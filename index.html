@@ -3765,11 +3765,14 @@ async function syncSupabase(silent=false){
       document.getElementById('dataStatus').className='tbadge tbg';
     }
 
-    buildDashboardData();
+    try{buildDashboardData();}catch(be){console.error('buildDashboardData error:',be);}
+
     leEngine=null;
     const activeId=document.querySelector('.sec.on')?.id;
-    if(activeId==='le')renderLE();
-    if(activeId==='ng')renderNetGen();
+    try{
+      if(activeId==='le')renderLE();
+      if(activeId==='ng')renderNetGen();
+    }catch(re){console.error('Re-render error after sync:',re);}
 
     const el=document.getElementById('uploadStatus');
     if(el&&sbActuals.length)el.textContent=`Live · ${sbActuals.length.toLocaleString()} actuals rows`;
@@ -4003,7 +4006,8 @@ function renderLEOverview(){
   const vy=tot25?(totProj-tot25)/tot25*100:0;
   const mo=maxAct?FC_MONTHS[maxAct-1].substring(0,3):'--';
 
-  document.getElementById('le_krow').innerHTML=`
+  const _krow=document.getElementById('le_krow');if(!_krow)return;
+  _krow.innerHTML=`
     <div class="kpi kt"><div class="kl">FY2026 Projection</div><div class="kv">${(totProj/1e9).toFixed(2)}B kWh</div><div class="ks nt">through ${mo} + LE</div></div>
     <div class="kpi ${vb>=0?'kg':'kr'}"><div class="kl">vs 2026 Budget</div><div class="kv">${vb>=0?'+':''}${vb.toFixed(1)}%</div><div class="ks ${vb>=0?'up':'dn'}">${((totProj-totBud)/1e6).toFixed(0)}M kWh</div></div>
     <div class="kpi ${vy>=0?'kg':'kr'}"><div class="kl">vs 2025 Actual</div><div class="kv">${vy>=0?'+':''}${vy.toFixed(1)}%</div><div class="ks ${vy>=0?'up':'dn'}">YoY</div></div>
@@ -4040,7 +4044,7 @@ function renderLEOverview(){
         y:{ticks:{color:TC,callback:v=>v.toFixed(2)+'B'},grid:{color:CC}}}}
   });
 
-  document.getElementById('le_rc_tbl').innerHTML=`<table class="dt" id="le_rc_dt">
+  const _rctbl=document.getElementById('le_rc_tbl');if(_rctbl)_rctbl.innerHTML=`<table class="dt" id="le_rc_dt">
     <thead><tr><th>RC</th><th>2025 FY Act (M)</th><th>2026 Budget (M)</th><th>2026 Act YTD (M)</th><th>2026 Projection (M)</th><th>vs Budget</th><th>vs PY</th></tr></thead>
     <tbody>${rcSummary.map(r=>{
       const p=r[scen]||0,vb2=r.bud26?(p-r.bud26)/r.bud26*100:0;
@@ -4090,7 +4094,7 @@ function renderLEMonthly(){
         y:{ticks:{color:TC,callback:v=>v.toFixed(0)+'M'},grid:{color:CC}}}}
   });
 
-  document.getElementById('le_monthly_tbl').innerHTML=`<table class="dt" style="font-size:10px;white-space:nowrap">
+  const _mtbl=document.getElementById('le_monthly_tbl');if(!_mtbl)return;_mtbl.innerHTML=`<table class="dt" style="font-size:10px;white-space:nowrap">
     <thead><tr>
       <th>Month</th>
       <th style="color:#94a3b8">2025 Act (M)</th>
@@ -4163,7 +4167,7 @@ function renderLEScenario(scen){
         y:{ticks:{color:TC,callback:v=>v.toFixed(0)+'M'},grid:{color:CC}}}}
   });
 
-  document.getElementById(tblMap[scen]).innerHTML=`<table class="dt">
+  const _scenEl=document.getElementById(tblMap[scen]);if(_scenEl)_scenEl.innerHTML=`<table class="dt">
     <thead><tr><th>RC</th><th>2025 FY Act (M)</th><th>2026 Budget (M)</th><th>2026 Act YTD (M)</th><th>2026 LE ${scen.toUpperCase()} (M)</th><th>vs Budget</th><th>vs PY</th></tr></thead>
     <tbody>${rcSummary.map(r=>{
       const p=r[sk]||0,vb=r.bud26?(p-r.bud26)/r.bud26*100:0;
@@ -4513,7 +4517,7 @@ function renderLEVariance(){
         y:{ticks:{color:TC,callback:v=>v.toFixed(0)+'M'},grid:{color:CC}}}}
   });
 
-  document.getElementById('le_var_tbl').innerHTML=`<table class="dt" id="le_var_dt">
+  const _vtbl=document.getElementById('le_var_tbl');if(!_vtbl)return;_vtbl.innerHTML=`<table class="dt" id="le_var_dt">
     <thead><tr><th>${dim==='rc'?'Rate Class':dim==='industry'?'Industry':'Customer'}</th><th>Budget YTD</th><th>Actual YTD</th><th>Variance (kWh)</th><th>Variance %</th></tr></thead>
     <tbody>${rows.map(r=>{
       const v=r.act-r.bud,vp=r.bud?v/r.bud*100:0;
