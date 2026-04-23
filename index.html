@@ -3654,21 +3654,27 @@ function printReport() {
 }
 
 /* ==========================================
-   SUPABASE INTEGRATION (from Sales_forecastJPS)
+   SUPABASE — Direct SDK Connection (no proxy)
 ========================================== */
-const SB_URL   = 'https://rvtaryvxiryfmurudjcx.supabase.co';
-const SB_KEY   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ2dGFyeXZ4aXJ5Zm11cnVkamN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2ODI4MjMsImV4cCI6MjA5MTI1ODgyM30.qnieHBDcLHeoRKelnO3gUMK4qKR8tlBjkWgOopJrCmM';
-const SB_PROXY = 'https://sales-forecast-b97hww8vd-jps-fpa.vercel.app/api/db';
+const SB_URL = 'https://bhrswnbenkvflpdjhfpa.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJocnN3bmJlbmt2ZmxwZGpoZnBhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMTc0OTcsImV4cCI6MjA5MTg5MzQ5N30.JupFs0tnMn3k282PqFOSMi2ch-wtB7Ewv7O8fN16-94';
 
-let sbActuals=[], sbBudget=[], sbNetGen=[], sbConnected=false, sbLastSync=null;
+let _sbClient=null, sbActuals=[], sbBudget=[], sbNetGen=[], sbConnected=false, sbLastSync=null;
+
+function getSB(){
+  if(!_sbClient&&window.supabase?.createClient)
+    _sbClient=window.supabase.createClient(SB_URL,SB_KEY);
+  return _sbClient;
+}
 
 function updateSbStatus(state){
   const el=document.getElementById('sbStatus');
   if(!el)return;
   const cfg={
-    live:  {cls:'sb-badge sb-live',    txt:'⚡ Live'},
+    live:   {cls:'sb-badge sb-live',    txt:'⚡ Live'},
     offline:{cls:'sb-badge sb-offline', txt:'○ Offline'},
     syncing:{cls:'sb-badge sb-syncing', txt:'↻ Syncing…'},
+    partial:{cls:'sb-badge sb-syncing', txt:'⚠ Partial'},
   };
   const c=cfg[state]||cfg.offline;
   el.className=c.cls; el.textContent=c.txt;
@@ -3692,36 +3698,70 @@ function parseCSVText(txt){
   });
 }
 
+async function sbTable(tbl,opts={}){
+  const sb=getSB(); if(!sb)return null;
+  let q=sb.from(tbl).select(opts.cols||'*').limit(opts.limit||10000);
+  if(opts.order)q=q.order(opts.order,{ascending:true});
+  const{data,error}=await q;
+  return(!error&&data&&data.length)?data:null;
+}
+
+async function sbStorage(bucket,file){
+  const sb=getSB(); if(!sb)return null;
+  const{data,error}=await sb.storage.from(bucket).download(file);
+  if(error||!data)return null;
+  const txt=await data.text();
+  return txt.includes(',')?parseCSVText(txt):null;
+}
+
 async function syncSupabase(silent=false){
-  if(!silent) updateSbStatus('syncing');
-  document.getElementById('sbStatus').textContent='↻ Syncing…';
+  updateSbStatus('syncing');
+  const sb=getSB();
+  if(!sb){
+    updateSbStatus('offline');
+    if(!silent)alert('Supabase SDK not ready. Check your connection.');
+    return;
+  }
+  const log=[];
   try{
-    const [actRes, budRes] = await Promise.all([
-      fetch(`${SB_PROXY}?action=download&bucket=jps_data&filename=actuals.csv`),
-      fetch(`${SB_PROXY}?action=download&bucket=jps_data&filename=budget.csv`)
-    ]);
-    if(actRes.ok){ const t=await actRes.text(); if(t.includes(','))sbActuals=parseCSVText(t); }
-    if(budRes.ok){ const t=await budRes.text(); if(t.includes(','))sbBudget=parseCSVText(t); }
+    // ── Actuals ────────────────────────────────────────────
+    const actData=await sbTable('jps_actuals',{limit:50000});
+    const actOk=!!actData;
+    if(actOk){sbActuals=actData;log.push(`Actuals: jps_actuals (${actData.length} rows)`);}
+    else log.push('Actuals: ⚠ jps_actuals not accessible — check RLS policies');
 
-    const ngRes=await fetch(`${SB_PROXY}?action=select&table=net_gen_historical&order=year:asc&limit=1000`);
-    if(ngRes.ok){ const d=await ngRes.json(); if(Array.isArray(d)&&d.length)sbNetGen=d; }
+    // ── Budget ─────────────────────────────────────────────
+    const budData=await sbTable('jps_budget',{limit:10000});
+    const budOk=!!budData;
+    if(budOk){sbBudget=budData;log.push(`Budget:  jps_budget (${budData.length} rows)`);}
+    else log.push('Budget: ⚠ jps_budget not accessible — check RLS policies');
 
-    sbConnected=true; sbLastSync=new Date();
+    // ── Net Generation ─────────────────────────────────────
+    const ng=await sbTable('net_gen_historical',{order:'year'});
+    if(ng){sbNetGen=ng;log.push(`Net Gen: net_gen_historical (${ng.length} rows)`);}
+    else log.push('Net Gen: ⚠ net_gen_historical not accessible');
+
+    const anyOk=actOk||budOk||ng;
+    sbConnected=anyOk;
+    sbLastSync=new Date();
     S.set('sb_last_sync',sbLastSync.toLocaleString());
-    updateSbStatus('live');
-    document.getElementById('dataStatus').textContent='📡 Live Data';
-    document.getElementById('dataStatus').className='tbadge tbg';
+    updateSbStatus(anyOk?(actOk&&budOk?'live':'partial'):'offline');
 
-    // Refresh active section — reset cached LE engine so it recomputes with new data
+    if(anyOk){
+      document.getElementById('dataStatus').textContent='📡 Live Data';
+      document.getElementById('dataStatus').className='tbadge tbg';
+    }
+
     leEngine=null;
     const activeId=document.querySelector('.sec.on')?.id;
     if(activeId==='le')renderLE();
     if(activeId==='ng')renderNetGen();
-    if(!silent)alert(`✓ Synced — ${sbActuals.length} actuals · ${sbBudget.length} budget rows · ${sbNetGen.length} net gen records`);
+
+    if(!silent)alert('Supabase sync complete\n\n'+log.join('\n'));
   }catch(e){
     sbConnected=false;
     updateSbStatus('offline');
-    if(!silent)alert('Supabase sync failed. Using sample data.\n\n'+e.message);
+    if(!silent)alert('Supabase sync failed:\n'+e.message+'\n\nCheck Supabase URL, key, and RLS policies.');
   }
 }
 
@@ -3734,50 +3774,6 @@ const FC_MONTHS=['January','February','March','April','May','June',
   'July','August','September','October','November','December'];
 const FC_CUST_RCS=['RT10','RT20','RT60']; // residential RCs → use cust method in Base
 const FC_BUD_YEAR=2026, FC_PY=2025;
-
-// Sample data — mirrors real CSV structure so engine works offline
-const FC_SAMPLE_ACT=(()=>{
-  const rows=[];
-  const rcs=['RT10','RT20','RT40','RT50','RT70','BU'];
-  const bases={RT10:76,RT20:42,RT40:46,RT50:27,RT70:30,BU:1};
-  const inds={RT10:'Residential',RT20:'Small Commercial',RT40:'Hotels',RT50:'Manufacturing',RT70:'Industry',BU:'Bauxite'};
-  // 2025 full year
-  FC_MONTHS.forEach((mn,mi)=>{
-    rcs.forEach(rc=>{
-      const v=bases[rc]*(0.95+Math.random()*.15);
-      rows.push({'JPS A/c':'S'+rc,'Name':'Sample '+rc,'Rate category':rc,
-        'Updated Parish':'Kingston','Industry':inds[rc],
-        'Sum of net_kwh_billed_consump':(v*1e6).toFixed(0),'Month':mn+' 2025'});
-    });
-  });
-  // 2026 Jan–Feb actuals
-  [1,2].forEach(m=>{
-    const mn=FC_MONTHS[m-1];
-    rcs.forEach(rc=>{
-      const v=bases[rc]*(0.93+Math.random()*.12);
-      rows.push({'JPS A/c':'S'+rc,'Name':'Sample '+rc,'Rate category':rc,
-        'Updated Parish':'Kingston','Industry':inds[rc],
-        'Sum of net_kwh_billed_consump':(v*1e6).toFixed(0),'Month':mn+' 2026'});
-    });
-  });
-  return rows;
-})();
-
-const FC_SAMPLE_BUD=(()=>{
-  const rows=[];
-  const rcs=['RT10','RT20','RT40','RT50','RT70','BU'];
-  const bases={RT10:80,RT20:44,RT40:53,RT50:28,RT70:31,BU:1.4};
-  const inds={RT10:'Residential',RT20:'Small Commercial',RT40:'Hotels',RT50:'Manufacturing',RT70:'Industry',BU:'Bauxite'};
-  FC_MONTHS.forEach((mn,mi)=>{
-    rcs.forEach(rc=>{
-      const v=bases[rc]*(0.97+Math.random()*.08);
-      rows.push({'JPS A/c':'S'+rc,'Name':'Sample '+rc,'Rate category':rc,
-        'Updated Parish':'Kingston','Industry':inds[rc],
-        'Sum of Budget':(v*1e6).toFixed(0),'Month':mn+' 2026'});
-    });
-  });
-  return rows;
-})();
 
 function fcParseMonth(str){
   if(!str)return{year:0,month:0};
@@ -3919,9 +3915,8 @@ let leToggles={act25:true,bud26:true,act26:true,base26:true,cust26:false,rc26:fa
 let leAdvPct={month:{},rc:{},industry:{}};
 
 function fcGetData(){
-  const rawA=sbActuals.length?sbActuals:FC_SAMPLE_ACT;
-  const rawB=sbBudget.length?sbBudget:FC_SAMPLE_BUD;
-  return computeLE(fcNormActuals(rawA),fcNormBudget(rawB),leAdvPct);
+  if(!sbActuals.length||!sbBudget.length)return null;
+  return computeLE(fcNormActuals(sbActuals),fcNormBudget(sbBudget),leAdvPct);
 }
 
 function swLE(tab,btn){
@@ -3934,8 +3929,22 @@ function swLE(tab,btn){
   renderLEActive();
 }
 
+function leSyncPrompt(){
+  const tabs=['ov','mt','base','cust','rc','adv','risk','var','pivot'];
+  tabs.forEach(t=>{
+    const el=document.getElementById('le_tab_'+t);
+    if(el)el.innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:16px;color:var(--text2)">
+      <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 5.625c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125"/></svg>
+      <div style="font-size:15px;font-weight:600;color:var(--text1)">No data loaded</div>
+      <div style="font-size:12px;max-width:320px;text-align:center">Connect to Supabase to load actuals and budget data, then return here.</div>
+      <button onclick="syncSupabase()" style="margin-top:8px;padding:8px 20px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">Sync Supabase Now</button>
+    </div>`;
+  });
+}
+
 function renderLEActive(){
   if(!leEngine)leEngine=fcGetData();
+  if(!leEngine){leSyncPrompt();return;}
   switch(leActiveTab){
     case'ov':   renderLEOverview();break;
     case'mt':   renderLEMonthly();break;
@@ -4504,18 +4513,19 @@ function renderLEVariance(){
 /* ==========================================
    NET GENERATION SECTION
 ========================================== */
-const NG_SAMPLE=[
-  {year:2020,month:1,net_gen_mwh:3180},{year:2020,month:2,net_gen_mwh:2890},{year:2020,month:3,net_gen_mwh:3020},{year:2020,month:4,net_gen_mwh:2950},{year:2020,month:5,net_gen_mwh:3100},{year:2020,month:6,net_gen_mwh:3250},{year:2020,month:7,net_gen_mwh:3380},{year:2020,month:8,net_gen_mwh:3410},{year:2020,month:9,net_gen_mwh:3190},{year:2020,month:10,net_gen_mwh:3050},{year:2020,month:11,net_gen_mwh:2980},{year:2020,month:12,net_gen_mwh:3120},
-  {year:2021,month:1,net_gen_mwh:3200},{year:2021,month:2,net_gen_mwh:2940},{year:2021,month:3,net_gen_mwh:3080},{year:2021,month:4,net_gen_mwh:3010},{year:2021,month:5,net_gen_mwh:3150},{year:2021,month:6,net_gen_mwh:3300},{year:2021,month:7,net_gen_mwh:3420},{year:2021,month:8,net_gen_mwh:3450},{year:2021,month:9,net_gen_mwh:3230},{year:2021,month:10,net_gen_mwh:3100},{year:2021,month:11,net_gen_mwh:3020},{year:2021,month:12,net_gen_mwh:3160},
-  {year:2022,month:1,net_gen_mwh:3250},{year:2022,month:2,net_gen_mwh:2980},{year:2022,month:3,net_gen_mwh:3110},{year:2022,month:4,net_gen_mwh:3040},{year:2022,month:5,net_gen_mwh:3200},{year:2022,month:6,net_gen_mwh:3350},{year:2022,month:7,net_gen_mwh:3480},{year:2022,month:8,net_gen_mwh:3500},{year:2022,month:9,net_gen_mwh:3280},{year:2022,month:10,net_gen_mwh:3150},{year:2022,month:11,net_gen_mwh:3060},{year:2022,month:12,net_gen_mwh:3200},
-  {year:2023,month:1,net_gen_mwh:3300},{year:2023,month:2,net_gen_mwh:3020},{year:2023,month:3,net_gen_mwh:3160},{year:2023,month:4,net_gen_mwh:3090},{year:2023,month:5,net_gen_mwh:3240},{year:2023,month:6,net_gen_mwh:3400},{year:2023,month:7,net_gen_mwh:3520},{year:2023,month:8,net_gen_mwh:3550},{year:2023,month:9,net_gen_mwh:3320},{year:2023,month:10,net_gen_mwh:3200},{year:2023,month:11,net_gen_mwh:3100},{year:2023,month:12,net_gen_mwh:3250},
-  {year:2024,month:1,net_gen_mwh:3380},{year:2024,month:2,net_gen_mwh:3100},{year:2024,month:3,net_gen_mwh:3240},{year:2024,month:4,net_gen_mwh:3170},{year:2024,month:5,net_gen_mwh:3320},{year:2024,month:6,net_gen_mwh:3480},{year:2024,month:7,net_gen_mwh:3600},{year:2024,month:8,net_gen_mwh:3620},{year:2024,month:9,net_gen_mwh:3400},{year:2024,month:10,net_gen_mwh:3280},{year:2024,month:11,net_gen_mwh:3180},{year:2024,month:12,net_gen_mwh:3320},
-  {year:2025,month:1,net_gen_mwh:3420},{year:2025,month:2,net_gen_mwh:3140},{year:2025,month:3,net_gen_mwh:3280},{year:2025,month:4,net_gen_mwh:3210},{year:2025,month:5,net_gen_mwh:3360},{year:2025,month:6,net_gen_mwh:3520},{year:2025,month:7,net_gen_mwh:3640},{year:2025,month:8,net_gen_mwh:3660},{year:2025,month:9,net_gen_mwh:2980},{year:2025,month:10,net_gen_mwh:2750},{year:2025,month:11,net_gen_mwh:2820},{year:2025,month:12,net_gen_mwh:2960},
-  {year:2026,month:1,net_gen_mwh:3050},{year:2026,month:2,net_gen_mwh:2890},
-];
 
 function renderNetGen(){
-  const src=sbNetGen.length?sbNetGen:NG_SAMPLE;
+  if(!sbNetGen.length){
+    const el=document.getElementById('ng-content');
+    if(el)el.innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:16px;color:var(--text2)">
+      <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 5.625c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125"/></svg>
+      <div style="font-size:15px;font-weight:600;color:var(--text1)">No net generation data loaded</div>
+      <div style="font-size:12px;max-width:320px;text-align:center">Sync Supabase to load net generation history.</div>
+      <button onclick="syncSupabase()" style="margin-top:8px;padding:8px 20px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">Sync Supabase Now</button>
+    </div>`;
+    return;
+  }
+  const src=sbNetGen;
   const years=[...new Set(src.map(r=>Number(r.year)))].sort();
   const annual=years.map(y=>({
     year:y,
