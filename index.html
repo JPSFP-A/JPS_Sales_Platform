@@ -1157,6 +1157,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
         <button class="stab"    id="le_btn_adv"  onclick="swLE('adv',this)">🎛 LE Advanced</button>
         <button class="stab"    id="le_btn_risk" onclick="swLE('risk',this)">⚠ Customer Risk</button>
         <button class="stab"    id="le_btn_var"  onclick="swLE('var',this)">📐 Variance</button>
+        <button class="stab"    id="le_btn_pivot" onclick="swLE('pivot',this)">🔀 Pivot / Movers</button>
         <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
           <button class="btn btn-t" onclick="syncSupabase()">🔄 Sync</button>
           <span id="le_last_sync" style="font-size:10px;color:var(--text3)">Using sample data</span>
@@ -1294,6 +1295,58 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
             </div>
           </div>
           <div class="tbl-wrap" id="le_risk_tbl"></div>
+        </div>
+      </div>
+
+      <!-- ── PIVOT / MOVERS ─────────────────────────────── -->
+      <div id="le_tab_pivot" class="le-subtab">
+        <!-- Controls -->
+        <div class="card" style="margin-bottom:10px">
+          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+            <div>
+              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Timeframe</div>
+              <select class="sel" id="pv_timeframe" onchange="renderLEPivot()">
+                <option value="FY">Full Year (FY)</option>
+                <option value="YTD">YTD</option>
+                <option value="MTD">MTD (latest actual month)</option>
+              </select>
+            </div>
+            <div>
+              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Scenario</div>
+              <select class="sel" id="pv_scenario" onchange="renderLEPivot()">
+                <option value="base">LE Base</option>
+                <option value="cust">LE Cust Vol</option>
+                <option value="rc">LE RC Vol</option>
+                <option value="adv">LE Advanced</option>
+                <option value="bud">Budget + Actuals</option>
+              </select>
+            </div>
+            <div>
+              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">RC Filter (Movers)</div>
+              <select class="sel" id="pv_rc" onchange="renderMovers()">
+                <option value="">All Commercial</option>
+              </select>
+            </div>
+            <button class="btn btn-o" style="margin-top:14px" onclick="exportTableCSV('pv_pivot_tbl','pivot_matrix')">⬇ Pivot CSV</button>
+          </div>
+        </div>
+
+        <!-- Top & Bottom movers side by side -->
+        <div class="g2" style="margin-bottom:10px">
+          <div class="card">
+            <div class="ch" style="color:var(--green)">🏆 Top Performers <span style="color:var(--text3)">2026 vs 2025 · GWh incline</span></div>
+            <div class="tbl-wrap" style="max-height:220px;overflow-y:auto" id="pv_top_tbl"></div>
+          </div>
+          <div class="card">
+            <div class="ch" style="color:var(--red)">📉 Bottom Performers <span style="color:var(--text3)">2026 vs 2025 · GWh decline</span></div>
+            <div class="tbl-wrap" style="max-height:220px;overflow-y:auto" id="pv_bot_tbl"></div>
+          </div>
+        </div>
+
+        <!-- RC × Month pivot matrix -->
+        <div class="card">
+          <div class="ch">Combined Scenario Pivot — net kWh billed (GWh) <span>Click RC row to expand customers</span></div>
+          <div class="tbl-wrap" id="pv_pivot_tbl" style="overflow-x:auto;max-height:400px;overflow-y:auto"></div>
         </div>
       </div>
 
@@ -3892,6 +3945,7 @@ function renderLEActive(){
     case'adv':  renderLEAdvanced();break;
     case'risk': renderLERisk();break;
     case'var':  renderLEVariance();break;
+    case'pivot':renderLEPivot();break;
   }
 }
 
@@ -4181,6 +4235,221 @@ function renderLERisk(){
       <td><span class="pill ${r.below>=3?'pr':'pa'}">${r.below} of ${maxAct}</span></td>
     </tr>`).join('')}</tbody></table>`;
   makeSortable('le_risk_dt');
+}
+
+// ── Pivot / Movers ─────────────────────────────────────────
+const PV_SKIP_RCS=['RT10','RT20','EV','BU']; // excluded from movers (aggregated rates)
+
+function pvGetDataset(){
+  if(!leEngine)return[];
+  const{normA,normB,leCust,leRC,leBase,leAdv,maxAct}=leEngine;
+  const scen=document.getElementById('pv_scenario')?.value||'base';
+  if(scen==='bud'){
+    return[
+      ...normA.filter(d=>d.year===FC_BUD_YEAR&&d.month<=maxAct),
+      ...normB.filter(d=>d.year===FC_BUD_YEAR&&d.month>maxAct)
+    ];
+  }
+  const map={base:leBase,cust:leCust,rc:leRC,adv:leAdv};
+  return(map[scen]||leBase).filter(d=>d.year===FC_BUD_YEAR);
+}
+
+function pvTimeFilter(rows){
+  const tf=document.getElementById('pv_timeframe')?.value||'FY';
+  if(tf==='FY')return rows;
+  const lim=leEngine?.maxAct||12;
+  if(tf==='MTD')return rows.filter(d=>d.month===lim);
+  return rows.filter(d=>d.month<=lim); // YTD
+}
+
+function renderLEPivot(){
+  if(!leEngine)return;
+
+  // Populate RC filter once
+  const rcEl=document.getElementById('pv_rc');
+  if(rcEl&&!rcEl.dataset.populated){
+    leEngine.rcSummary.map(r=>r.rc)
+      .filter(r=>!PV_SKIP_RCS.includes(r.toUpperCase()))
+      .forEach(r=>rcEl.insertAdjacentHTML('beforeend',`<option>${r}</option>`));
+    rcEl.dataset.populated='1';
+  }
+
+  renderMovers();
+  renderPivotMatrix();
+}
+
+function renderMovers(){
+  if(!leEngine)return;
+  const{normA}=leEngine;
+  const rcFlt=document.getElementById('pv_rc')?.value||'';
+  const targetRows=pvTimeFilter(pvGetDataset());
+  const baseRows=pvTimeFilter(normA.filter(d=>d.year===FC_PY));
+
+  const accVar={};
+  baseRows.forEach(d=>{
+    if(PV_SKIP_RCS.includes((d.rc||'').toUpperCase()))return;
+    const k=d.name||d.acct||'Unknown';
+    if(!accVar[k])accVar[k]={name:k,rc:d.rc,baseline:0,target:0};
+    accVar[k].baseline+=d.kwh/1e6;
+  });
+  targetRows.forEach(d=>{
+    if(PV_SKIP_RCS.includes((d.rc||'').toUpperCase()))return;
+    const k=d.name||d.acct||'Unknown';
+    if(!accVar[k])accVar[k]={name:k,rc:d.rc,baseline:0,target:0};
+    accVar[k].target+=d.kwh/1e6;
+  });
+
+  const variances=Object.values(accVar).map(v=>({
+    ...v,
+    variance:v.target-v.baseline,
+    pct:v.baseline>0?(v.target-v.baseline)/v.baseline*100:v.target>0?100:0
+  })).filter(v=>!rcFlt||v.rc===rcFlt);
+
+  const top=[...variances].filter(v=>v.variance>0).sort((a,b)=>b.variance-a.variance).slice(0,10);
+  const bot=[...variances].filter(v=>v.variance<0).sort((a,b)=>a.variance-b.variance).slice(0,10);
+
+  const moverTbl=(rows,isTop)=>`
+    <table class="dt" style="font-size:10px">
+      <thead><tr>
+        <th>#</th><th>Account</th><th>RC</th>
+        <th style="text-align:right">2025 Base</th>
+        <th style="text-align:right">2026 Target</th>
+        <th style="text-align:right">${isTop?'GWh Incline':'GWh Decline'}</th>
+        <th style="text-align:right">% Growth</th>
+        <th>Notes</th>
+      </tr></thead>
+      <tbody>${rows.length?rows.map((m,i)=>{
+        const noteKey=`pv|${m.name}`;
+        const note=S.get(noteKey,'');
+        return`<tr>
+          <td style="color:var(--text3)">${i+1}</td>
+          <td style="font-weight:500;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${m.name}">${m.name}</td>
+          <td><span class="pill pt">${m.rc}</span></td>
+          <td style="text-align:right;color:var(--text2)">${m.baseline.toFixed(2)}</td>
+          <td style="text-align:right;color:var(--text2)">${m.target.toFixed(2)}</td>
+          <td style="text-align:right;font-weight:700;color:${isTop?'var(--green)':'var(--red)'}">${isTop?'+':''}${m.variance.toFixed(2)}</td>
+          <td style="text-align:right;color:${isTop?'var(--green)':'var(--red)'}">${isTop?'+':''}${m.pct.toFixed(1)}%</td>
+          <td style="text-align:center">
+            <button title="${note||'Add explanation'}" onclick="pvAddNote('${m.name.replace(/'/g,"\\'")}',this)"
+              style="background:none;border:none;cursor:pointer;font-size:12px">${note?'💬':'➕'}</button>
+          </td>
+        </tr>`;
+      }).join(''):`<tr><td colspan="8" style="text-align:center;padding:12px;color:var(--text3)">No ${isTop?'inclines':'declines'} found.</td></tr>`}
+      </tbody>
+    </table>`;
+
+  const topEl=document.getElementById('pv_top_tbl');
+  const botEl=document.getElementById('pv_bot_tbl');
+  if(topEl)topEl.innerHTML=moverTbl(top,true);
+  if(botEl)botEl.innerHTML=moverTbl(bot,false);
+}
+
+function pvAddNote(name,btn){
+  const key=`pv|${name}`;
+  const cur=S.get(key,'');
+  openModal(`Variance note: ${name}`,
+    `<textarea id="pv_note_ta" style="width:100%;min-height:80px;background:var(--navy3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px">${cur}</textarea>`,
+    ()=>{
+      const v=document.getElementById('pv_note_ta')?.value||'';
+      if(v)S.set(key,v); else S.del(key);
+      btn.textContent=v?'💬':'➕';
+      btn.title=v||'Add explanation';
+    }
+  );
+}
+
+function renderPivotMatrix(){
+  if(!leEngine)return;
+  const target=pvGetDataset();
+  const rcMatrix={};
+  target.forEach(d=>{
+    const rc=d.rc||'Unassigned';
+    const acctName=PV_SKIP_RCS.includes(rc.toUpperCase())?'':(d.name||d.acct||'Unknown');
+    const val=d.kwh/1e6;
+    const m=d.month;
+    if(!rcMatrix[rc])rcMatrix[rc]={total:0,months:Array(12).fill(0),customers:{}};
+    rcMatrix[rc].total+=val;
+    if(m>=1&&m<=12)rcMatrix[rc].months[m-1]+=val;
+    if(acctName){
+      if(!rcMatrix[rc].customers[acctName])rcMatrix[rc].customers[acctName]={total:0,months:Array(12).fill(0)};
+      rcMatrix[rc].customers[acctName].total+=val;
+      if(m>=1&&m<=12)rcMatrix[rc].customers[acctName].months[m-1]+=val;
+    }
+  });
+
+  const mns=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const grandTotals=Array(12).fill(0);
+  Object.values(rcMatrix).forEach(r=>r.months.forEach((v,i)=>grandTotals[i]+=v));
+  const grandTotal=grandTotals.reduce((s,v)=>s+v,0);
+
+  // Track expanded rows in DOM attribute to survive re-render
+  const expandedRC=document.getElementById('pv_pivot_tbl')?.dataset.expanded||'';
+
+  const rows=Object.entries(rcMatrix).sort((a,b)=>{
+    const order=['BU','EV','RT10','RT20','RT40','RT50','RT60','RT70'];
+    return(order.indexOf(a[0])||99)-(order.indexOf(b[0])||99);
+  });
+
+  let html=`<table class="dt" style="font-size:10px;white-space:nowrap;border-collapse:collapse" id="pv_matrix_tbl">
+    <thead style="position:sticky;top:0;z-index:20">
+      <tr style="background:var(--navy3)">
+        <th style="text-align:left;padding:6px 8px;border-right:1px solid var(--border);min-width:90px;position:sticky;left:0;background:var(--navy3);z-index:21">RC</th>
+        <th style="text-align:left;padding:6px 8px;border-right:1px solid var(--border);min-width:180px;position:sticky;left:90px;background:var(--navy3);z-index:21">Account</th>
+        ${mns.map(m=>`<th style="text-align:right;padding:6px 8px;border-right:1px solid var(--border);color:var(--teal)">${m}</th>`).join('')}
+        <th style="text-align:right;padding:6px 10px;background:var(--navy4);color:var(--teal);font-weight:900">Total</th>
+      </tr>
+    </thead>
+    <tbody>`;
+
+  rows.forEach(([rc,data])=>{
+    const hasCusts=Object.keys(data.customers).filter(Boolean).length>0;
+    const isExp=expandedRC===rc;
+    html+=`<tr style="border-bottom:1px solid var(--border);cursor:${hasCusts?'pointer':'default'}"
+      onclick="${hasCusts?`pvToggleRC('${rc}')`:''}">
+      <td style="text-align:left;padding:5px 8px;font-weight:700;border-right:1px solid var(--border);position:sticky;left:0;background:var(--navy2);z-index:10">
+        <span style="font-size:9px;color:var(--text3);margin-right:3px">${hasCusts?(isExp?'▼':'▶'):''}</span>${rc}
+      </td>
+      <td style="text-align:left;padding:5px 8px;border-right:1px solid var(--border);color:var(--text3);font-style:italic;position:sticky;left:90px;background:var(--navy2);z-index:10">
+        ${hasCusts?`[${Object.keys(data.customers).length} Accounts]`:'Aggregated'}
+      </td>
+      ${data.months.map(v=>`<td style="text-align:right;padding:5px 8px;border-right:1px solid rgba(255,255,255,.05);font-weight:600">${v>0?v.toFixed(2):'—'}</td>`).join('')}
+      <td style="text-align:right;padding:5px 10px;font-weight:900;background:var(--navy3);color:var(--teal)">${data.total.toFixed(2)}</td>
+    </tr>`;
+
+    if(isExp){
+      Object.entries(data.customers).sort((a,b)=>b[1].total-a[1].total).forEach(([cust,cd])=>{
+        if(!cust)return;
+        html+=`<tr style="border-bottom:1px solid rgba(255,255,255,.03);background:rgba(0,194,168,.04)">
+          <td style="padding:4px 8px;border-right:1px solid var(--border);position:sticky;left:0;background:rgba(13,27,42,.95);z-index:10"></td>
+          <td style="padding:4px 8px;border-right:1px solid var(--border);color:var(--text);font-size:9px;position:sticky;left:90px;background:rgba(13,27,42,.95);z-index:10;max-width:180px;overflow:hidden;text-overflow:ellipsis" title="${cust}">${cust}</td>
+          ${cd.months.map(v=>`<td style="text-align:right;padding:4px 8px;border-right:1px solid rgba(255,255,255,.03);color:var(--text2);font-size:9px">${v>0?v.toFixed(2):'—'}</td>`).join('')}
+          <td style="text-align:right;padding:4px 10px;font-weight:700;color:var(--text2);background:rgba(0,0,0,.15)">${cd.total.toFixed(2)}</td>
+        </tr>`;
+      });
+    }
+  });
+
+  // Grand total footer
+  html+=`</tbody>
+    <tfoot style="position:sticky;bottom:0;z-index:20">
+      <tr style="background:var(--navy4);font-weight:900;border-top:2px solid var(--teal2)">
+        <td style="padding:6px 8px;text-align:left;border-right:1px solid var(--border);position:sticky;left:0;background:var(--navy4);z-index:21">TOTAL</td>
+        <td style="padding:6px 8px;border-right:1px solid var(--border);position:sticky;left:90px;background:var(--navy4);z-index:21"></td>
+        ${grandTotals.map(v=>`<td style="text-align:right;padding:6px 8px;border-right:1px solid var(--border);color:var(--teal)">${v.toFixed(2)}</td>`).join('')}
+        <td style="text-align:right;padding:6px 10px;color:var(--teal);background:var(--navy3)">${grandTotal.toFixed(2)}</td>
+      </tr>
+    </tfoot>
+  </table>`;
+
+  const el=document.getElementById('pv_pivot_tbl');
+  if(el){el.innerHTML=html;el.dataset.expanded=expandedRC;}
+}
+
+function pvToggleRC(rc){
+  const el=document.getElementById('pv_pivot_tbl');
+  if(!el)return;
+  el.dataset.expanded=(el.dataset.expanded===rc)?'':rc;
+  renderPivotMatrix();
 }
 
 // ── Variance ───────────────────────────────────────────────
