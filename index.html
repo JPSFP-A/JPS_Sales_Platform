@@ -1459,28 +1459,7 @@ const S={
 /* ==========================================
    SAMPLE DATA
 ========================================== */
-const CUSTOMERS=[
-  {num:'100001',name:'Carib Cement Company',rate:'RT70',ind:'Manufacturing',parish:'St. Elizabeth',y25:17.5,y26:19.2,bud:17.0,m:[1.8,1.9,2.0,1.9,1.8,1.7,1.6,1.5,1.6,1.7,1.8,1.9],cmt:'Rebuilding demand post-hurricane'},
-  {num:'100002',name:'Jamalco (Alcoa)',rate:'RT70',ind:'Mining',parish:'Manchester',y25:15.2,y26:10.0,bud:14.0,m:[2.1,0.8,0.7,0.7,0.8,0.9,1.0,1.0,1.0,1.1,1.2,1.2],cmt:'Reduced load post-hurricane'},
-  {num:'100003',name:'NWC',rate:'RT40',ind:'Utilities',parish:'Kingston',y25:36.1,y26:28.8,bud:34.0,m:[4.2,2.4,2.4,2.4,2.5,2.5,2.6,2.6,2.6,2.7,2.7,2.7],cmt:'Facilities still offline'},
-  {num:'100004',name:'Digicel',rate:'RT40',ind:'Telecom',parish:'Kingston',y25:6.7,y26:6.3,bud:6.5,m:[0.6,0.53,0.54,0.54,0.55,0.55,0.55,0.56,0.56,0.57,0.57,0.57],cmt:'Sites not restored + efficiency'},
-  {num:'100005',name:'MBJ Airports',rate:'RT70',ind:'Transport',parish:'St. James',y25:2.1,y26:2.2,bud:2.1,m:[0.18,0.185,0.185,0.185,0.185,0.185,0.185,0.185,0.185,0.185,0.185,0.185],cmt:'Minute variation'},
-  {num:'100006',name:'Cable & Wireless JA',rate:'RT40',ind:'Telecom',parish:'Kingston',y25:5.9,y26:4.4,bud:5.5,m:[0.55,0.37,0.38,0.38,0.38,0.38,0.38,0.38,0.38,0.38,0.38,0.38],cmt:'Multi-site not restored + efficiency'},
-  {num:'100007',name:'Jamaica Broilers',rate:'RT50',ind:'Manufacturing',parish:'St. Catherine',y25:2.9,y26:0.9,bud:2.5,m:[0.4,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075,0.075],cmt:'Returned to CHP self-generation'},
-  {num:'100008',name:'Caribbean Broilers',rate:'RT50',ind:'Manufacturing',parish:'Kingston',y25:4.2,y26:4.1,bud:4.1,m:[0.35,0.342,0.342,0.342,0.342,0.342,0.342,0.342,0.342,0.342,0.342,0.342],cmt:'Minute variation'},
-  {num:'100009',name:'Petrojam',rate:'RT70',ind:'Energy',parish:'Kingston',y25:3.4,y26:3.0,bud:3.2,m:[0.28,0.25,0.26,0.26,0.26,0.26,0.26,0.26,0.26,0.26,0.26,0.26],cmt:'No available information'},
-  {num:'100010',name:'Windalco',rate:'RT70',ind:'Mining',parish:'Manchester',y25:4.0,y26:4.9,bud:4.2,m:[0.35,0.408,0.41,0.41,0.41,0.41,0.41,0.41,0.41,0.41,0.41,0.41],cmt:'Substation restored'},
-  {num:'100011',name:'D&G / Red Stripe',rate:'RT50',ind:'Food & Bev',parish:'Kingston',y25:0.5,y26:2.2,bud:1.5,m:[0.04,0.183,0.18,0.18,0.18,0.18,0.18,0.18,0.18,0.18,0.18,0.18],cmt:'Red Stripe returned Jun 2025'},
-  {num:'100012',name:'Kingston Wharves',rate:'RT50',ind:'Transport',parish:'Kingston',y25:0.5,y26:1.0,bud:0.7,m:[0.04,0.083,0.083,0.083,0.083,0.083,0.083,0.083,0.083,0.083,0.083,0.083],cmt:'Meter adjustment recovery'},
-  {num:'100013',name:'Playa Hall Jamaican Resort',rate:'RT70',ind:'Hotels',parish:'St. James',y25:2.4,y26:0.7,bud:2.0,m:[0.2,0.058,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06],cmt:'Hurricane Melissa damage'},
-  {num:'100014',name:'Sandals Whitehouse',rate:'RT50',ind:'Hotels',parish:'Westmoreland',y25:1.5,y26:0.0,bud:1.3,m:[0.125,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],cmt:'Closed -- hurricane damage, reopen Jun 2026'},
-  {num:'100015',name:'Operadora Palace Resorts',rate:'RT70',ind:'Hotels',parish:'Portland',y25:1.9,y26:0.4,bud:1.7,m:[0.158,0.033,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04],cmt:'New LNG plant load testing'},
-  {num:'100016',name:'Seawind Key Investments',rate:'RT70',ind:'Hotels',parish:'St. Ann',y25:2.4,y26:0.9,bud:2.1,m:[0.2,0.075,0.08,0.08,0.08,0.08,0.08,0.08,0.08,0.08,0.08,0.08],cmt:'Hurricane damage; reopen Jun 2026'},
-  {num:'100017',name:'Riu Jamaicotel',rate:'RT70',ind:'Hotels',parish:'St. James',y25:4.2,y26:3.5,bud:4.0,m:[0.35,0.292,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3],cmt:'Scaled back operations'},
-  {num:'100018',name:'HOCATSA Jamaica',rate:'RT50',ind:'Hotels',parish:'Trelawny',y25:0.9,y26:0.0,bud:0.8,m:[0.075,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],cmt:'Hurricane damage; Q3 2026 reopen'},
-  {num:'100019',name:'Bay Roc Hotel',rate:'RT40',ind:'Hotels',parish:'St. James',y25:0.9,y26:0.3,bud:0.8,m:[0.075,0.025,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03],cmt:'Hurricane damage; Jun 2026 reopen'},
-  {num:'100020',name:'Beaches Boscobel',rate:'RT40',ind:'Hotels',parish:'St. Mary',y25:0.7,y26:0.0,bud:0.6,m:[0.058,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],cmt:'Closed -- no return date'},
-];
+let CUSTOMERS=[];
 
 // Compute defection flags from customer data
 function computeDefectors(){
@@ -1508,26 +1487,8 @@ function computeDefectors(){
   }).filter(c=>c.isDefector);
 }
 
-const INDUSTRIES=[
-  {name:'Manufacturing',rc:'RT50/70',y25:1.71,y26:1.87,note:'Hurricane rebuilding surge'},
-  {name:'Accommodation & Food',rc:'RT40/50/70',y25:2.25,y26:1.78,note:'8+ hotels off-grid'},
-  {name:'Utilities (NWC)',rc:'RT40/50',y25:1.82,y26:1.64,note:'NWC down 20.4% YTD'},
-  {name:'Transport & Storage',rc:'RT40/50',y25:0.91,y26:0.74,note:'Airport recovery ongoing'},
-  {name:'Telecom',rc:'RT40/50',y25:0.74,y26:0.67,note:'Multi-site restoration'},
-  {name:'Retail Trade',rc:'RT40',y25:0.66,y26:0.63,note:'Generally resilient'},
-  {name:'Finance & Insurance',rc:'RT40',y25:0.60,y26:0.58,note:'Stable demand'},
-  {name:'Health Services',rc:'RT40',y25:0.51,y26:0.51,note:'Essential services maintained'},
-];
-
-const PARISHES=[
-  {name:'Kingston',curr:420,prev:398,rc:210,rp:195},{name:'St. Andrew',curr:380,prev:365,rc:280,rp:268},
-  {name:'St. Catherine',curr:310,prev:290,rc:240,rp:228},{name:'St. James',curr:275,prev:262,rc:180,rp:172},
-  {name:'Clarendon',curr:195,prev:188,rc:155,rp:149},{name:'Manchester',curr:182,prev:195,rc:130,rp:128},
-  {name:'St. Ann',curr:168,prev:155,rc:120,rp:115},{name:'Trelawny',curr:145,prev:132,rc:98,rp:92},
-  {name:'St. Elizabeth',curr:138,prev:142,rc:105,rp:104},{name:'Hanover',curr:122,prev:115,rc:88,rp:84},
-  {name:'Portland',curr:98,prev:95,rc:78,rp:76},{name:'St. Mary',curr:92,prev:98,rc:72,rp:75},
-  {name:'Westmoreland',curr:88,prev:84,rc:65,rp:62},{name:'St. Thomas',curr:75,prev:80,rc:60,rp:63},
-];
+let INDUSTRIES=[];
+let PARISHES=[];
 
 let RISK_OPP=[
   {num:'A100',name:'Branch Developments',acct:'100101',type:'Risk',level:'Very high',rate:'RT70',parish:'St. James',sector:'Hotels',kwh:12676277,owner:'atoyloy',status:'Confirmed',source:'Manual',cmt:'Solar 1.4MW installed; 3.2MW additional planned'},
@@ -3714,6 +3675,58 @@ async function sbStorage(bucket,file){
   return txt.includes(',')?parseCSVText(txt):null;
 }
 
+function buildDashboardData(){
+  if(!sbActuals.length)return;
+  const rows=fcNormActuals(sbActuals);
+
+  // CUSTOMERS — one row per account
+  const custMap={};
+  rows.forEach(r=>{
+    if(!custMap[r.acct])custMap[r.acct]={num:r.acct,name:r.name,rate:r.rc,ind:r.industry,parish:r.parish,y25:0,y26:0,bud:0,m:Array(12).fill(0),cmt:''};
+    const c=custMap[r.acct],gwh=r.kwh/1e6;
+    if(r.year===2025)c.y25+=gwh;
+    if(r.year===2026){c.y26+=gwh;if(r.month>=1&&r.month<=12)c.m[r.month-1]+=gwh;}
+  });
+  // Distribute RC-level budget to customers by proportional 2025 share
+  if(sbBudget.length){
+    const budRows=fcNormBudget(sbBudget);
+    const rcBud={},rcAct25={};
+    budRows.filter(r=>r.year===2026).forEach(r=>{rcBud[r.rc]=(rcBud[r.rc]||0)+r.kwh;});
+    rows.filter(r=>r.year===2025).forEach(r=>{rcAct25[r.rc]=(rcAct25[r.rc]||0)+r.kwh;});
+    Object.values(custMap).forEach(c=>{
+      const share=rcAct25[c.rate]>0?(c.y25*1e6)/rcAct25[c.rate]:0;
+      c.bud=((rcBud[c.rate]||0)*share)/1e6;
+    });
+  }
+  CUSTOMERS=Object.values(custMap).filter(c=>c.y25>0||c.y26>0).sort((a,b)=>b.y25-a.y25);
+
+  // PARISHES — grouped by parish, 2026 vs 2025, with commercial split
+  const COMM_RCS=['RT40','RT50','RT60','RT70','BU'];
+  const parMap={};
+  rows.forEach(r=>{
+    const p=r.parish||'Unknown';
+    if(!parMap[p])parMap[p]={name:p,curr:0,prev:0,rc:0,rp:0};
+    const gwh=r.kwh/1e6;
+    if(r.year===2026){parMap[p].curr+=gwh;if(COMM_RCS.includes(r.rc))parMap[p].rc+=gwh;}
+    if(r.year===2025){parMap[p].prev+=gwh;if(COMM_RCS.includes(r.rc))parMap[p].rp+=gwh;}
+  });
+  PARISHES=Object.values(parMap).sort((a,b)=>b.curr-a.curr);
+
+  // INDUSTRIES — grouped by industry segment
+  const indRcMap={};
+  const indMap={};
+  rows.forEach(r=>{
+    const i=r.industry||'Other';
+    if(!indMap[i]){indMap[i]={name:i,y25:0,y26:0,note:''};indRcMap[i]=new Set();}
+    const gwh=r.kwh/1e6;
+    if(r.year===2025)indMap[i].y25+=gwh;
+    if(r.year===2026)indMap[i].y26+=gwh;
+    indRcMap[i].add(r.rc);
+  });
+  Object.values(indMap).forEach(i=>{i.rc=[...indRcMap[i.name]].join('/');});
+  INDUSTRIES=Object.values(indMap).filter(i=>i.y25>0||i.y26>0).sort((a,b)=>b.y25-a.y25);
+}
+
 async function syncSupabase(silent=false){
   updateSbStatus('syncing');
   const sb=getSB();
@@ -3752,10 +3765,14 @@ async function syncSupabase(silent=false){
       document.getElementById('dataStatus').className='tbadge tbg';
     }
 
+    buildDashboardData();
     leEngine=null;
     const activeId=document.querySelector('.sec.on')?.id;
     if(activeId==='le')renderLE();
     if(activeId==='ng')renderNetGen();
+
+    const el=document.getElementById('uploadStatus');
+    if(el&&sbActuals.length)el.textContent=`Live · ${sbActuals.length.toLocaleString()} actuals rows`;
 
     if(!silent)alert('Supabase sync complete\n\n'+log.join('\n'));
   }catch(e){
