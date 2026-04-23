@@ -1348,6 +1348,15 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
           <div class="ch">Combined Scenario Pivot — net kWh billed (GWh) <span>Click RC row to expand customers</span></div>
           <div class="tbl-wrap" id="pv_pivot_tbl" style="overflow-x:auto;max-height:400px;overflow-y:auto"></div>
         </div>
+
+        <!-- Customer Commentary Log -->
+        <div class="card" style="margin-top:10px">
+          <div class="ch">Customer Commentary Log
+            <span style="color:var(--text3);font-weight:400">All saved notes by period — full detail report</span>
+            <button class="btn btn-o" style="margin-left:auto" onclick="exportTableCSV('pv_notes_tbl','commentary_log')">⬇ Export</button>
+          </div>
+          <div class="tbl-wrap" id="pv_notes_tbl"></div>
+        </div>
       </div>
 
       <!-- ── VARIANCE ────────────────────────────────────── -->
@@ -4313,6 +4322,7 @@ function renderLEPivot(){
 
   renderMovers();
   renderPivotMatrix();
+  renderPivotCommentReport();
 }
 
 function renderMovers(){
@@ -4356,7 +4366,8 @@ function renderMovers(){
         <th>Notes</th>
       </tr></thead>
       <tbody>${rows.length?rows.map((m,i)=>{
-        const noteKey=`pv|${m.name}`;
+        const _prd=pvGetPeriodKey();
+        const noteKey=`pv|${_prd}|${m.name}`;
         const note=S.get(noteKey,'');
         return`<tr>
           <td style="color:var(--text3)">${i+1}</td>
@@ -4381,18 +4392,67 @@ function renderMovers(){
   if(botEl)botEl.innerHTML=moverTbl(bot,false);
 }
 
+function pvGetPeriodKey(){
+  return document.getElementById('pv_timeframe')?.value||'FY';
+}
+
 function pvAddNote(name,btn){
-  const key=`pv|${name}`;
+  const period=pvGetPeriodKey();
+  const key=`pv|${period}|${name}`;
   const cur=S.get(key,'');
-  openModal(`Variance note: ${name}`,
-    `<textarea id="pv_note_ta" style="width:100%;min-height:80px;background:var(--navy3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px">${cur}</textarea>`,
+  openModal(`Commentary — ${name} (${period})`,
+    `<textarea id="pv_note_ta" style="width:100%;min-height:100px;background:var(--navy3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;font-family:inherit">${cur}</textarea>`,
     ()=>{
       const v=document.getElementById('pv_note_ta')?.value||'';
       if(v)S.set(key,v); else S.del(key);
       btn.textContent=v?'💬':'➕';
       btn.title=v||'Add explanation';
+      renderPivotCommentReport();
     }
   );
+}
+
+function pvDeleteNote(period,name,row){
+  S.del(`pv|${period}|${name}`);
+  if(row)row.remove();
+  renderMovers();
+}
+
+function renderPivotCommentReport(){
+  const el=document.getElementById('pv_notes_tbl');
+  if(!el)return;
+  const notes=[];
+  for(let i=0;i<localStorage.length;i++){
+    const k=localStorage.key(i);
+    if(!k||!k.startsWith('jps5_pv|'))continue;
+    const inner=k.slice('jps5_pv|'.length);
+    const sep=inner.indexOf('|');
+    if(sep<0)continue; // old format without period — skip
+    const period=inner.slice(0,sep);
+    const name=inner.slice(sep+1);
+    const val=S.get(`pv|${period}|${name}`,'');
+    if(val)notes.push({period,name,note:val});
+  }
+  if(!notes.length){
+    el.innerHTML=`<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">No commentary yet. Use the ➕ buttons in the movers tables above to add notes per period.</div>`;
+    return;
+  }
+  const periodOrder={FY:0,YTD:1,MTD:2};
+  notes.sort((a,b)=>(periodOrder[a.period]??9)-(periodOrder[b.period]??9)||a.name.localeCompare(b.name));
+  el.innerHTML=`<table class="dt" id="pv_notes_dt">
+    <thead><tr>
+      <th>Customer</th>
+      <th>Period</th>
+      <th>Commentary</th>
+      <th style="width:36px"></th>
+    </tr></thead>
+    <tbody>${notes.map(n=>`<tr>
+      <td style="font-weight:600;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${n.name}">${n.name}</td>
+      <td><span class="pill pt" style="background:rgba(55,138,221,.12);color:var(--blue);border-color:var(--blue)">${n.period}</span></td>
+      <td style="font-size:11px;line-height:1.5">${n.note}</td>
+      <td style="text-align:center"><button onclick="pvDeleteNote('${n.period}','${n.name.replace(/'/g,"\\'")}',this.closest('tr'))" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:13px" title="Delete">🗑</button></td>
+    </tr>`).join('')}
+    </tbody></table>`;
 }
 
 function renderPivotMatrix(){
