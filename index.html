@@ -154,6 +154,13 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 .stabs{display:flex;gap:4px;margin-bottom:11px;flex-wrap:wrap}
 .stab{padding:5px 11px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text2);cursor:pointer;font-weight:500;transition:all .13s}
 .stab:hover{color:var(--text);border-color:var(--text3)}
+.le-subtab{display:none}.le-subtab.on{display:block}
+.le-tog{font-size:10px;padding:3px 8px}
+.le-tog.on{background:rgba(0,194,168,.18);color:var(--teal);border-color:var(--teal2)}
+.adv-slider{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.adv-slider label{font-size:10px;color:var(--text2);width:65px}
+.adv-slider input[type=range]{flex:1;accent-color:var(--teal)}
+.adv-slider span{font-size:10px;width:34px;text-align:right;color:var(--teal)}
 .stab.on{background:var(--teal);color:#000;border-color:var(--teal);font-weight:700}
 .ssec{display:none}.ssec.on{display:block}
 
@@ -1140,45 +1147,172 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 
     <!-- === LE FORECAST === -->
     <div id="le" class="sec">
-      <div style="background:rgba(245,166,35,.07);border-left:3px solid var(--amber);border-radius:4px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:var(--text2);line-height:1.7">
-        <strong style="color:var(--amber)">Latest Estimate (LE):</strong> The in-year revised forecast reflecting actual performance to date plus updated outlook for remaining months. Sourced from Supabase when connected; falls back to sample data offline. Click <strong>Sync from Supabase</strong> to pull the latest actuals and budget CSVs.
+      <!-- Sub-tab bar -->
+      <div style="display:flex;gap:4px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+        <button class="stab on" id="le_btn_ov"   onclick="swLE('ov',this)">📊 Overview</button>
+        <button class="stab"    id="le_btn_mt"   onclick="swLE('mt',this)">📈 Monthly Trend</button>
+        <button class="stab"    id="le_btn_base" onclick="swLE('base',this)">⚡ LE Base</button>
+        <button class="stab"    id="le_btn_cust" onclick="swLE('cust',this)">👥 LE Cust Vol</button>
+        <button class="stab"    id="le_btn_rc"   onclick="swLE('rc',this)">📉 LE RC Vol</button>
+        <button class="stab"    id="le_btn_adv"  onclick="swLE('adv',this)">🎛 LE Advanced</button>
+        <button class="stab"    id="le_btn_risk" onclick="swLE('risk',this)">⚠ Customer Risk</button>
+        <button class="stab"    id="le_btn_var"  onclick="swLE('var',this)">📐 Variance</button>
+        <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
+          <button class="btn btn-t" onclick="syncSupabase()">🔄 Sync</button>
+          <span id="le_last_sync" style="font-size:10px;color:var(--text3)">Using sample data</span>
+        </div>
       </div>
-      <div class="krow" id="le_krow"></div>
-      <div class="card">
-        <div class="ch">LE vs Actuals vs Budget — Monthly GWh
-          <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
-            <button class="btn btn-t" onclick="syncSupabase()">🔄 Sync from Supabase</button>
-            <button class="btn btn-o" onclick="exportChart('c_le_trend')">💾 Save Chart</button>
-            <span id="le_last_sync" style="font-size:10px;color:var(--text3)">Not yet synced — using sample data</span>
+      <!-- Global filter bar -->
+      <div class="period-bar" style="margin-bottom:10px">
+        <label>RC:</label>
+        <select class="psel" id="le_frc"  onchange="leEngine=null;renderLEActive()"><option value="">All</option></select>
+        <label>Industry:</label>
+        <select class="psel" id="le_find" onchange="leEngine=null;renderLEActive()"><option value="">All</option></select>
+        <label>Parish:</label>
+        <select class="psel" id="le_fpar" onchange="leEngine=null;renderLEActive()"><option value="">All</option></select>
+        <label>Customer:</label>
+        <input class="psel" id="le_fcust" placeholder="Search…" oninput="leEngine=null;renderLEActive()" style="width:130px">
+      </div>
+
+      <!-- ── OVERVIEW ─────────────────────────────────────── -->
+      <div id="le_tab_ov" class="le-subtab on">
+        <div class="krow" id="le_krow"></div>
+        <div class="g2">
+          <div class="card">
+            <div class="ch">Budget vs Projection by RC
+              <select class="sel" id="le_scen_sel" onchange="renderLEOverview()">
+                <option value="base">LE Base (hybrid)</option>
+                <option value="cust">LE Cust Vol</option>
+                <option value="rc">LE RC Vol</option>
+                <option value="adv">LE Advanced</option>
+              </select>
+            </div>
+            <div class="cw" style="height:220px"><canvas id="c_le_rc_bar"></canvas></div>
+          </div>
+          <div class="card">
+            <div class="ch">FY 2026 — Actuals + LE Projection</div>
+            <div class="cw" style="height:220px"><canvas id="c_le_fy"></canvas></div>
           </div>
         </div>
-        <div class="leg">
-          <span><span class="ld" style="background:#00c2a8"></span>Actual</span>
-          <span><span class="ld" style="background:#378ADD;border-style:dashed"></span>Budget</span>
-          <span><span class="ld" style="background:#f5a623"></span>LE</span>
-          <span><span class="ld" style="background:rgba(255,255,255,.25)"></span>Prior Year</span>
-        </div>
-        <div class="cw" style="height:250px"><canvas id="c_le_trend"></canvas></div>
-      </div>
-      <div class="g2">
         <div class="card">
-          <div class="ch">LE by Rate Class <span>GWh · MTD/YTD</span></div>
-          <div class="tbl-wrap" id="le_tbl"></div>
-        </div>
-        <div class="card">
-          <div class="ch">LE Scenario Comparison <span>Base · Upside · Downside</span></div>
-          <div class="cw" style="height:200px"><canvas id="c_le_scenario"></canvas></div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="ch">Customer-Level LE Entries <span>Linked to Forecast Accuracy</span>
-          <div style="display:flex;gap:6px">
-            <input class="si" style="max-width:200px" placeholder="🔍 Search customer..." id="le_q" oninput="renderLECust()"/>
-            <select class="sel" id="le_rc" onchange="renderLECust()"><option value="">All rate classes</option><option>RT40</option><option>RT50</option><option>RT70</option></select>
-            <button class="btn btn-o" onclick="exportTableCSV('le_cust_tbl','le_customers')">⬇ CSV</button>
+          <div class="ch">RC Summary — Active Scenario
+            <button class="btn btn-o" onclick="exportTableCSV('le_rc_tbl','le_rc_summary')">⬇ CSV</button>
           </div>
+          <div class="tbl-wrap" id="le_rc_tbl"></div>
         </div>
-        <div class="tbl-wrap" id="le_cust_tbl"></div>
+      </div>
+
+      <!-- ── MONTHLY TREND ───────────────────────────────── -->
+      <div id="le_tab_mt" class="le-subtab">
+        <div class="card">
+          <div class="ch">Monthly kWh — All Scenarios
+            <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">
+              <button class="btn le-tog on" data-tog="act25"  onclick="toggleLELine(this)">2025 Act</button>
+              <button class="btn le-tog on" data-tog="bud26"  onclick="toggleLELine(this)">2026 Budget</button>
+              <button class="btn le-tog on" data-tog="act26"  onclick="toggleLELine(this)">2026 Actual</button>
+              <button class="btn le-tog on" data-tog="base26" onclick="toggleLELine(this)" style="color:#f5a623">LE Base</button>
+              <button class="btn le-tog"    data-tog="cust26" onclick="toggleLELine(this)" style="color:#d946ef">LE Cust</button>
+              <button class="btn le-tog"    data-tog="rc26"   onclick="toggleLELine(this)" style="color:#0ea5e9">LE RC</button>
+              <button class="btn le-tog"    data-tog="adv26"  onclick="toggleLELine(this)" style="color:#6366f1">LE Adv</button>
+              <button class="btn btn-o" style="margin-left:auto" onclick="exportTableCSV('le_monthly_tbl','monthly_scenarios')">⬇ CSV</button>
+            </div>
+          </div>
+          <div class="cw" style="height:260px"><canvas id="c_le_monthly"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="ch">Monthly Data Matrix</div>
+          <div class="tbl-wrap" id="le_monthly_tbl"></div>
+        </div>
+      </div>
+
+      <!-- ── LE BASE ─────────────────────────────────────── -->
+      <div id="le_tab_base" class="le-subtab">
+        <div class="card">
+          <div class="ch">LE Base — Hybrid (Residential: Customer trend · Commercial: RC trend)
+            <button class="btn btn-o" onclick="exportTableCSV('le_base_tbl','le_base')">⬇ CSV</button>
+          </div>
+          <div class="cw" style="height:220px"><canvas id="c_le_base"></canvas></div>
+          <div class="tbl-wrap" id="le_base_tbl"></div>
+        </div>
+      </div>
+
+      <!-- ── LE CUST VOL ─────────────────────────────────── -->
+      <div id="le_tab_cust" class="le-subtab">
+        <div class="card">
+          <div class="ch">LE Customer Volume Growth — All remaining months adjusted by customer YTD trend
+            <button class="btn btn-o" onclick="exportTableCSV('le_cust_tbl','le_cust_vol')">⬇ CSV</button>
+          </div>
+          <div class="cw" style="height:220px"><canvas id="c_le_cust"></canvas></div>
+          <div class="tbl-wrap" id="le_cust_tbl"></div>
+        </div>
+      </div>
+
+      <!-- ── LE RC VOL ───────────────────────────────────── -->
+      <div id="le_tab_rc" class="le-subtab">
+        <div class="card">
+          <div class="ch">LE RC Volume Growth — All remaining months adjusted by rate-class YTD trend
+            <button class="btn btn-o" onclick="exportTableCSV('le_rc_vol_tbl','le_rc_vol')">⬇ CSV</button>
+          </div>
+          <div class="cw" style="height:220px"><canvas id="c_le_rc"></canvas></div>
+          <div class="tbl-wrap" id="le_rc_vol_tbl"></div>
+        </div>
+      </div>
+
+      <!-- ── LE ADVANCED ─────────────────────────────────── -->
+      <div id="le_tab_adv" class="le-subtab">
+        <div class="card">
+          <div class="ch">LE Advanced — Manual Override Controls
+            <button class="btn btn-o" onclick="clearAdvOverrides()">↺ Reset All</button>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:10px 0 14px">
+            <div>
+              <div style="font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Monthly % Adjustment</div>
+              <div id="le_adv_month"></div>
+            </div>
+            <div>
+              <div style="font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Rate Class % Adjustment</div>
+              <div id="le_adv_rc"></div>
+            </div>
+          </div>
+          <div class="cw" style="height:200px"><canvas id="c_le_adv"></canvas></div>
+          <div class="tbl-wrap" id="le_adv_tbl"></div>
+        </div>
+      </div>
+
+      <!-- ── CUSTOMER RISK ───────────────────────────────── -->
+      <div id="le_tab_risk" class="le-subtab">
+        <div class="krow" id="le_risk_krow"></div>
+        <div class="card">
+          <div class="ch">Customer Risk Flags
+            <div style="display:flex;gap:8px;align-items:center">
+              <label style="font-size:10px;color:var(--text2)">Threshold:</label>
+              <input type="number" id="risk_thresh" value="10" min="1" max="50"
+                style="width:52px;background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:3px 6px;font-size:11px"
+                onchange="renderLERisk()">
+              <span style="font-size:10px;color:var(--text2)">% below budget · 2+ months</span>
+              <button class="btn btn-o" onclick="exportTableCSV('le_risk_tbl','customer_risk')">⬇ CSV</button>
+            </div>
+          </div>
+          <div class="tbl-wrap" id="le_risk_tbl"></div>
+        </div>
+      </div>
+
+      <!-- ── VARIANCE ────────────────────────────────────── -->
+      <div id="le_tab_var" class="le-subtab">
+        <div class="card">
+          <div class="ch">Variance Analysis — Actual vs Budget (YTD)
+            <div style="display:flex;gap:6px;align-items:center">
+              <select class="sel" id="le_var_dim" onchange="renderLEVariance()">
+                <option value="rc">By Rate Class</option>
+                <option value="industry">By Industry</option>
+                <option value="customer">By Customer</option>
+              </select>
+              <button class="btn btn-o" onclick="exportTableCSV('le_var_tbl','variance_analysis')">⬇ CSV</button>
+            </div>
+          </div>
+          <div class="cw" style="height:230px"><canvas id="c_le_var"></canvas></div>
+          <div class="tbl-wrap" id="le_var_tbl"></div>
+        </div>
       </div>
     </div>
 
@@ -3525,7 +3659,8 @@ async function syncSupabase(silent=false){
     document.getElementById('dataStatus').textContent='📡 Live Data';
     document.getElementById('dataStatus').className='tbadge tbg';
 
-    // Refresh active section
+    // Refresh active section — reset cached LE engine so it recomputes with new data
+    leEngine=null;
     const activeId=document.querySelector('.sec.on')?.id;
     if(activeId==='le')renderLE();
     if(activeId==='ng')renderNetGen();
@@ -3538,157 +3673,563 @@ async function syncSupabase(silent=false){
 }
 
 /* ==========================================
-   LE FORECAST SECTION
+   LE FORECAST ENGINE (ported from Sales_forecastJPS)
 ========================================== */
-const LE_SAMPLE=[
-  {rc:'RT10',actual:76.5,budget:79.8,le:77.2,prior:81.2,le_high:79.0,le_low:75.0},
-  {rc:'RT20',actual:41.9,budget:44.0,le:42.5,prior:44.5,le_high:43.5,le_low:41.0},
-  {rc:'RT40',actual:46.0,budget:53.0,le:48.0,prior:55.0,le_high:50.0,le_low:46.0},
-  {rc:'RT50',actual:27.0,budget:27.9,le:27.5,prior:28.5,le_high:28.5,le_low:26.5},
-  {rc:'RT70',actual:30.0,budget:30.8,le:31.2,prior:36.5,le_high:32.0,le_low:29.5},
-  {rc:'ST',  actual:1.0, budget:1.4, le:1.1, prior:1.5, le_high:1.2, le_low:0.9},
-];
+const FC_MONTH_MAP={January:1,February:2,March:3,April:4,May:5,June:6,
+  July:7,August:8,September:9,October:10,November:11,December:12};
+const FC_MONTHS=['January','February','March','April','May','June',
+  'July','August','September','October','November','December'];
+const FC_CUST_RCS=['RT10','RT20','RT60']; // residential RCs → use cust method in Base
+const FC_BUD_YEAR=2026, FC_PY=2025;
 
-function buildLEData(){
-  if(sbActuals.length===0||sbBudget.length===0)return LE_SAMPLE;
-  // Aggregate Supabase data by rate_class
-  const byRC={};
-  sbActuals.forEach(r=>{
-    const rc=r.rate_class||r.rate||'';
-    if(!rc)return;
-    if(!byRC[rc])byRC[rc]={rc,actual:0,budget:0,le:0,prior:0};
-    byRC[rc].actual+=(parseFloat(r.kwh)||0)/1e6;
+// Sample data — mirrors real CSV structure so engine works offline
+const FC_SAMPLE_ACT=(()=>{
+  const rows=[];
+  const rcs=['RT10','RT20','RT40','RT50','RT70','BU'];
+  const bases={RT10:76,RT20:42,RT40:46,RT50:27,RT70:30,BU:1};
+  const inds={RT10:'Residential',RT20:'Small Commercial',RT40:'Hotels',RT50:'Manufacturing',RT70:'Industry',BU:'Bauxite'};
+  // 2025 full year
+  FC_MONTHS.forEach((mn,mi)=>{
+    rcs.forEach(rc=>{
+      const v=bases[rc]*(0.95+Math.random()*.15);
+      rows.push({'JPS A/c':'S'+rc,'Name':'Sample '+rc,'Rate category':rc,
+        'Updated Parish':'Kingston','Industry':inds[rc],
+        'Sum of net_kwh_billed_consump':(v*1e6).toFixed(0),'Month':mn+' 2025'});
+    });
   });
-  sbBudget.forEach(r=>{
-    const rc=r.rate_class||r.rate||'';
-    if(!rc||!byRC[rc])return;
-    byRC[rc].budget+=(parseFloat(r.kwh)||0)/1e6;
+  // 2026 Jan–Feb actuals
+  [1,2].forEach(m=>{
+    const mn=FC_MONTHS[m-1];
+    rcs.forEach(rc=>{
+      const v=bases[rc]*(0.93+Math.random()*.12);
+      rows.push({'JPS A/c':'S'+rc,'Name':'Sample '+rc,'Rate category':rc,
+        'Updated Parish':'Kingston','Industry':inds[rc],
+        'Sum of net_kwh_billed_consump':(v*1e6).toFixed(0),'Month':mn+' 2026'});
+    });
   });
-  const rows=Object.values(byRC);
-  rows.forEach(r=>{r.le=r.actual+(r.budget-r.actual)*0.6;r.prior=r.budget*1.05;r.le_high=r.le*1.04;r.le_low=r.le*0.96;});
-  return rows.length?rows:LE_SAMPLE;
+  return rows;
+})();
+
+const FC_SAMPLE_BUD=(()=>{
+  const rows=[];
+  const rcs=['RT10','RT20','RT40','RT50','RT70','BU'];
+  const bases={RT10:80,RT20:44,RT40:53,RT50:28,RT70:31,BU:1.4};
+  const inds={RT10:'Residential',RT20:'Small Commercial',RT40:'Hotels',RT50:'Manufacturing',RT70:'Industry',BU:'Bauxite'};
+  FC_MONTHS.forEach((mn,mi)=>{
+    rcs.forEach(rc=>{
+      const v=bases[rc]*(0.97+Math.random()*.08);
+      rows.push({'JPS A/c':'S'+rc,'Name':'Sample '+rc,'Rate category':rc,
+        'Updated Parish':'Kingston','Industry':inds[rc],
+        'Sum of Budget':(v*1e6).toFixed(0),'Month':mn+' 2026'});
+    });
+  });
+  return rows;
+})();
+
+function fcParseMonth(str){
+  if(!str)return{year:0,month:0};
+  const p=str.trim().split(' ');
+  if(p.length!==2)return{year:0,month:0};
+  return{year:parseInt(p[1])||0,month:FC_MONTH_MAP[p[0]]||0};
+}
+function fcVal(v){return parseFloat((v||'0').toString().replace(/,/g,''))||0;}
+
+function fcNormActuals(rows){
+  return rows.map(d=>{
+    const{year,month}=fcParseMonth(d['Month']);
+    return{acct:(d['JPS A/c']||'Unassigned').trim(),
+      name:(d['Name']||'Unassigned').trim(),
+      rc:(d['Rate category']||'Unassigned').trim(),
+      parish:(d['Updated Parish']||'Unassigned').trim(),
+      industry:(d['Industry']||'Unassigned').trim(),
+      kwh:fcVal(d['Sum of net_kwh_billed_consump']),year,month};
+  }).filter(d=>d.year>0&&d.month>0&&d.kwh>0);
+}
+function fcNormBudget(rows){
+  return rows.map(d=>{
+    const{year,month}=fcParseMonth(d['Month']);
+    return{acct:(d['JPS A/c']||'Unassigned').trim(),
+      name:(d['Name']||'Unassigned').trim(),
+      rc:(d['Rate category']||'Unassigned').trim(),
+      parish:(d['Updated Parish']||'Unassigned').trim(),
+      industry:(d['Industry']||'Unassigned').trim(),
+      kwh:fcVal(d['Sum of Budget']),year,month};
+  }).filter(d=>d.year>0&&d.month>0);
+}
+
+function fcFilter(arr){
+  const frc=document.getElementById('le_frc')?.value||'';
+  const find=document.getElementById('le_find')?.value||'';
+  const fpar=document.getElementById('le_fpar')?.value||'';
+  const fcust=(document.getElementById('le_fcust')?.value||'').toLowerCase();
+  return arr.filter(d=>
+    (!frc||d.rc===frc)&&
+    (!find||d.industry===find)&&
+    (!fpar||d.parish===fpar)&&
+    (!fcust||d.name.toLowerCase().includes(fcust))
+  );
+}
+
+function computeLE(normA,normB,advPct){
+  const actM26=[...new Set(normA.filter(d=>d.year===FC_BUD_YEAR).map(d=>d.month))];
+  const maxAct=actM26.length?Math.max(...actM26):0;
+  const ytdLim=Math.min(maxAct,3);
+
+  const ytdActC={},ytdActRC={},ytdPyC={},ytdPyRC={};
+  normA.filter(d=>d.month<=ytdLim&&d.month>0).forEach(d=>{
+    if(d.year===FC_PY){
+      ytdPyC[d.acct]=(ytdPyC[d.acct]||0)+d.kwh;
+      ytdPyRC[d.rc]=(ytdPyRC[d.rc]||0)+d.kwh;
+    }else if(d.year===FC_BUD_YEAR){
+      ytdActC[d.acct]=(ytdActC[d.acct]||0)+d.kwh;
+      ytdActRC[d.rc]=(ytdActRC[d.rc]||0)+d.kwh;
+    }
+  });
+
+  const q1Act=[...normA.filter(d=>d.year===FC_BUD_YEAR&&d.month<=maxAct)];
+  const leCust=[...q1Act],leRC=[...q1Act],leBase=[...q1Act],leAdv=[...q1Act];
+
+  const budFut=normB.filter(d=>d.year===FC_BUD_YEAR&&d.month>maxAct);
+  const bRcTot={},bCustTot={};
+  budFut.forEach(b=>{
+    const rk=`${b.month}|${b.rc}`,ck=`${b.month}|${b.acct}`;
+    bRcTot[rk]=(bRcTot[rk]||0)+b.kwh;
+    bCustTot[ck]=(bCustTot[ck]||0)+b.kwh;
+  });
+
+  budFut.forEach(b=>{
+    const div=Math.max(ytdLim,1);
+    const cDelta=((ytdActC[b.acct]||0)-(ytdPyC[b.acct]||0))/div;
+    const rDelta=((ytdActRC[b.rc]||0)-(ytdPyRC[b.rc]||0))/div;
+    const rWt=b.kwh/(bRcTot[`${b.month}|${b.rc}`]||1);
+    const cWt=b.kwh/(bCustTot[`${b.month}|${b.acct}`]||1);
+    const cKwh=Math.max(0,b.kwh+cDelta*cWt);
+    const rKwh=Math.max(0,b.kwh+rDelta*rWt);
+    const isCust=FC_CUST_RCS.includes(b.rc.toUpperCase());
+    const ovPct=advPct.month&&advPct.month[b.month]!==undefined?advPct.month[b.month]
+      :advPct.rc&&advPct.rc[b.rc]!==undefined?advPct.rc[b.rc]
+      :advPct.industry&&advPct.industry[b.industry]!==undefined?advPct.industry[b.industry]:null;
+    const aKwh=ovPct!==null?Math.max(0,b.kwh*(1+ovPct/100)):cKwh;
+    leCust.push({...b,kwh:cKwh});
+    leRC.push({...b,kwh:rKwh});
+    leBase.push({...b,kwh:isCust?cKwh:rKwh});
+    leAdv.push({...b,kwh:aKwh});
+  });
+
+  const sum=(arr,y,m)=>arr.filter(d=>d.year===y&&d.month===m).reduce((s,d)=>s+d.kwh,0);
+  const matrix=FC_MONTHS.map((name,idx)=>{
+    const m=idx+1;
+    const fA=fcFilter(normA),fB=fcFilter(normB);
+    const fLC=fcFilter(leCust),fLR=fcFilter(leRC),fLB=fcFilter(leBase),fLA=fcFilter(leAdv);
+    const a25=sum(fA,FC_PY,m);
+    const b26=sum(fB,FC_BUD_YEAR,m);
+    const a26=sum(fA.filter(d=>d.year===FC_BUD_YEAR&&d.month<=maxAct),FC_BUD_YEAR,m);
+    return{monthNum:m,monthName:name,monthShort:name.substring(0,3),
+      act25:a25,bud26:b26,act26:a26>0?a26:null,
+      cust26:sum(fLC,FC_BUD_YEAR,m),rc26:sum(fLR,FC_BUD_YEAR,m),
+      base26:sum(fLB,FC_BUD_YEAR,m),adv26:sum(fLA,FC_BUD_YEAR,m)};
+  });
+
+  const fA=fcFilter(normA),fB=fcFilter(normB);
+  const fLC=fcFilter(leCust),fLR=fcFilter(leRC),fLB=fcFilter(leBase),fLA=fcFilter(leAdv);
+  const allRCs=[...new Set([...fA,...fB].map(d=>d.rc))].filter(Boolean).sort();
+  const rcSummary=allRCs.map(rc=>({
+    rc,
+    act25:fA.filter(d=>d.year===FC_PY&&d.rc===rc).reduce((s,d)=>s+d.kwh,0)/1e6,
+    bud26:fB.filter(d=>d.year===FC_BUD_YEAR&&d.rc===rc).reduce((s,d)=>s+d.kwh,0)/1e6,
+    act26:fA.filter(d=>d.year===FC_BUD_YEAR&&d.rc===rc).reduce((s,d)=>s+d.kwh,0)/1e6,
+    cust26:fLC.filter(d=>d.year===FC_BUD_YEAR&&d.rc===rc).reduce((s,d)=>s+d.kwh,0)/1e6,
+    rc26:fLR.filter(d=>d.year===FC_BUD_YEAR&&d.rc===rc).reduce((s,d)=>s+d.kwh,0)/1e6,
+    base26:fLB.filter(d=>d.year===FC_BUD_YEAR&&d.rc===rc).reduce((s,d)=>s+d.kwh,0)/1e6,
+    adv26:fLA.filter(d=>d.year===FC_BUD_YEAR&&d.rc===rc).reduce((s,d)=>s+d.kwh,0)/1e6,
+  })).filter(r=>r.bud26>0||r.act25>0);
+
+  // Populate filter dropdowns once
+  const rcs=[...new Set([...normA,...normB].map(d=>d.rc))].filter(Boolean).sort();
+  const inds=[...new Set([...normA,...normB].map(d=>d.industry))].filter(Boolean).sort();
+  const pars=[...new Set([...normA,...normB].map(d=>d.parish))].filter(Boolean).sort();
+  ['le_frc','le_find','le_fpar'].forEach((id,i)=>{
+    const el=document.getElementById(id);
+    if(!el||el.dataset.populated)return;
+    const opts=[rcs,inds,pars][i];
+    opts.forEach(v=>el.insertAdjacentHTML('beforeend',`<option>${v}</option>`));
+    el.dataset.populated='1';
+  });
+
+  return{normA,normB,leCust,leRC,leBase,leAdv,matrix,rcSummary,maxAct};
+}
+
+// ── State ──────────────────────────────────────────────────
+let leEngine=null;
+let leActiveTab='ov';
+let leToggles={act25:true,bud26:true,act26:true,base26:true,cust26:false,rc26:false,adv26:false};
+let leAdvPct={month:{},rc:{},industry:{}};
+
+function fcGetData(){
+  const rawA=sbActuals.length?sbActuals:FC_SAMPLE_ACT;
+  const rawB=sbBudget.length?sbBudget:FC_SAMPLE_BUD;
+  return computeLE(fcNormActuals(rawA),fcNormBudget(rawB),leAdvPct);
+}
+
+function swLE(tab,btn){
+  leActiveTab=tab;
+  document.querySelectorAll('.le-subtab').forEach(d=>{d.classList.remove('on');d.style.display='none';});
+  document.querySelectorAll('[id^="le_btn_"]').forEach(b=>b.classList.remove('on'));
+  const el=document.getElementById('le_tab_'+tab);
+  if(el){el.classList.add('on');el.style.display='';}
+  if(btn)btn.classList.add('on');
+  renderLEActive();
+}
+
+function renderLEActive(){
+  if(!leEngine)leEngine=fcGetData();
+  switch(leActiveTab){
+    case'ov':   renderLEOverview();break;
+    case'mt':   renderLEMonthly();break;
+    case'base': renderLEScenario('base');break;
+    case'cust': renderLEScenario('cust');break;
+    case'rc':   renderLEScenario('rc');break;
+    case'adv':  renderLEAdvanced();break;
+    case'risk': renderLERisk();break;
+    case'var':  renderLEVariance();break;
+  }
 }
 
 function renderLE(){
-  const data=buildLEData();
-  const tot=k=>data.reduce((s,r)=>s+(r[k]||0),0);
-  const tA=tot('actual'),tB=tot('budget'),tL=tot('le'),tP=tot('prior');
-
-  const kEl=document.getElementById('le_krow');
-  if(kEl)kEl.innerHTML=`
-    <div class="kpi kt"><div class="kl">Total LE (YTD)</div><div class="kv">${tL.toFixed(1)} GWh</div><div class="ks nt">Latest Estimate</div></div>
-    <div class="kpi ${pct(tL,tB)>=0?'kg':'kr'}"><div class="kl">LE vs Budget</div><div class="kv">${pct(tL,tB)>=0?'+':''}${pct(tL,tB).toFixed(1)}%</div><div class="ks ${pct(tL,tB)>=0?'up':'dn'}">${(tL-tB).toFixed(1)} GWh</div></div>
-    <div class="kpi ${pct(tL,tP)>=0?'kg':'kr'}"><div class="kl">LE vs Prior Year</div><div class="kv">${pct(tL,tP)>=0?'+':''}${pct(tL,tP).toFixed(1)}%</div><div class="ks ${pct(tL,tP)>=0?'up':'dn'}">YoY</div></div>
-    <div class="kpi ka"><div class="kl">MTD Actual</div><div class="kv">${tA.toFixed(1)} GWh</div><div class="ks nt">vs LE: ${(tA-tL).toFixed(1)}</div></div>
-    <div class="kpi kg"><div class="kl">Upside Segments</div><div class="kv">${data.filter(r=>r.le>r.budget).length}</div><div class="ks up">Above budget</div></div>
-    <div class="kpi kr"><div class="kl">Downside Segments</div><div class="kv">${data.filter(r=>r.le<r.budget).length}</div><div class="ks dn">Below budget</div></div>`;
-
-  // LE table
-  const tEl=document.getElementById('le_tbl');
-  if(tEl){
-    tEl.innerHTML=`<table class="dt" id="le_dt">
-      <thead><tr><th>Rate Class</th><th>MTD Actual</th><th>Budget</th><th>Latest Estimate</th><th>LE High</th><th>LE Low</th><th>LE vs Budget</th><th>LE vs Prior Yr</th></tr></thead>
-      <tbody>${data.map(r=>{
-        const vb=pct(r.le,r.budget),yy=pct(r.le,r.prior);
-        return`<tr>
-          <td><span class="pill pt">${r.rc}</span></td>
-          <td>${r.actual.toFixed(1)}</td>
-          <td style="color:var(--text3)">${r.budget.toFixed(1)}</td>
-          <td style="font-weight:700;color:var(--teal)">${r.le.toFixed(1)}</td>
-          <td style="color:var(--green);font-size:10px">${(r.le_high||r.le).toFixed(1)}</td>
-          <td style="color:var(--red);font-size:10px">${(r.le_low||r.le).toFixed(1)}</td>
-          <td><span class="heat ${hc(vb)}">${vb>=0?'+':''}${vb.toFixed(1)}%</span></td>
-          <td>${vbar(r.le,r.prior)}</td>
-        </tr>`;
-      }).join('')}
-      <tr class="ft"><td>Total</td><td>${tA.toFixed(1)}</td><td>${tB.toFixed(1)}</td>
-        <td style="color:var(--teal)">${tL.toFixed(1)}</td>
-        <td></td><td></td>
-        <td><span class="heat ${hc(pct(tL,tB))}">${pct(tL,tB)>=0?'+':''}${pct(tL,tB).toFixed(1)}%</span></td>
-        <td>${vbar(tL,tP)}</td>
-      </tr></tbody></table>`;
-    makeSortable('le_dt');
-  }
-
-  // LE trend chart
-  destroyChart('c_le_trend');
-  const lc=document.getElementById('c_le_trend');
-  if(lc&&lc.offsetParent){
-    const leM={
-      actual:[234,221,null,null,null,null,null,null,null,null,null,null],
-      budget:[248,236,244,251,265,258,262,268,255,248,240,235],
-      le:    [234,221,238,245,252,248,255,261,250,244,236,231],
-      prior: [268,255,261,258,272,265,270,276,262,256,248,243]
-    };
-    chartInstances['c_le_trend']=new Chart(lc,{
-      type:'bar',
-      data:{labels:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
-        datasets:[
-          {label:'Actual',data:leM.actual,backgroundColor:'rgba(0,194,168,0.65)',borderColor:'#00c2a8',borderWidth:1,borderRadius:2,order:1},
-          {label:'Budget',data:leM.budget,type:'line',borderColor:'#378ADD',borderDash:[5,3],backgroundColor:'transparent',tension:.3,pointRadius:3,order:0},
-          {label:'LE',data:leM.le,type:'line',borderColor:'#f5a623',backgroundColor:'rgba(245,166,35,0.07)',tension:.3,pointRadius:3,fill:true,order:0},
-          {label:'Prior Year',data:leM.prior,type:'line',borderColor:'rgba(255,255,255,0.2)',backgroundColor:'transparent',tension:.3,pointRadius:2,borderDash:[2,4],order:0},
-        ]},
-      options:{responsive:true,maintainAspectRatio:false,
-        plugins:{legend:{display:true,labels:{color:TC,font:{size:10},boxWidth:10}}},
-        scales:{x:{ticks:{color:TC,font:{size:10}},grid:{color:CC}},y:{ticks:{color:TC,font:{size:10}},grid:{color:CC}}}}
-    });
-  }
-
-  // Scenario chart
-  destroyChart('c_le_scenario');
-  const sc=document.getElementById('c_le_scenario');
-  if(sc&&sc.offsetParent){
-    chartInstances['c_le_scenario']=new Chart(sc,{
-      type:'bar',
-      data:{labels:data.map(r=>r.rc),
-        datasets:[
-          {label:'Budget',data:data.map(r=>r.budget),backgroundColor:'rgba(55,138,221,0.4)',borderRadius:2},
-          {label:'LE Base',data:data.map(r=>r.le),backgroundColor:'rgba(245,166,35,0.6)',borderRadius:2},
-          {label:'LE High',data:data.map(r=>r.le_high||r.le),backgroundColor:'rgba(39,196,133,0.4)',borderRadius:2},
-          {label:'LE Low',data:data.map(r=>r.le_low||r.le),backgroundColor:'rgba(232,64,64,0.3)',borderRadius:2},
-        ]},
-      options:{responsive:true,maintainAspectRatio:false,
-        plugins:{legend:{display:true,labels:{color:TC,font:{size:10},boxWidth:10}}},
-        scales:{x:{ticks:{color:TC,font:{size:10}},grid:{color:CC}},y:{ticks:{color:TC},grid:{color:CC}}}}
-    });
-  }
-
-  // Customer-level LE table
-  renderLECust();
-
-  // Sync time
+  leEngine=fcGetData();
+  renderLEActive();
   const ls=S.get('sb_last_sync',null);
-  const lsEl=document.getElementById('le_last_sync');
-  if(lsEl)lsEl.textContent=ls?`Last synced: ${ls}`:(sbActuals.length?`${sbActuals.length} actuals loaded`:'Not yet synced — using sample data');
+  const el=document.getElementById('le_last_sync');
+  if(el)el.textContent=ls?`Synced: ${ls}`:(sbActuals.length?`${sbActuals.length} rows loaded`:'Using sample data');
 }
 
-function renderLECust(){
-  const q=(document.getElementById('le_q')?.value||'').toLowerCase();
-  const rc=document.getElementById('le_rc')?.value||'';
-  const cust=CUSTOMERS.filter(c=>c.rate!=='RT10'&&c.rate!=='RT20'
-    &&(!q||(c.name.toLowerCase().includes(q)||c.num.includes(q)))
-    &&(!rc||c.rate===rc));
-  const el=document.getElementById('le_cust_tbl');
-  if(!el)return;
-  el.innerHTML=`<table class="dt" id="le_cust_dt">
-    <thead><tr><th>Acct #</th><th>Customer</th><th>Rate</th><th>Industry</th><th>2025 YTD</th><th>2026 Actual</th><th>Budget</th><th>LE (est.)</th><th>LE vs Budget</th><th>LE vs Prior</th></tr></thead>
-    <tbody>${cust.map(c=>{
-      const le=c.y26+(c.bud-c.y26)*0.6;
+// ── Overview ───────────────────────────────────────────────
+function renderLEOverview(){
+  if(!leEngine)return;
+  const{matrix,rcSummary,maxAct}=leEngine;
+  const scen=(document.getElementById('le_scen_sel')?.value||'base')+'26';
+
+  const totProj=matrix.reduce((s,m)=>s+(m.act26||m[scen]||0),0);
+  const totBud=matrix.reduce((s,m)=>s+m.bud26,0);
+  const tot25=matrix.reduce((s,m)=>s+m.act25,0);
+  const vb=totBud?(totProj-totBud)/totBud*100:0;
+  const vy=tot25?(totProj-tot25)/tot25*100:0;
+  const mo=maxAct?FC_MONTHS[maxAct-1].substring(0,3):'--';
+
+  document.getElementById('le_krow').innerHTML=`
+    <div class="kpi kt"><div class="kl">FY2026 Projection</div><div class="kv">${(totProj/1e9).toFixed(2)}B kWh</div><div class="ks nt">through ${mo} + LE</div></div>
+    <div class="kpi ${vb>=0?'kg':'kr'}"><div class="kl">vs 2026 Budget</div><div class="kv">${vb>=0?'+':''}${vb.toFixed(1)}%</div><div class="ks ${vb>=0?'up':'dn'}">${((totProj-totBud)/1e6).toFixed(0)}M kWh</div></div>
+    <div class="kpi ${vy>=0?'kg':'kr'}"><div class="kl">vs 2025 Actual</div><div class="kv">${vy>=0?'+':''}${vy.toFixed(1)}%</div><div class="ks ${vy>=0?'up':'dn'}">YoY</div></div>
+    <div class="kpi ka"><div class="kl">Latest Actual Month</div><div class="kv">${mo} 2026</div><div class="ks nt">Actuals through here</div></div>
+    <div class="kpi kg"><div class="kl">RC Segments Above Bud</div><div class="kv">${rcSummary.filter(r=>r[scen]>=r.bud26).length}</div><div class="ks up">of ${rcSummary.length} total</div></div>
+    <div class="kpi kr"><div class="kl">RC Segments Below Bud</div><div class="kv">${rcSummary.filter(r=>r[scen]<r.bud26).length}</div><div class="ks dn">at risk</div></div>`;
+
+  destroyChart('c_le_rc_bar');
+  const cv=document.getElementById('c_le_rc_bar');
+  if(cv&&cv.offsetParent)chartInstances['c_le_rc_bar']=new Chart(cv,{
+    type:'bar',
+    data:{labels:rcSummary.map(r=>r.rc),datasets:[
+      {label:'Budget',data:rcSummary.map(r=>r.bud26),backgroundColor:'rgba(55,138,221,0.4)',borderRadius:2},
+      {label:'Projection',data:rcSummary.map(r=>r[scen]),
+       backgroundColor:rcSummary.map(r=>r[scen]>=r.bud26?'rgba(39,196,133,.65)':'rgba(232,64,64,.55)'),borderRadius:2},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:true,labels:{color:TC,font:{size:10},boxWidth:10}}},
+      scales:{x:{ticks:{color:TC},grid:{color:CC}},
+        y:{ticks:{color:TC,callback:v=>v.toFixed(1)+'M'},grid:{color:CC}}}}
+  });
+
+  destroyChart('c_le_fy');
+  const cv2=document.getElementById('c_le_fy');
+  if(cv2&&cv2.offsetParent)chartInstances['c_le_fy']=new Chart(cv2,{
+    type:'bar',
+    data:{labels:['2025 Actual','2026 Budget','2026 Projection'],
+      datasets:[{data:[tot25/1e9,totBud/1e9,totProj/1e9],
+        backgroundColor:['rgba(55,138,221,.5)','rgba(245,166,35,.5)',
+          totProj>=totBud?'rgba(39,196,133,.7)':'rgba(232,64,64,.6)'],borderRadius:3}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{x:{ticks:{color:TC},grid:{color:CC}},
+        y:{ticks:{color:TC,callback:v=>v.toFixed(2)+'B'},grid:{color:CC}}}}
+  });
+
+  document.getElementById('le_rc_tbl').innerHTML=`<table class="dt" id="le_rc_dt">
+    <thead><tr><th>RC</th><th>2025 FY Act (M)</th><th>2026 Budget (M)</th><th>2026 Act YTD (M)</th><th>2026 Projection (M)</th><th>vs Budget</th><th>vs PY</th></tr></thead>
+    <tbody>${rcSummary.map(r=>{
+      const p=r[scen]||0,vb2=r.bud26?(p-r.bud26)/r.bud26*100:0;
       return`<tr>
-        <td style="font-size:10px;color:var(--text3)">${c.num}</td>
-        <td style="font-weight:500">${c.name}</td>
-        <td><span class="pill pt">${c.rate}</span></td>
-        <td>${c.ind}</td>
-        <td>${c.y25.toFixed(1)}</td>
-        <td>${c.y26.toFixed(1)}</td>
-        <td style="color:var(--text3)">${c.bud.toFixed(1)}</td>
-        <td style="font-weight:700;color:var(--teal)">${le.toFixed(1)}</td>
-        <td><span class="heat ${hc(pct(le,c.bud))}">${pct(le,c.bud)>=0?'+':''}${pct(le,c.bud).toFixed(1)}%</span></td>
-        <td>${vbar(le,c.y25)}</td>
+        <td><span class="pill pt">${r.rc}</span></td>
+        <td>${r.act25.toFixed(2)}</td>
+        <td style="color:var(--text2)">${r.bud26.toFixed(2)}</td>
+        <td>${r.act26.toFixed(2)}</td>
+        <td style="font-weight:700;color:var(--teal)">${p.toFixed(2)}</td>
+        <td><span class="heat ${hc(vb2)}">${vb2>=0?'+':''}${vb2.toFixed(1)}%</span></td>
+        <td>${vbar(p,r.act25)}</td>
       </tr>`;
-    }).join('')}</tbody></table>`;
-  makeSortable('le_cust_dt');
+    }).join('')}
+    <tr class="ft"><td>Total</td>
+      <td>${rcSummary.reduce((s,r)=>s+r.act25,0).toFixed(2)}</td>
+      <td>${rcSummary.reduce((s,r)=>s+r.bud26,0).toFixed(2)}</td>
+      <td>${rcSummary.reduce((s,r)=>s+r.act26,0).toFixed(2)}</td>
+      <td style="color:var(--teal)">${rcSummary.reduce((s,r)=>s+(r[scen]||0),0).toFixed(2)}</td>
+      <td></td><td></td>
+    </tr></tbody></table>`;
+  makeSortable('le_rc_dt');
+}
+
+// ── Monthly Trend ──────────────────────────────────────────
+function renderLEMonthly(){
+  if(!leEngine)return;
+  const{matrix}=leEngine;
+  const tog=leToggles;
+  const cc={act25:'#94a3b8',bud26:'#378ADD',act26:'#8b5cf6',base26:'#f5a623',cust26:'#d946ef',rc26:'#0ea5e9',adv26:'#6366f1'};
+  const ds=[];
+  if(tog.act25)ds.push({label:'2025 Act',data:matrix.map(m=>m.act25/1e6),borderColor:cc.act25,borderDash:[5,5],fill:false,tension:.3,pointRadius:2});
+  if(tog.bud26)ds.push({label:'2026 Budget',data:matrix.map(m=>m.bud26/1e6),borderColor:cc.bud26,borderWidth:2,fill:false,tension:.3,pointRadius:2});
+  if(tog.act26)ds.push({label:'2026 Actual',data:matrix.map(m=>m.act26?m.act26/1e6:null),borderColor:cc.act26,borderWidth:3,fill:false,tension:.3,pointRadius:4});
+  if(tog.base26)ds.push({label:'LE Base',data:matrix.map(m=>m.base26/1e6),borderColor:cc.base26,borderDash:[4,4],fill:false,tension:.3,pointRadius:2});
+  if(tog.cust26)ds.push({label:'LE Cust',data:matrix.map(m=>m.cust26/1e6),borderColor:cc.cust26,borderDash:[4,4],fill:false,tension:.3,pointRadius:2});
+  if(tog.rc26)ds.push({label:'LE RC',data:matrix.map(m=>m.rc26/1e6),borderColor:cc.rc26,borderDash:[4,4],fill:false,tension:.3,pointRadius:2});
+  if(tog.adv26)ds.push({label:'LE Adv',data:matrix.map(m=>m.adv26/1e6),borderColor:cc.adv26,borderDash:[4,4],fill:false,tension:.3,pointRadius:2});
+
+  destroyChart('c_le_monthly');
+  const cv=document.getElementById('c_le_monthly');
+  if(cv&&cv.offsetParent)chartInstances['c_le_monthly']=new Chart(cv,{
+    type:'line',
+    data:{labels:matrix.map(m=>m.monthShort),datasets:ds},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:true,labels:{color:TC,font:{size:10},boxWidth:10}}},
+      scales:{x:{ticks:{color:TC},grid:{color:CC}},
+        y:{ticks:{color:TC,callback:v=>v.toFixed(0)+'M'},grid:{color:CC}}}}
+  });
+
+  document.getElementById('le_monthly_tbl').innerHTML=`<table class="dt" style="font-size:10px;white-space:nowrap">
+    <thead><tr>
+      <th>Month</th>
+      <th style="color:#94a3b8">2025 Act (M)</th>
+      <th style="color:#378ADD">Budget (M)</th>
+      <th style="color:#8b5cf6">2026 Actual</th>
+      <th style="color:#f5a623">LE Base (M)</th>
+      <th style="color:#d946ef">LE Cust (M)</th>
+      <th style="color:#0ea5e9">LE RC (M)</th>
+      <th style="color:#6366f1">LE Adv (M)</th>
+      <th>Base vs Bud</th><th>Base vs PY</th>
+    </tr></thead>
+    <tbody>${matrix.map(m=>{
+      const p=m.base26/1e6,b=m.bud26/1e6;
+      const vb=b?(p-b)/b*100:0,vy=m.act25?(m.base26-m.act25)/m.act25*100:0;
+      return`<tr>
+        <td style="font-weight:600">${m.monthShort}</td>
+        <td>${(m.act25/1e6).toFixed(2)}</td>
+        <td>${b.toFixed(2)}</td>
+        <td>${m.act26?(m.act26/1e6).toFixed(2):'—'}</td>
+        <td style="color:var(--amber);font-weight:600">${p.toFixed(2)}</td>
+        <td>${(m.cust26/1e6).toFixed(2)}</td>
+        <td>${(m.rc26/1e6).toFixed(2)}</td>
+        <td>${(m.adv26/1e6).toFixed(2)}</td>
+        <td><span class="heat ${hc(vb)}">${vb>=0?'+':''}${vb.toFixed(1)}%</span></td>
+        <td>${vbar(m.base26,m.act25)}</td>
+      </tr>`;
+    }).join('')}
+    <tr class="ft"><td>Total</td>
+      <td>${(matrix.reduce((s,m)=>s+m.act25,0)/1e9).toFixed(3)}B</td>
+      <td>${(matrix.reduce((s,m)=>s+m.bud26,0)/1e9).toFixed(3)}B</td>
+      <td>${(matrix.filter(m=>m.act26).reduce((s,m)=>s+(m.act26||0),0)/1e6).toFixed(0)}M</td>
+      <td style="color:var(--amber)">${(matrix.reduce((s,m)=>s+m.base26,0)/1e9).toFixed(3)}B</td>
+      <td>${(matrix.reduce((s,m)=>s+m.cust26,0)/1e9).toFixed(3)}B</td>
+      <td>${(matrix.reduce((s,m)=>s+m.rc26,0)/1e9).toFixed(3)}B</td>
+      <td>${(matrix.reduce((s,m)=>s+m.adv26,0)/1e9).toFixed(3)}B</td>
+      <td></td><td></td>
+    </tr></tbody></table>`;
+}
+
+function toggleLELine(btn){
+  const t=btn.dataset.tog;
+  leToggles[t]=!leToggles[t];
+  btn.classList.toggle('on',leToggles[t]);
+  renderLEMonthly();
+}
+
+// ── Scenario detail (Base / Cust / RC / Adv) ──────────────
+function renderLEScenario(scen){
+  if(!leEngine)return;
+  const{matrix,rcSummary}=leEngine;
+  const sk=scen+'26';
+  const cols={base:'#f5a623',cust:'#d946ef',rc:'#0ea5e9',adv:'#6366f1'};
+  const color=cols[scen];
+  const canvMap={base:'c_le_base',cust:'c_le_cust',rc:'c_le_rc',adv:'c_le_adv'};
+  const tblMap={base:'le_base_tbl',cust:'le_cust_tbl',rc:'le_rc_vol_tbl',adv:'le_adv_tbl'};
+
+  destroyChart(canvMap[scen]);
+  const cv=document.getElementById(canvMap[scen]);
+  if(cv&&cv.offsetParent)chartInstances[canvMap[scen]]=new Chart(cv,{
+    type:'bar',
+    data:{labels:matrix.map(m=>m.monthShort),datasets:[
+      {label:'Budget',data:matrix.map(m=>m.bud26/1e6),backgroundColor:'rgba(55,138,221,0.3)',borderRadius:2},
+      {label:'2026 Actual',data:matrix.map(m=>(m.act26||0)/1e6),backgroundColor:'rgba(0,194,168,0.7)',borderRadius:2},
+      {label:'LE '+scen.toUpperCase(),data:matrix.map(m=>m[sk]/1e6),
+       type:'line',borderColor:color,backgroundColor:'transparent',tension:.3,pointRadius:2,fill:false},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:true,labels:{color:TC,font:{size:10},boxWidth:10}}},
+      scales:{x:{ticks:{color:TC},grid:{color:CC}},
+        y:{ticks:{color:TC,callback:v=>v.toFixed(0)+'M'},grid:{color:CC}}}}
+  });
+
+  document.getElementById(tblMap[scen]).innerHTML=`<table class="dt">
+    <thead><tr><th>RC</th><th>2025 FY Act (M)</th><th>2026 Budget (M)</th><th>2026 Act YTD (M)</th><th>2026 LE ${scen.toUpperCase()} (M)</th><th>vs Budget</th><th>vs PY</th></tr></thead>
+    <tbody>${rcSummary.map(r=>{
+      const p=r[sk]||0,vb=r.bud26?(p-r.bud26)/r.bud26*100:0;
+      return`<tr>
+        <td><span class="pill pt">${r.rc}</span></td>
+        <td>${r.act25.toFixed(2)}</td>
+        <td style="color:var(--text2)">${r.bud26.toFixed(2)}</td>
+        <td>${r.act26.toFixed(2)}</td>
+        <td style="font-weight:700;color:${color}">${p.toFixed(2)}</td>
+        <td><span class="heat ${hc(vb)}">${vb>=0?'+':''}${vb.toFixed(1)}%</span></td>
+        <td>${vbar(p,r.act25)}</td>
+      </tr>`;
+    }).join('')}
+    <tr class="ft"><td>Total</td>
+      <td>${rcSummary.reduce((s,r)=>s+r.act25,0).toFixed(2)}</td>
+      <td>${rcSummary.reduce((s,r)=>s+r.bud26,0).toFixed(2)}</td>
+      <td>${rcSummary.reduce((s,r)=>s+r.act26,0).toFixed(2)}</td>
+      <td style="color:${color}">${rcSummary.reduce((s,r)=>s+(r[sk]||0),0).toFixed(2)}</td>
+      <td></td><td></td>
+    </tr></tbody></table>`;
+}
+
+// ── Advanced (overrides) ───────────────────────────────────
+function renderLEAdvanced(){
+  if(!leEngine)return;
+  const mEl=document.getElementById('le_adv_month');
+  const rEl=document.getElementById('le_adv_rc');
+  if(mEl)mEl.innerHTML=FC_MONTHS.map((mn,i)=>{
+    const m=i+1,v=leAdvPct.month[m]||0;
+    return`<div class="adv-slider">
+      <label>${mn.substring(0,3)}</label>
+      <input type="range" min="-30" max="30" value="${v}"
+        oninput="this.nextElementSibling.textContent=this.value+'%';leAdvPct.month[${m}]=+this.value;leEngine=null;renderLEActive()">
+      <span>${v}%</span></div>`;
+  }).join('');
+  const rcs=leEngine.rcSummary.map(r=>r.rc);
+  if(rEl)rEl.innerHTML=rcs.map(rc=>{
+    const v=leAdvPct.rc[rc]||0;
+    return`<div class="adv-slider">
+      <label>${rc}</label>
+      <input type="range" min="-30" max="30" value="${v}"
+        oninput="this.nextElementSibling.textContent=this.value+'%';leAdvPct.rc['${rc}']=+this.value;leEngine=null;renderLEActive()">
+      <span>${v}%</span></div>`;
+  }).join('');
+  renderLEScenario('adv');
+}
+
+function clearAdvOverrides(){
+  leAdvPct={month:{},rc:{},industry:{}};
+  leEngine=null;
+  renderLEActive();
+}
+
+// ── Customer Risk ──────────────────────────────────────────
+function renderLERisk(){
+  if(!leEngine)return;
+  const{normA,normB,maxAct}=leEngine;
+  const thresh=parseFloat(document.getElementById('risk_thresh')?.value)||10;
+  const custBud={},custAct={};
+  normB.filter(d=>d.year===FC_BUD_YEAR&&d.month<=maxAct).forEach(d=>{
+    if(!custBud[d.name])custBud[d.name]={rc:d.rc,ind:d.industry,months:{}};
+    custBud[d.name].months[d.month]=(custBud[d.name].months[d.month]||0)+d.kwh;
+  });
+  normA.filter(d=>d.year===FC_BUD_YEAR&&d.month<=maxAct).forEach(d=>{
+    if(!custAct[d.name])custAct[d.name]={months:{}};
+    custAct[d.name].months[d.month]=(custAct[d.name].months[d.month]||0)+d.kwh;
+  });
+  const risks=[];
+  Object.keys(custBud).forEach(name=>{
+    const bm=custBud[name].months;
+    const am=(custAct[name]||{months:{}}).months;
+    let below=0,totB=0,totA=0;
+    Object.keys(bm).forEach(m=>{
+      const b=bm[m]||0,a=am[m]||0;
+      totB+=b;totA+=a;
+      if(b>0&&(b-a)/b*100>thresh)below++;
+    });
+    if(below>=2){
+      const vp=totB?(totA-totB)/totB*100:0;
+      risks.push({name,rc:custBud[name].rc,ind:custBud[name].ind,totA,totB,vp,below});
+    }
+  });
+  risks.sort((a,b)=>a.vp-b.vp);
+  const kEl=document.getElementById('le_risk_krow');
+  if(kEl)kEl.innerHTML=`
+    <div class="kpi kr"><div class="kl">At-Risk Customers</div><div class="kv">${risks.length}</div><div class="ks dn">${thresh}%+ below bud 2+ mos</div></div>
+    <div class="kpi ka"><div class="kl">Budget at Risk</div><div class="kv">${(risks.reduce((s,r)=>s+r.totB,0)/1e6).toFixed(1)}M kWh</div><div class="ks dn">these accounts</div></div>
+    <div class="kpi kt"><div class="kl">Actual vs At-Risk Bud</div><div class="kv">${(risks.reduce((s,r)=>s+r.totA,0)/1e6).toFixed(1)}M kWh</div><div class="ks nt">YTD</div></div>
+    <div class="kpi kp"><div class="kl">Accounts Monitored</div><div class="kv">${Object.keys(custBud).length}</div><div class="ks nt">through ${FC_MONTHS[(maxAct||1)-1]?.substring(0,3)}</div></div>`;
+  const el=document.getElementById('le_risk_tbl');
+  if(!el)return;
+  if(!risks.length){el.innerHTML=`<div style="padding:20px;text-align:center;color:var(--green)">✓ No customers ${thresh}%+ below budget for 2+ months</div>`;return;}
+  el.innerHTML=`<table class="dt" id="le_risk_dt">
+    <thead><tr><th>Customer</th><th>RC</th><th>Industry</th><th>Budget YTD</th><th>Actual YTD</th><th>vs Budget</th><th>Risk Months</th></tr></thead>
+    <tbody>${risks.map(r=>`<tr>
+      <td style="font-weight:500">${r.name}</td>
+      <td><span class="pill pt">${r.rc}</span></td>
+      <td>${r.ind}</td>
+      <td>${(r.totB/1e6).toFixed(3)}M</td>
+      <td>${(r.totA/1e6).toFixed(3)}M</td>
+      <td><span class="heat ${hc(r.vp)}">${r.vp.toFixed(1)}%</span></td>
+      <td><span class="pill ${r.below>=3?'pr':'pa'}">${r.below} of ${maxAct}</span></td>
+    </tr>`).join('')}</tbody></table>`;
+  makeSortable('le_risk_dt');
+}
+
+// ── Variance ───────────────────────────────────────────────
+function renderLEVariance(){
+  if(!leEngine)return;
+  const{normA,normB,maxAct}=leEngine;
+  const dim=document.getElementById('le_var_dim')?.value||'rc';
+  const getKey=d=>dim==='rc'?d.rc:dim==='industry'?d.industry:d.name;
+  const actD={},budD={};
+  normB.filter(d=>d.year===FC_BUD_YEAR&&d.month<=maxAct).forEach(d=>{const k=getKey(d)||'Other';budD[k]=(budD[k]||0)+d.kwh;});
+  normA.filter(d=>d.year===FC_BUD_YEAR&&d.month<=maxAct).forEach(d=>{const k=getKey(d)||'Other';actD[k]=(actD[k]||0)+d.kwh;});
+  const keys=[...new Set([...Object.keys(budD),...Object.keys(actD)])].sort();
+  const rows=keys.map(k=>({key:k,bud:budD[k]||0,act:actD[k]||0}))
+    .filter(r=>r.bud>0||r.act>0).sort((a,b)=>Math.abs(b.act-b.bud)-Math.abs(a.act-a.bud));
+
+  destroyChart('c_le_var');
+  const cv=document.getElementById('c_le_var');
+  if(cv&&cv.offsetParent)chartInstances['c_le_var']=new Chart(cv,{
+    type:'bar',
+    data:{labels:rows.map(r=>r.key),datasets:[
+      {label:'Budget',data:rows.map(r=>r.bud/1e6),backgroundColor:'rgba(55,138,221,0.4)',borderRadius:2},
+      {label:'Actual YTD',data:rows.map(r=>r.act/1e6),
+       backgroundColor:rows.map(r=>r.act>=r.bud?'rgba(39,196,133,.7)':'rgba(232,64,64,.6)'),borderRadius:2},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:true,labels:{color:TC,font:{size:10},boxWidth:10}}},
+      scales:{x:{ticks:{color:TC,font:{size:9}},grid:{color:CC}},
+        y:{ticks:{color:TC,callback:v=>v.toFixed(0)+'M'},grid:{color:CC}}}}
+  });
+
+  document.getElementById('le_var_tbl').innerHTML=`<table class="dt" id="le_var_dt">
+    <thead><tr><th>${dim==='rc'?'Rate Class':dim==='industry'?'Industry':'Customer'}</th><th>Budget YTD</th><th>Actual YTD</th><th>Variance (kWh)</th><th>Variance %</th></tr></thead>
+    <tbody>${rows.map(r=>{
+      const v=r.act-r.bud,vp=r.bud?v/r.bud*100:0;
+      return`<tr>
+        <td style="font-weight:500">${r.key}</td>
+        <td>${(r.bud/1e6).toFixed(3)}M</td>
+        <td>${(r.act/1e6).toFixed(3)}M</td>
+        <td style="${v>=0?'color:var(--green)':'color:var(--red)'}">${v>=0?'+':''}${(v/1e6).toFixed(3)}M</td>
+        <td><span class="heat ${hc(vp)}">${vp>=0?'+':''}${vp.toFixed(1)}%</span></td>
+      </tr>`;
+    }).join('')}
+    <tr class="ft"><td>Total</td>
+      <td>${(rows.reduce((s,r)=>s+r.bud,0)/1e6).toFixed(0)}M</td>
+      <td>${(rows.reduce((s,r)=>s+r.act,0)/1e6).toFixed(0)}M</td>
+      <td>${((rows.reduce((s,r)=>s+r.act,0)-rows.reduce((s,r)=>s+r.bud,0))/1e6).toFixed(0)}M</td>
+      <td></td>
+    </tr></tbody></table>`;
+  makeSortable('le_var_dt');
 }
 
 /* ==========================================
