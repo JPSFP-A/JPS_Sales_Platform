@@ -351,7 +351,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
     </div>
     <div class="tb-right">
       <span class="tbadge tba" id="periodLabel">Feb 2026 · MTD</span>
-      <span class="tbadge tbr">YTD: −14.6% YoY</span>
+      <span class="tbadge tbr" id="kpi_ytd_yoy">-- YoY</span>
       <span class="tbadge tbt" id="dataStatus">⚡ Sample Data</span>
       <span class="sb-badge sb-offline" id="sbStatus" onclick="syncSupabase()" title="Click to sync from Supabase">○ Offline</span>
       <div class="ua" id="uAvatar" onclick="toggleMenu()">--</div>
@@ -393,10 +393,10 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
     <!-- === OVERVIEW === -->
     <div id="ov" class="sec on">
       <div class="krow">
-        <div class="kpi kt"><div class="kl">Feb Sales</div><div class="kv">221.3 GWh</div><div class="ks dn">↓ −6.0% vs Budget</div></div>
-        <div class="kpi kr"><div class="kl">YTD Sales</div><div class="kv">455.5 GWh</div><div class="ks dn">↓ −14.6% YoY</div></div>
-        <div class="kpi ka"><div class="kl">vs Budget (MTD)</div><div class="kv">−6.0%</div><div class="ks dn">Provisional budget</div></div>
-        <div class="kpi kg"><div class="kl">Net Billers</div><div class="kv">868</div><div class="ks dn">10× unlicensed DG</div></div>
+        <div class="kpi kt"><div class="kl">MTD Sales</div><div class="kv" id="kpi_mtd_sales">--</div><div class="ks nt" id="kpi_mtd_vs_bud">-- vs Budget</div></div>
+        <div class="kpi kr"><div class="kl">YTD Sales</div><div class="kv" id="kpi_ytd_sales">--</div><div class="ks nt" id="kpi_ytd_yoy_sub">-- YoY</div></div>
+        <div class="kpi ka"><div class="kl">vs Budget (MTD)</div><div class="kv" id="kpi_vs_bud">--</div><div class="ks nt" id="kpi_bud_note">Upload data</div></div>
+        <div class="kpi kg"><div class="kl">Net Billers</div><div class="kv" id="kpi_net_billers">--</div><div class="ks nt" id="kpi_nb_note">Registered DG</div></div>
         <div class="kpi kr"><div class="kl">Defectors flagged</div><div class="kv" id="kpi_defectors">--</div><div class="ks dn">↓ &lt;80% YoY avg</div></div>
         <div class="kpi ka"><div class="kl">Forecast accuracy</div><div class="kv" id="kpi_accuracy">--</div><div class="ks nt">Last month MAPE</div></div>
       </div>
@@ -420,8 +420,8 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
           <div class="ch">Period Mix <span id="donut_period_lbl">Feb 2026</span></div>
           <div class="cw" style="height:160px"><canvas id="c_donut"></canvas></div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:10px;font-size:10px">
-            <div style="background:var(--navy3);border-radius:5px;padding:7px;text-align:center"><div style="color:var(--text3)">Residential</div><div style="font-weight:700;color:var(--teal)">76.5 GWh</div><div style="color:var(--red)">−4.1% bud</div></div>
-            <div style="background:var(--navy3);border-radius:5px;padding:7px;text-align:center"><div style="color:var(--text3)">Commercial</div><div style="font-weight:700;color:var(--blue)">103.0 GWh</div><div style="color:var(--red)">−7.8% bud</div></div>
+            <div style="background:var(--navy3);border-radius:5px;padding:7px;text-align:center"><div style="color:var(--text3)">Residential</div><div style="font-weight:700;color:var(--teal)" id="mix_res_gwh">--</div><div id="mix_res_bud" style="color:var(--text3)">-- vs bud</div></div>
+            <div style="background:var(--navy3);border-radius:5px;padding:7px;text-align:center"><div style="color:var(--text3)">Commercial</div><div style="font-weight:700;color:var(--blue)" id="mix_com_gwh">--</div><div id="mix_com_bud" style="color:var(--text3)">-- vs bud</div></div>
           </div>
         </div>
       </div>
@@ -460,12 +460,12 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
     <!-- === COMMERCIAL === -->
     <div id="cm" class="sec">
       <div class="krow">
-        <div class="kpi kt"><div class="kl">Feb Commercial</div><div class="kv">103.0 GWh</div><div class="ks dn">↓ −7.8% vs budget</div></div>
-        <div class="kpi kr"><div class="kl">RT40 Gap</div><div class="kv">−13.2%</div><div class="ks dn">Hotel closures, NWC</div></div>
-        <div class="kpi ka"><div class="kl">RT50 Gap</div><div class="kv">−3.3%</div><div class="ks dn">Broilers CHP return</div></div>
-        <div class="kpi kg"><div class="kl">Manufacturing</div><div class="kv">#1 Industry</div><div class="ks up">Overtook Hotels YTD</div></div>
-        <div class="kpi kr"><div class="kl">Hotels off-grid</div><div class="kv">7+</div><div class="ks dn">~8.6 GWh loss</div></div>
-        <div class="kpi kp"><div class="kl">EV YTD</div><div class="kv">+190%</div><div class="ks up">5 new accounts</div></div>
+        <div class="kpi kt"><div class="kl">MTD Commercial</div><div class="kv" id="kpi_cm_mtd">--</div><div class="ks nt" id="kpi_cm_vs_bud">-- vs budget</div></div>
+        <div class="kpi kr"><div class="kl">RT40 Gap</div><div class="kv" id="kpi_rt40_gap">--</div><div class="ks nt" id="kpi_rt40_note">vs budget</div></div>
+        <div class="kpi ka"><div class="kl">RT50 Gap</div><div class="kv" id="kpi_rt50_gap">--</div><div class="ks nt" id="kpi_rt50_note">vs budget</div></div>
+        <div class="kpi kg"><div class="kl">Top Industry</div><div class="kv" id="kpi_top_ind">--</div><div class="ks nt" id="kpi_top_ind_note">YTD leader</div></div>
+        <div class="kpi kr"><div class="kl">Commercial Defectors</div><div class="kv" id="kpi_cm_def">--</div><div class="ks nt">flagged</div></div>
+        <div class="kpi kp"><div class="kl">Customers</div><div class="kv" id="kpi_cm_custs">--</div><div class="ks nt">commercial accounts</div></div>
       </div>
 
       <div class="g2">
@@ -1642,20 +1642,9 @@ function computeDefectors(){
 let INDUSTRIES=[];
 let PARISHES=[];
 
-let RISK_OPP=[
-  {num:'A100',name:'Branch Developments',acct:'100101',type:'Risk',level:'Very high',rate:'RT70',parish:'St. James',sector:'Hotels',kwh:12676277,owner:'atoyloy',status:'Confirmed',source:'Manual',cmt:'Solar 1.4MW installed; 3.2MW additional planned'},
-  {num:'A101',name:'Sandals Dunn\'s River',acct:'100102',type:'Opportunity',level:'Very high',rate:'RT40',parish:'St. Ann',sector:'Hotels',kwh:7566267,owner:'jugordon',status:'Under Review',source:'Manual',cmt:'260-room resort opened May 2023'},
-  {num:'A102',name:'RIU Aquarelle',acct:'100103',type:'Opportunity',level:'Very high',rate:'RT50',parish:'Trelawny',sector:'Hotels',kwh:1575090,owner:'jugordon',status:'New',source:'Manual',cmt:'700-room hotel under construction'},
-  {num:'A103',name:'Jamaica Broilers',acct:'100007',type:'Risk',level:'Very high',rate:'RT50',parish:'St. Catherine',sector:'Manufacturing',kwh:2000000,owner:'atoyloy',status:'Confirmed',source:'Defection',cmt:'Returned to CHP; auto-flagged by defection signal'},
-  {num:'A104',name:'Sandals Whitehouse',acct:'100014',type:'Risk',level:'Very high',rate:'RT50',parish:'Westmoreland',sector:'Hotels',kwh:1500000,owner:'jugordon',status:'Confirmed',source:'Defection',cmt:'Hurricane closure; auto-flagged'},
-];
+let RISK_OPP=[];
 
-const RECON_DATA=[
-  {id:'RC001',type:'Name mismatch',acct:'100008',names:['Cable & Wireless JA Ltd','CABLE & WIRELESS JA LTD','C&W Jamaica'],rcs:['RT40','RT40','RT40'],status:'Pending',resolution:'',note:''},
-  {id:'RC002',type:'Possible duplicate',acct:'100009/100019',names:['Petrojam Ltd','Petrojam Limited'],rcs:['RT70','RT70'],status:'Pending',resolution:'',note:''},
-  {id:'RC003',type:'Name mismatch',acct:'100017',names:['Riu Jamaicotel','RIU Jamaicotel Limited','Riu Jamaicotel Ltd.'],rcs:['RT70','RT50','RT70'],status:'Resolved',resolution:'Keep Separate',note:'Different rate classes confirmed'},
-  {id:'RC004',type:'Possible duplicate',acct:'100007/100021',names:['Jamaica Broilers Group','Jamaica Broilers'],rcs:['RT50','RT50'],status:'Pending',resolution:'',note:''},
-];
+const RECON_DATA=[];
 
 const GLOSSARY_DATA=[
   {term:'RT10',cat:'Rate Class',def:'Residential Tariff 10 -- low-use residential customers, typically below 150 kWh/month.'},
@@ -1684,12 +1673,12 @@ const GLOSSARY_DATA=[
 ];
 
 const FC_SEGS=[
-  {seg:'RT10',lbl:'RT10 Residential',base:1201},
-  {seg:'RT20',lbl:'RT20 Residential',base:650},
-  {seg:'RT40',lbl:'RT40 Commercial',base:821},
-  {seg:'RT50',lbl:'RT50 Commercial',base:388},
-  {seg:'RT70',lbl:'RT70 Large Com.',base:305},
-  {seg:'ST',lbl:'Street Lights',base:42},
+  {seg:'RT10',lbl:'RT10 Residential',base:0},
+  {seg:'RT20',lbl:'RT20 Residential',base:0},
+  {seg:'RT40',lbl:'RT40 Commercial',base:0},
+  {seg:'RT50',lbl:'RT50 Commercial',base:0},
+  {seg:'RT70',lbl:'RT70 Large Com.',base:0},
+  {seg:'ST',lbl:'Street Lights',base:0},
 ];
 
 /* ==========================================
@@ -1731,8 +1720,8 @@ function setPeriod(p,btn){
 }
 function renderSection(id){
   if(!id)return;
-  if(id==='ov'){renderPfCust();renderPfInd();renderPfRC();renderPfPar();renderVariance();}
-  else if(id==='cm'){renderCmCust();renderCmIndTbl();renderCmComment();}
+  if(id==='ov'){renderOverviewKPIs();renderPfCust();renderPfInd();renderPfRC();renderPfPar();renderVariance();}
+  else if(id==='cm'){renderCommercialKPIs();renderCmCust();renderCmIndTbl();renderCmComment();}
   else if(id==='rs'){renderRsPar();}
   else if(id==='df'){renderDefectors();renderDefKPIs();}
   else if(id==='fc'){renderFcEntry();renderMacroGrid();renderFcKPIs();}
@@ -1873,23 +1862,35 @@ function exportChart(id){
 function buildCharts(){
   if(!window.Chart)return;
 
+  // Build trend chart data from CUSTOMERS arrays
+  const trendAct26=Array(12).fill(null),trendBud26=Array(12).fill(null),trendAct25=Array(12).fill(null);
+  if(CUSTOMERS.length){
+    CUSTOMERS.forEach(c=>{for(let i=0;i<12;i++){if(c.m[i]){trendAct26[i]=(trendAct26[i]||0)+c.m[i];}}});
+    CUSTOMERS.forEach(c=>{for(let i=0;i<12;i++){trendAct25[i]=(trendAct25[i]||0)+(c.y25/12);}});
+    if(sbBudget.length){CUSTOMERS.forEach(c=>{for(let i=0;i<12;i++){trendBud26[i]=(trendBud26[i]||0)+(c.bud/12);}});}
+  }
   mkChart('c_trend',{type:'bar',data:{
     labels:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
     datasets:[
-      {label:'2026 Actual',data:[234,221,null,null,null,null,null,null,null,null,null,null],backgroundColor:'rgba(0,194,168,0.6)',borderColor:'#00c2a8',borderWidth:1,borderRadius:2,order:1},
-      {label:'2026 Budget',data:[248,236,244,251,265,258,262,268,255,248,240,235],type:'line',borderColor:'#378ADD',borderDash:[5,3],backgroundColor:'transparent',tension:.35,pointRadius:3,order:0},
-      {label:'2025 Actual',data:[268,255,261,258,272,265,270,276,262,256,248,243],type:'line',borderColor:'rgba(255,255,255,0.25)',backgroundColor:'transparent',tension:.35,pointRadius:2,order:0},
+      {label:'2026 Actual',data:trendAct26,backgroundColor:'rgba(0,194,168,0.6)',borderColor:'#00c2a8',borderWidth:1,borderRadius:2,order:1},
+      {label:'2026 Budget',data:trendBud26,type:'line',borderColor:'#378ADD',borderDash:[5,3],backgroundColor:'transparent',tension:.35,pointRadius:3,order:0},
+      {label:'2025 Actual',data:trendAct25,type:'line',borderColor:'rgba(255,255,255,0.25)',backgroundColor:'transparent',tension:.35,pointRadius:2,order:0},
     ]},options:{...co(),onClick:(e,el)=>{
       if(el.length){const idx=el[0].index;document.getElementById('trend_drill_info').textContent=`Filtered: Month ${idx+1} -- showing customers for this period`;}
     }}});
 
-  mkChart('c_donut',{type:'doughnut',data:{labels:['RT10','RT20','RT40','RT50','RT70','ST'],datasets:[{data:[76.5,41.9,46,27,30,1],backgroundColor:['#00c2a8','#00957f','#378ADD','#185FA5','#f5a623','#5a7a96'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},cutout:'60%'}});
+  const donutRCs=['RT10','RT20','RT40','RT50','RT70','ST'];
+  const donutData=donutRCs.map(rc=>CUSTOMERS.filter(c=>c.rate===rc).reduce((s,c)=>s+(c.m[curMonth-1]||0),0));
+  mkChart('c_donut',{type:'doughnut',data:{labels:donutRCs,datasets:[{data:donutData,backgroundColor:['#00c2a8','#00957f','#378ADD','#185FA5','#f5a623','#5a7a96'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},cutout:'60%'}});
 
+  const cm1RCs=['RT40','RT50','RT70'];
+  const cm1_25=cm1RCs.map(rc=>CUSTOMERS.filter(c=>c.rate===rc).reduce((s,c)=>s+c.y25,0));
+  const cm1_26=cm1RCs.map(rc=>CUSTOMERS.filter(c=>c.rate===rc).reduce((s,c)=>s+c.y26,0));
   mkChart('c_cm1',{type:'bar',data:{
-    labels:['RT40','RT50','RT70'],
+    labels:cm1RCs,
     datasets:[
-      {label:'2025',data:[798.5,383.6,324.5],backgroundColor:'rgba(55,138,221,0.5)',borderColor:'#378ADD',borderWidth:1,borderRadius:2},
-      {label:'2026',data:[839,401.1,296.8],backgroundColor:'rgba(0,194,168,0.5)',borderColor:'#00c2a8',borderWidth:1,borderRadius:2},
+      {label:'2025',data:cm1_25,backgroundColor:'rgba(55,138,221,0.5)',borderColor:'#378ADD',borderWidth:1,borderRadius:2},
+      {label:'2026',data:cm1_26,backgroundColor:'rgba(0,194,168,0.5)',borderColor:'#00c2a8',borderWidth:1,borderRadius:2},
     ]},options:{...co(),onClick:(e,el)=>{
       if(el.length){
         const rcs=['RT40','RT50','RT70'];
@@ -1912,16 +1913,16 @@ function buildCharts(){
   mkChart('c_nb',{type:'bar',data:{
     labels:['2021','2022','2023','2024','2025','2026 YTD'],
     datasets:[
-      {label:'RT10',data:[314,354,414,455,479,496],backgroundColor:'#00c2a8',stack:'s',borderRadius:2},
-      {label:'RT20',data:[234,250,280,294,300,307],backgroundColor:'#378ADD',stack:'s',borderRadius:2},
-      {label:'RT40',data:[55,57,63,63,65,65],backgroundColor:'#f5a623',stack:'s',borderRadius:2},
+      {label:'RT10',data:[0,0,0,0,0,0],backgroundColor:'#00c2a8',stack:'s',borderRadius:2},
+      {label:'RT20',data:[0,0,0,0,0,0],backgroundColor:'#378ADD',stack:'s',borderRadius:2},
+      {label:'RT40',data:[0,0,0,0,0,0],backgroundColor:'#f5a623',stack:'s',borderRadius:2},
     ]},options:co({scales:{x:{ticks:{color:TC},grid:{color:CC},stacked:true},y:{ticks:{color:TC},grid:{color:CC},stacked:true}}})});
 
   mkChart('c_ev',{type:'bar',data:{
     labels:['2021','2022','2023','2024','2025','2026 YTD'],
     datasets:[
-      {label:'MWh',data:[1.4,7.99,23.1,45.2,109.8,72.6],backgroundColor:'rgba(245,166,35,0.5)',yAxisID:'y',borderRadius:2},
-      {label:'Accounts',data:[6,28,37,42,42,41],type:'line',borderColor:'#00c2a8',backgroundColor:'transparent',yAxisID:'y1',tension:.3,pointRadius:4},
+      {label:'MWh',data:[0,0,0,0,0,0],backgroundColor:'rgba(245,166,35,0.5)',yAxisID:'y',borderRadius:2},
+      {label:'Accounts',data:[0,0,0,0,0,0],type:'line',borderColor:'#00c2a8',backgroundColor:'transparent',yAxisID:'y1',tension:.3,pointRadius:4},
     ]},options:{...co(),scales:{x:{ticks:{color:TC},grid:{color:CC}},y:{ticks:{color:TC},grid:{color:CC},position:'left'},y1:{ticks:{color:TC},grid:{display:false},position:'right'}}}});
 
   // Defection charts
@@ -1932,12 +1933,14 @@ function buildCharts(){
   mkChart('c_def1',{type:'bar',data:{labels:Object.keys(defByRC),datasets:[{label:'Defectors',data:Object.values(defByRC),backgroundColor:'rgba(232,64,64,0.6)',borderColor:'#e84040',borderWidth:1,borderRadius:3}]},options:co()});
   mkChart('c_def2',{type:'doughnut',data:{labels:Object.keys(defByCause),datasets:[{data:Object.values(defByCause),backgroundColor:['#f5a623','#e84040','#378ADD','#27c485','#5a7a96'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:TC,font:{size:10}}}}}});
 
-  // Forecast accuracy chart
+  // Forecast accuracy chart — populated from saved forecast entries vs actuals
+  const accMonths=[];const accAct=[];const accFc=[];
+  for(let i=5;i>=0;i--){const mi=(curMonth-1-i+12)%12;const ms=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];accMonths.push(ms[mi]);accAct.push(null);accFc.push(null);}
   mkChart('c_acc',{type:'line',data:{
-    labels:['Sep','Oct','Nov','Dec','Jan','Feb'],
+    labels:accMonths,
     datasets:[
-      {label:'Actual GWh',data:[262,256,248,243,234,221],borderColor:'#00c2a8',backgroundColor:'rgba(0,194,168,0.07)',tension:.3,pointRadius:4,fill:true},
-      {label:'Forecast GWh',data:[265,260,251,246,238,225],borderColor:'#f5a623',borderDash:[4,2],backgroundColor:'transparent',tension:.3,pointRadius:4},
+      {label:'Actual GWh',data:accAct,borderColor:'#00c2a8',backgroundColor:'rgba(0,194,168,0.07)',tension:.3,pointRadius:4,fill:true},
+      {label:'Forecast GWh',data:accFc,borderColor:'#f5a623',borderDash:[4,2],backgroundColor:'transparent',tension:.3,pointRadius:4},
     ]},options:co()});
 }
 
@@ -1986,15 +1989,14 @@ function renderPfInd(){
   makeSortable('pfi_dt');
 }
 function renderPfRC(){
-  const rcs=[
-    {rc:'RT10',desc:'Low-use Residential',y25:1821,y26:1221,bud:1300,note:'−4.1% vs budget'},
-    {rc:'RT20 / SME',desc:'Gen. Service',y25:680,y26:641,bud:668,note:'−4.8% vs budget'},
-    {rc:'RT40',desc:'LV Commercial',y25:798,y26:839,bud:900,note:'−13.2% MTD'},
-    {rc:'RT50',desc:'MV Commercial',y25:384,y26:401,bud:415,note:'−3.3% MTD'},
-    {rc:'RT70',desc:'Large Industrial',y25:325,y26:297,bud:318,note:'Hurricane pressure'},
-    {rc:'ST',desc:'Street Lights',y25:12,y26:8.6,bud:12,note:'−28.3% YTD'},
-    {rc:'EV',desc:'Electric Vehicle',y25:0.11,y26:0.20,bud:0.15,note:'+190% YTD'},
-  ];
+  const rcDefs={RT10:'Low-use Residential','RT20':'Gen. Service / SME',RT40:'LV Commercial',RT50:'MV Commercial',RT70:'Large Industrial',ST:'Street Lights',EV:'Electric Vehicle'};
+  const rcList=['RT10','RT20','RT40','RT50','RT70','ST','EV'];
+  const rcs=rcList.map(rc=>({rc,desc:rcDefs[rc]||rc,
+    y25:CUSTOMERS.filter(c=>c.rate===rc).reduce((s,c)=>s+c.y25,0),
+    y26:CUSTOMERS.filter(c=>c.rate===rc).reduce((s,c)=>s+c.y26,0),
+    bud:CUSTOMERS.filter(c=>c.rate===rc).reduce((s,c)=>s+c.bud,0),
+    note:CUSTOMERS.length?'from loaded data':'Upload data to populate'
+  }));
   document.getElementById('pfr_tbl').innerHTML=`<div style="background:rgba(245,166,35,.12);border-left:3px solid var(--amber);border-radius:4px;padding:8px 13px;margin-bottom:9px;font-size:11px;color:var(--amber);font-weight:500">&#9888; Static snapshot &middot; Feb 2026 &mdash; update when live rate-class data is available</div><table class="dt" id="pfr_dt">
     <thead><tr><th>Rate Class</th><th>Description</th><th>2025 (GWh)</th><th>2026 (GWh)</th><th>Budget (Est.)</th><th>vs Budget</th><th>YoY</th><th>MTD Notes</th></tr></thead>
     <tbody>${rcs.map(r=>{const vb2=pct(r.y26,r.bud),yy=pct(r.y26,r.y25);return`<tr>
@@ -2021,14 +2023,19 @@ function renderPfPar(){
   makeSortable('pfp_dt');
 }
 function renderVariance(){
-  const rows=[
-    {seg:'RT10',mtd_act:76.5,mtd_bud:79.8,mtd_ly:81.2,ytd_act:76.5,ytd_bud:79.8,ytd_ly:81.2},
-    {seg:'RT20',mtd_act:41.9,mtd_bud:44.0,mtd_ly:44.5,ytd_act:41.9,ytd_bud:44.0,ytd_ly:44.5},
-    {seg:'RT40',mtd_act:46.0,mtd_bud:53.0,mtd_ly:55.0,ytd_act:46.0,ytd_bud:53.0,ytd_ly:55.0},
-    {seg:'RT50',mtd_act:27.0,mtd_bud:27.9,mtd_ly:28.5,ytd_act:27.0,ytd_bud:27.9,ytd_ly:28.5},
-    {seg:'RT70',mtd_act:30.0,mtd_bud:30.8,mtd_ly:36.5,ytd_act:30.0,ytd_bud:30.8,ytd_ly:36.5},
-    {seg:'Total',mtd_act:221.4,mtd_bud:235.5,mtd_ly:245.7,ytd_act:221.4,ytd_bud:235.5,ytd_ly:245.7},
-  ];
+  const segs=['RT10','RT20','RT40','RT50','RT70','ST'];
+  const rows=segs.map(seg=>{
+    const custs=CUSTOMERS.filter(c=>c.rate===seg);
+    const mtd_act=custs.reduce((s,c)=>s+(c.m[curMonth-1]||0),0);
+    const mtd_bud=custs.reduce((s,c)=>s+(c.bud/12),0);
+    const mtd_ly=custs.reduce((s,c)=>s+(c.y25/12),0);
+    const ytd_act=custs.reduce((s,c)=>s+c.m.slice(0,curMonth).reduce((a,v)=>a+(v||0),0),0);
+    const ytd_bud=custs.reduce((s,c)=>s+(c.bud*(curMonth/12)),0);
+    const ytd_ly=custs.reduce((s,c)=>s+(c.y25*(curMonth/12)),0);
+    return{seg,mtd_act,mtd_bud,mtd_ly,ytd_act,ytd_bud,ytd_ly};
+  });
+  const tot=(k)=>rows.reduce((s,r)=>s+r[k],0);
+  rows.push({seg:'Total',mtd_act:tot('mtd_act'),mtd_bud:tot('mtd_bud'),mtd_ly:tot('mtd_ly'),ytd_act:tot('ytd_act'),ytd_bud:tot('ytd_bud'),ytd_ly:tot('ytd_ly')});
   document.getElementById('variance_tbl').innerHTML=`<table class="dt" id="var_dt">
     <thead><tr><th>Segment</th><th>MTD Actual</th><th>MTD Budget</th><th>MTD vs Bud</th><th>MTD LY</th><th>MTD YoY</th><th>YTD Actual</th><th>YTD Budget</th><th>YTD vs Bud</th><th>YTD LY</th><th>YTD YoY</th></tr></thead>
     <tbody>${rows.map(r=>`<tr${r.seg==='Total'?' class="ft"':''}>
@@ -2218,9 +2225,9 @@ function renderFcKPIs(){
   document.getElementById('fc_entered').textContent=entered;
   document.getElementById('fc_on').textContent=onTrend;
   document.getElementById('fc_off').textContent=offTrend;
-  document.getElementById('fc_mape').textContent='3.2%';
+  document.getElementById('fc_mape').textContent='--';
   document.getElementById('fc_pending').textContent=Math.max(0,CUSTOMERS.filter(c=>c.rate!=='RT10'&&c.rate!=='RT20').length*months.length-entered);
-  document.getElementById('kpi_accuracy').textContent='96.8%';
+  document.getElementById('kpi_accuracy').textContent='--';
   document.getElementById('fc_period_kpi').textContent=`${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][curMonth-1]} ${curYear}`;
 }
 function renderFcEntry(){
@@ -2571,6 +2578,80 @@ function exportReview(){
 }
 
 /* ==========================================
+   DYNAMIC KPI HELPERS
+========================================== */
+function renderOverviewKPIs(){
+  if(!CUSTOMERS.length)return;
+  const mIdx=curMonth-1;
+  const resRCs=['RT10','RT20'];
+  const comRCs=['RT40','RT50','RT70'];
+  const mtd=CUSTOMERS.reduce((s,c)=>s+(c.m[mIdx]||0),0);
+  const mtdBud=CUSTOMERS.reduce((s,c)=>s+(c.bud/12),0);
+  const ytd=CUSTOMERS.reduce((s,c)=>s+c.m.slice(0,curMonth).reduce((a,v)=>a+(v||0),0),0);
+  const ytdLY=CUSTOMERS.reduce((s,c)=>s+(c.y25*(curMonth/12)),0);
+  const vBud=mtdBud>0?pct(mtd,mtdBud):0;
+  const vYoY=ytdLY>0?pct(ytd,ytdLY):0;
+  const resMtd=CUSTOMERS.filter(c=>resRCs.includes(c.rate)).reduce((s,c)=>s+(c.m[mIdx]||0),0);
+  const resBud=CUSTOMERS.filter(c=>resRCs.includes(c.rate)).reduce((s,c)=>s+(c.bud/12),0);
+  const comMtd=CUSTOMERS.filter(c=>comRCs.includes(c.rate)).reduce((s,c)=>s+(c.m[mIdx]||0),0);
+  const comBud=CUSTOMERS.filter(c=>comRCs.includes(c.rate)).reduce((s,c)=>s+(c.bud/12),0);
+  const ms=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const lbl=ms[mIdx]+' '+curYear;
+  const sv=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+  const sc=(id,cls)=>{const e=document.getElementById(id);if(e)e.className='tbadge '+cls;};
+  sv('kpi_mtd_sales',(mtd).toFixed(1)+' GWh');
+  sv('kpi_mtd_vs_bud',(vBud>=0?'↑ +':'↓ ')+vBud.toFixed(1)+'% vs Budget');
+  sv('kpi_ytd_sales',(ytd).toFixed(1)+' GWh');
+  sv('kpi_ytd_yoy_sub',(vYoY>=0?'↑ +':'↓ ')+vYoY.toFixed(1)+'% YoY');
+  sv('kpi_vs_bud',(vBud>=0?'+':'')+vBud.toFixed(1)+'%');
+  sv('kpi_bud_note',CUSTOMERS.some(c=>c.bud>0)?'vs Budget':'Budget not loaded');
+  sv('kpi_net_billers','--');
+  sv('kpi_nb_note','Registered DG');
+  sv('kpi_ytd_yoy',(vYoY>=0?'+':'')+vYoY.toFixed(1)+'% YoY');
+  sc('kpi_ytd_yoy',vYoY>=0?'tbadge tbg':'tbadge tbr');
+  // Period Mix mini stats
+  const resBudPct=resBud>0?pct(resMtd,resBud):0;
+  const comBudPct=comBud>0?pct(comMtd,comBud):0;
+  sv('mix_res_gwh',resMtd.toFixed(1)+' GWh');
+  const mixResBud=document.getElementById('mix_res_bud');
+  if(mixResBud){mixResBud.textContent=(resBudPct>=0?'+':'')+resBudPct.toFixed(1)+'% bud';mixResBud.style.color=resBudPct>=0?'var(--green)':'var(--red)';}
+  sv('mix_com_gwh',comMtd.toFixed(1)+' GWh');
+  const mixComBud=document.getElementById('mix_com_bud');
+  if(mixComBud){mixComBud.textContent=(comBudPct>=0?'+':'')+comBudPct.toFixed(1)+'% bud';mixComBud.style.color=comBudPct>=0?'var(--green)':'var(--red)';}
+}
+
+function renderCommercialKPIs(){
+  if(!CUSTOMERS.length)return;
+  const mIdx=curMonth-1;
+  const comRCs=['RT40','RT50','RT70'];
+  const comCusts=CUSTOMERS.filter(c=>comRCs.includes(c.rate));
+  const cmMtd=comCusts.reduce((s,c)=>s+(c.m[mIdx]||0),0);
+  const cmBud=comCusts.reduce((s,c)=>s+(c.bud/12),0);
+  const vBud=cmBud>0?pct(cmMtd,cmBud):0;
+  const rt40Custs=CUSTOMERS.filter(c=>c.rate==='RT40');
+  const rt50Custs=CUSTOMERS.filter(c=>c.rate==='RT50');
+  const rt40Bud=rt40Custs.reduce((s,c)=>s+(c.bud/12),0);
+  const rt50Bud=rt50Custs.reduce((s,c)=>s+(c.bud/12),0);
+  const rt40Mtd=rt40Custs.reduce((s,c)=>s+(c.m[mIdx]||0),0);
+  const rt50Mtd=rt50Custs.reduce((s,c)=>s+(c.m[mIdx]||0),0);
+  const rt40v=rt40Bud>0?pct(rt40Mtd,rt40Bud):0;
+  const rt50v=rt50Bud>0?pct(rt50Mtd,rt50Bud):0;
+  const topInd=INDUSTRIES.length?INDUSTRIES.reduce((a,b)=>b.y26>a.y26?b:a,INDUSTRIES[0]):null;
+  const defs=computeDefectors().filter(d=>comRCs.includes(d.rate));
+  const sv=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+  sv('kpi_cm_mtd',cmMtd.toFixed(1)+' GWh');
+  sv('kpi_cm_vs_bud',(vBud>=0?'↑ +':'↓ ')+vBud.toFixed(1)+'% vs budget');
+  sv('kpi_rt40_gap',(rt40v>=0?'+':'')+rt40v.toFixed(1)+'%');
+  sv('kpi_rt40_note','vs budget');
+  sv('kpi_rt50_gap',(rt50v>=0?'+':'')+rt50v.toFixed(1)+'%');
+  sv('kpi_rt50_note','vs budget');
+  sv('kpi_top_ind',topInd?topInd.name.substring(0,12):'--');
+  sv('kpi_top_ind_note',topInd?'#1 YTD industry':'No data');
+  sv('kpi_cm_def',defs.length);
+  sv('kpi_cm_custs',comCusts.length);
+}
+
+/* ==========================================
    INIT
 ========================================== */
 function initAll(){
@@ -2584,13 +2665,13 @@ function initAll(){
 ===================================================== */
 
 const SCORECARD_DATA = [
-  {seg:'RT10',desc:'Low-use Residential', mtd_act:76.5, mtd_bud:79.8, mtd_ly:81.2, ytd_act:76.5, ytd_bud:79.8, ytd_ly:81.2, status:'Watch'},
-  {seg:'RT20',desc:'SME / Gen. Service',  mtd_act:41.9, mtd_bud:44.0, mtd_ly:44.5, ytd_act:41.9, ytd_bud:44.0, ytd_ly:44.5, status:'Watch'},
-  {seg:'RT40',desc:'LV Commercial',       mtd_act:46.0, mtd_bud:53.0, mtd_ly:55.0, ytd_act:46.0, ytd_bud:53.0, ytd_ly:55.0, status:'Risk'},
-  {seg:'RT50',desc:'MV Commercial',       mtd_act:27.0, mtd_bud:27.9, mtd_ly:28.5, ytd_act:27.0, ytd_bud:27.9, ytd_ly:28.5, status:'Watch'},
-  {seg:'RT70',desc:'Large Industrial',    mtd_act:30.0, mtd_bud:30.8, mtd_ly:36.5, ytd_act:30.0, ytd_bud:30.8, ytd_ly:36.5, status:'Risk'},
-  {seg:'ST',  desc:'Street Lights',       mtd_act:1.0,  mtd_bud:1.4,  mtd_ly:1.5,  ytd_act:1.0,  ytd_bud:1.4,  ytd_ly:1.5,  status:'Risk'},
-  {seg:'EV',  desc:'Electric Vehicle',    mtd_act:0.20, mtd_bud:0.15, mtd_ly:0.11, ytd_act:0.20, ytd_bud:0.15, ytd_ly:0.11, status:'OK'},
+  {seg:'RT10',desc:'Low-use Residential', mtd_act:0, mtd_bud:0, mtd_ly:0, ytd_act:0, ytd_bud:0, ytd_ly:0, status:'OK'},
+  {seg:'RT20',desc:'SME / Gen. Service',  mtd_act:0, mtd_bud:0, mtd_ly:0, ytd_act:0, ytd_bud:0, ytd_ly:0, status:'OK'},
+  {seg:'RT40',desc:'LV Commercial',       mtd_act:0, mtd_bud:0, mtd_ly:0, ytd_act:0, ytd_bud:0, ytd_ly:0, status:'OK'},
+  {seg:'RT50',desc:'MV Commercial',       mtd_act:0, mtd_bud:0, mtd_ly:0, ytd_act:0, ytd_bud:0, ytd_ly:0, status:'OK'},
+  {seg:'RT70',desc:'Large Industrial',    mtd_act:0, mtd_bud:0, mtd_ly:0, ytd_act:0, ytd_bud:0, ytd_ly:0, status:'OK'},
+  {seg:'ST',  desc:'Street Lights',       mtd_act:0, mtd_bud:0, mtd_ly:0, ytd_act:0, ytd_bud:0, ytd_ly:0, status:'OK'},
+  {seg:'EV',  desc:'Electric Vehicle',    mtd_act:0, mtd_bud:0, mtd_ly:0, ytd_act:0, ytd_bud:0, ytd_ly:0, status:'OK'},
 ];
 
 function renderExecSummary() {
@@ -2605,17 +2686,18 @@ function renderExecSummary() {
     el('es_narrative').value = S.get(`es_narrative_${curYear}_${curMonth}`, '');
   }
 
-  // Auto bullets
+  // Auto bullets — computed from loaded data
   const defs = computeDefectors();
   const critSev = defs.filter(d => d.sev === 'Critical' || d.sev === 'Severe');
-  const totalGap = 221.3 - 235.5;
-  const bullets = [
-    `<strong style="color:var(--red)">MTD Sales ${totalGap.toFixed(1)} GWh vs budget</strong> -- commercial segment accounts for 79% of the shortfall (RT40: -7.0 GWh, RT70: -0.8 GWh).`,
-    `<strong style="color:var(--amber)">Post-hurricane recovery:</strong> 8+ hotels remain off-grid representing ~8.6 GWh cumulative load loss. NWC pumping operations remain ~20% below prior year levels.`,
-    `<strong style="color:var(--red)">${critSev.length} critical/severe defectors</strong> identified this period. Jamaica Broilers CHP return (-2.0 GWh YTD) now confirmed structural.`,
-    `<strong style="color:var(--green)">Positive offset:</strong> Carib Cement +9.6% YTD (+1.7 GWh) driven by post-hurricane reconstruction demand. EV segment +190% YTD.`,
-    `<strong style="color:var(--blue)">Revenue recovery</strong> exceeds budget by +US$2.3M (+3%) despite volume shortfall -- supported by favourable mix (higher on-peak share) and fuel cost recovery.`,
-  ];
+  const esAct = CUSTOMERS.reduce((s,c)=>s+(c.m[curMonth-1]||0),0);
+  const esBud = CUSTOMERS.reduce((s,c)=>s+(c.bud/12),0);
+  const esLY  = CUSTOMERS.reduce((s,c)=>s+(c.y25/12),0);
+  const totalGap = esAct - esBud;
+  const bullets = CUSTOMERS.length ? [
+    `<strong style="color:${totalGap<0?'var(--red)':'var(--green)'}">MTD Sales ${esAct.toFixed(1)} GWh vs budget ${esBud.toFixed(1)} GWh (${totalGap>=0?'+':''}${totalGap.toFixed(1)} GWh gap)</strong>`,
+    `<strong style="color:var(--amber)">${critSev.length} critical/severe defector${critSev.length!==1?'s':''}</strong> identified this period.`,
+    `<strong style="color:var(--teal)">YoY:</strong> ${esLY>0?((esAct-esLY)/esLY*100).toFixed(1)+'% vs prior year':'Prior year data not loaded.'}`,
+  ] : ['<span style="color:var(--text3)">No data loaded — sync Supabase or upload an Excel file to populate executive summary bullets.</span>'];
   if(el('es_auto_bullets')) {
     el('es_auto_bullets').innerHTML = bullets.map(b => `<div style="padding:4px 0;border-bottom:1px solid var(--border);display:flex;gap:8px"><span style="color:var(--teal);flex-shrink:0">&#8227;</span><span>${b}</span></div>`).join('');
   }
@@ -2668,14 +2750,10 @@ function renderExecSummary() {
         </div>`).join('');
   }
 
-  // Forecast accuracy by rep
-  const repAccuracy = [
-    {name:'A. Toyloy', mape:'2.8%', score:'97.2%', status:'On track'},
-    {name:'J. Gordon', mape:'4.1%', score:'95.9%', status:'On track'},
-    {name:'M. Smith',  mape:'6.7%', score:'93.3%', status:'Review'},
-  ];
+  // Forecast accuracy by rep — computed from saved entries vs actuals
+  const repAccuracy = [];
   if(el('es_fc_accuracy')) {
-    el('es_fc_accuracy').innerHTML = repAccuracy.map(r => `
+    el('es_fc_accuracy').innerHTML = repAccuracy.length ? repAccuracy.map(r => `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
         <div style="font-size:12px;font-weight:600;color:var(--text)">${r.name}</div>
         <div style="text-align:right">
@@ -2683,7 +2761,7 @@ function renderExecSummary() {
           <span style="font-size:10px;color:var(--text3);margin-left:6px">MAPE ${r.mape}</span>
           <span class="pill ${r.status==='On track'?'pg':'pa'}" style="margin-left:6px">${r.status}</span>
         </div>
-      </div>`).join('');
+      </div>`).join('') : '<div style="font-size:11px;color:var(--text3);padding:10px 0">Forecast accuracy data not yet available.</div>';
   }
 
   // Scorecard
@@ -2753,16 +2831,7 @@ function exportExecSummary() {
    PRIORITY 2: VARIANCE BRIDGE
 ===================================================== */
 
-const DEFAULT_DRIVERS = [
-  {desc:'Hotel closures -- Hurricane Melissa damage',  seg:'RT70', gwh:-2.8, cat:'Hotel closure / damage',    type:'Temporary'},
-  {desc:'NWC pumping -- facilities offline post-storm', seg:'RT40', gwh:-3.1, cat:'Other known',              type:'Temporary'},
-  {desc:'Jamaica Broilers -- CHP self-generation',      seg:'RT50', gwh:-2.0, cat:'Self-generation / DG',     type:'Structural'},
-  {desc:'Cable & Wireless -- efficiency + unrestored',  seg:'RT40', gwh:-0.8, cat:'Efficiency measures',      type:'Structural'},
-  {desc:'Carib Cement -- rebuilding demand',            seg:'RT70', gwh:+1.7, cat:'New customer',             type:'Temporary'},
-  {desc:'D&G / Red Stripe -- grid return',              seg:'RT50', gwh:+1.7, cat:'New customer',             type:'Structural'},
-  {desc:'Kingston Wharves -- meter recovery',           seg:'RT50', gwh:+0.5, cat:'Meter / billing adjustment',type:'Temporary'},
-  {desc:'Beach Boscobel, HOCATSA -- full closure',      seg:'RT40', gwh:-0.8, cat:'Hotel closure / damage',   type:'Temporary'},
-];
+const DEFAULT_DRIVERS = [];
 
 function getBridgeDrivers() {
   return S.get('vb_drivers', DEFAULT_DRIVERS);
@@ -2770,7 +2839,9 @@ function getBridgeDrivers() {
 
 function renderVarianceBridge() {
   const drivers = getBridgeDrivers();
-  const totalGap = -14.1;
+  const _bAct=CUSTOMERS.reduce((s,c)=>s+(c.m[curMonth-1]||0),0);
+  const _bBud=CUSTOMERS.reduce((s,c)=>s+(c.bud/12),0);
+  const totalGap = CUSTOMERS.length ? _bAct - _bBud : 0;
   const explained = drivers.reduce((s,d) => s + d.gwh, 0);
   const residual = totalGap - explained;
   const pos = drivers.filter(d => d.gwh > 0).reduce((s,d)=>s+d.gwh,0);
@@ -2820,12 +2891,15 @@ function renderBridgeChart() {
   const seg = document.getElementById('vb_seg')?.value || 'total';
   const vs  = document.getElementById('vb_vs')?.value  || 'budget';
   const drivers = getBridgeDrivers().filter(d => seg === 'total' || d.seg === seg);
-  const totalGap = vs === 'budget' ? -14.1 : -24.4;
+  const _bAct2=CUSTOMERS.reduce((s,c)=>s+(c.m[curMonth-1]||0),0);
+  const _bBud2=CUSTOMERS.reduce((s,c)=>s+(c.bud/12),0);
+  const _bLY2=CUSTOMERS.reduce((s,c)=>s+(c.y25/12),0);
+  const totalGap = CUSTOMERS.length ? (vs==='budget'?_bAct2-_bBud2:_bAct2-_bLY2) : 0;
   const explained = drivers.reduce((s,d)=>s+d.gwh,0);
   const residual  = totalGap - explained;
 
-  const budget = vs === 'budget' ? 235.5 : 245.7;
-  const actual  = 221.3;
+  const budget = CUSTOMERS.length ? (vs==='budget'?_bBud2:_bLY2) : 0;
+  const actual  = CUSTOMERS.length ? _bAct2 : 0;
   const subtitle = `${seg === 'total' ? 'Total portfolio' : seg} MTD gap vs ${vs === 'budget' ? 'Budget' : 'Prior Year'}: ${totalGap.toFixed(1)} GWh. ${Math.abs(explained/totalGap*100).toFixed(0)}% explained by known drivers.`;
   const el = document.getElementById('vb_bridge_subtitle');
   if(el) el.textContent = subtitle;
@@ -2933,45 +3007,38 @@ function clearBridgeDrivers() {
    PRIORITY 3: REVENUE RECOVERY
 ===================================================== */
 
-// Feb 2026 data from PPTX slide 1 (USD thousands)
+// Revenue recovery data — populated from uploaded data or Supabase sync
 const RR_DATA = {
-  budget_usd:    { qty: -3200, mix: 1800, fx: -800, fuel: 2400, ipp: 600, adj: -300, total: 500 },
+  budget_usd:    { qty: 0, mix: 0, fx: 0, fuel: 0, ipp: 0, adj: 0, total: 0 },
   waterfall_usd: [
-    {label:'Budget',        val:null, base:0,     color:'#5a7a96', isBase:true},
-    {label:'Qty effect',    val:-3200,base:0,     color:'rgba(232,64,64,0.7)'},
-    {label:'Mix effect',    val:1800, base:0,     color:'rgba(39,196,133,0.7)'},
-    {label:'FX effect',     val:-800, base:0,     color:'rgba(232,64,64,0.7)'},
-    {label:'Fuel cost',     val:2400, base:0,     color:'rgba(39,196,133,0.7)'},
-    {label:'IPP cost',      val:600,  base:0,     color:'rgba(245,166,35,0.7)'},
-    {label:'Expected',      val:null, base:0,     color:'#378ADD', isBase:true},
-    {label:'Billing adj.',  val:-118, base:0,     color:'rgba(232,64,64,0.5)'},
-    {label:'Other var.',    val:-37,  base:0,     color:'rgba(232,64,64,0.4)'},
-    {label:'Actual',        val:null, base:0,     color:'#00c2a8', isBase:true},
+    {label:'Budget',       val:null, base:0, color:'#5a7a96', isBase:true},
+    {label:'Qty effect',   val:0,    base:0, color:'rgba(232,64,64,0.7)'},
+    {label:'Mix effect',   val:0,    base:0, color:'rgba(39,196,133,0.7)'},
+    {label:'FX effect',    val:0,    base:0, color:'rgba(232,64,64,0.7)'},
+    {label:'Fuel cost',    val:0,    base:0, color:'rgba(39,196,133,0.7)'},
+    {label:'IPP cost',     val:0,    base:0, color:'rgba(245,166,35,0.7)'},
+    {label:'Expected',     val:null, base:0, color:'#378ADD', isBase:true},
+    {label:'Billing adj.', val:0,    base:0, color:'rgba(232,64,64,0.5)'},
+    {label:'Other var.',   val:0,    base:0, color:'rgba(232,64,64,0.4)'},
+    {label:'Actual',       val:null, base:0, color:'#00c2a8', isBase:true},
   ],
   by_rc_jmd: [
-    {rc:'RT10', y25:10.80, y26:10.00, comps:{cust:0.78,energy:2.97,ipp:2.28,fuel:4.74,other:0.04}},
-    {rc:'RT20', y25:5.59,  y26:5.19,  comps:{cust:0.19,energy:1.01,ipp:1.87,fuel:2.51,other:0.01}},
-    {rc:'RT40', y25:5.85,  y26:5.44,  comps:{cust:0.03,demand:1.25,energy:0.73,ipp:0.51,fuel:2.88,other:0.04}},
-    {rc:'RT50', y25:2.49,  y26:2.28,  comps:{cust:0.003,demand:0.41,energy:0.26,ipp:0.38,fuel:1.22,other:0.01}},
-    {rc:'ST',   y25:0.42,  y26:0.30,  comps:{energy:0.06,ipp:0.11,fuel:0.12,other:0.001}},
-    {rc:'RT70', y25:1.97,  y26:1.79,  comps:{cust:0.0004,demand:0.39,energy:0.21,ipp:0.07,fuel:1.12,other:0.01}},
+    {rc:'RT10', y25:0, y26:0, comps:{cust:0,energy:0,ipp:0,fuel:0,other:0}},
+    {rc:'RT20', y25:0, y26:0, comps:{cust:0,energy:0,ipp:0,fuel:0,other:0}},
+    {rc:'RT40', y25:0, y26:0, comps:{cust:0,demand:0,energy:0,ipp:0,fuel:0,other:0}},
+    {rc:'RT50', y25:0, y26:0, comps:{cust:0,demand:0,energy:0,ipp:0,fuel:0,other:0}},
+    {rc:'ST',   y25:0, y26:0, comps:{energy:0,ipp:0,fuel:0,other:0}},
+    {rc:'RT70', y25:0, y26:0, comps:{cust:0,demand:0,energy:0,ipp:0,fuel:0,other:0}},
   ],
   tariff: [
-    {rc:'RT10', y25:82,  y26:89,  note:'Lowest tariff -- energy-dominant billing'},
-    {rc:'RT20', y25:87,  y26:95,  note:'General service -- moderate tariff'},
-    {rc:'RT40', y25:95,  y26:104, note:'Highest tariff -- high fixed cost ratio'},
-    {rc:'RT50', y25:88,  y26:95,  note:'MV service -- demand-weighted'},
-    {rc:'ST',   y25:48,  y26:51,  note:'Street light -- >99% energy-based'},
-    {rc:'RT70', y25:62,  y26:68,  note:'Large industrial -- demand heavy'},
+    {rc:'RT10', y25:0, y26:0, note:'Upload revenue data to populate'},
+    {rc:'RT20', y25:0, y26:0, note:'Upload revenue data to populate'},
+    {rc:'RT40', y25:0, y26:0, note:'Upload revenue data to populate'},
+    {rc:'RT50', y25:0, y26:0, note:'Upload revenue data to populate'},
+    {rc:'ST',   y25:0, y26:0, note:'Upload revenue data to populate'},
+    {rc:'RT70', y25:0, y26:0, note:'Upload revenue data to populate'},
   ],
-  driver_notes: [
-    {driver:'Quantity (Volume)', impact:'Negative', note:'MTD kWh 6% & demand 13% below budget. Offset by +0.4% customer count growth. Primary driver of gap.'},
-    {driver:'Mix (On-peak/rate)', impact:'Positive', note:'5.3% of actual billed at on-peak vs 4.8% budgeted. 8% more demand at Standard rate. Favourable revenue mix.'},
-    {driver:'FX (Exchange rate)', impact:'Negative', note:'Budget FX 162.39 JMD/USD vs actual 157.54. Overstated FX adjustment partially offset understated budget revenue.'},
-    {driver:'Fuel cost recovery', impact:'Positive', note:'Unit fuel price +11.4% above budget -- NFE fixed payment, Henry Hub +7% above budget, prior period adjustment.'},
-    {driver:'IPP cost', impact:'Positive', note:'Higher unit variable IPP cost (2.03 vs 1.86 Usc/kWh) offset lower fixed payments.'},
-    {driver:'Billing adjustments', impact:'Negative', note:'~USD 118,200 in revenue adjustments -- special customers, bill corrections, arrears payments.'},
-  ]
+  driver_notes: []
 };
 
 function renderRevenueRecovery() {
@@ -3180,7 +3247,7 @@ function renderDefFlow() {
   kv('drf_prog', inProg);
   kv('drf_recov', recov.toFixed(1) + ' GWh');
   kv('drf_struct', structural.toFixed(1) + ' GWh');
-  kv('drf_days', '23');
+  kv('drf_days', actions.length?Math.round(actions.filter(a=>a.due).reduce((s,a)=>{const d=new Date(a.due)-new Date();return s+(d>0?d/86400000:0);},0)/Math.max(1,actions.filter(a=>a.due&&new Date(a.due)>new Date()).length))+'d avg':'--');
   kv('drf_closed', closed);
 
   const stageCols = { Investigation:'pa', 'Retention Offer':'pt', 'Tariff Review':'pb', 'Accept Loss':'pr', Closed:'pg' };
@@ -3273,32 +3340,23 @@ function editDefNote(num, name) {
 
 const BRACKETS = ['0-150','150-300','300-500','500-750','750-1000','1000+'];
 const BRACKET_TREND = {
-  '0-150':    [152,148,145,143,141,139],
-  '150-300':  [224,221,219,220,218,217],
-  '300-500':  [387,382,378,375,372,370],
-  '500-750':  [612,607,601,598,595,592],
-  '750-1000': [874,869,863,860,855,851],
-  '1000+':    [1340,1335,1328,1322,1318,1312]
+  '0-150':    [0,0,0,0,0,0],
+  '150-300':  [0,0,0,0,0,0],
+  '300-500':  [0,0,0,0,0,0],
+  '500-750':  [0,0,0,0,0,0],
+  '750-1000': [0,0,0,0,0,0],
+  '1000+':    [0,0,0,0,0,0]
 };
 const BRACKET_COLORS = ['#00c2a8','#00957f','#378ADD','#185FA5','#f5a623','#7F77DD'];
 
-const DG_BY_PARISH = [
-  {p:'Kingston',   total:85000, nb:142, pct:0.167},
-  {p:'St. Andrew', total:120000, nb:98,  pct:0.082},
-  {p:'St. Catherine',total:95000,nb:67, pct:0.071},
-  {p:'St. James',  total:48000, nb:55,  pct:0.115},
-  {p:'St. Ann',    total:32000, nb:38,  pct:0.119},
-  {p:'Clarendon',  total:38000, nb:29,  pct:0.076},
-  {p:'Manchester', total:35000, nb:24,  pct:0.069},
-  {p:'Trelawny',   total:22000, nb:18,  pct:0.082},
-];
+const DG_BY_PARISH = [];
 
 const CDD_DATA = {
-  months:['Sep','Oct','Nov','Dec','Jan','Feb'],
-  cdd_actual: [420,310,245,198,212,268],
-  cdd_normal: [400,295,230,185,200,255],
-  kwh_raw:    [262,256,248,243,234,221],
-  kwh_adj:    [258,253,245,241,232,219]
+  months:['','','','','',''],
+  cdd_actual: [0,0,0,0,0,0],
+  cdd_normal: [0,0,0,0,0,0],
+  kwh_raw:    [0,0,0,0,0,0],
+  kwh_adj:    [0,0,0,0,0,0]
 };
 
 function resTab(id, btn) {
@@ -3345,8 +3403,8 @@ function renderResIntelSection(id) {
       data: {
         labels: BRACKETS,
         datasets: [
-          { label:'2025', data:[185000,95000,42000,18000,6500,2200], backgroundColor:'rgba(55,138,221,0.5)', borderRadius:2 },
-          { label:'2026', data:[183000,94500,41800,17900,6450,2190], backgroundColor:'rgba(0,194,168,0.5)', borderRadius:2 },
+          { label:'2025', data:[0,0,0,0,0,0], backgroundColor:'rgba(55,138,221,0.5)', borderRadius:2 },
+          { label:'2026', data:[0,0,0,0,0,0], backgroundColor:'rgba(0,194,168,0.5)', borderRadius:2 },
         ]
       },
       options: { ...co(), scales:{ x:{ticks:{color:TC,font:{size:10}},grid:{color:CC}}, y:{ticks:{color:TC,callback:v=>(v/1000).toFixed(0)+'K'},grid:{color:CC}} } }
@@ -3358,9 +3416,9 @@ function renderResIntelSection(id) {
     if (dt) dt.innerHTML = `<table class="dt">
       <thead><tr><th>Category</th><th>Avg Consumption</th><th>Avg NB Consumption</th><th>Avg NB Export</th><th>NB vs Std (%)</th><th>NB grid reliance</th></tr></thead>
       <tbody>
-        <tr><td>Residential (RT10)</td><td>151.2 kWh</td><td>388.0 kWh</td><td>265.5 kWh</td><td><span class="heat hG">+157%</span></td><td>59%</td></tr>
-        <tr><td>General Services (RT20)</td><td>713.3 kWh</td><td>3,334.3 kWh</td><td>846.2 kWh</td><td><span class="heat hG">+368%</span></td><td>75%</td></tr>
-        <tr><td>LV Power (RT40)</td><td>33,199.4 kWh</td><td>4,487.2 kWh</td><td>1,639.2 kWh</td><td><span class="heat hr">-86%</span></td><td>14%</td></tr>
+        <tr><td>Residential (RT10)</td><td>--</td><td>--</td><td>--</td><td>--</td><td>--</td></tr>
+        <tr><td>General Services (RT20)</td><td>--</td><td>--</td><td>--</td><td>--</td><td>--</td></tr>
+        <tr><td>LV Power (RT40)</td><td>--</td><td>--</td><td>--</td><td>--</td><td>--</td></tr>
       </tbody></table>`;
 
     destroyChart('c_ri_dg_growth');
@@ -3370,8 +3428,8 @@ function renderResIntelSection(id) {
       data: {
         labels: ['2021','2022','2023','2024','2025','2026 YTD'],
         datasets: [
-          { label:'Net Billers (index)',     data:[100,110,125,135,140,144], borderColor:'#e84040', backgroundColor:'rgba(232,64,64,0.07)', tension:.35, fill:true, pointRadius:4 },
-          { label:'Total Customers (index)', data:[100,101,102,103,104,104], borderColor:'#378ADD', backgroundColor:'transparent', tension:.35, borderDash:[4,2], pointRadius:4 },
+          { label:'Net Billers (index)',     data:[0,0,0,0,0,0], borderColor:'#e84040', backgroundColor:'rgba(232,64,64,0.07)', tension:.35, fill:true, pointRadius:4 },
+          { label:'Total Customers (index)', data:[0,0,0,0,0,0], borderColor:'#378ADD', backgroundColor:'transparent', tension:.35, borderDash:[4,2], pointRadius:4 },
         ]
       },
       options: { responsive:true, maintainAspectRatio:false,
@@ -3599,9 +3657,9 @@ function renderROAdvanced() {
     data: {
       labels: ['Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb'],
       datasets: [
-        { label:'Risk items added',        data:[2,1,3,2,2,4,3,2,1,2,3,2], backgroundColor:'rgba(232,64,64,0.6)', borderRadius:2 },
-        { label:'Opportunity items added',  data:[3,2,2,3,4,2,3,2,2,4,3,3], backgroundColor:'rgba(39,196,133,0.6)', borderRadius:2 },
-        { label:'Items closed',            data:[1,2,1,2,3,1,2,3,1,2,2,1], backgroundColor:'rgba(55,138,221,0.5)', borderRadius:2 },
+        { label:'Risk items added',        data:[0,0,0,0,0,0,0,0,0,0,0,0], backgroundColor:'rgba(232,64,64,0.6)', borderRadius:2 },
+        { label:'Opportunity items added',  data:[0,0,0,0,0,0,0,0,0,0,0,0], backgroundColor:'rgba(39,196,133,0.6)', borderRadius:2 },
+        { label:'Items closed',            data:[0,0,0,0,0,0,0,0,0,0,0,0], backgroundColor:'rgba(55,138,221,0.5)', borderRadius:2 },
       ]
     },
     options: { ...co(), scales:{ x:{ticks:{color:TC,font:{size:10}},grid:{color:CC}}, y:{ticks:{color:TC},grid:{color:CC}} } }
@@ -3889,6 +3947,23 @@ function buildDashboardData(){
   });
   Object.values(indMap).forEach(i=>{i.rc=[...indRcMap[i.name]].join('/');});
   INDUSTRIES=Object.values(indMap).filter(i=>i.y25>0||i.y26>0).sort((a,b)=>b.y25-a.y25);
+
+  // Refresh FC_SEGS base values from actual annual data
+  FC_SEGS.forEach(s=>{s.base=CUSTOMERS.filter(c=>c.rate===s.seg).reduce((sum,c)=>sum+c.y26,0)||0;});
+
+  // Refresh SCORECARD_DATA from actual data
+  const mIdx2=curMonth-1;
+  SCORECARD_DATA.forEach(r=>{
+    const custs=CUSTOMERS.filter(c=>c.rate===r.seg);
+    r.mtd_act=custs.reduce((s,c)=>s+(c.m[mIdx2]||0),0);
+    r.mtd_bud=custs.reduce((s,c)=>s+(c.bud/12),0);
+    r.mtd_ly=custs.reduce((s,c)=>s+(c.y25/12),0);
+    r.ytd_act=custs.reduce((s,c)=>s+c.m.slice(0,curMonth).reduce((a,v)=>a+(v||0),0),0);
+    r.ytd_bud=custs.reduce((s,c)=>s+(c.bud*(curMonth/12)),0);
+    r.ytd_ly=custs.reduce((s,c)=>s+(c.y25*(curMonth/12)),0);
+    const vb=r.mtd_bud>0?pct(r.mtd_act,r.mtd_bud):0;
+    r.status=vb>=-3?'OK':vb>=-8?'Watch':'Risk';
+  });
 }
 
 async function syncSupabase(silent=false){
