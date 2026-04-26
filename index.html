@@ -17,7 +17,7 @@
   --border:rgba(255,255,255,0.07);--card:rgba(255,255,255,0.04);
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:13px;display:flex;min-height:100vh;overflow:hidden}
+body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:13px;display:flex;flex-direction:column;min-height:100vh;overflow:hidden}
 
 /* LOGIN */
 .login-screen{position:fixed;inset:0;background:var(--navy);z-index:9999;display:flex;align-items:center;justify-content:center}
@@ -33,7 +33,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 .lerr{color:var(--red);font-size:11px;margin-top:7px;display:none}
 
 /* SIDEBAR */
-.sidebar{width:196px;min-width:196px;background:var(--navy2);border-right:1px solid var(--border);display:flex;flex-direction:column;height:100vh;overflow-y:auto;flex-shrink:0}
+.sidebar{width:196px;min-width:196px;background:var(--navy2);border-right:1px solid var(--border);display:flex;flex-direction:column;height:100%;overflow-y:auto;flex-shrink:0}
 .sb-logo{padding:16px 14px 12px;border-bottom:1px solid var(--border)}
 .sb-logo h2{font-size:13px;font-weight:700;color:var(--teal)}
 .sb-logo p{font-size:9px;color:var(--text3);margin-top:2px;text-transform:uppercase;letter-spacing:.4px}
@@ -50,7 +50,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 .chip.on{background:var(--teal);color:#000;border-color:var(--teal)}
 
 /* MAIN */
-.main{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+.main{flex:1;display:flex;flex-direction:column;height:100%;overflow:hidden}
 .topbar{background:var(--navy2);border-bottom:1px solid var(--border);padding:10px 18px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:10px;flex-wrap:wrap}
 .tb-left h1{font-size:14px;font-weight:700;color:var(--text)}
 .tb-left p{font-size:10px;color:var(--text2);margin-top:1px}
@@ -247,9 +247,29 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 .ng-hi{background:rgba(0,194,168,.2);color:var(--teal)}
 .ng-lo{background:rgba(232,64,64,.12);color:var(--red)}
 .ng-na{color:var(--text3)}
+/* SUITE NAV */
+.suite-nav{height:30px;min-height:30px;background:#060e18;border-bottom:1px solid rgba(0,194,168,0.2);display:flex;align-items:center;padding:0 14px;gap:0;z-index:10000;flex-shrink:0;font-size:11px}
+.suite-nav .sn-brand{color:rgba(255,255,255,.35);font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-right:14px;white-space:nowrap}
+.suite-nav a.sn-link{display:flex;align-items:center;gap:5px;padding:0 11px;height:30px;color:rgba(255,255,255,.45);text-decoration:none;font-size:11px;font-weight:500;border-right:1px solid rgba(255,255,255,.07);transition:color .12s}
+.suite-nav a.sn-link:first-of-type{border-left:1px solid rgba(255,255,255,.07)}
+.suite-nav a.sn-link:hover{color:#fff;background:rgba(255,255,255,.06)}
+.suite-nav a.sn-link.sn-active{color:var(--teal);background:rgba(0,194,168,.1)}
+.suite-nav a.sn-back{margin-left:auto;color:rgba(255,255,255,.35);font-size:10px;text-decoration:none;padding:0 10px;height:30px;display:flex;align-items:center;gap:4px}
+.suite-nav a.sn-back:hover{color:var(--teal)}
+.app-wrap{display:flex;flex:1;min-height:0;overflow:hidden}
 </style>
 </head>
 <body>
+
+<!-- SUITE NAV -->
+<div class="suite-nav">
+  <span class="sn-brand">JPS Analytics Suite</span>
+  <a class="sn-link sn-active" href="#">&#x2B21; Sales Platform</a>
+  <a class="sn-link" id="sn-fpa-link" href="../JPS-FP-A/index.html" target="_self">&#x1F4CA; FP&amp;A Platform</a>
+  <a class="sn-back" href="javascript:history.back()">&#x21A9; Back</a>
+</div>
+
+<div class="app-wrap">
 
 <!-- LOGIN -->
 <div class="login-screen" id="loginScreen">
@@ -503,6 +523,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 
     <!-- === RESIDENTIAL === -->
     <div id="rs" class="sec">
+      <div style="background:rgba(245,166,35,.12);border-left:3px solid var(--amber);border-radius:4px;padding:8px 13px;margin-bottom:11px;font-size:11px;color:var(--amber);font-weight:500">&#9888; Static snapshot &middot; Feb 2026 &mdash; figures update when live residential data is loaded</div>
       <div class="krow">
         <div class="kpi kt"><div class="kl">Feb Residential</div><div class="kv">76.5 GWh</div><div class="ks dn">↓ −4.1% vs budget</div></div>
         <div class="kpi ka"><div class="kl">Net Billers</div><div class="kv">868</div><div class="ks dn">Registered DG</div></div>
@@ -736,6 +757,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 
     <!-- === EXEC SUMMARY === -->
     <div id="es" class="sec">
+      <div style="background:rgba(245,166,35,.12);border-left:3px solid var(--amber);border-radius:4px;padding:8px 13px;margin-bottom:11px;font-size:11px;color:var(--amber);font-weight:500">&#9888; Static snapshot &middot; Feb 2026 &mdash; KPIs and scorecard data are hardcoded; LE Forecast section reflects live Supabase data</div>
       <div class="krow">
         <div class="kpi kt"><div class="kl">Period</div><div class="kv" id="es_period">Feb 2026</div><div class="ks nt">Reporting month</div></div>
         <div class="kpi kr"><div class="kl">MTD vs Budget</div><div class="kv">-6.0%</div><div class="ks dn">221.3 vs 235.5 GWh</div></div>
@@ -875,6 +897,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 
     <!-- === REVENUE RECOVERY === -->
     <div id="rr" class="sec">
+      <div style="background:rgba(245,166,35,.12);border-left:3px solid var(--amber);border-radius:4px;padding:8px 13px;margin-bottom:11px;font-size:11px;color:var(--amber);font-weight:500">&#9888; Static snapshot &middot; Feb 2026 &mdash; all revenue figures sourced from PPTX slide data</div>
       <div style="background:rgba(55,138,221,0.08);border-left:3px solid var(--blue);border-radius:4px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:var(--text2);line-height:1.8">
         <strong style="color:var(--blue)">Revenue Recovery Analysis:</strong> Decomposes the gap between <strong style="color:var(--text)">Budget</strong>, <strong style="color:var(--teal)">Expected</strong> (based on actual volumes and prices), and <strong style="color:var(--amber)">Actual</strong> (including billing adjustments). Drivers: Quantity (kWh volume) &middot; Mix (rate class and on-peak share) &middot; FX (billing exchange rate) &middot; Fuel (unit fuel price) &middot; IPP (variable IPP cost). Based on PPTX Feb 2026 data.
       </div>
@@ -1457,13 +1480,126 @@ function toggleMenu(){document.getElementById('uMenu').classList.toggle('sh');}
 document.addEventListener('click',e=>{if(!e.target.closest('#uAvatar')&&!e.target.closest('#uMenu'))document.getElementById('uMenu').classList.remove('sh');});
 
 /* ==========================================
-   STORAGE
+   STORAGE — localStorage cache + Supabase DB
+   All user-generated data is written to both.
+   On load, Supabase is the source of truth.
 ========================================== */
 const S={
   set(k,v){try{localStorage.setItem('jps5_'+k,JSON.stringify(v));}catch(e){}},
   get(k,d){try{const v=localStorage.getItem('jps5_'+k);return v?JSON.parse(v):d;}catch(e){return d;}},
   del(k){try{localStorage.removeItem('jps5_'+k);}catch(e){}}
 };
+
+/* ── DB helpers ── */
+async function dbUpsert(table,row){
+  const sb=getSB();if(!sb)return;
+  try{await sb.from(table).upsert(row,{onConflict:Object.keys(row).filter(k=>k!=='id'&&k!=='created_at'&&k!=='updated_at').slice(0,2).join(',')});}
+  catch(e){console.warn('dbUpsert',table,e.message);}
+}
+async function dbDelete(table,match){
+  const sb=getSB();if(!sb)return;
+  try{let q=sb.from(table).delete();Object.entries(match).forEach(([k,v])=>{q=q.eq(k,v);});await q;}
+  catch(e){console.warn('dbDelete',table,e.message);}
+}
+async function dbSelect(table,match={}){
+  const sb=getSB();if(!sb)return[];
+  try{let q=sb.from(table).select('*');Object.entries(match).forEach(([k,v])=>{q=q.eq(k,v);});const{data,error}=await q;return(!error&&data)?data:[];}
+  catch(e){return[];}
+}
+
+/* ── Notes / account commentary ── */
+async function saveNote(acctNum,customer,text){
+  S.set(`note_${acctNum}`,text);
+  if(text){
+    await dbUpsert('jps_user_notes',{acct_num:acctNum,customer,note_text:text,author:CU.name,updated_at:new Date().toISOString()});
+  } else {
+    await dbDelete('jps_user_notes',{acct_num:acctNum});
+  }
+}
+async function loadNotes(){
+  const rows=await dbSelect('jps_user_notes');
+  rows.forEach(r=>{if(r.note_text)S.set(`note_${r.acct_num}`,r.note_text);});
+}
+
+/* ── Exec narrative ── */
+async function saveNarrative(year,month,text){
+  S.set(`es_narrative_${year}_${month}`,text);
+  await dbUpsert('jps_exec_narratives',{year,month,narrative:text,author:CU.name,updated_at:new Date().toISOString()});
+}
+async function loadNarratives(){
+  const rows=await dbSelect('jps_exec_narratives');
+  rows.forEach(r=>{S.set(`es_narrative_${r.year}_${r.month}`,r.narrative||'');});
+}
+
+/* ── Variance bridge drivers ── */
+async function saveBridgeDriversToDB(drivers){
+  const sb=getSB();if(!sb)return;
+  try{
+    // Delete existing for this period then re-insert
+    await sb.from('jps_vb_drivers').delete().eq('year',curYear).eq('month',curMonth);
+    if(drivers.length){
+      await sb.from('jps_vb_drivers').insert(drivers.map(d=>({
+        year:curYear,month:curMonth,segment:d.seg,description:d.desc,
+        gwh_impact:d.gwh,category:d.cat,driver_type:d.type,author:CU.name,
+        updated_at:new Date().toISOString()
+      })));
+    }
+  }catch(e){console.warn('saveBridgeDriversToDB',e.message);}
+}
+async function loadBridgeDriversFromDB(){
+  const rows=await dbSelect('jps_vb_drivers',{year:curYear,month:curMonth});
+  if(rows.length){
+    const drivers=rows.map(r=>({seg:r.segment,desc:r.description,gwh:Number(r.gwh_impact),cat:r.category,type:r.driver_type}));
+    S.set('vb_drivers',drivers);
+  }
+}
+
+/* ── Pivot commentary ── */
+async function savePivotNote(period,acctNum,customer,text){
+  const key=`pv|${period}|${acctNum}`;
+  if(text){S.set(key,text);}else{S.del(key);}
+  if(text){
+    await dbUpsert('jps_pivot_commentary',{period,acct_num:acctNum,customer,note_text:text,author:CU.name,updated_at:new Date().toISOString()});
+  } else {
+    await dbDelete('jps_pivot_commentary',{period,acct_num:acctNum});
+  }
+}
+async function loadPivotCommentary(){
+  const rows=await dbSelect('jps_pivot_commentary');
+  rows.forEach(r=>{if(r.note_text)S.set(`pv|${r.period}|${r.acct_num}`,r.note_text);});
+}
+
+/* ── Defection actions ── */
+async function saveDefActionToDB(acctNum,data){
+  await dbUpsert('jps_def_actions',{acct_num:acctNum,...data,updated_at:new Date().toISOString()});
+}
+async function loadDefActionsFromDB(){
+  const rows=await dbSelect('jps_def_actions');
+  if(rows.length){
+    const saved={};
+    rows.forEach(r=>{saved[r.acct_num]={stage:r.stage,recovery_gwh:r.recovery_gwh,type:r.action_type,owner:r.owner,due:r.due_date,note:r.note_text};});
+    S.set('def_actions',saved);
+  }
+}
+
+/* ── R&O Register ── */
+async function saveROItemToDB(item){
+  await dbUpsert('jps_ro_register',{num:item.num,name:item.name,acct_num:item.acct,type:item.type,level:item.level,rate_class:item.rate,parish:item.parish,sector:item.sector,kwh:item.kwh,owner:item.owner,status:item.status,source:item.source,cmt:item.cmt,updated_at:new Date().toISOString()});
+}
+async function loadRORegisterFromDB(){
+  const rows=await dbSelect('jps_ro_register');
+  if(rows.length){
+    const items=rows.map(r=>({num:r.num,name:r.name,acct:r.acct_num,type:r.type,level:r.level,rate:r.rate_class,parish:r.parish,sector:r.sector,kwh:Number(r.kwh)||0,owner:r.owner,status:r.status,source:r.source,cmt:r.cmt}));
+    S.set('ro_items',items);
+    // Merge into RISK_OPP in-memory array preserving defaults
+    items.forEach(item=>{const idx=RISK_OPP.findIndex(r=>r.num===item.num);if(idx>=0)RISK_OPP[idx]={...RISK_OPP[idx],...item};else RISK_OPP.push(item);});
+  }
+}
+
+/* ── Load all user data from DB after sync ── */
+async function loadAllUserData(){
+  await Promise.allSettled([loadNotes(),loadNarratives(),loadBridgeDriversFromDB(),loadPivotCommentary(),loadDefActionsFromDB(),loadRORegisterFromDB()]);
+}
 
 /* ==========================================
    SAMPLE DATA
@@ -1474,8 +1610,15 @@ let CUSTOMERS=[];
 function computeDefectors(){
   return CUSTOMERS.map(c=>{
     const m=c.m;
-    const curr3=((m[11]||0)+(m[10]||0)+(m[9]||0))/3;
-    const prior3=((m[2]||0)+(m[1]||0)+(m[0]||0))/3;
+    // Dynamic rolling window: current 3 months ending at (curMonth-1), vs same 3 months prior year
+    // m[] is 0-based (0=Jan … 11=Dec); curMonth is 1-based
+    const ci=(curMonth-2+12)%12; // most recent complete month index
+    const i0=ci, i1=(ci-1+12)%12, i2=(ci-2+12)%12;
+    // Prior year same 3 months = same indices (year-over-year, data only covers 2 years)
+    // Use 9-month lookback within the same array as proxy (m has 12 months of 2026 data)
+    const p0=(ci-9+12)%12, p1=(ci-10+12)%12, p2=(ci-11+12)%12;
+    const curr3=((m[i0]||0)+(m[i1]||0)+(m[i2]||0))/3;
+    const prior3=((m[p0]||0)+(m[p1]||0)+(m[p2]||0))/3;
     const ratio=prior3>0?curr3/prior3:1;
     let sev='Normal', cons=0;
     if(ratio<0.5)sev='Critical';
@@ -1815,7 +1958,7 @@ function renderPfCust(){
   const rows=d.slice(0,10);
   document.getElementById('pfc_count').textContent=rows.length+' of '+d.length;
   document.getElementById('pfc_tbl').innerHTML=`<table class="dt" id="pfc_dt">
-    <thead><tr><th>#</th><th>Acct #</th><th>Customer</th><th>Rate</th><th>Parish</th><th>Industry</th><th>2025 YTD</th><th>2026 YTD</th><th>Budget</th><th>vs Budget</th><th>YoY</th></tr></thead>
+    <thead><tr><th>#</th><th>Acct #</th><th>Customer</th><th>Rate</th><th>Parish</th><th>Industry</th><th>2025 YTD</th><th>2026 YTD</th><th>Budget (Est.)</th><th>vs Budget</th><th>YoY</th></tr></thead>
     <tbody>${rows.map((c,i)=>{const vb=pct(c.y26,c.bud),yy=pct(c.y26,c.y25);return`<tr>
       <td style="font-weight:700;color:${mode==='top'?'var(--teal)':'var(--red)'}">${i+1}</td>
       <td style="font-size:10px;color:var(--text3)">${c.num}</td><td style="font-weight:500">${c.name}</td>
@@ -1852,8 +1995,8 @@ function renderPfRC(){
     {rc:'ST',desc:'Street Lights',y25:12,y26:8.6,bud:12,note:'−28.3% YTD'},
     {rc:'EV',desc:'Electric Vehicle',y25:0.11,y26:0.20,bud:0.15,note:'+190% YTD'},
   ];
-  document.getElementById('pfr_tbl').innerHTML=`<table class="dt" id="pfr_dt">
-    <thead><tr><th>Rate Class</th><th>Description</th><th>2025 (GWh)</th><th>2026 (GWh)</th><th>Budget</th><th>vs Budget</th><th>YoY</th><th>MTD Notes</th></tr></thead>
+  document.getElementById('pfr_tbl').innerHTML=`<div style="background:rgba(245,166,35,.12);border-left:3px solid var(--amber);border-radius:4px;padding:8px 13px;margin-bottom:9px;font-size:11px;color:var(--amber);font-weight:500">&#9888; Static snapshot &middot; Feb 2026 &mdash; update when live rate-class data is available</div><table class="dt" id="pfr_dt">
+    <thead><tr><th>Rate Class</th><th>Description</th><th>2025 (GWh)</th><th>2026 (GWh)</th><th>Budget (Est.)</th><th>vs Budget</th><th>YoY</th><th>MTD Notes</th></tr></thead>
     <tbody>${rcs.map(r=>{const vb2=pct(r.y26,r.bud),yy=pct(r.y26,r.y25);return`<tr>
       <td><span class="pill pt">${r.rc}</span></td><td>${r.desc}</td>
       <td>${r.y25.toFixed(1)}</td><td style="font-weight:600">${r.y26.toFixed(1)}</td>
@@ -1915,7 +2058,7 @@ function renderCmCust(){
   const d=CUSTOMERS.filter(c=>c.rate!=='RT10'&&c.rate!=='RT20'&&(!q||(c.name.toLowerCase().includes(q)||c.num.includes(q)))&&(!rc||c.rate===rc)&&(!tr||(tr==='up'?c.y26>=c.y25:c.y26<c.y25)));
   document.getElementById('cm_count').textContent=d.length+' customers';
   document.getElementById('cm_cust_tbl').innerHTML=`<table class="dt" id="cm_dt">
-    <thead><tr><th>Acct #</th><th>Customer</th><th>Rate</th><th>Industry</th><th>Parish</th><th>2025 YTD</th><th>2026 YTD</th><th>Budget</th><th>vs Budget</th><th>YoY</th><th>Comment / Note</th></tr></thead>
+    <thead><tr><th>Acct #</th><th>Customer</th><th>Rate</th><th>Industry</th><th>Parish</th><th>2025 YTD</th><th>2026 YTD</th><th>Budget (Est.)</th><th>vs Budget</th><th>YoY</th><th>Comment / Note</th></tr></thead>
     <tbody>${d.map(c=>{const saved=S.get(`note_${c.num}`,'');return`<tr>
       <td style="font-size:10px;color:var(--text3)">${c.num}</td>
       <td style="font-weight:500">${c.name}</td>
@@ -2204,10 +2347,10 @@ function filterRO(){
     </tr>`).join('')}</tbody></table>`;
   makeSortable('ro_dt');
 }
-function updateROStatus(num,status){const r=RISK_OPP.find(x=>x.num===num);if(r)r.status=status;}
+function updateROStatus(num,status){const r=RISK_OPP.find(x=>x.num===num);if(r){r.status=status;saveROItemToDB(r).catch(e=>console.warn('DB R&O status save:',e));}}
 function editRONote(num){
   const r=RISK_OPP.find(x=>x.num===num);if(!r)return;
-  openModal(`Note: ${r.name}`,`<textarea id="ro_note_ta">${r.cmt||''}</textarea>`,()=>{r.cmt=document.getElementById('ro_note_ta').value;closeModal();filterRO();});
+  openModal(`Note: ${r.name}`,`<textarea id="ro_note_ta">${r.cmt||''}</textarea>`,()=>{r.cmt=document.getElementById('ro_note_ta').value;closeModal();saveROItemToDB(r).catch(e=>console.warn('DB R&O note save:',e));filterRO();});
 }
 function addROItem(){
   openModal('Add Risk / Opportunity Item',`
@@ -2221,7 +2364,9 @@ function addROItem(){
     </div>
     <div class="lf"><label>Notes</label><textarea id="nro_note" placeholder="Describe the risk or opportunity..."></textarea></div>`,
   ()=>{
-    RISK_OPP.push({num:'M'+Date.now(),name:document.getElementById('nro_name').value,acct:document.getElementById('nro_acct').value,type:document.getElementById('nro_type').value,level:document.getElementById('nro_level').value,rate:document.getElementById('nro_rc').value,sector:'',parish:'',kwh:parseInt(document.getElementById('nro_kwh').value)||0,owner:CU.id,status:'New',source:'Manual',cmt:document.getElementById('nro_note').value});
+    const newItem={num:'M'+Date.now(),name:document.getElementById('nro_name').value,acct:document.getElementById('nro_acct').value,type:document.getElementById('nro_type').value,level:document.getElementById('nro_level').value,rate:document.getElementById('nro_rc').value,sector:'',parish:'',kwh:parseInt(document.getElementById('nro_kwh').value)||0,owner:CU.id,status:'New',source:'Manual',cmt:document.getElementById('nro_note').value};
+    RISK_OPP.push(newItem);
+    saveROItemToDB(newItem).catch(e=>console.warn('DB R&O save:',e));
     closeModal();filterRO();
   });
 }
@@ -2293,7 +2438,12 @@ function editMrNote(num,name,cid){
   openModal(`Review Note: ${name}`,`<textarea id="mrn_ta">${S.get(`mr_note_${mrPeriod}_${num}`,'')}</textarea>`,()=>{S.set(`mr_note_${mrPeriod}_${num}`,document.getElementById('mrn_ta').value);closeModal();renderMrSection();});
 }
 function editNote(num,name,cid){
-  openModal(`Customer Note: ${name}`,`<textarea id="gn_ta">${S.get(`note_${num}`,'')}</textarea>`,()=>{S.set(`note_${num}`,document.getElementById('gn_ta').value);closeModal();renderCmCust();});
+  openModal(`Customer Note: ${name}`,`<textarea id="gn_ta">${S.get(`note_${num}`,'')}</textarea>`,()=>{
+    const v=document.getElementById('gn_ta').value;
+    S.set(`note_${num}`,v);
+    saveNote(num,name,v).catch(e=>console.warn('DB note save:',e));
+    closeModal();renderCmCust();
+  });
 }
 function countMrCmts(){let c=0;['mr_overall','mr_cust_top','mr_cust_bot','mr_ind','mr_par','mr_fc'].forEach(k=>c+=S.get(`${mrPeriod}_${k}`,[]).length);return c;}
 
@@ -2576,6 +2726,7 @@ function renderExecSummary() {
 function saveExecNarrative() {
   const text = document.getElementById('es_narrative')?.value || '';
   S.set(`es_narrative_${curYear}_${curMonth}`, text);
+  saveNarrative(curYear, curMonth, text).catch(e=>console.warn('DB narrative save:',e));
   const t = document.getElementById('es_saved');
   if(t){t.classList.add('sh'); setTimeout(()=>t.classList.remove('sh'),2000);}
 }
@@ -2757,6 +2908,7 @@ function addBridgeDriver() {
   const drivers = getBridgeDrivers();
   drivers.push({desc, seg, gwh, cat, type});
   S.set('vb_drivers', drivers);
+  saveBridgeDriversToDB(drivers).catch(e=>console.warn('DB bridge save:',e));
   document.getElementById('vb_d_desc').value = '';
   document.getElementById('vb_d_gwh').value  = '';
   renderVarianceBridge();
@@ -2766,12 +2918,14 @@ function removeBridgeDriver(idx) {
   const drivers = getBridgeDrivers();
   drivers.splice(idx, 1);
   S.set('vb_drivers', drivers);
+  saveBridgeDriversToDB(drivers).catch(e=>console.warn('DB bridge save:',e));
   renderVarianceBridge();
 }
 
 function clearBridgeDrivers() {
   if(!confirm('Reset drivers to default?')) return;
   S.del('vb_drivers');
+  saveBridgeDriversToDB([]).catch(e=>console.warn('DB bridge clear:',e));
   renderVarianceBridge();
 }
 
@@ -3005,6 +3159,7 @@ function saveDefAction(num, field, val) {
   if (!saved[num]) saved[num] = {};
   saved[num][field] = val;
   S.set('def_actions', saved);
+  saveDefActionToDB(num, saved[num]).catch(e=>console.warn('DB defaction save:',e));
 }
 
 function renderDefFlow() {
@@ -3770,11 +3925,40 @@ async function syncSupabase(silent=false){
     updateSbStatus(anyOk?(actOk&&budOk?'live':'partial'):'offline');
 
     if(anyOk){
-      document.getElementById('dataStatus').textContent='📡 Live Data';
-      document.getElementById('dataStatus').className='tbadge tbg';
+      const dsEl=document.getElementById('dataStatus');
+      if(dsEl){dsEl.textContent='📊 Live Data';dsEl.className='tbadge tbg';}
+      // Update period label to reflect latest actual month from data
+      if(sbActuals.length){
+        const mNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        let latestY=0,latestM=0;
+        sbActuals.forEach(r=>{
+          const ry=parseInt(r.year||r.cal_year||0)||0;
+          const rm=parseInt(r.month||r.cal_month||0)||0;
+          if(!rm){
+            // derive from Month field e.g. "January 2025"
+            const parsed=fcParseMonth(r['Month']||'');
+            if(parsed.year>latestY||(parsed.year===latestY&&parsed.month>latestM)){latestY=parsed.year;latestM=parsed.month;}
+          } else {
+            if(ry>latestY||(ry===latestY&&rm>latestM)){latestY=ry;latestM=rm;}
+          }
+        });
+        if(latestY&&latestM){
+          curYear=latestY;curMonth=latestM;
+          const plEl=document.getElementById('periodLabel');
+          if(plEl)plEl.textContent=`${mNames[latestM-1]} ${latestY} · MTD`;
+          // Sync year/month selectors
+          const sy=document.getElementById('selYear');
+          const sm=document.getElementById('selMonth');
+          if(sy)sy.value=String(latestY);
+          if(sm)sm.value=String(latestM);
+        }
+      }
     }
 
     try{buildDashboardData();}catch(be){console.error('buildDashboardData error:',be);}
+
+    // Hydrate user-generated data (notes, narratives, R&O, defection actions, etc.) from DB
+    try{await loadAllUserData();}catch(ue){console.warn('loadAllUserData error:',ue);}
 
     leEngine=null;
     const activeId=document.querySelector('.sec.on')?.id;
@@ -4270,7 +4454,7 @@ function renderLERisk(){
   if(!el)return;
   if(!risks.length){el.innerHTML=`<div style="padding:20px;text-align:center;color:var(--green)">✓ No customers ${thresh}%+ below budget for 2+ months</div>`;return;}
   el.innerHTML=`<table class="dt" id="le_risk_dt">
-    <thead><tr><th>Customer</th><th>RC</th><th>Industry</th><th>Budget YTD</th><th>Actual YTD</th><th>vs Budget</th><th>Risk Months</th></tr></thead>
+    <thead><tr><th>Customer</th><th>RC</th><th>Industry</th><th>Budget YTD (Est.)</th><th>Actual YTD</th><th>vs Budget</th><th>Risk Months</th></tr></thead>
     <tbody>${risks.map(r=>`<tr>
       <td style="font-weight:500">${r.name}</td>
       <td><span class="pill pt">${r.rc}</span></td>
@@ -4405,6 +4589,7 @@ function pvAddNote(name,btn){
     ()=>{
       const v=document.getElementById('pv_note_ta')?.value||'';
       if(v)S.set(key,v); else S.del(key);
+      savePivotNote(period,'',name,v).catch(e=>console.warn('DB pivot note save:',e));
       btn.textContent=v?'💬':'➕';
       btn.title=v||'Add explanation';
       renderPivotCommentReport();
@@ -4414,6 +4599,7 @@ function pvAddNote(name,btn){
 
 function pvDeleteNote(period,name,row){
   S.del(`pv|${period}|${name}`);
+  savePivotNote(period,'',name,'').catch(e=>console.warn('DB pivot note delete:',e));
   if(row)row.remove();
   renderMovers();
 }
@@ -4578,7 +4764,7 @@ function renderLEVariance(){
   });
 
   const _vtbl=document.getElementById('le_var_tbl');if(!_vtbl)return;_vtbl.innerHTML=`<table class="dt" id="le_var_dt">
-    <thead><tr><th>${dim==='rc'?'Rate Class':dim==='industry'?'Industry':'Customer'}</th><th>Budget YTD</th><th>Actual YTD</th><th>Variance (kWh)</th><th>Variance %</th></tr></thead>
+    <thead><tr><th>${dim==='rc'?'Rate Class':dim==='industry'?'Industry':'Customer'}</th><th>Budget YTD (Est.)</th><th>Actual YTD</th><th>Variance (kWh)</th><th>Variance %</th></tr></thead>
     <tbody>${rows.map(r=>{
       const v=r.act-r.bud,vp=r.bud?v/r.bud*100:0;
       return`<tr>
@@ -4604,7 +4790,7 @@ function renderLEVariance(){
 
 function renderNetGen(){
   if(!sbNetGen.length){
-    const el=document.getElementById('ng-content');
+    const el=document.getElementById('ng-content')||document.getElementById('ng');
     if(el)el.innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:16px;color:var(--text2)">
       <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 5.625c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125"/></svg>
       <div style="font-size:15px;font-weight:600;color:var(--text1)">No net generation data loaded</div>
@@ -4747,5 +4933,6 @@ initAll=function(){
 };
 
 </script>
+</div><!-- /app-wrap -->
 </body>
 </html>
