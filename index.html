@@ -342,10 +342,8 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
     <div class="ni on" onclick="sw('ov',this)"><span class="ni-icon">⬡</span>Overview</div>
     <div class="ni" onclick="sw('cm',this)"><span class="ni-icon">🏢</span>Commercial</div>
     <div class="ni" onclick="sw('rs',this)"><span class="ni-icon">🏠</span>Residential</div>
-    <div class="ni" onclick="sw('df',this)"><span class="ni-icon">📉</span>Defection Analysis</div>
     <div class="ni" onclick="sw('fc',this)"><span class="ni-icon">🎯</span>Forecast Accuracy</div>
     <div class="ni" onclick="sw('le',this)"><span class="ni-icon">📈</span>LE Forecast</div>
-    <div class="ni" onclick="sw('ro',this)"><span class="ni-icon">⚠</span>Risk &amp; Opportunity</div>
     <div class="ni" onclick="sw('mr',this)"><span class="ni-icon">📋</span>Monthly Review</div>
     <div class="nav-lbl" style="margin-top:8px">Intelligence</div>
     <div class="ni" onclick="sw('es',this)"><span class="ni-icon">📰</span>Exec Summary</div>
@@ -364,15 +362,9 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
   </div>
   <div class="sb-bottom">
     <div class="fl">Segment</div>
-    <div class="chips" id="segChips">
-      <span class="chip on">RT10</span><span class="chip on">RT20</span>
-      <span class="chip on">RT40</span><span class="chip on">RT50</span>
-      <span class="chip on">RT70</span><span class="chip on">ST</span>
-    </div>
+    <div class="chips" id="segChips"><span style="font-size:9px;color:var(--text3)">No data</span></div>
     <div class="fl">Year</div>
-    <div class="chips">
-      <span class="chip on">2025</span><span class="chip on">2026</span><span class="chip">2027</span>
-    </div>
+    <div class="chips" id="yearChips"><span style="font-size:9px;color:var(--text3)">No data</span></div>
   </div>
 </div>
 
@@ -522,6 +514,13 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 
     <!-- === COMMERCIAL === -->
     <div id="cm" class="sec">
+      <!-- Commercial sub-tabs -->
+      <div class="stabs" id="cm_subtabs" style="margin-bottom:12px">
+        <button class="stab on" id="cm_tab_customers" onclick="swCm('customers',this)">🏢 Customers</button>
+        <button class="stab" id="cm_tab_pivot"     onclick="swCm('pivot',this)">🔀 Pivot / Movers</button>
+        <button class="stab" id="cm_tab_defection" onclick="swCm('defection',this)">📉 Defection</button>
+        <button class="stab" id="cm_tab_ro"        onclick="swCm('ro',this)">⚠ Risk &amp; Opportunity</button>
+      </div>
       <div class="krow">
         <div class="kpi kt"><div class="kl">MTD Commercial</div><div class="kv" id="kpi_cm_mtd">--</div><div class="ks nt" id="kpi_cm_vs_bud">-- vs budget</div></div>
         <div class="kpi kr"><div class="kl">RT40 Gap</div><div class="kv" id="kpi_rt40_gap">--</div><div class="ks nt" id="kpi_rt40_note">vs budget</div></div>
@@ -623,6 +622,12 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 
     <!-- === DEFECTION ANALYSIS === -->
     <div id="df" class="sec">
+      <div class="stabs" style="margin-bottom:12px">
+        <button class="stab" onclick="sw('cm',document.querySelector('.ni[onclick*=\'cm\']'))">🏢 Customers</button>
+        <button class="stab" onclick="swCmPivot()">🔀 Pivot / Movers</button>
+        <button class="stab on">📉 Defection</button>
+        <button class="stab" onclick="sw('ro',document.querySelector('.ni[onclick*=\'ro_adv\']'))">⚠ Risk &amp; Opportunity</button>
+      </div>
       <div style="background:rgba(232,64,64,.07);border-left:3px solid var(--red);border-radius:4px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:var(--text2);line-height:1.7">
         <strong style="color:var(--red)">Defection Definition:</strong> A customer is flagged as a defector when their <strong style="color:var(--text)">3-month rolling average kWh</strong> drops below <strong style="color:var(--red)">80%</strong> of the same 3-month average from the prior year. Severity is graded: <span class="def-severity def-critical">Critical &lt;50%</span> <span class="def-severity def-severe">Severe 50–65%</span> <span class="def-severity def-moderate">Moderate 65–80%</span>. Requires validation before being confirmed as structural defection vs temporary disruption (hurricane, meter, closure).
       </div>
@@ -699,6 +704,12 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 
     <!-- === RISK & OPP === -->
     <div id="ro" class="sec">
+      <div class="stabs" style="margin-bottom:12px">
+        <button class="stab" onclick="sw('cm',document.querySelector('.ni[onclick*=\'cm\']'))">🏢 Customers</button>
+        <button class="stab" onclick="swCmPivot()">🔀 Pivot / Movers</button>
+        <button class="stab" onclick="sw('df',document.querySelector('.ni[onclick*=\'df\']'))">📉 Defection</button>
+        <button class="stab on">⚠ Risk &amp; Opportunity</button>
+      </div>
       <div class="krow">
         <div class="kpi kt"><div class="kl">Total items</div><div class="kv" id="ro_total">--</div><div class="ks nt">Pipeline</div></div>
         <div class="kpi kg"><div class="kl">Opportunities</div><div class="kv" id="ro_opp_count">--</div><div class="ks up" id="ro_opp_kwh">-- kWh</div></div>
@@ -2072,10 +2083,70 @@ function getFcMonths(){
 function sw(id,el){
   document.querySelectorAll('.sec').forEach(s=>s.classList.remove('on'));
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
-  document.getElementById(id).classList.add('on');
-  el.classList.add('on');
+  const sec=document.getElementById(id);
+  if(sec)sec.classList.add('on');
+  // For df/ro, highlight the Commercial nav item in sidebar
+  const cmSections=['df','ro'];
+  if(cmSections.includes(id)){
+    document.querySelector('.ni[onclick*="\'cm\'"]')?.classList.add('on');
+  } else if(el){
+    el.classList.add('on');
+  }
   setTimeout(()=>{buildCharts();renderSection(id);},60);
   if(typeof _rtAnnouncePresence==='function')_rtAnnouncePresence(id);
+}
+
+// Commercial sub-tab navigation
+function swCm(panel,btn){
+  // Update active tab highlight in cm subtabs
+  document.querySelectorAll('#cm_subtabs .stab').forEach(b=>b.classList.remove('on'));
+  if(btn)btn.classList.add('on');
+  if(panel==='defection'){
+    sw('df', document.querySelector('.ni[onclick*="\'cm\'"]')||document.createElement('div'));
+    // Re-highlight cm nav
+    document.querySelector('.ni[onclick*="\'cm\'"]')?.classList.add('on');
+  } else if(panel==='ro'){
+    sw('ro', document.querySelector('.ni[onclick*="\'cm\'"]')||document.createElement('div'));
+    document.querySelector('.ni[onclick*="\'cm\'"]')?.classList.add('on');
+  } else if(panel==='pivot'){
+    swCmPivot();
+  }
+  // 'customers' is the default view — already visible in cm section
+}
+
+function swCmPivot(){
+  // Navigate to LE and activate pivot sub-tab
+  const leNi = document.querySelector('.ni[onclick*="\'le\'"]');
+  if(leNi) sw('le', leNi);
+  setTimeout(()=>{
+    const pivotBtn = document.getElementById('le_btn_pivot');
+    if(pivotBtn) pivotBtn.click();
+  }, 80);
+}
+
+// Populate sidebar segment + year chips from actual DB data
+function renderSidebarFilters(){
+  const segs = sbActuals.length
+    ? [...new Set(sbActuals.map(r=>String(r.rate_class||r.rc||'').trim()).filter(Boolean))].sort()
+    : [];
+  const years = sbActuals.length
+    ? [...new Set(sbActuals.map(r=>Number(r.year||r.cal_year||0)).filter(Boolean))].sort()
+    : [];
+
+  const segEl = document.getElementById('segChips');
+  const yrEl  = document.getElementById('yearChips');
+  if(segEl){
+    segEl.innerHTML = segs.length
+      ? segs.map(s=>`<span class="chip on" data-seg="${s}">${s}</span>`).join('')
+      : '<span style="font-size:9px;color:var(--text3)">No data</span>';
+    segEl.querySelectorAll('.chip').forEach(c=>c.onclick=()=>c.classList.toggle('on'));
+  }
+  if(yrEl){
+    yrEl.innerHTML = years.length
+      ? years.map(y=>`<span class="chip on" data-year="${y}">${y}</span>`).join('')
+      : '<span style="font-size:9px;color:var(--text3)">No data</span>';
+    yrEl.querySelectorAll('.chip').forEach(c=>c.onclick=()=>c.classList.toggle('on'));
+  }
 }
 function setPeriod(p,btn){
   curPeriod=p;
@@ -5410,6 +5481,7 @@ async function syncSupabase(silent=false){
     }
 
     try{buildDashboardData();}catch(be){console.error('buildDashboardData error:',be);}
+    renderSidebarFilters();
 
     // Hydrate user-generated data (notes, narratives, R&O, defection actions, etc.) from DB
     try{await loadAllUserData();}catch(ue){console.warn('loadAllUserData error:',ue);}
