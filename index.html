@@ -1717,7 +1717,6 @@ async function doRegister(){
         role:salesRole,fpa_role:fpaRole,territory:'All'
       });
     } else {
-      showErr('Account created! Check your email to confirm, then sign in.');
       showErr('Account created ✓ — sign in now.');
     }
     toast(`Account created${isFirst?' (Admin)':' (View — Admin will upgrade your role)'}. Sign in to continue.`,'ok');
