@@ -3746,27 +3746,31 @@ function renderRRCharts() {
     });
   }
 
-  // Driver decomposition bar
-  const drivers_d = RR_DATA.driver_notes.map(d => ({
-    label: d.driver,
-    val: d.impact === 'Positive' ? Math.abs(RR_DATA.budget_usd[d.driver.split(' ')[0].toLowerCase()]||500)*scale : -Math.abs(RR_DATA.budget_usd[d.driver.split(' ')[0].toLowerCase()]||500)*scale
-  }));
-  const dVals   = [3200,-1800,800,-2400,-600,118].map(v=>v*scale);
-  const dLabels = ['Quantity','Mix','FX','Fuel','IPP','Billing adj.'];
-  const dColors = dVals.map(v => v > 0 ? 'rgba(232,64,64,0.7)' : 'rgba(39,196,133,0.7)');
-
+  // Driver decomposition bar — only render when real driver data exists
   destroyChart('c_rr_drivers');
   const cd = document.getElementById('c_rr_drivers');
+  const dn2 = document.getElementById('rr_driver_notes');
+  const hasDrivers = RR_DATA.driver_notes && RR_DATA.driver_notes.length > 0;
   if(cd) {
-    chartInstances['c_rr_drivers'] = new Chart(cd, {
-      type: 'bar',
-      data: {labels:dLabels, datasets:[{label:'Driver impact', data:dVals, backgroundColor:dColors, borderRadius:3}]},
-      options: {
-        responsive:true, maintainAspectRatio:false, indexAxis:'y',
-        plugins:{legend:{display:false}},
-        scales:{y:{ticks:{color:TC,font:{size:10}},grid:{color:CC}},x:{ticks:{color:TC},grid:{color:CC}}}
-      }
-    });
+    if(!hasDrivers) {
+      // No data — show placeholder instead of hardcoded sample values
+      cd.style.display='none';
+      if(dn2) dn2.innerHTML='<div style="padding:24px;text-align:center;color:var(--text3);font-size:11px">No driver data loaded — upload via the <strong>RR_Data</strong> sheet or populate <code>jps_rr_data</code> in Supabase.</div>';
+    } else {
+      cd.style.display='';
+      const dVals   = RR_DATA.driver_notes.map(d => d.impact==='Positive' ? Math.abs(RR_DATA.budget_usd[d.driver.split(' ')[0].toLowerCase()]||0)*scale : -Math.abs(RR_DATA.budget_usd[d.driver.split(' ')[0].toLowerCase()]||0)*scale);
+      const dLabels = RR_DATA.driver_notes.map(d => d.driver);
+      const dColors = dVals.map(v => v > 0 ? 'rgba(39,196,133,0.7)' : 'rgba(232,64,64,0.7)');
+      chartInstances['c_rr_drivers'] = new Chart(cd, {
+        type: 'bar',
+        data: {labels:dLabels, datasets:[{label:'Driver impact', data:dVals, backgroundColor:dColors, borderRadius:3}]},
+        options: {
+          responsive:true, maintainAspectRatio:false, indexAxis:'y',
+          plugins:{legend:{display:false}},
+          scales:{y:{ticks:{color:TC,font:{size:10}},grid:{color:CC}},x:{ticks:{color:TC},grid:{color:CC}}}
+        }
+      });
+    }
   }
 
   // RC comparison
