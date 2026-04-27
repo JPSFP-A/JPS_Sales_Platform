@@ -417,8 +417,38 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
       <option value="3">Q3</option><option value="4">Q4</option>
     </select>
     <label style="margin-left:8px">Upload Data:</label>
+    <select id="uploadMode" class="psel" style="font-size:10px;padding:3px 6px" title="How to handle existing data for the same month">
+      <option value="overwrite">Overwrite month</option>
+      <option value="append">Append / upsert</option>
+    </select>
     <label class="upload-btn" style="cursor:pointer">📂 Load Excel<input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="loadExcel(this)"/></label>
+    <button class="pbtn" style="background:rgba(232,64,64,.15);color:var(--red);border-color:var(--red)" onclick="showDeleteMonth()" title="Delete all actuals for a specific month">🗑 Delete Month</button>
     <span class="data-status" id="uploadStatus">No data — upload or sync DB</span>
+    <!-- Delete month modal -->
+    <div id="delMonthPanel" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center">
+      <div style="background:var(--navy2);border:1px solid var(--border);border-radius:10px;padding:24px;width:320px">
+        <div style="font-size:13px;font-weight:800;color:var(--red);margin-bottom:16px">🗑 Delete Month Data</div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:14px">Permanently removes all actuals rows for the selected month. This cannot be undone.</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+          <div><label style="font-size:10px;color:var(--text3)">Year</label>
+            <select id="delYear" class="sel" style="width:100%;margin-top:3px">
+              <option>2026</option><option>2025</option><option>2024</option>
+            </select></div>
+          <div><label style="font-size:10px;color:var(--text3)">Month</label>
+            <select id="delMonth" class="sel" style="width:100%;margin-top:3px">
+              <option value="1">January</option><option value="2">February</option><option value="3">March</option>
+              <option value="4">April</option><option value="5">May</option><option value="6">June</option>
+              <option value="7">July</option><option value="8">August</option><option value="9">September</option>
+              <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+            </select></div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button onclick="doDeleteMonth()" style="flex:1;padding:9px;background:var(--red);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;font-size:12px">Delete →</button>
+          <button onclick="document.getElementById('delMonthPanel').style.display='none'" style="flex:1;padding:9px;background:var(--navy3);color:var(--text);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px">Cancel</button>
+        </div>
+        <div id="delMonthMsg" style="margin-top:10px;font-size:10px;color:var(--teal);display:none"></div>
+      </div>
+    </div>
   </div>
 
   <div class="content">
@@ -2028,15 +2058,17 @@ async function loadExcel(input){
   if(!file)return;
   const sb=getSB();
   if(!sb){toast('Supabase not connected — check Admin → DB Schema','err');return;}
+  const mode=document.getElementById('uploadMode')?.value||'overwrite';
   const stEl=document.getElementById('uploadStatus');
   const dsEl=document.getElementById('dataStatus');
   if(stEl)stEl.textContent='Reading file…';
+
   const reader=new FileReader();
   reader.onload=async e=>{
     try{
       const wb=XLSX.read(e.target.result,{type:'binary'});
-      let totalRows=0,errors=[];
-      // ── Helper: upsert in 500-row batches ──────────────────
+      let totalRows=0;
+
       async function batchUpsert(table,rows,conflictCols){
         const CHUNK=500;
         for(let i=0;i<rows.length;i+=CHUNK){
@@ -2047,100 +2079,109 @@ async function loadExcel(input){
         }
         totalRows+=rows.length;
       }
-      // ── Actuals sheet ──────────────────────────────────────
-      const actSheet=wb.Sheets['Actuals']||wb.Sheets['Commercial_Actuals']||wb.Sheets[wb.SheetNames[0]];
+
+      // ── Detect primary data sheet ───────────────────────
+      // Accepts: 'Actuals', 'Sales', 'Data', or first sheet
+      const actSheetName=wb.SheetNames.find(n=>['Actuals','Sales','Data','Sheet1','Sheet 1'].includes(n))||wb.SheetNames[0];
+      const actSheet=actSheetName?wb.Sheets[actSheetName]:null;
+
       if(actSheet){
-        const rows=XLSX.utils.sheet_to_json(actSheet);
-        if(rows.length&&rows[0]['Sum of net_kwh_billed_consump']!==undefined){
-          await batchUpsert('jps_actuals',rows,'Month,JPS A/c');
-        } else if(rows.length&&rows[0]['Sum of Budget']!==undefined){
-          // Budget in same file
-          await batchUpsert('jps_budget',rows,'Month,JPS A/c');
-        }
-      }
-      // ── Budget sheet ───────────────────────────────────────
-      const budSheet=wb.Sheets['Budget'];
-      if(budSheet){
-        const rows=XLSX.utils.sheet_to_json(budSheet);
-        if(rows.length)await batchUpsert('jps_budget',rows,'Month,JPS A/c');
-      }
-      // ── Net Gen sheet ──────────────────────────────────────
-      const ngSheet=wb.Sheets['Net_Generation']||wb.Sheets['NetGen']||wb.Sheets['net_gen'];
-      if(ngSheet){
-        const rows=XLSX.utils.sheet_to_json(ngSheet).map(r=>({
-          year:Number(r.year||r.Year),
-          month:Number(r.month||r.Month),
-          net_gen_mwh:Number(r.net_gen_mwh||r.net_gen||r.MWh||0)
-        })).filter(r=>r.year&&r.month);
-        if(rows.length)await batchUpsert('net_gen_historical',rows,'year,month');
-      }
-      // ── Budget sheet — detect commercial vs residential by columns ───
-      const budSheet=wb.Sheets['Budget']||wb.Sheets['Commercial_Budget'];
-      if(budSheet){
-        const rows=XLSX.utils.sheet_to_json(budSheet);
-        if(rows.length){
-          if(rows[0]['JPS A/c']!==undefined){
-            // Account-level → commercial budget
-            await batchUpsert('jps_commercial_budget',rows,'Month,JPS A/c');
-          } else if(rows[0]['rate_class']!==undefined){
-            // Aggregate → residential budget
-            await batchUpsert('jps_residential_budget',rows,'year,month,rate_class,parish');
+        const raw=XLSX.utils.sheet_to_json(actSheet);
+        if(raw.length){
+          const first=raw[0];
+          const isActuals=first.kwh!==undefined||first['Sum of net_kwh_billed_consump']!==undefined;
+          const isBudget =first.kwh_budget!==undefined||first['Sum of Budget']!==undefined;
+
+          if(isActuals){
+            // Map to flat schema: year,month,jps_ac,name,consumption_bucket,kwh,revenue_jmd,parish,rate_class,demand_kva
+            const rows=raw.map(d=>{
+              let year=Number(d.year||0),month=Number(d.month||0);
+              if(!year||!month){
+                const p=fcParseMonth(d['Month']||'');
+                year=p.year;month=p.month;
+              }
+              return{
+                year,month,
+                jps_ac:   String(d.jps_ac||d['JPS A/c']||'').trim(),
+                name:     (d.name||d['Name']||'').trim(),
+                consumption_bucket:(d.consumption_bucket||'').trim(),
+                kwh:      Number(d.kwh||d['Sum of net_kwh_billed_consump']||0),
+                revenue_jmd:Number(d.revenue_jmd||d['Revenue (JMD)']||0),
+                parish:   (d.parish||d['Updated Parish']||d['Parish']||'').trim(),
+                rate_class:(d.rate_class||d['Rate category']||d['Rate Class']||'').trim(),
+                demand_kva:Number(d.demand_kva||d['Demand (kVA)']||d.demand||0),
+              };
+            }).filter(d=>d.year>0&&d.month>0&&d.jps_ac);
+
+            if(rows.length){
+              if(mode==='overwrite'){
+                // Group by year+month and delete those months first
+                const periods=[...new Set(rows.map(r=>`${r.year}-${r.month}`))];
+                for(const p of periods){
+                  const[y,m]=p.split('-');
+                  if(stEl)stEl.textContent=`Clearing ${y}-${m}…`;
+                  const{error}=await sb.from('jps_actuals').delete().eq('year',Number(y)).eq('month',Number(m));
+                  if(error)throw new Error('Delete failed: '+error.message);
+                }
+                // Insert fresh
+                await batchUpsert('jps_actuals',rows,'year,month,jps_ac,consumption_bucket');
+              } else {
+                await batchUpsert('jps_actuals',rows,'year,month,jps_ac,consumption_bucket');
+              }
+            }
+          } else if(isBudget){
+            await batchUpsert('jps_commercial_budget',raw,'Month,JPS A/c');
           }
         }
       }
-      // ── Residential Budget sheet (explicit) ───────────────
-      const resBudSheet=wb.Sheets['Residential_Budget'];
-      if(resBudSheet){
-        const rows=XLSX.utils.sheet_to_json(resBudSheet);
-        if(rows.length)await batchUpsert('jps_residential_budget',rows,'year,month,rate_class,parish');
+
+      // ── Residential Budget sheet ───────────────────────
+      const rbSheet=wb.Sheets['Residential_Budget'];
+      if(rbSheet){
+        const rows=XLSX.utils.sheet_to_json(rbSheet);
+        if(rows.length)await batchUpsert('jps_residential_budget',rows,'year,month,rate_class,parish,consumption_bucket');
       }
-      // ── Account Master sheet ──────────────────────────────
-      const amSheet=wb.Sheets['Account_Master'];
-      if(amSheet){
-        const rows=XLSX.utils.sheet_to_json(amSheet);
-        if(rows.length)await batchUpsert('jps_account_master',rows,'JPS A/c');
+      // ── Commercial Budget sheet ────────────────────────
+      const cbSheet=wb.Sheets['Budget']||wb.Sheets['Commercial_Budget'];
+      if(cbSheet&&cbSheet!==actSheet){
+        const rows=XLSX.utils.sheet_to_json(cbSheet);
+        if(rows.length){
+          const first=rows[0];
+          if(first['JPS A/c']!==undefined||first.jps_ac!==undefined)
+            await batchUpsert('jps_commercial_budget',rows,'Month,JPS A/c');
+        }
       }
-      // ── Industries sheet ──────────────────────────────────
-      const indSheet=wb.Sheets['Industries'];
-      if(indSheet){
-        const rows=XLSX.utils.sheet_to_json(indSheet);
-        if(rows.length)await batchUpsert('jps_industries',rows,'name');
-      }
-      // ── KAM sheet ─────────────────────────────────────────
+      // ── KAM sheet ─────────────────────────────────────
       const kamSheet=wb.Sheets['KAM'];
-      if(kamSheet){
-        const rows=XLSX.utils.sheet_to_json(kamSheet);
-        if(rows.length)await batchUpsert('jps_kam',rows,'email');
+      if(kamSheet){const rows=XLSX.utils.sheet_to_json(kamSheet);if(rows.length)await batchUpsert('jps_kam',rows,'email');}
+      // ── Industries sheet ──────────────────────────────
+      const indSheet=wb.Sheets['Industries'];
+      if(indSheet){const rows=XLSX.utils.sheet_to_json(indSheet);if(rows.length)await batchUpsert('jps_industries',rows,'name');}
+      // ── Net Generation ────────────────────────────────
+      const ngSheet=wb.Sheets['Net_Generation']||wb.Sheets['NetGen'];
+      if(ngSheet){
+        const rows=XLSX.utils.sheet_to_json(ngSheet).map(r=>({year:Number(r.year||r.Year),month:Number(r.month||r.Month),net_gen_mwh:Number(r.net_gen_mwh||r.net_gen||0)})).filter(r=>r.year&&r.month);
+        if(rows.length)await batchUpsert('net_gen_historical',rows,'year,month');
       }
-      // ── Net Billers sheet ──────────────────────────────────
-      const nbSheet=wb.Sheets['Net_Billers']||wb.Sheets['NetBillers'];
-      if(nbSheet){
-        const rows=XLSX.utils.sheet_to_json(nbSheet);
-        if(rows.length)await batchUpsert('jps_net_billers',rows,'year,rate_class');
-      }
-      // ── EV sheet ───────────────────────────────────────────
+      // ── Net Billers ───────────────────────────────────
+      const nbSheet=wb.Sheets['Net_Billers'];
+      if(nbSheet){const rows=XLSX.utils.sheet_to_json(nbSheet);if(rows.length)await batchUpsert('jps_net_billers',rows,'year,month,rate_class');}
+      // ── EV ────────────────────────────────────────────
       const evSheet=wb.Sheets['EV_Accounts']||wb.Sheets['EV'];
-      if(evSheet){
-        const rows=XLSX.utils.sheet_to_json(evSheet);
-        if(rows.length)await batchUpsert('jps_ev_accounts',rows,'year');
-      }
-      if(totalRows===0){
-        toast('No recognisable sheets found — check template column names','w');
-        if(stEl)stEl.textContent='Upload failed — no matching sheets';
-        input.value='';return;
-      }
-      if(stEl){stEl.textContent=`✓ ${totalRows.toLocaleString()} rows uploaded`;stEl.classList.add('live');}
+      if(evSheet){const rows=XLSX.utils.sheet_to_json(evSheet);if(rows.length)await batchUpsert('jps_ev_accounts',rows,'year,month');}
+
+      if(totalRows===0){toast('No data rows found — check sheet names and column headers','w');if(stEl)stEl.textContent='No rows found';input.value='';return;}
+      if(stEl){stEl.textContent=`✓ ${totalRows.toLocaleString()} rows uploaded (${mode})`;stEl.classList.add('live');}
       if(dsEl){dsEl.textContent='📊 Live Data';dsEl.className='tbadge tbg';}
-      toast(`Uploaded ${totalRows.toLocaleString()} rows — syncing charts…`,'ok');
+      toast(`Uploaded ${totalRows.toLocaleString()} rows — refreshing…`,'ok');
       input.value='';
-      // Re-sync from DB so all charts reflect the new data
       await syncSupabase(true);
       buildCharts();
       renderSection(document.querySelector('.sec.on')?.id);
     }catch(err){
       toast('Upload failed: '+err.message,'err');
-      if(stEl)stEl.textContent='Upload error';
-      console.error('loadExcel error:',err);
+      if(stEl)stEl.textContent='Upload error — see console';
+      console.error('loadExcel:',err);
       input.value='';
     }
   };
@@ -2150,67 +2191,52 @@ async function loadExcel(input){
 function dlTemplate(){
   const wb=XLSX.utils.book_new();
 
-  // 1. Actuals (commercial + residential, account-level where available)
-  const actHdr=[['Month','JPS A/c','Name','Rate category','Updated Parish','Industry','Sum of net_kwh_billed_consump']];
+  // 1. Actuals — flat dump format, same columns for commercial and residential
+  //    For residential: consumption_bucket is required; demand_kva = 0
+  //    For commercial:  consumption_bucket = '' (blank); demand_kva filled
+  const actHdr=[['year','month','jps_ac','name','consumption_bucket','kwh','revenue_jmd','parish','rate_class','demand_kva']];
   const actSample=[
-    ['February 2026','100001','Carib Cement Co','RT70','St. Elizabeth','Manufacturing',1900000],
-    ['February 2026','200045','Residential Aggregate','RT10','Kingston','Residential',450000]
+    [2026,2,'100001','Carib Cement Co','',1900000,45000000,'St. Elizabeth','RT70',2500],
+    [2026,2,'200045','','0-150',450000,28000000,'Kingston','RT10',0],
+    [2026,2,'200046','','150-300',320000,22000000,'Kingston','RT10',0],
+    [2026,2,'200047','','300-500',180000,14000000,'St. Andrew','RT20',0],
   ];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...actHdr,...actSample]),'Actuals');
 
-  // 2. Commercial Budget — account-level, keyed by JPS A/c
-  const commBudHdr=[['Month','JPS A/c','Name','Rate category','Updated Parish','Industry','Sum of Budget']];
-  const commBudSample=[['February 2026','100001','Carib Cement Co','RT70','St. Elizabeth','Manufacturing',2100000]];
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...commBudHdr,...commBudSample]),'Budget');
-
-  // 3. Residential Budget — aggregate by rate_class + parish + month (NO account numbers)
-  const resBudHdr=[['year','month','rate_class','parish','kwh_budget','customer_count_budget']];
+  // 2. Residential Budget — aggregate by rate_class + parish + consumption_bucket + month
+  const resBudHdr=[['year','month','rate_class','parish','consumption_bucket','kwh_budget','customer_count_budget']];
   const resBudSample=[
-    [2026,2,'RT10','Kingston',12500000,8500],
-    [2026,2,'RT10','St. Andrew',9800000,6600],
-    [2026,2,'RT20','Kingston',3200000,1200],
-    [2026,1,'RT10','Kingston',12200000,8400]
+    [2026,2,'RT10','Kingston','0-150',12500000,8500],
+    [2026,2,'RT10','Kingston','150-300',9800000,3200],
+    [2026,2,'RT10','Kingston','300-500',4200000,840],
+    [2026,2,'RT10','St. Andrew','0-150',10100000,6800],
+    [2026,2,'RT20','Kingston','0-150',3200000,1200],
   ];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...resBudHdr,...resBudSample]),'Residential_Budget');
 
-  // 4. Account Master — cross-reference with KAM and industry
-  const amHdr=[['JPS A/c','name','rate_class','parish','account_type','industry','kam_name','is_active']];
-  const amSample=[
-    ['100001','Carib Cement Co','RT70','St. Elizabeth','commercial','Manufacturing','Jane Smith',true],
-    ['200045','RT10 Kingston Block','RT10','Kingston','residential','',''  ,true]
-  ];
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...amHdr,...amSample]),'Account_Master');
+  // 3. Commercial Budget — account-level (JPS A/c keyed)
+  const commBudHdr=[['year','month','jps_ac','name','rate_class','parish','kwh_budget','revenue_budget','demand_budget']];
+  const commBudSample=[[2026,2,'100001','Carib Cement Co','RT70','St. Elizabeth',2100000,48000000,2600]];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...commBudHdr,...commBudSample]),'Budget');
 
-  // 5. KAM — Key Account Managers
-  const kamHdr=[['name','email','territory','phone','accounts_assigned']];
-  const kamSample=[
-    ['Jane Smith','jsmith@jpsco.com','Commercial East','876-555-0001',''],
-    ['Mark Brown','mbrown@jpsco.com','Commercial West','876-555-0002','']
-  ];
+  // 4. KAM
+  const kamHdr=[['name','email','territory','phone']];
+  const kamSample=[['Jane Smith','jsmith@jpsco.com','Commercial East','876-555-0001']];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...kamHdr,...kamSample]),'KAM');
 
-  // 6. Industries
-  const indHdr=[['name','sector','description']];
-  const indSample=[
-    ['Manufacturing','Industrial','Cement, food processing, etc.'],
-    ['Tourism','Services','Hotels, resorts, attractions'],
-    ['Residential','Residential','RT10/RT20 domestic customers']
-  ];
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...indHdr,...indSample]),'Industries');
-
-  // 7. Net Generation
+  // 5. Net Generation
   const ngHdr=[['year','month','net_gen_mwh']];
-  const ngSample=[[2026,2,320000],[2026,1,315000],[2025,12,308000]];
+  const ngSample=[[2026,2,320000],[2026,1,315000]];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...ngHdr,...ngSample]),'Net_Generation');
 
-  // 8. Net Billers
+  // 6. Net Billers
   const nbHdr=[['year','month','rate_class','count','avg_export_kwh','total_export_kwh']];
-  const nbSample=[[2026,2,'RT10',1250,380,475000],[2026,2,'RT20',88,1200,105600]];
+  const nbSample=[[2026,2,'RT10',1250,380,475000]];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...nbHdr,...nbSample]),'Net_Billers');
 
-  // 9. EV Accounts
+  // 7. EV
   const evHdr=[['year','month','accounts','mwh']];
-  const evSample=[[2026,2,45,380],[2026,1,43,365]];
+  const evSample=[[2026,2,45,380]];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...evHdr,...evSample]),'EV_Accounts');
 
   XLSX.writeFile(wb,'JPS_Data_Template.xlsx');
@@ -4405,6 +4431,34 @@ function swAdm(id,btn){
   if(id==='adm_schema')renderSchemaSQL();
 }
 
+function showDeleteMonth(){
+  if(!can('lock_period')){toast('Admin only','err');return;}
+  const p=document.getElementById('delMonthPanel');
+  if(p){p.style.display='flex';}
+}
+
+async function doDeleteMonth(){
+  const sb=getSB();if(!sb){toast('Supabase not connected','err');return;}
+  const year=Number(document.getElementById('delYear')?.value);
+  const month=Number(document.getElementById('delMonth')?.value);
+  if(!year||!month)return;
+  const msg=document.getElementById('delMonthMsg');
+  if(msg){msg.textContent='Deleting…';msg.style.display='';}
+  try{
+    const{error,count}=await sb.from('jps_actuals').delete({count:'exact'}).eq('year',year).eq('month',month);
+    if(error)throw error;
+    if(msg){msg.textContent=`✓ Deleted ${count||'all'} rows for ${year}-${String(month).padStart(2,'0')}`;}
+    toast(`Month ${year}-${month} deleted ✓`,'ok');
+    await syncSupabase(true);
+    buildCharts();
+    renderSection(document.querySelector('.sec.on')?.id);
+    setTimeout(()=>{document.getElementById('delMonthPanel').style.display='none';},1500);
+  }catch(e){
+    if(msg){msg.textContent='Error: '+e.message;}
+    toast('Delete failed: '+e.message,'err');
+  }
+}
+
 /* ── User management ── */
 async function loadPlatformUsers(){
   const sb=getSB();if(!sb)return;
@@ -4755,17 +4809,23 @@ create policy "Managers can write account master"
 -- STEP 3: Consumption actuals and budgets
 -- ══════════════════════════════════════════════════════════
 
--- Actuals: account-level monthly consumption (commercial + residential aggregate rows)
+-- Actuals: flat dump format — one row per account per month
+-- Commercial rows: jps_ac + name + rate_class + kwh + revenue + demand; consumption_bucket = ''
+-- Residential rows: jps_ac (can be a bucket-level ID) + rate_class + consumption_bucket + kwh + revenue; demand = 0
 create table if not exists public.jps_actuals (
-  id                              bigserial primary key,
-  "Month"                         text not null,           -- e.g. "February 2026"
-  "JPS A/c"                       text references public.jps_account_master("JPS A/c"),
-  "Name"                          text,
-  "Rate category"                 text,
-  "Updated Parish"                text,
-  "Industry"                      text,
-  "Sum of net_kwh_billed_consump" numeric(15,2),
-  unique ("Month","JPS A/c")
+  id                 bigserial primary key,
+  year               smallint not null,
+  month              smallint not null check (month between 1 and 12),
+  jps_ac             text not null,
+  name               text default '',
+  consumption_bucket text not null default '',  -- '' for commercial; '0-150','150-300',… for residential
+  kwh                numeric(15,2) default 0,
+  revenue_jmd        numeric(15,2) default 0,
+  parish             text default '',
+  rate_class         text default '',
+  demand_kva         numeric(10,2) default 0,
+  created_at         timestamptz default now(),
+  unique (year, month, jps_ac, consumption_bucket)
 );
 alter table public.jps_actuals enable row level security;
 drop policy if exists "Authenticated users can read actuals" on public.jps_actuals;
@@ -4804,12 +4864,13 @@ create table if not exists public.jps_residential_budget (
   id                    bigserial primary key,
   year                  smallint not null,
   month                 smallint not null check (month between 1 and 12),
-  rate_class            text not null,      -- RT10, RT20
+  rate_class            text not null,                -- RT10, RT20
   parish                text not null default 'All',
+  consumption_bucket    text not null default '',     -- '0-150','150-300','300-500','500-750','750-1000','1000+', or '' for all
   kwh_budget            numeric(15,2) default 0,
   customer_count_budget int default 0,
   created_at            timestamptz default now(),
-  unique (year, month, rate_class, parish)
+  unique (year, month, rate_class, parish, consumption_bucket)
 );
 alter table public.jps_residential_budget enable row level security;
 drop policy if exists "Authenticated users can read res budget" on public.jps_residential_budget;
@@ -5230,24 +5291,38 @@ function fcVal(v){return parseFloat((v||'0').toString().replace(/,/g,''))||0;}
 
 function fcNormActuals(rows){
   return rows.map(d=>{
-    const{year,month}=fcParseMonth(d['Month']);
-    return{acct:(d['JPS A/c']||'Unassigned').trim(),
-      name:(d['Name']||'Unassigned').trim(),
-      rc:(d['Rate category']||'Unassigned').trim(),
-      parish:(d['Updated Parish']||'Unassigned').trim(),
-      industry:(d['Industry']||'Unassigned').trim(),
-      kwh:fcVal(d['Sum of net_kwh_billed_consump']),year,month};
+    // Support both new flat format (year+month integers) and old Month-string format
+    let year,month;
+    if(d.year&&d.month){year=Number(d.year);month=Number(d.month);}
+    else{const p=fcParseMonth(d['Month']||'');year=p.year;month=p.month;}
+    return{
+      acct: String(d.jps_ac||d['JPS A/c']||'Unassigned').trim(),
+      name: (d.name||d['Name']||'').trim(),
+      rc:   (d.rate_class||d['Rate category']||'').trim(),
+      parish:(d.parish||d['Updated Parish']||'').trim(),
+      industry:(d.industry||d['Industry']||'').trim(),
+      bucket:(d.consumption_bucket||'').trim(),
+      kwh:  fcVal(d.kwh||d['Sum of net_kwh_billed_consump']),
+      revenue:fcVal(d.revenue_jmd||0),
+      demand: fcVal(d.demand_kva||0),
+      year,month
+    };
   }).filter(d=>d.year>0&&d.month>0&&d.kwh>0);
 }
 function fcNormBudget(rows){
   return rows.map(d=>{
-    const{year,month}=fcParseMonth(d['Month']);
-    return{acct:(d['JPS A/c']||'Unassigned').trim(),
-      name:(d['Name']||'Unassigned').trim(),
-      rc:(d['Rate category']||'Unassigned').trim(),
-      parish:(d['Updated Parish']||'Unassigned').trim(),
-      industry:(d['Industry']||'Unassigned').trim(),
-      kwh:fcVal(d['Sum of Budget']),year,month};
+    let year,month;
+    if(d.year&&d.month){year=Number(d.year);month=Number(d.month);}
+    else{const p=fcParseMonth(d['Month']||'');year=p.year;month=p.month;}
+    return{
+      acct: String(d.jps_ac||d['JPS A/c']||'Unassigned').trim(),
+      name: (d.name||d['Name']||'').trim(),
+      rc:   (d.rate_class||d['Rate category']||'').trim(),
+      parish:(d.parish||d['Updated Parish']||'').trim(),
+      industry:(d.industry||d['Industry']||'').trim(),
+      kwh:  fcVal(d.kwh_budget||d['Sum of Budget']||d.kwh||0),
+      year,month
+    };
   }).filter(d=>d.year>0&&d.month>0);
 }
 
