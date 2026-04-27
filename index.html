@@ -300,8 +300,17 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
     <button class="login-btn" id="lBtn" onclick="doLogin()">Sign In →</button>
     <div class="lerr" id="lErr">Invalid email or password.</div>
     <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center">
-      <span style="font-size:9px;color:var(--text3)">Roles managed by Admin in-app</span>
-      <span style="font-size:9px;color:var(--teal);cursor:pointer" onclick="showDemoLogin()">Demo mode</span>
+      <span style="font-size:9px;color:var(--teal);cursor:pointer" onclick="showRegister()">First time? Register →</span>
+      <span style="font-size:9px;color:var(--text3);cursor:pointer" onclick="showDemoLogin()">Demo mode</span>
+    </div>
+    <!-- Register panel -->
+    <div id="registerPanel" style="display:none;margin-top:14px;padding:12px;background:rgba(55,138,221,.07);border:1px solid var(--blue);border-radius:8px">
+      <div style="font-size:10px;color:var(--blue);font-weight:700;margin-bottom:10px">CREATE ACCOUNT</div>
+      <div class="lf" style="margin-bottom:8px"><label>Full Name</label><input class="si" id="rName" placeholder="Your full name"/></div>
+      <div class="lf" style="margin-bottom:8px"><label>Email</label><input class="si" id="rEmail" type="email" placeholder="you@jpsco.com"/></div>
+      <div class="lf" style="margin-bottom:8px"><label>Password</label><input class="si" id="rPass" type="password" placeholder="Min 8 characters"/></div>
+      <button class="login-btn" id="rBtn" onclick="doRegister()" style="background:var(--blue);color:#fff">Create Account →</button>
+      <div style="font-size:9px;color:var(--text3);margin-top:8px">First account created is automatically Admin. Subsequent accounts start as View — Admin upgrades roles in-app.</div>
     </div>
     <!-- Demo mode (offline / no Supabase) -->
     <div id="demoPanel" style="display:none;margin-top:14px;padding:12px;background:rgba(0,194,168,0.07);border:1px solid var(--teal);border-radius:8px">
@@ -1574,7 +1583,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
    AUTH — Supabase Auth + role-based access
 ========================================== */
 let CU={id:'',role:'',name:'',email:'',territory:'All'};
-let PLATFORM_USERS=[]; // loaded from jps_sales_profiles
+let PLATFORM_USERS=[]; // loaded from shared profiles table
 let PERIOD_LOCKS=[];   // loaded from jps_period_locks
 
 let curPeriod='MTD', curYear=2026, curMonth=2, curQtr=1;
@@ -1630,11 +1639,12 @@ async function doLogin(){
     const{data,error}=await sb.auth.signInWithPassword({email,password:pwd});
     if(error){showErr(error.message);if(btn){btn.textContent='Sign In →';btn.disabled=false;}return;}
     // Fetch profile for role
-    const{data:profile}=await sb.from('jps_sales_profiles').select('*').eq('id',data.user.id).single().catch(()=>({data:null}));
+    const{data:profile}=await sb.from('profiles').select('*').eq('id',data.user.id).single().catch(()=>({data:null}));
     _applyLogin({
       id:data.user.id,email:data.user.email,
       name:profile?.name||data.user.email.split('@')[0],
-      role:profile?.role||'view',
+      role:profile?.sales_role||'view',
+      fpa_role:profile?.role||'viewer',
       territory:profile?.territory||'All',
     });
     // Listen for session expiry
@@ -1657,6 +1667,64 @@ function demoLogin(){
   const sel=document.getElementById('lDemoUser')?.value||'view';
   const u=_DEMO_USERS[sel];
   _applyLogin({...u,email:sel+'@demo.jps'});
+}
+
+/* ── Register (first-time / self-signup) ── */
+function showRegister(){
+  const p=document.getElementById('registerPanel');
+  const d=document.getElementById('demoPanel');
+  if(d)d.style.display='none';
+  if(p)p.style.display=p.style.display==='none'?'':'none';
+}
+
+async function doRegister(){
+  const name =(document.getElementById('rName')?.value||'').trim();
+  const email=(document.getElementById('rEmail')?.value||'').trim();
+  const pwd  =(document.getElementById('rPass')?.value||'');
+  if(!name) {showErr('Please enter your full name.');return;}
+  if(!email){showErr('Please enter your email.');return;}
+  if(pwd.length<8){showErr('Password must be at least 8 characters.');return;}
+  const btn=document.getElementById('rBtn');
+  if(btn){btn.textContent='Creating…';btn.disabled=true;}
+  try{
+    const sb=getSB();
+    if(!sb){showErr('Supabase not configured.');if(btn){btn.textContent='Create Account →';btn.disabled=false;}return;}
+    // Sign up via Supabase Auth
+    const{data,error}=await sb.auth.signUp({email,password:pwd,options:{data:{name}}});
+    if(error){showErr(error.message);if(btn){btn.textContent='Create Account →';btn.disabled=false;}return;}
+    // Determine role: first user in profiles gets admin, others get view
+    const{count}=await sb.from('profiles').select('*',{count:'exact',head:true}).catch(()=>({count:1}));
+    const isFirst=(count===0||count===null);
+    const salesRole=isFirst?'admin':'view';
+    const fpaRole  =isFirst?'admin':'viewer';
+    // Insert profile row
+    if(data.user){
+      await sb.from('profiles').upsert({
+        id:data.user.id,name,email,
+        role:fpaRole,sales_role:salesRole,
+        territory:'All',is_active:true,
+        created_at:new Date().toISOString()
+      },{onConflict:'id'});
+    }
+    if(btn){btn.textContent='Create Account →';btn.disabled=false;}
+    document.getElementById('registerPanel').style.display='none';
+    // Pre-fill email for sign-in
+    const emailEl=document.getElementById('lEmail');if(emailEl)emailEl.value=email;
+    // If Supabase email confirmation is disabled, log straight in
+    if(data.session){
+      _applyLogin({
+        id:data.user.id,email,name,
+        role:salesRole,fpa_role:fpaRole,territory:'All'
+      });
+    } else {
+      showErr('Account created! Check your email to confirm, then sign in.');
+      showErr('Account created ✓ — sign in now.');
+    }
+    toast(`Account created${isFirst?' (Admin)':' (View — Admin will upgrade your role)'}. Sign in to continue.`,'ok');
+  }catch(e){
+    showErr('Registration failed: '+e.message);
+    if(btn){btn.textContent='Create Account →';btn.disabled=false;}
+  }
 }
 
 /* ── Common post-auth setup ── */
@@ -4194,7 +4262,7 @@ function swAdm(id,btn){
 /* ── User management ── */
 async function loadPlatformUsers(){
   const sb=getSB();if(!sb)return;
-  try{const{data}=await sb.from('jps_sales_profiles').select('*').order('name');if(data)PLATFORM_USERS=data;}
+  try{const{data}=await sb.from('profiles').select('*').order('name');if(data)PLATFORM_USERS=data;}
   catch(e){console.warn('loadPlatformUsers:',e);}
 }
 
@@ -4203,20 +4271,21 @@ function renderAdm(){
     const el=document.getElementById('adm_users_tbl');if(!el)return;
     if(!PLATFORM_USERS.length){
       el.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">
-        No users found in <code>jps_sales_profiles</code>.<br>Run the DB Schema SQL, then invite users below.
+        No users found in <code>profiles</code>.<br>Run the DB Schema SQL, then register or invite users below.
         <div style="margin-top:12px"><button class="btn btn-t" onclick="showInviteUser()">+ Invite First User</button></div></div>`;
       return;
     }
     el.innerHTML=`<table class="dt" id="users_dt">
-      <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Territory</th><th>Status</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Name</th><th>Email</th><th>Sales Role</th><th>FP&amp;A Role</th><th>Territory</th><th>Status</th><th>Actions</th></tr></thead>
       <tbody>${PLATFORM_USERS.map(u=>`<tr>
         <td style="font-weight:600">${u.name}</td>
         <td style="font-size:11px;color:var(--text3)">${u.email||'--'}</td>
         <td>${can('manage_users')
           ?`<select class="sel" style="font-size:10px;padding:3px" onchange="changeUserRole('${u.id}',this.value)">
-              ${['admin','manager','rep','view'].map(r=>`<option${u.role===r?' selected':''}>${r}</option>`).join('')}
+              ${['admin','manager','rep','view'].map(r=>`<option${(u.sales_role||u.role||'view')===r?' selected':''}>${r}</option>`).join('')}
             </select>`
-          :`<span class="pill ${u.role==='admin'||u.role==='manager'?'pa':'pt'}">${u.role}</span>`}</td>
+          :`<span class="pill ${(u.sales_role==='admin'||u.sales_role==='manager')?'pa':'pt'}">${u.sales_role||'view'}</span>`}</td>
+        <td><span class="pill pgr" style="font-size:9px">${u.role||'viewer'}</span></td>
         <td style="font-size:11px">${u.territory||'All'}</td>
         <td><span class="pill ${u.is_active!==false?'pg':'pr'}">${u.is_active!==false?'Active':'Inactive'}</span></td>
         <td>${can('manage_users')
@@ -4231,8 +4300,8 @@ async function changeUserRole(userId,newRole){
   if(!can('manage_users')){alert('Admin access required.');return;}
   const sb=getSB();if(!sb){toast('Supabase required','err');return;}
   try{
-    await sb.from('jps_sales_profiles').update({role:newRole,updated_at:new Date().toISOString()}).eq('id',userId);
-    const u=PLATFORM_USERS.find(x=>x.id===userId);if(u)u.role=newRole;
+    await sb.from('profiles').update({sales_role:newRole,updated_at:new Date().toISOString()}).eq('id',userId);
+    const u=PLATFORM_USERS.find(x=>x.id===userId);if(u)u.sales_role=newRole;
     toast('Role updated ✓','ok');renderAdm();
   }catch(e){toast('Failed: '+e.message,'err');}
 }
@@ -4241,7 +4310,7 @@ async function toggleUserActive(userId,currently){
   if(!can('manage_users')){alert('Admin access required.');return;}
   const sb=getSB();if(!sb){toast('Supabase required','err');return;}
   try{
-    await sb.from('jps_sales_profiles').update({is_active:!currently,updated_at:new Date().toISOString()}).eq('id',userId);
+    await sb.from('profiles').update({is_active:!currently,updated_at:new Date().toISOString()}).eq('id',userId);
     const u=PLATFORM_USERS.find(x=>x.id===userId);if(u)u.is_active=!currently;
     toast(`User ${!currently?'activated':'deactivated'}`,'ok');renderAdm();
   }catch(e){toast('Failed: '+e.message,'err');}
@@ -4278,8 +4347,8 @@ function showInviteUser(){
     if(!sb){toast('Supabase required to send invitations','err');closeModal();return;}
     try{
       // Insert profile — auth user created when they accept the invite
-      await sb.from('jps_sales_profiles').insert({name,email,role,territory,is_active:true,created_at:new Date().toISOString()});
-      PLATFORM_USERS.push({name,email,role,territory,is_active:true});
+      await sb.from('profiles').insert({name,email,sales_role:role,territory,is_active:true,created_at:new Date().toISOString()});
+      PLATFORM_USERS.push({name,email,sales_role:role,territory,is_active:true});
       toast(`${name} added. Send them the platform URL and their email to sign up.`,'ok');
       closeModal();renderAdm();
     }catch(e){toast('Failed: '+e.message,'err');}
@@ -4422,34 +4491,59 @@ function downloadTemplate(type){
 }
 
 /* ── DB Schema SQL ── */
-const SCHEMA_SQL=`-- JPS Sales Platform — Supabase Schema
+const SCHEMA_SQL=`-- JPS Unified Platform Schema — shared by FP&A + Sales
 -- Run in: Supabase Dashboard → SQL Editor → New Query
+-- Both platforms use the SAME Supabase project and the SAME profiles table.
+-- One sign-in per user. Roles are independent per platform.
 
--- 1. User profiles (linked to Supabase auth.users)
-create table if not exists public.jps_sales_profiles (
+-- ══════════════════════════════════════════════════════════
+-- STEP 1: Extend the shared profiles table
+-- (FP&A already created this table with a "role" column.
+--  Run only the ALTER statements if profiles already exists.)
+-- ══════════════════════════════════════════════════════════
+create table if not exists public.profiles (
   id          uuid references auth.users primary key,
   name        text not null,
-  email       text,
-  role        text not null default 'rep'
-              check (role in ('admin','manager','rep','view')),
-  territory   text default 'All',
-  is_active   boolean default true,
-  created_at  timestamptz default now(),
-  updated_at  timestamptz default now()
+  role        text not null default 'viewer'       -- FP&A role
+              check (role in ('admin','analyst','viewer')),
+  created_at  timestamptz default now()
 );
-alter table public.jps_sales_profiles enable row level security;
-create policy "All users can view profiles"
-  on public.jps_sales_profiles for select using (auth.role() = 'authenticated');
+
+-- Add Sales Platform columns (safe to run even if already added)
+alter table public.profiles add column if not exists email      text;
+alter table public.profiles add column if not exists sales_role text default 'view'
+  check (sales_role in ('admin','manager','rep','view'));
+alter table public.profiles add column if not exists territory  text default 'All';
+alter table public.profiles add column if not exists is_active  boolean default true;
+alter table public.profiles add column if not exists updated_at timestamptz default now();
+
+-- Enable RLS (idempotent)
+alter table public.profiles enable row level security;
+
+-- Policies (drop first if they already exist to avoid conflicts)
+drop policy if exists "Users can view all profiles"   on public.profiles;
+drop policy if exists "Users can update own profile"  on public.profiles;
+drop policy if exists "Admins can insert profiles"    on public.profiles;
+drop policy if exists "Admins can update profiles"    on public.profiles;
+
+create policy "Authenticated users can view all profiles"
+  on public.profiles for select using (auth.role() = 'authenticated');
+create policy "Users can update own profile"
+  on public.profiles for update using (auth.uid() = id);
 create policy "Admins can insert profiles"
-  on public.jps_sales_profiles for insert with check (
-    exists (select 1 from jps_sales_profiles where id=auth.uid() and role='admin')
+  on public.profiles for insert with check (
+    (select count(*) from profiles) = 0   -- first user always allowed
+    or exists (select 1 from profiles where id=auth.uid() and sales_role='admin')
+    or exists (select 1 from profiles where id=auth.uid() and role='admin')
   );
-create policy "Admins can update profiles"
-  on public.jps_sales_profiles for update using (
-    exists (select 1 from jps_sales_profiles where id=auth.uid() and role='admin')
+create policy "Admins can update any profile"
+  on public.profiles for update using (
+    exists (select 1 from profiles where id=auth.uid() and (sales_role='admin' or role='admin'))
   );
 
--- 2. Period locks
+-- ══════════════════════════════════════════════════════════
+-- STEP 2: Period locks (Sales Platform)
+-- ══════════════════════════════════════════════════════════
 create table if not exists public.jps_period_locks (
   year        smallint not null,
   month       smallint not null check (month between 1 and 12),
@@ -4459,23 +4553,27 @@ create table if not exists public.jps_period_locks (
   primary key (year, month)
 );
 alter table public.jps_period_locks enable row level security;
-create policy "All authenticated users can view locks"
+drop policy if exists "All authenticated users can view locks" on public.jps_period_locks;
+drop policy if exists "Admins can manage locks"               on public.jps_period_locks;
+create policy "Authenticated users can view locks"
   on public.jps_period_locks for select using (auth.role() = 'authenticated');
-create policy "Admins can manage locks"
+create policy "Sales admins can manage locks"
   on public.jps_period_locks for all using (
-    exists (select 1 from jps_sales_profiles where id=auth.uid() and role='admin')
+    exists (select 1 from profiles where id=auth.uid() and sales_role='admin')
   );
 
--- 3. Net Billers (DG / solar customers)
+-- ══════════════════════════════════════════════════════════
+-- STEP 3: Net Billers
+-- ══════════════════════════════════════════════════════════
 create table if not exists public.jps_net_billers (
-  id              bigserial primary key,
-  year            smallint not null,
-  month           smallint not null,
-  rate_class      text not null,
-  count           int default 0,
-  avg_export_kwh  numeric(10,2) default 0,
+  id               bigserial primary key,
+  year             smallint not null,
+  month            smallint not null,
+  rate_class       text not null,
+  count            int default 0,
+  avg_export_kwh   numeric(10,2) default 0,
   total_export_kwh numeric(12,2) default 0,
-  created_at      timestamptz default now(),
+  created_at       timestamptz default now(),
   unique (year, month, rate_class)
 );
 alter table public.jps_net_billers enable row level security;
@@ -4483,10 +4581,12 @@ create policy "Authenticated users can read net billers"
   on public.jps_net_billers for select using (auth.role() = 'authenticated');
 create policy "Managers can write net billers"
   on public.jps_net_billers for all using (
-    exists (select 1 from jps_sales_profiles where id=auth.uid() and role in ('admin','manager'))
+    exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager'))
   );
 
--- 4. EV Accounts
+-- ══════════════════════════════════════════════════════════
+-- STEP 4: EV Accounts
+-- ══════════════════════════════════════════════════════════
 create table if not exists public.jps_ev_accounts (
   id         bigserial primary key,
   year       smallint not null,
@@ -4502,8 +4602,26 @@ create policy "Authenticated users can read EV data"
   on public.jps_ev_accounts for select using (auth.role() = 'authenticated');
 create policy "Managers can write EV data"
   on public.jps_ev_accounts for all using (
-    exists (select 1 from jps_sales_profiles where id=auth.uid() and role in ('admin','manager'))
-  );`;
+    exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager'))
+  );
+
+-- ══════════════════════════════════════════════════════════
+-- STEP 5: Create admin user (run AFTER signing up in the app)
+-- Replace the UUID with the one from auth.users for Jwilson@jpsco.com
+-- ══════════════════════════════════════════════════════════
+-- insert into public.profiles (id, name, email, role, sales_role, territory, is_active)
+-- values (
+--   '<paste-uuid-from-auth.users>',
+--   'J. Wilson',
+--   'Jwilson@jpsco.com',
+--   'admin',       -- FP&A role
+--   'admin',       -- Sales role
+--   'All',
+--   true
+-- )
+-- on conflict (id) do update
+--   set role='admin', sales_role='admin', is_active=true;
+`;
 
 function renderSchemaSQL(){
   const el=document.getElementById('adm_schema_sql');
