@@ -350,7 +350,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
       <p>Jamaica Public Service Company · AOP 2025–2027</p>
     </div>
     <div class="tb-right">
-      <span class="tbadge tba" id="periodLabel">Feb 2026 · MTD</span>
+      <span class="tbadge tba" id="periodLabel">-- · MTD</span>
       <span class="tbadge tbr" id="kpi_ytd_yoy">-- YoY</span>
       <span class="tbadge tbt" id="dataStatus">⚡ Sample Data</span>
       <span class="sb-badge sb-offline" id="sbStatus" onclick="syncSupabase()" title="Click to sync from Supabase">○ Offline</span>
@@ -417,7 +417,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
           <div class="cw" style="height:230px"><canvas id="c_trend"></canvas></div>
         </div>
         <div class="card">
-          <div class="ch">Period Mix <span id="donut_period_lbl">Feb 2026</span></div>
+          <div class="ch">Period Mix <span id="donut_period_lbl">--</span></div>
           <div class="cw" style="height:160px"><canvas id="c_donut"></canvas></div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:10px;font-size:10px">
             <div style="background:var(--navy3);border-radius:5px;padding:7px;text-align:center"><div style="color:var(--text3)">Residential</div><div style="font-weight:700;color:var(--teal)" id="mix_res_gwh">--</div><div id="mix_res_bud" style="color:var(--text3)">-- vs bud</div></div>
@@ -523,14 +523,13 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 
     <!-- === RESIDENTIAL === -->
     <div id="rs" class="sec">
-      <div style="background:rgba(245,166,35,.12);border-left:3px solid var(--amber);border-radius:4px;padding:8px 13px;margin-bottom:11px;font-size:11px;color:var(--amber);font-weight:500">&#9888; Static snapshot &middot; Feb 2026 &mdash; figures update when live residential data is loaded</div>
       <div class="krow">
-        <div class="kpi kt"><div class="kl">Feb Residential</div><div class="kv">76.5 GWh</div><div class="ks dn">↓ −4.1% vs budget</div></div>
-        <div class="kpi ka"><div class="kl">Net Billers</div><div class="kv">868</div><div class="ks dn">Registered DG</div></div>
-        <div class="kpi kr"><div class="kl">Unlicensed DG</div><div class="kv">7,811</div><div class="ks dn">↑ +11.5% since Dec</div></div>
-        <div class="kpi kg"><div class="kl">Customer Growth</div><div class="kv">+0.4%</div><div class="ks up">vs budget</div></div>
-        <div class="kpi ka"><div class="kl">RT10 Net Billers</div><div class="kv">496</div><div class="ks dn">+42% since 2021</div></div>
-        <div class="kpi kp"><div class="kl">Avg NB Export</div><div class="kv">265.5 kWh</div><div class="ks nt">Residential avg</div></div>
+        <div class="kpi kt"><div class="kl">MTD Residential</div><div class="kv" id="rs_kpi_mtd">--</div><div class="ks nt" id="rs_kpi_vs_bud">-- vs budget</div></div>
+        <div class="kpi ka"><div class="kl">Net Billers</div><div class="kv" id="rs_kpi_nb">--</div><div class="ks nt">Registered DG</div></div>
+        <div class="kpi kr"><div class="kl">Unlicensed DG</div><div class="kv" id="rs_kpi_udg">--</div><div class="ks nt">Sync DB to populate</div></div>
+        <div class="kpi kg"><div class="kl">Customer Growth</div><div class="kv" id="rs_kpi_cg">--</div><div class="ks nt">vs prior year</div></div>
+        <div class="kpi ka"><div class="kl">RT10 Net Billers</div><div class="kv" id="rs_kpi_rt10nb">--</div><div class="ks nt">Sync DB to populate</div></div>
+        <div class="kpi kp"><div class="kl">Avg NB Export</div><div class="kv" id="rs_kpi_nbexp">--</div><div class="ks nt">Sync DB to populate</div></div>
       </div>
       <div class="g2">
         <div class="card">
@@ -600,7 +599,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
     <!-- === FORECAST ACCURACY === -->
     <div id="fc" class="sec">
       <div class="krow">
-        <div class="kpi kt"><div class="kl">Period</div><div class="kv" id="fc_period_kpi">Feb 2026</div><div class="ks nt">Current forecast month</div></div>
+        <div class="kpi kt"><div class="kl">Period</div><div class="kv" id="fc_period_kpi">--</div><div class="ks nt">Current forecast month</div></div>
         <div class="kpi kg"><div class="kl">On trend</div><div class="kv" id="fc_on">--</div><div class="ks up">Customers in line</div></div>
         <div class="kpi kr"><div class="kl">Off trend</div><div class="kv" id="fc_off">--</div><div class="ks dn">Explanation required</div></div>
         <div class="kpi ka"><div class="kl">MAPE</div><div class="kv" id="fc_mape">--</div><div class="ks nt">Mean abs % error</div></div>
@@ -638,10 +637,10 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
     <!-- === RISK & OPP === -->
     <div id="ro" class="sec">
       <div class="krow">
-        <div class="kpi kt"><div class="kl">Total items</div><div class="kv">52</div><div class="ks nt">Pipeline</div></div>
-        <div class="kpi kg"><div class="kl">Opportunities</div><div class="kv">33</div><div class="ks up">111.3M kWh</div></div>
-        <div class="kpi kr"><div class="kl">Risks</div><div class="kv">19</div><div class="ks dn">63.6M kWh</div></div>
-        <div class="kpi kt"><div class="kl">Net position</div><div class="kv">+47.8M kWh</div><div class="ks up">Net opportunity</div></div>
+        <div class="kpi kt"><div class="kl">Total items</div><div class="kv" id="ro_total">--</div><div class="ks nt">Pipeline</div></div>
+        <div class="kpi kg"><div class="kl">Opportunities</div><div class="kv" id="ro_opp_count">--</div><div class="ks up" id="ro_opp_kwh">-- kWh</div></div>
+        <div class="kpi kr"><div class="kl">Risks</div><div class="kv" id="ro_risk_count">--</div><div class="ks dn" id="ro_risk_kwh">-- kWh</div></div>
+        <div class="kpi kt"><div class="kl">Net position</div><div class="kv" id="ro_net_pos">--</div><div class="ks nt" id="ro_net_dir">Net position</div></div>
         <div class="kpi kr"><div class="kl">Defection-fed risks</div><div class="kv" id="ro_def_count">--</div><div class="ks dn">Auto-flagged</div></div>
         <div class="kpi ka"><div class="kl">Forecast-fed opps</div><div class="kv" id="ro_fc_count">--</div><div class="ks up">Auto-flagged</div></div>
       </div>
@@ -757,14 +756,13 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 
     <!-- === EXEC SUMMARY === -->
     <div id="es" class="sec">
-      <div style="background:rgba(245,166,35,.12);border-left:3px solid var(--amber);border-radius:4px;padding:8px 13px;margin-bottom:11px;font-size:11px;color:var(--amber);font-weight:500">&#9888; Static snapshot &middot; Feb 2026 &mdash; KPIs and scorecard data are hardcoded; LE Forecast section reflects live Supabase data</div>
       <div class="krow">
-        <div class="kpi kt"><div class="kl">Period</div><div class="kv" id="es_period">Feb 2026</div><div class="ks nt">Reporting month</div></div>
-        <div class="kpi kr"><div class="kl">MTD vs Budget</div><div class="kv">-6.0%</div><div class="ks dn">221.3 vs 235.5 GWh</div></div>
-        <div class="kpi kr"><div class="kl">YTD vs Prior Year</div><div class="kv">-14.6%</div><div class="ks dn">455.5 vs 533.0 GWh</div></div>
-        <div class="kpi ka"><div class="kl">Revenue Recovery</div><div class="kv">+3%</div><div class="ks up">vs Budget (excl. other)</div></div>
-        <div class="kpi kr"><div class="kl">Commercial Gap</div><div class="kv">-7.8%</div><div class="ks dn">103.0 GWh MTD</div></div>
-        <div class="kpi kg"><div class="kl">Restoration</div><div class="kv">98.6%</div><div class="ks up">End Feb 2026</div></div>
+        <div class="kpi kt"><div class="kl">Period</div><div class="kv" id="es_period">--</div><div class="ks nt">Reporting month</div></div>
+        <div class="kpi kt"><div class="kl">MTD vs Budget</div><div class="kv" id="es_kpi_mtd_bud">--</div><div class="ks nt" id="es_kpi_mtd_detail">-- vs -- GWh</div></div>
+        <div class="kpi kt"><div class="kl">YTD vs Prior Year</div><div class="kv" id="es_kpi_ytd_yoy">--</div><div class="ks nt" id="es_kpi_ytd_detail">-- vs -- GWh</div></div>
+        <div class="kpi kt"><div class="kl">Revenue Recovery</div><div class="kv" id="es_kpi_rev">--</div><div class="ks nt">vs Budget (sync DB)</div></div>
+        <div class="kpi kt"><div class="kl">Commercial Gap</div><div class="kv" id="es_kpi_cm_gap">--</div><div class="ks nt" id="es_kpi_cm_detail">-- GWh MTD</div></div>
+        <div class="kpi kt"><div class="kl">Defectors</div><div class="kv" id="es_kpi_def">--</div><div class="ks nt">Critical + Severe</div></div>
       </div>
 
       <!-- Headline narrative -->
@@ -817,7 +815,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
     <!-- === VARIANCE BRIDGE === -->
     <div id="vb" class="sec">
       <div class="krow">
-        <div class="kpi kr"><div class="kl">Total MTD gap vs Budget</div><div class="kv">-14.1 GWh</div><div class="ks dn">221.3 vs 235.5 GWh</div></div>
+        <div class="kpi kr"><div class="kl">Total MTD gap vs Budget</div><div class="kv" id="vb_gap_kpi">--</div><div class="ks nt" id="vb_gap_detail">-- vs -- GWh</div></div>
         <div class="kpi kr"><div class="kl">Explained (known drivers)</div><div class="kv" id="vb_explained_kpi">-</div><div class="ks dn">From R&amp;O register</div></div>
         <div class="kpi ka"><div class="kl">Unexplained residual</div><div class="kv" id="vb_residual_kpi">-</div><div class="ks dn">Needs investigation</div></div>
         <div class="kpi kt"><div class="kl">Explanation rate</div><div class="kv" id="vb_expl_rate">-</div><div class="ks nt">% of gap explained</div></div>
@@ -845,7 +843,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
             <button class="btn btn-o" onclick="exportChart('c_bridge')">Save Image</button>
           </div>
         </div>
-        <div style="font-size:10px;color:var(--text3);margin-bottom:10px" id="vb_bridge_subtitle">Total portfolio MTD gap vs Budget: -14.1 GWh. Green bars add to sales, red bars reduce sales. Grey = starting/ending total.</div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:10px" id="vb_bridge_subtitle">Sync data to compute gap. Green bars add to sales, red bars reduce. Grey = start/end total.</div>
         <div class="cw" style="height:280px"><canvas id="c_bridge"></canvas></div>
       </div>
 
@@ -897,23 +895,22 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 
     <!-- === REVENUE RECOVERY === -->
     <div id="rr" class="sec">
-      <div style="background:rgba(245,166,35,.12);border-left:3px solid var(--amber);border-radius:4px;padding:8px 13px;margin-bottom:11px;font-size:11px;color:var(--amber);font-weight:500">&#9888; Static snapshot &middot; Feb 2026 &mdash; all revenue figures sourced from PPTX slide data</div>
       <div style="background:rgba(55,138,221,0.08);border-left:3px solid var(--blue);border-radius:4px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:var(--text2);line-height:1.8">
-        <strong style="color:var(--blue)">Revenue Recovery Analysis:</strong> Decomposes the gap between <strong style="color:var(--text)">Budget</strong>, <strong style="color:var(--teal)">Expected</strong> (based on actual volumes and prices), and <strong style="color:var(--amber)">Actual</strong> (including billing adjustments). Drivers: Quantity (kWh volume) &middot; Mix (rate class and on-peak share) &middot; FX (billing exchange rate) &middot; Fuel (unit fuel price) &middot; IPP (variable IPP cost). Based on PPTX Feb 2026 data.
+        <strong style="color:var(--blue)">Revenue Recovery Analysis:</strong> Decomposes the gap between <strong style="color:var(--text)">Budget</strong>, <strong style="color:var(--teal)">Expected</strong> (based on actual volumes and prices), and <strong style="color:var(--amber)">Actual</strong> (including billing adjustments). Drivers: Quantity (kWh volume) &middot; Mix (rate class and on-peak share) &middot; FX (billing exchange rate) &middot; Fuel (unit fuel price) &middot; IPP (variable IPP cost). <strong style="color:var(--amber)">Upload a revenue data file or sync the <code style="font-family:monospace;background:var(--navy3);padding:1px 4px;border-radius:3px">jps_revenue</code> Supabase table to populate.</strong>
       </div>
 
       <div class="krow">
-        <div class="kpi kg"><div class="kl">Expected vs Budget</div><div class="kv">+US$2.3M</div><div class="ks up">+3% -- above budget</div></div>
-        <div class="kpi ka"><div class="kl">Actual vs Expected</div><div class="kv">-0.1%</div><div class="ks dn">Billing adjustments</div></div>
-        <div class="kpi kr"><div class="kl">Quantity driver</div><div class="kv">-6%</div><div class="ks dn">Volume below budget</div></div>
-        <div class="kpi kg"><div class="kl">Mix driver</div><div class="kv">+ve</div><div class="ks up">On-peak share higher</div></div>
-        <div class="kpi kr"><div class="kl">Fuel driver</div><div class="kv">+11.4%</div><div class="ks dn">Above budget unit price</div></div>
-        <div class="kpi kr"><div class="kl">FX driver</div><div class="kv">-ve</div><div class="ks dn">Rate 162.39 vs 157.54</div></div>
+        <div class="kpi kt"><div class="kl">Expected vs Budget</div><div class="kv" id="rr_kpi_exp_bud">--</div><div class="ks nt" id="rr_kpi_exp_note">Sync revenue data</div></div>
+        <div class="kpi kt"><div class="kl">Actual vs Expected</div><div class="kv" id="rr_kpi_act_exp">--</div><div class="ks nt">Billing adjustments</div></div>
+        <div class="kpi kt"><div class="kl">Quantity driver</div><div class="kv" id="rr_kpi_qty">--</div><div class="ks nt">Volume vs budget</div></div>
+        <div class="kpi kt"><div class="kl">Mix driver</div><div class="kv" id="rr_kpi_mix">--</div><div class="ks nt">On-peak share</div></div>
+        <div class="kpi kt"><div class="kl">Fuel driver</div><div class="kv" id="rr_kpi_fuel">--</div><div class="ks nt">Unit price vs budget</div></div>
+        <div class="kpi kt"><div class="kl">FX driver</div><div class="kv" id="rr_kpi_fx">--</div><div class="ks nt">Exchange rate</div></div>
       </div>
 
       <!-- Waterfall: Budget to Expected to Actual -->
       <div class="card">
-        <div class="ch">Revenue Bridge: Budget vs Expected vs Actual <span>Feb 2026 -- USD thousands</span>
+        <div class="ch">Revenue Bridge: Budget vs Expected vs Actual <span id="rr_chart_period_lbl">-- USD thousands</span>
           <div style="display:flex;gap:6px">
             <select class="sel" id="rr_view" onchange="renderRRCharts()"><option value="usd">USD (000s)</option><option value="jmd">JMD (Billions)</option></select>
             <button class="btn btn-o" onclick="printChart('c_rr_bridge')">Print</button>
@@ -1664,11 +1661,11 @@ const GLOSSARY_DATA=[
   {term:'LE',cat:'Process',def:'Latest Estimate -- in-year revised forecast reflecting actual performance plus updated outlook.'},
   {term:'Zero Bill',cat:'Process',def:'Bill issued with zero consumption -- due to disconnection, meter fault, or outage. Widespread post-Hurricane Melissa.'},
   {term:'Defection',cat:'Market',def:'A customer whose 3-month rolling average kWh drops below 80% of the same 3-month average from the prior year. Graded: Critical <50%, Severe 50–65%, Moderate 65–80%.'},
-  {term:'Net Biller',cat:'Market',def:'Customer with registered distributed generation who exports surplus electricity to the JPS grid. 868 registered Feb 2026.'},
+  {term:'Net Biller',cat:'Market',def:'Customer with registered distributed generation who exports surplus electricity to the JPS grid. Count is DB-driven — see Residential Intelligence section.'},
   {term:'DG / Distributed Generation',cat:'Market',def:'On-site customer electricity generation (typically solar PV). Reduces grid offtake and causes load defection.'},
   {term:'CHP',cat:'Market',def:'Combined Heat & Power -- cogeneration reducing grid dependence. Used by Jamaica Broilers, industrial customers.'},
   {term:'IPP',cat:'Market',def:'Independent Power Producer -- third-party generators under contract to supply power to JPS.'},
-  {term:'Hurricane Melissa',cat:'Market',def:'Category 4 hurricane, late 2025. Primary driver of 2026 YTD commercial sales decline of −14.6% YoY.'},
+  {term:'Hurricane Melissa',cat:'Market',def:'Category 4 hurricane, late 2025. Primary structural driver of 2026 YTD commercial sales decline — magnitude varies by period loaded.'},
   {term:'Henry Hub',cat:'Market',def:'US natural gas price benchmark for LNG fuel costs in JPS tariff calculations. YTD 2026 prices +31% vs 2025.'},
 ];
 
@@ -1722,7 +1719,7 @@ function renderSection(id){
   if(!id)return;
   if(id==='ov'){renderOverviewKPIs();renderPfCust();renderPfInd();renderPfRC();renderPfPar();renderVariance();}
   else if(id==='cm'){renderCommercialKPIs();renderCmCust();renderCmIndTbl();renderCmComment();}
-  else if(id==='rs'){renderRsPar();}
+  else if(id==='rs'){renderRsKPIs();renderRsPar();}
   else if(id==='df'){renderDefectors();renderDefKPIs();}
   else if(id==='fc'){renderFcEntry();renderMacroGrid();renderFcKPIs();}
   else if(id==='ro'){filterRO();updateROAutoFlags();}
@@ -1879,6 +1876,11 @@ function buildCharts(){
       if(el.length){const idx=el[0].index;document.getElementById('trend_drill_info').textContent=`Filtered: Month ${idx+1} -- showing customers for this period`;}
     }}});
 
+  // Update donut period label
+  const _dnutMs=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const _dnutLbl=document.getElementById('donut_period_lbl');
+  if(_dnutLbl) _dnutLbl.textContent=`${_dnutMs[curMonth-1]} ${curYear}`;
+
   const donutRCs=['RT10','RT20','RT40','RT50','RT70','ST'];
   const donutData=donutRCs.map(rc=>CUSTOMERS.filter(c=>c.rate===rc).reduce((s,c)=>s+(c.m[curMonth-1]||0),0));
   mkChart('c_donut',{type:'doughnut',data:{labels:donutRCs,datasets:[{data:donutData,backgroundColor:['#00c2a8','#00957f','#378ADD','#185FA5','#f5a623','#5a7a96'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},cutout:'60%'}});
@@ -1997,7 +1999,10 @@ function renderPfRC(){
     bud:CUSTOMERS.filter(c=>c.rate===rc).reduce((s,c)=>s+c.bud,0),
     note:CUSTOMERS.length?'from loaded data':'Upload data to populate'
   }));
-  document.getElementById('pfr_tbl').innerHTML=`<div style="background:rgba(245,166,35,.12);border-left:3px solid var(--amber);border-radius:4px;padding:8px 13px;margin-bottom:9px;font-size:11px;color:var(--amber);font-weight:500">&#9888; Static snapshot &middot; Feb 2026 &mdash; update when live rate-class data is available</div><table class="dt" id="pfr_dt">
+  const pfrcBanner = CUSTOMERS.length
+    ? `<div style="background:rgba(32,201,151,.1);border-left:3px solid var(--green);border-radius:4px;padding:8px 13px;margin-bottom:9px;font-size:11px;color:var(--green);font-weight:500">&#10003; Rate-class data loaded from Supabase &mdash; ${CUSTOMERS.length} customer records</div>`
+    : `<div style="background:rgba(245,166,35,.12);border-left:3px solid var(--amber);border-radius:4px;padding:8px 13px;margin-bottom:9px;font-size:11px;color:var(--amber);font-weight:500">&#9888; No data loaded &mdash; sync Supabase or upload an Excel file to populate rate-class performance</div>`;
+  document.getElementById('pfr_tbl').innerHTML=pfrcBanner+`<table class="dt" id="pfr_dt">
     <thead><tr><th>Rate Class</th><th>Description</th><th>2025 (GWh)</th><th>2026 (GWh)</th><th>Budget (Est.)</th><th>vs Budget</th><th>YoY</th><th>MTD Notes</th></tr></thead>
     <tbody>${rcs.map(r=>{const vb2=pct(r.y26,r.bud),yy=pct(r.y26,r.y25);return`<tr>
       <td><span class="pill pt">${r.rc}</span></td><td>${r.desc}</td>
@@ -2107,6 +2112,25 @@ function renderCmComment(){
 /* ==========================================
    RESIDENTIAL
 ========================================== */
+function renderRsKPIs(){
+  const resRCs = ['RT10','RT20'];
+  const resCusts = CUSTOMERS.filter(c=>resRCs.includes(c.rate));
+  const mIdx = curMonth-1;
+  const resMtd  = resCusts.reduce((s,c)=>s+(c.m[mIdx]||0),0);
+  const resBud  = resCusts.reduce((s,c)=>s+(c.bud/12),0);
+  const resMtdLY= resCusts.reduce((s,c)=>s+(c.y25/12),0);
+  const resYoY  = resMtdLY>0?((resMtd-resMtdLY)/resMtdLY*100):null;
+  const rsCusts = resCusts.length;
+  const rsCustsLY = rsCusts; // no prior-year customer count without separate table; show current
+  const rsKv = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
+  rsKv('rs_kpi_mtd',    CUSTOMERS.length ? resMtd.toFixed(1)+' GWh' : '--');
+  rsKv('rs_kpi_vs_bud', CUSTOMERS.length ? (resBud>0?(resMtd>=resBud?'+':'')+((resMtd-resBud)/resBud*100).toFixed(1)+'% vs budget':'-- vs budget') : '-- vs budget');
+  rsKv('rs_kpi_nb',     '--'); // requires net_gen_historical or separate DG table
+  rsKv('rs_kpi_udg',    '--'); // requires unlicensed DG DB table
+  rsKv('rs_kpi_cg',     CUSTOMERS.length && resYoY!==null ? (resYoY>=0?'+':'')+resYoY.toFixed(1)+'% GWh YoY' : '--');
+  rsKv('rs_kpi_rt10nb', '--'); // requires net biller table
+  rsKv('rs_kpi_nbexp',  '--'); // requires export kWh table
+}
 function renderRsPar(){
   const q=(document.getElementById('rs_q')?.value||'').toLowerCase();
   const bracket=document.getElementById('rs_bracket')?.value||'';
@@ -2333,6 +2357,22 @@ function filterRO(){
   const st=document.getElementById('ro_status')?.value||'';
   const d=RISK_OPP.filter(r=>(!q||(r.name.toLowerCase().includes(q)||(r.acct||'').includes(q)||(r.num||'').toLowerCase().includes(q)))&&(!tp||r.type===tp)&&(!rc||r.rate===rc)&&(!src||r.source===src)&&(!st||r.status===st));
   document.getElementById('ro_count').textContent=d.length+' items';
+
+  // R&O KPI bar — computed from full RISK_OPP (not filtered subset)
+  const roOpp  = RISK_OPP.filter(r=>r.type==='Opportunity'&&r.status!=='Closed');
+  const roRisk = RISK_OPP.filter(r=>r.type==='Risk'&&r.status!=='Closed');
+  const roOppKwh  = roOpp.reduce((s,r)=>s+(r.kwh||0),0);
+  const roRiskKwh = roRisk.reduce((s,r)=>s+(r.kwh||0),0);
+  const roNet = roOppKwh - roRiskKwh;
+  const roKv = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
+  roKv('ro_total',       RISK_OPP.length ? RISK_OPP.filter(r=>r.status!=='Closed').length : '--');
+  roKv('ro_opp_count',   RISK_OPP.length ? roOpp.length : '--');
+  roKv('ro_opp_kwh',     RISK_OPP.length ? fmtK(roOppKwh)+' kWh' : '-- kWh');
+  roKv('ro_risk_count',  RISK_OPP.length ? roRisk.length : '--');
+  roKv('ro_risk_kwh',    RISK_OPP.length ? fmtK(roRiskKwh)+' kWh' : '-- kWh');
+  roKv('ro_net_pos',     RISK_OPP.length ? (roNet>=0?'+':'')+fmtK(roNet)+' kWh' : '--');
+  roKv('ro_net_dir',     RISK_OPP.length ? (roNet>=0?'Net positive position':'Net risk position') : 'Net position');
+
   const stColors={New:'pt',New2:'pt','Under Review':'pa',Confirmed:'pr',Closed:'pgr'};
   document.getElementById('ro_tbl').innerHTML=`<table class="dt" id="ro_dt">
     <thead><tr><th>Ref</th><th>Acct #</th><th>Customer</th><th>Type</th><th>Level</th><th>Rate</th><th>Sector</th><th>kWh Impact</th><th>Source</th><th>Status</th><th>Owner</th><th>Note</th></tr></thead>
@@ -2681,6 +2721,34 @@ function renderExecSummary() {
   if(el('es_period')) el('es_period').textContent = lbl;
   if(el('es_period_lbl')) el('es_period_lbl').textContent = lbl;
 
+  // ES KPI bar — computed from CUSTOMERS
+  const esAct0  = CUSTOMERS.reduce((s,c)=>s+(c.m[curMonth-1]||0),0);
+  const esBud0  = CUSTOMERS.reduce((s,c)=>s+(c.bud/12),0);
+  const esLY0   = CUSTOMERS.reduce((s,c)=>s+(c.y25/12),0);
+  const esYtd0  = CUSTOMERS.reduce((s,c)=>s+c.m.slice(0,curMonth).reduce((a,v)=>a+(v||0),0),0);
+  const esYtdLY0= CUSTOMERS.reduce((s,c)=>s+(c.y25*(curMonth/12)),0);
+  const esGap0  = esAct0 - esBud0;
+  const esYoY0  = esLY0>0?((esAct0-esLY0)/esLY0*100):null;
+  const esYtdYoY= esYtdLY0>0?((esYtd0-esYtdLY0)/esYtdLY0*100):null;
+  const esComRCs= ['RT40','RT50','RT70'];
+  const esCmMtd = CUSTOMERS.filter(c=>esComRCs.includes(c.rate)).reduce((s,c)=>s+(c.m[curMonth-1]||0),0);
+  const esCmBud = CUSTOMERS.filter(c=>esComRCs.includes(c.rate)).reduce((s,c)=>s+(c.bud/12),0);
+  const esCmGap = esCmMtd - esCmBud;
+  const esDefs  = computeDefectors().filter(d=>d.sev==='Critical'||d.sev==='Severe');
+  const esKv = (id,v) => { const e=document.getElementById(id); if(e) e.textContent=v; };
+  esKv('es_kpi_mtd_bud',   CUSTOMERS.length ? (esGap0>=0?'+':'')+((esGap0/esBud0)*100).toFixed(1)+'%' : '--');
+  esKv('es_kpi_mtd_detail',CUSTOMERS.length ? `${esAct0.toFixed(1)} vs ${esBud0.toFixed(1)} GWh` : '-- vs -- GWh');
+  esKv('es_kpi_ytd_yoy',   CUSTOMERS.length ? (esYtdYoY!==null?(esYtdYoY>=0?'+':'')+esYtdYoY.toFixed(1)+'%':'--') : '--');
+  esKv('es_kpi_ytd_detail',CUSTOMERS.length ? `${esYtd0.toFixed(1)} vs ${esYtdLY0.toFixed(1)} GWh` : '-- vs -- GWh');
+  esKv('es_kpi_rev',       '--'); // requires RR_DATA DB table
+  esKv('es_kpi_cm_gap',    CUSTOMERS.length ? (esCmGap>=0?'+':'')+esCmGap.toFixed(1)+' GWh' : '--');
+  esKv('es_kpi_cm_detail', CUSTOMERS.length ? `${esCmMtd.toFixed(1)} GWh MTD` : '-- GWh MTD');
+  esKv('es_kpi_def',       CUSTOMERS.length ? esDefs.length : '--');
+
+  // RR chart period label
+  const rrLbl = document.getElementById('rr_chart_period_lbl');
+  if(rrLbl) rrLbl.textContent = `${ms[curMonth-1]} ${curYear} — USD thousands`;
+
   // Load saved narrative
   if(el('es_narrative')) {
     el('es_narrative').value = S.get(`es_narrative_${curYear}_${curMonth}`, '');
@@ -2849,6 +2917,11 @@ function renderVarianceBridge() {
   const exRate = Math.abs(explained / totalGap * 100);
 
   const kv = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
+  // Top gap KPI card
+  kv('vb_gap_kpi', CUSTOMERS.length ? (totalGap>=0?'+':'')+totalGap.toFixed(1)+' GWh' : '--');
+  const vbGapDetail = document.getElementById('vb_gap_detail');
+  if(vbGapDetail) vbGapDetail.textContent = CUSTOMERS.length ? `${_bAct.toFixed(1)} vs ${_bBud.toFixed(1)} GWh (MTD)` : 'Sync data to compute gap';
+
   kv('vb_explained_kpi', explained.toFixed(1)+' GWh');
   kv('vb_residual_kpi', residual.toFixed(1)+' GWh');
   kv('vb_expl_rate', exRate.toFixed(0)+'%');
@@ -3042,6 +3115,36 @@ const RR_DATA = {
 };
 
 function renderRevenueRecovery() {
+  // Update chart period label
+  const ms0=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const rrLbl = document.getElementById('rr_chart_period_lbl');
+  if(rrLbl) rrLbl.textContent = `${ms0[curMonth-1]} ${curYear} — USD thousands`;
+
+  // RR KPI bar — driven by waterfall_usd values; show '--' until data is loaded
+  const wf = RR_DATA.waterfall_usd;
+  const wfVal = (lbl) => { const w=wf.find(x=>x.label===lbl); return (w&&w.val!==null&&w.val!==0)?w.val:null; };
+  const hasRR = wf.some(w=>!w.isBase&&w.val!==0);
+  const rrFmt = v => v!==null?(v>=0?'+':'')+(v/1000).toFixed(1)+'k USD':'--';
+  const rrPct = (a,b) => (a!==null&&b!==null&&b!==0)?(((a+b)/b*100-100).toFixed(1)+'%'):'--';
+  // Budget vs Expected: sum of pre-expected drivers
+  const rrQty   = wfVal('Qty effect');
+  const rrMix   = wfVal('Mix effect');
+  const rrFx    = wfVal('FX effect');
+  const rrFuel  = wfVal('Fuel cost');
+  const rrBudRaw= wf.find(x=>x.label==='Budget');
+  const rrBudV  = (rrBudRaw&&rrBudRaw.val!==null)?rrBudRaw.val:null;
+  const rrExpRaw= wf.find(x=>x.label==='Expected');
+  const rrExpV  = (rrExpRaw&&rrExpRaw.val!==null)?rrExpRaw.val:null;
+  const rrActRaw= wf.find(x=>x.label==='Actual');
+  const rrActV  = (rrActRaw&&rrActRaw.val!==null)?rrActRaw.val:null;
+  const rrKv = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
+  rrKv('rr_kpi_exp_bud', hasRR&&rrBudV&&rrExpV ? rrPct(rrExpV-rrBudV,rrBudV) : '--');
+  rrKv('rr_kpi_act_exp', hasRR&&rrExpV&&rrActV ? rrPct(rrActV-rrExpV,rrExpV) : '--');
+  rrKv('rr_kpi_qty',     hasRR&&rrQty  ? rrFmt(rrQty)  : '--');
+  rrKv('rr_kpi_mix',     hasRR&&rrMix  ? rrFmt(rrMix)  : '--');
+  rrKv('rr_kpi_fuel',    hasRR&&rrFuel ? rrFmt(rrFuel) : '--');
+  rrKv('rr_kpi_fx',      hasRR&&rrFx   ? rrFmt(rrFx)   : '--');
+
   renderRRCharts();
   renderRRDetailTable();
 
@@ -3067,8 +3170,10 @@ function renderRRCharts() {
   const useUSD = (document.getElementById('rr_view')?.value || 'usd') === 'usd';
   const scale  = useUSD ? 1 : 0.0063; // rough JMD/USD for illustration
 
-  // Build waterfall values
-  const budgetVal = 18200 * scale; // Feb budget USD 000s approx
+  // Build waterfall values — driven purely by RR_DATA (no hardcoded fallback)
+  // Budget isBase node carries the seed value; use its val if provided, else 0
+  const budgetNode = RR_DATA.waterfall_usd.find(w=>w.label==='Budget');
+  const budgetVal = ((budgetNode&&budgetNode.val!==null)?budgetNode.val:0) * scale;
   let running = budgetVal;
   const wfLabels = [], wfBase = [], wfPos = [], wfNeg = [], wfMark = [];
   RR_DATA.waterfall_usd.forEach(w => {
@@ -3081,7 +3186,7 @@ function renderRRCharts() {
     } else {
       wfLabels.push(w.label);
       wfBase.push(running < 0 ? 0 : running);
-      const v = w.val * scale;
+      const v = (w.val||0) * scale;
       wfPos.push(v > 0 ? v : 0);
       wfNeg.push(v < 0 ? v : 0);
       wfMark.push(null);
@@ -3759,8 +3864,14 @@ function generateReport() {
   if (S.get('rpt_sel_rpt_bridge', true)) {
     const drivers = getBridgeDrivers();
     const explained = drivers.reduce((s,d) => s+d.gwh, 0);
+    const _rptAct = CUSTOMERS.reduce((s,c)=>s+(c.m[curMonth-1]||0),0);
+    const _rptBud = CUSTOMERS.reduce((s,c)=>s+(c.bud/12),0);
+    const _rptGap = CUSTOMERS.length ? _rptAct - _rptBud : 0;
+    const _rptGapStr = CUSTOMERS.length ? ((_rptGap>=0?'+':'')+_rptGap.toFixed(1)+' GWh') : 'N/A (no data loaded)';
+    const _exPct = (_rptGap!==0&&CUSTOMERS.length)?Math.abs(explained/_rptGap*100).toFixed(0):'--';
+    const _resid = CUSTOMERS.length ? (_rptGap - explained).toFixed(1) : 'N/A';
     html += `<h2 style="font-size:15px;color:#003366;border-bottom:1px solid #ddd;padding-bottom:6px;margin:18px 0 10px">3. Variance Bridge</h2>
-    <p style="color:#333;font-size:11px;margin-bottom:10px">Total MTD gap vs Budget: <strong>-14.1 GWh</strong>. Explained by known drivers: <strong>${explained.toFixed(1)} GWh</strong> (${Math.abs(explained/14.1*100).toFixed(0)}%). Unexplained residual: <strong>${(-14.1-explained).toFixed(1)} GWh</strong>.</p>
+    <p style="color:#333;font-size:11px;margin-bottom:10px">Total MTD gap vs Budget: <strong>${_rptGapStr}</strong>. Explained by known drivers: <strong>${explained.toFixed(1)} GWh</strong> (${_exPct}%). Unexplained residual: <strong>${_resid} GWh</strong>.</p>
     <table style="width:100%;border-collapse:collapse;font-size:11px">
       <thead><tr style="background:#003366;color:#fff"><th style="padding:5px 8px;text-align:left">Driver</th><th style="padding:5px 8px">Segment</th><th style="padding:5px 8px">Type</th><th style="padding:5px 8px;text-align:right">GWh Impact</th></tr></thead>
       <tbody>${drivers.map((d,i) => `<tr style="background:${i%2===0?'#f9f9f9':'#fff'}">
