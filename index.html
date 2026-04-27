@@ -2141,31 +2141,71 @@ async function loadExcel(input){
         const rows=XLSX.utils.sheet_to_json(rbSheet);
         if(rows.length)await batchUpsert('jps_residential_budget',rows,'year,month,rate_class,parish,consumption_bucket');
       }
-      // ── Commercial Budget sheet ────────────────────────
+      // ── Commercial Budget sheet — year,month,jps_ac,name,rate_class,parish,kwh_budget,revenue_budget,demand_budget ──
       const cbSheet=wb.Sheets['Budget']||wb.Sheets['Commercial_Budget'];
       if(cbSheet&&cbSheet!==actSheet){
-        const rows=XLSX.utils.sheet_to_json(cbSheet);
-        if(rows.length){
-          const first=rows[0];
-          if(first['JPS A/c']!==undefined||first.jps_ac!==undefined)
-            await batchUpsert('jps_commercial_budget',rows,'Month,JPS A/c');
+        const rawCb=XLSX.utils.sheet_to_json(cbSheet);
+        if(rawCb.length){
+          const mappedCb=rawCb.map(r=>{
+            let year,month;
+            if(r.year&&r.month){year=Number(r.year);month=Number(r.month);}
+            else{const p=fcParseMonth(r['Month']||'');year=p.year;month=p.month;}
+            return{
+              year,month,
+              jps_ac:String(r.jps_ac||r['JPS A/c']||'').trim(),
+              name:(r.name||r['Name']||'').trim(),
+              rate_class:(r.rate_class||r['Rate category']||r['Rate Class']||'').trim(),
+              parish:(r.parish||r['Updated Parish']||'').trim(),
+              kwh_budget:Number(r.kwh_budget||r['Sum of Budget']||r['KWh Budget']||0),
+              revenue_budget:Number(r.revenue_budget||r['Revenue Budget']||0),
+              demand_budget:Number(r.demand_budget||r['Demand Budget']||0)
+            };
+          }).filter(r=>r.year>0&&r.month>0&&r.jps_ac);
+          if(mappedCb.length)await batchUpsert('jps_commercial_budget',mappedCb,'year,month,jps_ac');
         }
       }
-      // ── KAM sheet ─────────────────────────────────────
+      // ── KAM sheet — columns: jps_ac, kam ──────────────
       const kamSheet=wb.Sheets['KAM'];
-      if(kamSheet){const rows=XLSX.utils.sheet_to_json(kamSheet);if(rows.length)await batchUpsert('jps_kam',rows,'email');}
-      // ── Industries sheet ──────────────────────────────
+      if(kamSheet){
+        const rows=XLSX.utils.sheet_to_json(kamSheet).map(r=>({
+          jps_ac:String(r.jps_ac||r['JPS A/c']||'').trim(),
+          kam:String(r.kam||r.KAM||r.kam_name||'').trim()
+        })).filter(r=>r.jps_ac&&r.kam);
+        if(rows.length)await batchUpsert('jps_kam',rows,'jps_ac');
+      }
+      // ── Industries sheet — columns: jps_ac, industry ──
       const indSheet=wb.Sheets['Industries'];
-      if(indSheet){const rows=XLSX.utils.sheet_to_json(indSheet);if(rows.length)await batchUpsert('jps_industries',rows,'name');}
-      // ── Net Generation ────────────────────────────────
+      if(indSheet){
+        const rows=XLSX.utils.sheet_to_json(indSheet).map(r=>({
+          jps_ac:String(r.jps_ac||r['JPS A/c']||'').trim(),
+          industry:String(r.industry||r.Industry||'').trim()
+        })).filter(r=>r.jps_ac&&r.industry);
+        if(rows.length)await batchUpsert('jps_industries',rows,'jps_ac');
+      }
+      // ── Net Generation — columns: year, month, rate_class, count, kwh ──
       const ngSheet=wb.Sheets['Net_Generation']||wb.Sheets['NetGen'];
       if(ngSheet){
-        const rows=XLSX.utils.sheet_to_json(ngSheet).map(r=>({year:Number(r.year||r.Year),month:Number(r.month||r.Month),net_gen_mwh:Number(r.net_gen_mwh||r.net_gen||0)})).filter(r=>r.year&&r.month);
-        if(rows.length)await batchUpsert('net_gen_historical',rows,'year,month');
+        const rows=XLSX.utils.sheet_to_json(ngSheet).map(r=>({
+          year:Number(r.year||r.Year),
+          month:Number(r.month||r.Month),
+          rate_class:String(r.rate_class||r['Rate Class']||r.rate||'ALL').trim(),
+          count:Number(r.count||r.Count||0),
+          kwh:Number(r.kwh||r.KWh||r.net_gen_mwh||r.net_gen||0)
+        })).filter(r=>r.year&&r.month);
+        if(rows.length)await batchUpsert('net_gen_historical',rows,'year,month,rate_class');
       }
-      // ── Net Billers ───────────────────────────────────
+      // ── Net Billers — columns: year, month, rate_class, count, kwh ──
       const nbSheet=wb.Sheets['Net_Billers'];
-      if(nbSheet){const rows=XLSX.utils.sheet_to_json(nbSheet);if(rows.length)await batchUpsert('jps_net_billers',rows,'year,month,rate_class');}
+      if(nbSheet){
+        const rows=XLSX.utils.sheet_to_json(nbSheet).map(r=>({
+          year:Number(r.year||r.Year),
+          month:Number(r.month||r.Month),
+          rate_class:String(r.rate_class||r['Rate Class']||r.rate||'').trim(),
+          count:Number(r.count||r.Count||0),
+          kwh:Number(r.kwh||r.KWh||r.total_export_kwh||0)
+        })).filter(r=>r.year&&r.month&&r.rate_class);
+        if(rows.length)await batchUpsert('jps_net_billers',rows,'year,month,rate_class');
+      }
       // ── EV ────────────────────────────────────────────
       const evSheet=wb.Sheets['EV_Accounts']||wb.Sheets['EV'];
       if(evSheet){const rows=XLSX.utils.sheet_to_json(evSheet);if(rows.length)await batchUpsert('jps_ev_accounts',rows,'year,month');}
@@ -2214,24 +2254,33 @@ function dlTemplate(){
   ];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...resBudHdr,...resBudSample]),'Residential_Budget');
 
-  // 3. Commercial Budget — account-level (JPS A/c keyed)
+  // 3. Commercial Budget — account-level, same flat format as actuals (no consumption_bucket / demand optional)
+  //    kwh_budget = consumption kwh budget; revenue_budget = JMD revenue budget; demand_budget = kVA demand budget
   const commBudHdr=[['year','month','jps_ac','name','rate_class','parish','kwh_budget','revenue_budget','demand_budget']];
   const commBudSample=[[2026,2,'100001','Carib Cement Co','RT70','St. Elizabeth',2100000,48000000,2600]];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...commBudHdr,...commBudSample]),'Budget');
 
-  // 4. KAM
-  const kamHdr=[['name','email','territory','phone']];
-  const kamSample=[['Jane Smith','jsmith@jpsco.com','Commercial East','876-555-0001']];
+  // 4. KAM — account to Key Account Manager mapping
+  const kamHdr=[['jps_ac','kam']];
+  const kamSample=[['100001','Jane Smith'],['100045','Michael Brown']];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...kamHdr,...kamSample]),'KAM');
 
-  // 5. Net Generation
-  const ngHdr=[['year','month','net_gen_mwh']];
-  const ngSample=[[2026,2,320000],[2026,1,315000]];
+  // 4b. Industries — account to industry mapping
+  const indHdr=[['jps_ac','industry']];
+  const indSample=[['100001','Manufacturing'],['100045','Retail']];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...indHdr,...indSample]),'Industries');
+
+  // 5. Net Generation (DG) — same format as Net Billers
+  //    rate_class: generating technology or rate class (e.g. 'Solar','Wind','ALL')
+  //    count: number of DG installations; kwh: total generation in kWh
+  const ngHdr=[['year','month','rate_class','count','kwh']];
+  const ngSample=[[2026,2,'ALL',0,320000000],[2026,2,'Solar',245,185000000],[2026,1,'ALL',0,315000000]];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...ngHdr,...ngSample]),'Net_Generation');
 
-  // 6. Net Billers
-  const nbHdr=[['year','month','rate_class','count','avg_export_kwh','total_export_kwh']];
-  const nbSample=[[2026,2,'RT10',1250,380,475000]];
+  // 6. Net Billers — same format as Net Generation
+  //    rate_class: customer rate class; count: number of net billing customers; kwh: total export kWh
+  const nbHdr=[['year','month','rate_class','count','kwh']];
+  const nbSample=[[2026,2,'RT10',1250,475000],[2026,2,'RT20',380,142000]];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...nbHdr,...nbSample]),'Net_Billers');
 
   // 7. EV
@@ -4745,12 +4794,11 @@ create policy "Admins can update any profile"
 -- STEP 2: Reference tables — Industries, KAM, Account Master
 -- ══════════════════════════════════════════════════════════
 
+-- jps_industries: account-level industry mapping (jps_ac → industry)
 create table if not exists public.jps_industries (
-  id          bigserial primary key,
-  name        text not null unique,
-  sector      text,
-  description text,
-  created_at  timestamptz default now()
+  jps_ac     text primary key,
+  industry   text not null default '',
+  created_at timestamptz default now()
 );
 alter table public.jps_industries enable row level security;
 drop policy if exists "Authenticated users can read industries" on public.jps_industries;
@@ -4762,14 +4810,11 @@ create policy "Managers can write industries"
     exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager'))
   );
 
+-- jps_kam: account-level KAM mapping (jps_ac → kam name)
 create table if not exists public.jps_kam (
-  id              bigserial primary key,
-  name            text not null,
-  email           text unique,
-  territory       text,
-  phone           text,
-  is_active       boolean default true,
-  created_at      timestamptz default now()
+  jps_ac     text primary key,
+  kam        text not null default '',
+  created_at timestamptz default now()
 );
 alter table public.jps_kam enable row level security;
 drop policy if exists "Authenticated users can read KAM" on public.jps_kam;
@@ -4837,17 +4882,20 @@ create policy "Managers can write actuals"
     exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager'))
   );
 
--- Commercial Budget: account-level, keyed by JPS A/c (same structure as actuals)
+-- Commercial Budget: account-level, flat format matching actuals columns
 create table if not exists public.jps_commercial_budget (
-  id               bigserial primary key,
-  "Month"          text not null,
-  "JPS A/c"        text references public.jps_account_master("JPS A/c"),
-  "Name"           text,
-  "Rate category"  text,
-  "Updated Parish" text,
-  "Industry"       text,
-  "Sum of Budget"  numeric(15,2),
-  unique ("Month","JPS A/c")
+  id             bigserial primary key,
+  year           smallint not null,
+  month          smallint not null check (month between 1 and 12),
+  jps_ac         text not null,
+  name           text default '',
+  rate_class     text default '',
+  parish         text default '',
+  kwh_budget     numeric(15,2) default 0,
+  revenue_budget numeric(15,2) default 0,
+  demand_budget  numeric(10,2) default 0,
+  created_at     timestamptz default now(),
+  unique (year, month, jps_ac)
 );
 alter table public.jps_commercial_budget enable row level security;
 drop policy if exists "Authenticated users can read comm budget" on public.jps_commercial_budget;
@@ -4904,17 +4952,39 @@ create policy "Sales admins can manage locks"
   );
 
 -- ══════════════════════════════════════════════════════════
--- STEP 5: Net Billers
+-- STEP 5: Net Generation (DG) and Net Billers — same format
+-- Both tables: year, month, rate_class, count, kwh
+--   net_gen_historical: DG installations, generation kwh
+--   jps_net_billers:    net billing customers, export kwh
 -- ══════════════════════════════════════════════════════════
+create table if not exists public.net_gen_historical (
+  id         bigserial primary key,
+  year       smallint not null,
+  month      smallint not null check (month between 1 and 12),
+  rate_class text not null default 'ALL',
+  count      int default 0,
+  kwh        numeric(15,2) default 0,
+  created_at timestamptz default now(),
+  unique (year, month, rate_class)
+);
+alter table public.net_gen_historical enable row level security;
+drop policy if exists "Authenticated users can read net gen" on public.net_gen_historical;
+drop policy if exists "Managers can write net gen"           on public.net_gen_historical;
+create policy "Authenticated users can read net gen"
+  on public.net_gen_historical for select using (auth.role() = 'authenticated');
+create policy "Managers can write net gen"
+  on public.net_gen_historical for all using (
+    exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager'))
+  );
+
 create table if not exists public.jps_net_billers (
-  id               bigserial primary key,
-  year             smallint not null,
-  month            smallint not null,
-  rate_class       text not null,
-  count            int default 0,
-  avg_export_kwh   numeric(10,2) default 0,
-  total_export_kwh numeric(12,2) default 0,
-  created_at       timestamptz default now(),
+  id         bigserial primary key,
+  year       smallint not null,
+  month      smallint not null check (month between 1 and 12),
+  rate_class text not null,
+  count      int default 0,
+  kwh        numeric(15,2) default 0,
+  created_at timestamptz default now(),
   unique (year, month, rate_class)
 );
 alter table public.jps_net_billers enable row level security;
@@ -5001,7 +5071,7 @@ function updateSbStatus(state){
     live:   {cls:'sb-badge sb-live',    txt:'⚡ Live'},
     offline:{cls:'sb-badge sb-offline', txt:'○ Offline'},
     syncing:{cls:'sb-badge sb-syncing', txt:'↻ Syncing…'},
-    partial:{cls:'sb-badge sb-syncing', txt:'⚠ Partial'},
+    partial:{cls:'sb-badge sb-syncing', txt:'⚠ Partial — run Admin → DB Schema SQL'},
   };
   const c=cfg[state]||cfg.offline;
   el.className=c.cls; el.textContent=c.txt;
@@ -5095,18 +5165,16 @@ function buildDashboardData(){
   // Refresh FC_SEGS base values from actual annual data
   FC_SEGS.forEach(s=>{s.base=CUSTOMERS.filter(c=>c.rate===s.seg).reduce((sum,c)=>sum+c.y26,0)||0;});
 
-  // Enrich CUSTOMERS with KAM and industry display name from reference tables
-  if(sbAccountMaster.length){
-    const amMap={};
-    sbAccountMaster.forEach(a=>amMap[String(a['JPS A/c']||a.jps_ac||'')]=a);
-    CUSTOMERS.forEach(c=>{
-      const am=amMap[String(c.num)];
-      if(am){
-        c.kam=am.kam_name||am.kam||'';
-        c.industry=am.industry||c.ind||'';
-        c.account_type=am.account_type||'commercial';
-      }
-    });
+  // Enrich CUSTOMERS with KAM and industry from their respective lookup tables
+  if(sbKAM.length){
+    const kamMap={};
+    sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
+    CUSTOMERS.forEach(c=>{if(kamMap[String(c.num)])c.kam=kamMap[String(c.num)];});
+  }
+  if(sbIndustries.length){
+    const indMap={};
+    sbIndustries.forEach(i=>indMap[String(i.jps_ac||'').trim()]=i.industry||'');
+    CUSTOMERS.forEach(c=>{if(indMap[String(c.num)])c.industry=indMap[String(c.num)];});
   }
 
   const RES_RCS=['RT10','RT20'];
@@ -5204,11 +5272,17 @@ async function syncSupabase(silent=false){
     if(pl){PERIOD_LOCKS=pl;log.push(`Period Locks: jps_period_locks (${pl.length} locked)`);}
     else log.push('Period Locks: ⚠ jps_period_locks not found (run schema SQL in Admin)');
 
-    const anyOk=actOk||budOk||ng;
+    const anyOk=actOk||budOk||!!ng;
     sbConnected=anyOk;
     sbLastSync=new Date();
     S.set('sb_last_sync',sbLastSync.toLocaleString());
-    updateSbStatus(anyOk?(actOk&&budOk?'live':'partial'):'offline');
+    // "Live" only when actuals + at least one budget table loaded; otherwise Partial (missing tables = schema SQL not run yet)
+    const missingTables=log.filter(l=>l.includes('⚠')).map(l=>l.split(':')[0]);
+    if(!anyOk){updateSbStatus('offline');}
+    else if(missingTables.length){
+      const el=document.getElementById('sbStatus');
+      if(el){el.className='sb-badge sb-syncing';el.textContent=`⚠ Partial (${missingTables.join(', ')} missing — run DB Schema SQL)`;el.title=log.filter(l=>l.includes('⚠')).join('\n');}
+    }else{updateSbStatus('live');}
 
     if(anyOk){
       const dsEl=document.getElementById('dataStatus');
@@ -6101,19 +6175,22 @@ function renderNetGen(){
   }
   const src=sbNetGen;
   const years=[...new Set(src.map(r=>Number(r.year)))].sort();
+  // Aggregate by year+month across all rate_class rows (sum kwh per period)
   const annual=years.map(y=>({
     year:y,
-    total:src.filter(r=>Number(r.year)===y).reduce((s,r)=>s+Number(r.net_gen_mwh||r.net_gen||0),0),
+    total:src.filter(r=>Number(r.year)===y).reduce((s,r)=>s+Number(r.kwh||r.net_gen_mwh||0),0),
     months:Array.from({length:12},(_,m)=>{
-      const rec=src.find(r=>Number(r.year)===y&&Number(r.month)===m+1);
-      return rec?Number(rec.net_gen_mwh||rec.net_gen||0):null;
+      const recs=src.filter(r=>Number(r.year)===y&&Number(r.month)===m+1);
+      const tot=recs.reduce((s,r)=>s+Number(r.kwh||r.net_gen_mwh||0),0);
+      return tot||null;
     })
   }));
 
   const latest=annual[annual.length-1], prior=annual[annual.length-2];
-  const allVals=src.map(r=>Number(r.net_gen_mwh||r.net_gen||0)).filter(Boolean);
+  const allVals=src.map(r=>Number(r.kwh||r.net_gen_mwh||0)).filter(Boolean);
   const peak=Math.max(...allVals), trough=Math.min(...allVals);
-  const peakRec=src[allVals.indexOf(peak)];
+  const peakIdx=src.findIndex(r=>Number(r.kwh||r.net_gen_mwh||0)===peak);
+  const peakRec=src[peakIdx];
   const mNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
   // KPIs
@@ -6122,7 +6199,7 @@ function renderNetGen(){
     <div class="kpi kt"><div class="kl">Latest Year</div><div class="kv">${latest?.year||'--'}</div><div class="ks nt">${sbNetGen.length?'Live · Supabase':'No data loaded'}</div></div>
     <div class="kpi kg"><div class="kl">Annual Net Gen</div><div class="kv">${latest?((latest.total)/1000).toFixed(1)+' GWh':'--'}</div><div class="ks nt">YTD total</div></div>
     <div class="kpi ${prior&&pct(latest.total,prior.total)>=0?'kg':'kr'}"><div class="kl">YoY Change</div><div class="kv">${prior?(pct(latest.total,prior.total)>=0?'+':'')+pct(latest.total,prior.total).toFixed(1)+'%':'--'}</div><div class="ks nt">vs ${prior?.year||'--'}</div></div>
-    <div class="kpi ka"><div class="kl">Peak Month</div><div class="kv">${peakRec?mNames[Number(peakRec.month)-1]+' '+peakRec.year:'--'}</div><div class="ks nt">${peak.toLocaleString()} MWh</div></div>
+    <div class="kpi ka"><div class="kl">Peak Month</div><div class="kv">${peakRec?mNames[Number(peakRec.month)-1]+' '+peakRec.year:'--'}</div><div class="ks nt">${(peak/1e6).toFixed(1)} GWh</div></div>
     <div class="kpi kp"><div class="kl">Records</div><div class="kv">${src.length}</div><div class="ks nt">${sbNetGen.length?'Supabase':'No data'}</div></div>
     <div class="kpi kt"><div class="kl">Years tracked</div><div class="kv">${years.length}</div><div class="ks nt">${years[0]}–${years[years.length-1]}</div></div>`;
 
