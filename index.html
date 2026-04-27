@@ -21,6 +21,18 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 
 /* LOGIN */
 .login-screen{position:fixed;inset:0;background:var(--navy);z-index:9999;display:flex;align-items:center;justify-content:center}
+/* ADMIN TABS */
+.adm-tab.on{background:var(--teal)!important;color:#000!important;border-color:var(--teal)!important}
+.period-lock-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px}
+.period-cell{padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--navy3);text-align:center}
+.period-cell.locked{background:rgba(232,64,64,.08);border-color:var(--red)}
+.period-cell.open{background:rgba(0,194,168,.06);border-color:var(--teal)}
+.period-cell .pc-label{font-size:10px;font-weight:700;color:var(--text);margin-bottom:4px}
+.period-cell .pc-status{font-size:9px;margin-bottom:6px}
+.period-cell .pc-btn{font-size:9px;padding:3px 8px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;width:100%}
+.period-cell.locked .pc-btn{border-color:var(--red);color:var(--red)}
+.period-cell.open .pc-btn{border-color:var(--teal);color:var(--teal)}
+.lock-banner{display:flex;align-items:center;gap:8px;padding:8px 14px;background:rgba(232,64,64,.09);border:1px solid rgba(232,64,64,.3);border-radius:6px;font-size:11px;color:var(--red);font-weight:600;margin-bottom:12px}
 .login-card{background:var(--navy2);border:1px solid var(--border);border-radius:16px;padding:36px;width:380px;text-align:center}
 .login-card h2{font-size:18px;font-weight:700;color:var(--teal);margin-bottom:4px}
 .login-card p{font-size:11px;color:var(--text2);margin-bottom:20px}
@@ -276,24 +288,35 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
   <div class="login-card">
     <div style="font-size:28px;margin-bottom:10px">⚡</div>
     <h2>JPS Sales Analytics</h2>
-    <p>Sign in to access the dashboard</p>
-    <div class="lf"><label>Select Representative</label>
-      <select id="lRep">
-        <option value="">-- Select --</option>
-        <option value="atoyloy|rep|A. Toyloy">A. Toyloy (Sales Rep)</option>
-        <option value="jugordon|rep|J. Gordon">J. Gordon (Sales Rep)</option>
-        <option value="msmith|rep|M. Smith">M. Smith (Sales Rep)</option>
-        <option value="kbrown|admin|K. Brown">K. Brown (Manager)</option>
-        <option value="ljones|admin|L. Jones">L. Jones (Manager)</option>
-        <option value="viewer|view|View Only">View Only</option>
-      </select>
+    <p>Sign in with your JPS email address</p>
+    <div class="lf">
+      <label>Email</label>
+      <input type="email" id="lEmail" placeholder="you@jps.com" autocomplete="email" onkeydown="if(event.key==='Enter')document.getElementById('lPass').focus()"/>
     </div>
-    <div class="lf"><label>PIN</label>
-      <input type="password" id="lPin" placeholder="4-digit PIN" maxlength="4" onkeydown="if(event.key==='Enter')doLogin()"/>
+    <div class="lf">
+      <label>Password</label>
+      <input type="password" id="lPass" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"/>
     </div>
-    <button class="login-btn" onclick="doLogin()">Sign In →</button>
-    <div class="lerr" id="lErr">Incorrect PIN. Try again.</div>
-    <p style="font-size:9px;color:var(--text3);margin-top:14px">Rep PIN: 1234 · Manager PIN: 0000 · View: 9999</p>
+    <button class="login-btn" id="lBtn" onclick="doLogin()">Sign In →</button>
+    <div class="lerr" id="lErr">Invalid email or password.</div>
+    <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:9px;color:var(--text3)">Roles managed by Admin in-app</span>
+      <span style="font-size:9px;color:var(--teal);cursor:pointer" onclick="showDemoLogin()">Demo mode</span>
+    </div>
+    <!-- Demo mode (offline / no Supabase) -->
+    <div id="demoPanel" style="display:none;margin-top:14px;padding:12px;background:rgba(0,194,168,0.07);border:1px solid var(--teal);border-radius:8px">
+      <div style="font-size:10px;color:var(--teal);font-weight:700;margin-bottom:8px">DEMO / OFFLINE MODE</div>
+      <div class="lf" style="margin-bottom:8px">
+        <label>Select demo user</label>
+        <select id="lDemoUser" style="width:100%;background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px;font-size:12px">
+          <option value="admin">Admin (full access)</option>
+          <option value="manager">Manager (upload + approve)</option>
+          <option value="rep">Sales Rep (own territory)</option>
+          <option value="view">View Only (read-only)</option>
+        </select>
+      </div>
+      <button class="login-btn" onclick="demoLogin()" style="background:var(--teal);color:#000">Enter Demo →</button>
+    </div>
   </div>
 </div>
 
@@ -533,11 +556,11 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
       </div>
       <div class="g2">
         <div class="card">
-          <div class="ch">Net Billing Growth <span>2021–2026</span></div>
+          <div class="ch">Net Billing Growth <span id="nb_period_lbl">sync DB to populate</span></div>
           <div class="cw" style="height:200px"><canvas id="c_nb"></canvas></div>
         </div>
         <div class="card">
-          <div class="ch">EV Sales &amp; Accounts <span>+221% avg/yr</span></div>
+          <div class="ch">EV Sales &amp; Accounts <span id="ev_period_lbl">sync DB to populate</span></div>
           <div class="cw" style="height:200px"><canvas id="c_ev"></canvas></div>
         </div>
       </div>
@@ -737,18 +760,118 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 
     <!-- === ADMIN === -->
     <div id="adm" class="sec admin-only">
-      <div class="card">
-        <div class="ch">🔐 Access Control</div>
-        <table class="dt"><thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th></tr></thead>
-        <tbody>
-          <tr><td>A. Toyloy</td><td>atoyloy</td><td><span class="pill pt">Sales Rep</span></td><td><span class="pill pg">Active</span></td></tr>
-          <tr><td>J. Gordon</td><td>jugordon</td><td><span class="pill pt">Sales Rep</span></td><td><span class="pill pg">Active</span></td></tr>
-          <tr><td>M. Smith</td><td>msmith</td><td><span class="pill pt">Sales Rep</span></td><td><span class="pill pg">Active</span></td></tr>
-          <tr><td>K. Brown</td><td>kbrown</td><td><span class="pill pa">Admin</span></td><td><span class="pill pg">Active</span></td></tr>
-          <tr><td>L. Jones</td><td>ljones</td><td><span class="pill pa">Admin</span></td><td><span class="pill pg">Active</span></td></tr>
-        </tbody></table>
-        <div style="margin-top:12px;padding:10px;background:rgba(245,166,35,.07);border-left:3px solid var(--amber);border-radius:4px;font-size:11px;color:var(--text2)">
-          <strong style="color:var(--amber)">Roles:</strong> Admin = full access + delete any comment. Sales Rep = add comments for own period only. View = read only.
+      <!-- Admin tab bar -->
+      <div style="display:flex;gap:4px;margin-bottom:14px;flex-wrap:wrap">
+        <button class="btn btn-t adm-tab on" data-adm="adm_users"    onclick="swAdm('adm_users',this)">👥 Users &amp; Roles</button>
+        <button class="btn btn-o adm-tab"    data-adm="adm_periods"  onclick="swAdm('adm_periods',this)">🔒 Period Close</button>
+        <button class="btn btn-o adm-tab"    data-adm="adm_templates"onclick="swAdm('adm_templates',this)">📥 Upload Templates</button>
+        <button class="btn btn-o adm-tab"    data-adm="adm_schema"   onclick="swAdm('adm_schema',this)">🗄 DB Schema</button>
+      </div>
+
+      <!-- ── Users & Roles tab ── -->
+      <div id="adm_users" class="adm-panel">
+        <div class="card">
+          <div class="ch">👥 Users &amp; Role Management
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-t" onclick="showInviteUser()">+ Invite User</button>
+              <button class="btn btn-o" onclick="loadPlatformUsers().then(renderAdm)">🔄 Refresh</button>
+            </div>
+          </div>
+          <div style="margin-bottom:10px;padding:9px 13px;background:rgba(55,138,221,.07);border-left:3px solid var(--blue);border-radius:4px;font-size:11px;color:var(--text2)">
+            <strong>Roles:</strong>
+            <span class="pill pa" style="margin:0 4px">admin</span> Full access, user management, period locks, data upload. &nbsp;
+            <span class="pill pa" style="margin:0 4px">manager</span> Upload data, save narratives, approve forecasts, view all. &nbsp;
+            <span class="pill pt" style="margin:0 4px">rep</span> Add notes, validate defectors, enter forecast for own territory. &nbsp;
+            <span class="pill pgr" style="margin:0 4px">view</span> Read-only — no edits.
+          </div>
+          <div id="adm_users_tbl"><div style="color:var(--text3);font-size:12px;padding:20px 0;text-align:center">Loading users… click Refresh or sync Supabase.</div></div>
+        </div>
+      </div>
+
+      <!-- ── Period Close tab ── -->
+      <div id="adm_periods" class="adm-panel" style="display:none">
+        <div class="card">
+          <div class="ch">🔒 Period Close &amp; Lock
+            <button class="btn btn-o" onclick="loadPeriodLocks().then(renderPeriodClose)">🔄 Refresh</button>
+          </div>
+          <div style="margin-bottom:12px;padding:9px 13px;background:rgba(232,64,64,.07);border-left:3px solid var(--red);border-radius:4px;font-size:11px;color:var(--text2)">
+            <strong style="color:var(--red)">Locking a period makes all data for that month read-only.</strong>
+            Only Admins can lock or unlock. Edits are blocked on locked periods. Use the Unlock button to re-open if a correction is needed.
+          </div>
+          <div id="adm_period_grid"></div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <div class="ch">Period Close Checklist</div>
+          <div style="font-size:11px;color:var(--text2);line-height:2">
+            Before locking a period, confirm: &nbsp;
+            <label><input type="checkbox"> Actuals reconciled to billing system</label> &nbsp;·&nbsp;
+            <label><input type="checkbox"> Variance bridge fully explained</label> &nbsp;·&nbsp;
+            <label><input type="checkbox"> Executive narrative saved</label> &nbsp;·&nbsp;
+            <label><input type="checkbox"> R&amp;O register reviewed and updated</label> &nbsp;·&nbsp;
+            <label><input type="checkbox"> Forecast updated for next 3 months</label> &nbsp;·&nbsp;
+            <label><input type="checkbox"> Approved by Finance Manager</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Upload Templates tab ── -->
+      <div id="adm_templates" class="adm-panel" style="display:none">
+        <div class="card">
+          <div class="ch">📥 Data Upload Templates</div>
+          <div style="margin-bottom:12px;padding:9px 13px;background:rgba(0,194,168,.07);border-left:3px solid var(--teal);border-radius:4px;font-size:11px;color:var(--text2)">
+            Download a CSV template, fill it with your data, then upload via the file upload button in each section or import directly into the Supabase table.
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px">
+            <div class="card" style="background:var(--navy3)">
+              <div style="font-weight:700;font-size:12px;margin-bottom:4px;color:var(--teal)">📊 Actuals (jps_actuals)</div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:10px">Monthly kWh per customer by rate class. One row per account.</div>
+              <div style="font-size:9px;color:var(--text3);margin-bottom:8px">Columns: account_number, customer_name, rate_class, parish, industry, jan_kwh…dec_kwh</div>
+              <button class="btn btn-t" style="width:100%" onclick="downloadTemplate('actuals')">⬇ Download Template</button>
+            </div>
+            <div class="card" style="background:var(--navy3)">
+              <div style="font-weight:700;font-size:12px;margin-bottom:4px;color:var(--teal)">🎯 Budget (jps_budget)</div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:10px">Annual budget kWh per customer. Divide by 12 for monthly.</div>
+              <div style="font-size:9px;color:var(--text3);margin-bottom:8px">Columns: account_number, customer_name, rate_class, parish, industry, annual_budget_kwh, prior_year_kwh</div>
+              <button class="btn btn-t" style="width:100%" onclick="downloadTemplate('budget')">⬇ Download Template</button>
+            </div>
+            <div class="card" style="background:var(--navy3)">
+              <div style="font-weight:700;font-size:12px;margin-bottom:4px;color:var(--teal)">⚡ Net Generation (net_gen_historical)</div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:10px">MWh fed into grid by year, month, and source.</div>
+              <div style="font-size:9px;color:var(--text3);margin-bottom:8px">Columns: year, month, source, mwh, notes</div>
+              <button class="btn btn-t" style="width:100%" onclick="downloadTemplate('net_gen')">⬇ Download Template</button>
+            </div>
+            <div class="card" style="background:var(--navy3)">
+              <div style="font-weight:700;font-size:12px;margin-bottom:4px;color:var(--teal)">☀ Net Billers (jps_net_billers)</div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:10px">Registered DG customers by month, rate class, and export volume.</div>
+              <div style="font-size:9px;color:var(--text3);margin-bottom:8px">Columns: year, month, rate_class, count, avg_export_kwh, total_export_kwh</div>
+              <button class="btn btn-t" style="width:100%" onclick="downloadTemplate('net_billers')">⬇ Download Template</button>
+            </div>
+            <div class="card" style="background:var(--navy3)">
+              <div style="font-weight:700;font-size:12px;margin-bottom:4px;color:var(--teal)">🚗 EV Accounts (jps_ev_accounts)</div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:10px">EV customer count and charging MWh by year.</div>
+              <div style="font-size:9px;color:var(--text3);margin-bottom:8px">Columns: year, month, accounts, mwh, notes</div>
+              <button class="btn btn-t" style="width:100%" onclick="downloadTemplate('ev_accounts')">⬇ Download Template</button>
+            </div>
+            <div class="card" style="background:var(--navy3)">
+              <div style="font-weight:700;font-size:12px;margin-bottom:4px;color:var(--teal)">💰 Revenue Recovery (jps_rr_data)</div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:10px">Waterfall items: budget, qty effect, mix, FX, fuel, actual.</div>
+              <div style="font-size:9px;color:var(--text3);margin-bottom:8px">Columns: year, month, label, val_usd_000s, is_base</div>
+              <button class="btn btn-t" style="width:100%" onclick="downloadTemplate('rr_data')">⬇ Download Template</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── DB Schema tab ── -->
+      <div id="adm_schema" class="adm-panel" style="display:none">
+        <div class="card">
+          <div class="ch">🗄 Supabase Schema SQL
+            <button class="btn btn-o" onclick="copySchemaSql()">📋 Copy SQL</button>
+          </div>
+          <div style="margin-bottom:10px;font-size:11px;color:var(--text2)">
+            Run the SQL below in your Supabase dashboard → SQL Editor → New Query. This creates the two tables required for role security and period locking.
+          </div>
+          <pre id="adm_schema_sql" style="background:var(--navy3);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:10px;color:var(--teal);overflow-x:auto;white-space:pre-wrap;line-height:1.6"></pre>
         </div>
       </div>
     </div>
@@ -1448,31 +1571,116 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 
 <script>
 /* ==========================================
-   AUTH
+   AUTH — Supabase Auth + role-based access
 ========================================== */
-const PINS={rep:'1234',admin:'0000',view:'9999'};
-let CU={id:'',role:'',name:''};
+let CU={id:'',role:'',name:'',email:'',territory:'All'};
+let PLATFORM_USERS=[]; // loaded from jps_sales_profiles
+let PERIOD_LOCKS=[];   // loaded from jps_period_locks
+
 let curPeriod='MTD', curYear=2026, curMonth=2, curQtr=1;
 let mrPeriod='2026-02', mrRepName='', mrActiveSec='mr_ov';
 let cmDim='industry', cmDrillRC='', _modalFn=null;
 let chartInstances={};
 
-function doLogin(){
-  const s=document.getElementById('lRep').value;
-  const p=document.getElementById('lPin').value;
-  if(!s){showErr('Please select a name.');return;}
-  const [id,role,name]=s.split('|');
-  if(p!==PINS[role]){showErr('Incorrect PIN.');return;}
-  CU={id,role,name};
+/* ── Permission helper ── */
+function can(action){
+  const p={
+    upload_data:    ['admin','manager'],
+    lock_period:    ['admin'],
+    unlock_period:  ['admin'],
+    manage_users:   ['admin'],
+    invite_user:    ['admin'],
+    edit_narrative: ['admin','manager','rep'],
+    add_ro_item:    ['admin','manager','rep'],
+    validate_defect:['admin','manager','rep'],
+    approve_fc:     ['admin','manager'],
+    view_all_cust:  ['admin','manager'],
+    export_data:    ['admin','manager','rep'],
+    delete_item:    ['admin'],
+    view_only:      ['view'],
+  };
+  return (p[action]||[]).includes(CU.role);
+}
+
+/* ── Apply role-based UI visibility ── */
+function initRoleUI(){
+  // admin-only elements
+  document.querySelectorAll('.admin-only').forEach(e=>e.style.display=can('manage_users')?'':'none');
+  // manager-and-above controls
+  document.querySelectorAll('.manager-only').forEach(e=>e.style.display=can('upload_data')?'':'none');
+  // rep-and-above write controls
+  document.querySelectorAll('.rep-only').forEach(e=>e.style.display=can('edit_narrative')?'':'none');
+  // disable all write controls for view-only users
+  if(CU.role==='view'){
+    document.querySelectorAll('.btn-t,.cbox').forEach(e=>{e.style.opacity='0.35';e.style.pointerEvents='none';});
+  }
+}
+
+/* ── Supabase Auth login ── */
+async function doLogin(){
+  const email=(document.getElementById('lEmail')?.value||'').trim();
+  const pwd  =(document.getElementById('lPass')?.value||'');
+  if(!email){showErr('Please enter your email.');return;}
+  if(!pwd)  {showErr('Please enter your password.');return;}
+  const btn=document.getElementById('lBtn');
+  if(btn){btn.textContent='Signing in…';btn.disabled=true;}
+  try{
+    const sb=getSB();
+    if(!sb){showErr('Supabase not configured — use Demo mode.');if(btn){btn.textContent='Sign In →';btn.disabled=false;}return;}
+    const{data,error}=await sb.auth.signInWithPassword({email,password:pwd});
+    if(error){showErr(error.message);if(btn){btn.textContent='Sign In →';btn.disabled=false;}return;}
+    // Fetch profile for role
+    const{data:profile}=await sb.from('jps_sales_profiles').select('*').eq('id',data.user.id).single().catch(()=>({data:null}));
+    _applyLogin({
+      id:data.user.id,email:data.user.email,
+      name:profile?.name||data.user.email.split('@')[0],
+      role:profile?.role||'view',
+      territory:profile?.territory||'All',
+    });
+    // Listen for session expiry
+    sb.auth.onAuthStateChange((ev)=>{if(ev==='SIGNED_OUT')doLogout();});
+  }catch(e){showErr('Sign in failed: '+e.message);if(btn){btn.textContent='Sign In →';btn.disabled=false;}}
+}
+
+/* ── Demo / offline login ── */
+function showDemoLogin(){
+  const p=document.getElementById('demoPanel');
+  if(p)p.style.display=p.style.display==='none'?'':'none';
+}
+const _DEMO_USERS={
+  admin:  {id:'demo_admin',  name:'Demo Admin',   role:'admin',   territory:'All'},
+  manager:{id:'demo_manager',name:'Demo Manager', role:'manager', territory:'All'},
+  rep:    {id:'demo_rep',    name:'Demo Rep',     role:'rep',     territory:'Commercial'},
+  view:   {id:'demo_view',   name:'View Only',    role:'view',    territory:'All'},
+};
+function demoLogin(){
+  const sel=document.getElementById('lDemoUser')?.value||'view';
+  const u=_DEMO_USERS[sel];
+  _applyLogin({...u,email:sel+'@demo.jps'});
+}
+
+/* ── Common post-auth setup ── */
+function _applyLogin(user){
+  CU=user;
+  const btn=document.getElementById('lBtn');
+  if(btn){btn.textContent='Sign In →';btn.disabled=false;}
   document.getElementById('loginScreen').style.display='none';
-  document.getElementById('uAvatar').textContent=name.split(' ').map(w=>w[0]).join('').substring(0,2);
-  document.getElementById('uNameDisp').innerHTML=`${name} <span class="pill ${role==='admin'?'pa':'pt'}">${role}</span>`;
-  if(role==='admin')document.querySelectorAll('.admin-only').forEach(e=>e.style.display='');
-  if(role==='view')document.querySelectorAll('.cbox,.btn-t').forEach(e=>e.style.opacity='0.4');
+  const initials=CU.name.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
+  document.getElementById('uAvatar').textContent=initials;
+  document.getElementById('uNameDisp').innerHTML=
+    `${CU.name} <span class="pill ${CU.role==='admin'||CU.role==='manager'?'pa':'pt'}">${CU.role}</span>`;
+  initRoleUI();
   initAll();
 }
-function showErr(m){const e=document.getElementById('lErr');e.textContent=m;e.style.display='block';}
-function doLogout(){CU={id:'',role:'',name:''};document.getElementById('loginScreen').style.display='flex';document.getElementById('uMenu').classList.remove('sh');}
+
+function showErr(m){const e=document.getElementById('lErr');if(e){e.textContent=m;e.style.display='block';}}
+async function doLogout(){
+  const sb=getSB();
+  if(sb)await sb.auth.signOut().catch(()=>{});
+  CU={id:'',role:'',name:'',email:'',territory:'All'};
+  document.getElementById('loginScreen').style.display='flex';
+  document.getElementById('uMenu').classList.remove('sh');
+}
 function toggleMenu(){document.getElementById('uMenu').classList.toggle('sh');}
 document.addEventListener('click',e=>{if(!e.target.closest('#uAvatar')&&!e.target.closest('#uMenu'))document.getElementById('uMenu').classList.remove('sh');});
 
@@ -1520,6 +1728,7 @@ async function loadNotes(){
 
 /* ── Exec narrative ── */
 async function saveNarrative(year,month,text){
+  if(checkPeriodLock())return;
   S.set(`es_narrative_${year}_${month}`,text);
   await dbUpsert('jps_exec_narratives',{year,month,narrative:text,author:CU.name,updated_at:new Date().toISOString()});
 }
@@ -1650,7 +1859,7 @@ const GLOSSARY_DATA=[
   {term:'RT50',cat:'Rate Class',def:'MV Power Service -- medium-voltage commercial and light industrial with higher demand thresholds.'},
   {term:'RT70',cat:'Rate Class',def:'Large Power Service -- large industrial and commercial on high-voltage. Includes Carib Cement, bauxite, major hotels.'},
   {term:'ST / RT60',cat:'Rate Class',def:'Street Light & Traffic Signal tariff. Over 99% energy-based revenue; minimal fixed charges.'},
-  {term:'EV',cat:'Rate Class',def:'Electric Vehicle charging tariff. Growing at 221% avg annual rate 2021–2025.'},
+  {term:'EV',cat:'Rate Class',def:'Electric Vehicle charging tariff. Growth rate is DB-driven — see Residential section EV chart.'},
   {term:'MTD',cat:'Metric',def:'Month-to-Date -- cumulative from the 1st of the current month to the reporting date.'},
   {term:'YTD',cat:'Metric',def:'Year-to-Date -- cumulative from January 1st to the reporting date.'},
   {term:'QTD',cat:'Metric',def:'Quarter-to-Date -- cumulative from the first day of the current quarter.'},
@@ -1717,6 +1926,10 @@ function setPeriod(p,btn){
 }
 function renderSection(id){
   if(!id)return;
+  // Show lock banner on sections with period-sensitive data
+  const lockableSections=['ov','cm','rs','df','fc','ro','mr','ar','es','vb','rr'];
+  if(lockableSections.includes(id))maybeShowLockBanner(id);
+
   if(id==='ov'){renderOverviewKPIs();renderPfCust();renderPfInd();renderPfRC();renderPfPar();renderVariance();}
   else if(id==='cm'){renderCommercialKPIs();renderCmCust();renderCmIndTbl();renderCmComment();}
   else if(id==='rs'){renderRsKPIs();renderRsPar();}
@@ -1726,7 +1939,7 @@ function renderSection(id){
   else if(id==='mr'){initMrMonths();renderMrSection();}
   else if(id==='ar'){renderRecon();renderArKPIs();}
   else if(id==='gl'){renderGloss();}
-  else if(id==='adm'){}
+  else if(id==='adm'){renderAdm();}
   else if(id==='es'){renderExecSummary();}
   else if(id==='vb'){renderVarianceBridge();}
   else if(id==='rr'){renderRevenueRecovery();}
@@ -1912,20 +2125,36 @@ function buildCharts(){
       {label:'2026',data:INDUSTRIES.map(i=>i.y26),backgroundColor:'rgba(0,194,168,0.45)',borderRadius:2},
     ]},options:{...co(),indexAxis:'y',scales:{y:{ticks:{color:TC,font:{size:9}},grid:{color:CC}},x:{ticks:{color:TC},grid:{color:CC}}}}});
 
-  mkChart('c_nb',{type:'bar',data:{
-    labels:['2021','2022','2023','2024','2025','2026 YTD'],
-    datasets:[
-      {label:'RT10',data:[0,0,0,0,0,0],backgroundColor:'#00c2a8',stack:'s',borderRadius:2},
-      {label:'RT20',data:[0,0,0,0,0,0],backgroundColor:'#378ADD',stack:'s',borderRadius:2},
-      {label:'RT40',data:[0,0,0,0,0,0],backgroundColor:'#f5a623',stack:'s',borderRadius:2},
-    ]},options:co({scales:{x:{ticks:{color:TC},grid:{color:CC},stacked:true},y:{ticks:{color:TC},grid:{color:CC},stacked:true}}})});
+  // Net Biller chart — sourced from sbNetBillers (jps_net_billers table); zeros until loaded
+  (()=>{
+    const nbYears = sbNetBillers.length ? [...new Set(sbNetBillers.map(r=>String(r.year)))].sort() : [];
+    const nbRCs   = ['RT10','RT20','RT40'];
+    const nbData  = nbRCs.map(rc => nbYears.map(y => {
+      const rows = sbNetBillers.filter(r=>String(r.year)===y&&r.rate_class===rc);
+      return rows.reduce((s,r)=>s+(r.count||0),0);
+    }));
+    const nbLbl   = document.getElementById('nb_period_lbl');
+    if(nbLbl) nbLbl.textContent = nbYears.length ? `${nbYears[0]}–${nbYears[nbYears.length-1]}` : 'sync DB to populate';
+    mkChart('c_nb',{type:'bar',data:{
+      labels: nbYears.length ? nbYears : ['--'],
+      datasets: nbRCs.map((rc,i)=>({label:rc,data:nbYears.length?nbData[i]:[0],backgroundColor:['#00c2a8','#378ADD','#f5a623'][i],stack:'s',borderRadius:2}))
+    },options:co({scales:{x:{ticks:{color:TC},grid:{color:CC},stacked:true},y:{ticks:{color:TC},grid:{color:CC},stacked:true}}})});
 
-  mkChart('c_ev',{type:'bar',data:{
-    labels:['2021','2022','2023','2024','2025','2026 YTD'],
-    datasets:[
-      {label:'MWh',data:[0,0,0,0,0,0],backgroundColor:'rgba(245,166,35,0.5)',yAxisID:'y',borderRadius:2},
-      {label:'Accounts',data:[0,0,0,0,0,0],type:'line',borderColor:'#00c2a8',backgroundColor:'transparent',yAxisID:'y1',tension:.3,pointRadius:4},
-    ]},options:{...co(),scales:{x:{ticks:{color:TC},grid:{color:CC}},y:{ticks:{color:TC},grid:{color:CC},position:'left'},y1:{ticks:{color:TC},grid:{display:false},position:'right'}}}});
+    // EV chart — sourced from sbEvData (jps_ev_accounts table); zeros until loaded
+    const evYears = sbEvData.length ? [...new Set(sbEvData.map(r=>String(r.year)))].sort() : [];
+    const evMwh   = evYears.map(y=>sbEvData.filter(r=>String(r.year)===y).reduce((s,r)=>s+(r.mwh||0),0));
+    const evAcct  = evYears.map(y=>sbEvData.filter(r=>String(r.year)===y).reduce((s,r)=>s+(r.accounts||0),0));
+    const evGrowth = evMwh.length>1 ? (((evMwh[evMwh.length-1]/evMwh[0])**(1/(evMwh.length-1))-1)*100).toFixed(0)+'% CAGR' : 'sync DB to populate';
+    const evLbl = document.getElementById('ev_period_lbl');
+    if(evLbl) evLbl.textContent = evYears.length ? evGrowth : 'sync DB to populate';
+    mkChart('c_ev',{type:'bar',data:{
+      labels: evYears.length ? evYears : ['--'],
+      datasets:[
+        {label:'MWh',data:evYears.length?evMwh:[0],backgroundColor:'rgba(245,166,35,0.5)',yAxisID:'y',borderRadius:2},
+        {label:'Accounts',data:evYears.length?evAcct:[0],type:'line',borderColor:'#00c2a8',backgroundColor:'transparent',yAxisID:'y1',tension:.3,pointRadius:4},
+      ]
+    },options:{...co(),scales:{x:{ticks:{color:TC},grid:{color:CC}},y:{ticks:{color:TC},grid:{color:CC},position:'left'},y1:{ticks:{color:TC},grid:{display:false},position:'right'}}}});
+  })();
 
   // Defection charts
   const defs=computeDefectors();
@@ -2400,6 +2629,8 @@ function editRONote(num){
   openModal(`Note: ${r.name}`,`<textarea id="ro_note_ta">${r.cmt||''}</textarea>`,()=>{r.cmt=document.getElementById('ro_note_ta').value;closeModal();saveROItemToDB(r).catch(e=>console.warn('DB R&O note save:',e));filterRO();});
 }
 function addROItem(){
+  if(checkPeriodLock())return;
+  if(!can('add_ro_item')){toast('Sales Rep or above required to add items','err');return;}
   openModal('Add Risk / Opportunity Item',`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
       <div class="lf"><label>Customer Name</label><input class="si" id="nro_name" placeholder="Customer name"/></div>
@@ -3046,6 +3277,7 @@ function renderBridgeChart() {
 }
 
 function addBridgeDriver() {
+  if(checkPeriodLock())return;
   const desc = document.getElementById('vb_d_desc')?.value.trim();
   const gwh  = parseFloat(document.getElementById('vb_d_gwh')?.value) || 0;
   const seg  = document.getElementById('vb_d_seg')?.value  || 'All';
@@ -3948,12 +4180,346 @@ function printReport() {
 }
 
 /* ==========================================
+   ADMIN — User Management + Period Close
+========================================== */
+function swAdm(id,btn){
+  document.querySelectorAll('.adm-panel').forEach(p=>p.style.display='none');
+  document.querySelectorAll('.adm-tab').forEach(b=>{b.classList.remove('on');b.classList.add('btn-o');b.classList.remove('btn-t');});
+  const panel=document.getElementById(id);if(panel)panel.style.display='';
+  if(btn){btn.classList.add('on');btn.classList.remove('btn-o');btn.classList.add('btn-t');}
+  if(id==='adm_periods')renderPeriodClose();
+  if(id==='adm_schema')renderSchemaSQL();
+}
+
+/* ── User management ── */
+async function loadPlatformUsers(){
+  const sb=getSB();if(!sb)return;
+  try{const{data}=await sb.from('jps_sales_profiles').select('*').order('name');if(data)PLATFORM_USERS=data;}
+  catch(e){console.warn('loadPlatformUsers:',e);}
+}
+
+function renderAdm(){
+  loadPlatformUsers().then(()=>{
+    const el=document.getElementById('adm_users_tbl');if(!el)return;
+    if(!PLATFORM_USERS.length){
+      el.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">
+        No users found in <code>jps_sales_profiles</code>.<br>Run the DB Schema SQL, then invite users below.
+        <div style="margin-top:12px"><button class="btn btn-t" onclick="showInviteUser()">+ Invite First User</button></div></div>`;
+      return;
+    }
+    el.innerHTML=`<table class="dt" id="users_dt">
+      <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Territory</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>${PLATFORM_USERS.map(u=>`<tr>
+        <td style="font-weight:600">${u.name}</td>
+        <td style="font-size:11px;color:var(--text3)">${u.email||'--'}</td>
+        <td>${can('manage_users')
+          ?`<select class="sel" style="font-size:10px;padding:3px" onchange="changeUserRole('${u.id}',this.value)">
+              ${['admin','manager','rep','view'].map(r=>`<option${u.role===r?' selected':''}>${r}</option>`).join('')}
+            </select>`
+          :`<span class="pill ${u.role==='admin'||u.role==='manager'?'pa':'pt'}">${u.role}</span>`}</td>
+        <td style="font-size:11px">${u.territory||'All'}</td>
+        <td><span class="pill ${u.is_active!==false?'pg':'pr'}">${u.is_active!==false?'Active':'Inactive'}</span></td>
+        <td>${can('manage_users')
+          ?`<button class="btn btn-o" style="font-size:9px;padding:2px 8px" onclick="toggleUserActive('${u.id}',${u.is_active!==false})">${u.is_active!==false?'Deactivate':'Activate'}</button>`
+          :'--'}</td>
+      </tr>`).join('')}</tbody></table>`;
+    makeSortable('users_dt');
+  });
+}
+
+async function changeUserRole(userId,newRole){
+  if(!can('manage_users')){alert('Admin access required.');return;}
+  const sb=getSB();if(!sb){toast('Supabase required','err');return;}
+  try{
+    await sb.from('jps_sales_profiles').update({role:newRole,updated_at:new Date().toISOString()}).eq('id',userId);
+    const u=PLATFORM_USERS.find(x=>x.id===userId);if(u)u.role=newRole;
+    toast('Role updated ✓','ok');renderAdm();
+  }catch(e){toast('Failed: '+e.message,'err');}
+}
+
+async function toggleUserActive(userId,currently){
+  if(!can('manage_users')){alert('Admin access required.');return;}
+  const sb=getSB();if(!sb){toast('Supabase required','err');return;}
+  try{
+    await sb.from('jps_sales_profiles').update({is_active:!currently,updated_at:new Date().toISOString()}).eq('id',userId);
+    const u=PLATFORM_USERS.find(x=>x.id===userId);if(u)u.is_active=!currently;
+    toast(`User ${!currently?'activated':'deactivated'}`,'ok');renderAdm();
+  }catch(e){toast('Failed: '+e.message,'err');}
+}
+
+function showInviteUser(){
+  if(!can('invite_user')){alert('Admin access required to invite users.');return;}
+  openModal('Invite New User',`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="lf"><label>Full Name</label><input class="si" id="inv_name" placeholder="Jane Smith"/></div>
+      <div class="lf"><label>Email</label><input class="si" id="inv_email" type="email" placeholder="jane@jps.com"/></div>
+      <div class="lf"><label>Role</label>
+        <select class="sel" style="width:100%" id="inv_role">
+          <option value="rep">Sales Rep</option><option value="manager">Manager</option>
+          <option value="view">View Only</option><option value="admin">Admin</option>
+        </select>
+      </div>
+      <div class="lf"><label>Territory</label>
+        <select class="sel" style="width:100%" id="inv_territory">
+          <option>All</option><option>Commercial</option><option>Residential</option><option>Large Commercial</option>
+        </select>
+      </div>
+    </div>
+    <div style="font-size:10px;color:var(--teal);margin-top:10px;padding:8px;background:rgba(0,194,168,.07);border-radius:6px">
+      An invitation email will be sent via Supabase Auth. The user sets their own password on first sign-in.
+    </div>`,
+  async()=>{
+    const name=(document.getElementById('inv_name')?.value||'').trim();
+    const email=(document.getElementById('inv_email')?.value||'').trim();
+    const role=document.getElementById('inv_role')?.value||'rep';
+    const territory=document.getElementById('inv_territory')?.value||'All';
+    if(!name||!email){toast('Name and email required','err');return;}
+    const sb=getSB();
+    if(!sb){toast('Supabase required to send invitations','err');closeModal();return;}
+    try{
+      // Insert profile — auth user created when they accept the invite
+      await sb.from('jps_sales_profiles').insert({name,email,role,territory,is_active:true,created_at:new Date().toISOString()});
+      PLATFORM_USERS.push({name,email,role,territory,is_active:true});
+      toast(`${name} added. Send them the platform URL and their email to sign up.`,'ok');
+      closeModal();renderAdm();
+    }catch(e){toast('Failed: '+e.message,'err');}
+  });
+}
+
+/* ── Period close ── */
+async function loadPeriodLocks(){
+  const sb=getSB();if(!sb)return;
+  try{const{data}=await sb.from('jps_period_locks').select('*');if(data)PERIOD_LOCKS=data;}
+  catch(e){console.warn('loadPeriodLocks:',e);}
+}
+
+function isPeriodLocked(year,month){
+  return PERIOD_LOCKS.some(l=>Number(l.year)===year&&Number(l.month)===month&&l.locked_at);
+}
+
+// Call this before any save to block writes on locked periods
+function checkPeriodLock(){
+  if(isPeriodLocked(curYear,curMonth)){
+    const mns=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    toast(`${mns[curMonth-1]} ${curYear} is locked — unlock in Admin → Period Close to make changes.`,'err');
+    return true; // blocked
+  }
+  return false;
+}
+
+// Inject a lock banner at the top of any section's first element if the period is locked
+function maybeShowLockBanner(sectionId){
+  const mns=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const sec=document.getElementById(sectionId);if(!sec)return;
+  document.querySelectorAll('.lock-banner').forEach(b=>b.remove());
+  if(isPeriodLocked(curYear,curMonth)){
+    const lock=PERIOD_LOCKS.find(l=>Number(l.year)===curYear&&Number(l.month)===curMonth);
+    const banner=document.createElement('div');
+    banner.className='lock-banner';
+    banner.innerHTML=`🔒 <strong>${mns[curMonth-1]} ${curYear} is closed.</strong>&nbsp;
+      Locked ${lock?.locked_at?new Date(lock.locked_at).toLocaleDateString():''}
+      ${lock?.locked_by?' by '+lock.locked_by:''}. &nbsp;
+      ${can('unlock_period')?`<button class="btn btn-o" style="margin-left:auto;font-size:9px;padding:2px 8px;border-color:var(--red);color:var(--red)" onclick="unlockPeriodPrompt(${curYear},${curMonth})">Unlock</button>`:'Contact Admin to unlock.'}`;
+    sec.insertBefore(banner,sec.firstChild);
+  }
+}
+
+async function lockPeriodConfirm(year,month){
+  if(!can('lock_period')){alert('Admin access required.');return;}
+  const mns=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  openModal(`Lock ${mns[month-1]} ${year}`,`
+    <div style="color:var(--text2);font-size:12px;margin-bottom:12px">This will make <strong>${mns[month-1]} ${year}</strong> read-only. All saves will be blocked for this period.</div>
+    <div class="lf"><label>Lock notes (optional)</label><textarea id="lock_notes" class="cbox" rows="2" placeholder="e.g. Period close approved by Finance Manager, 15 Apr 2026"></textarea></div>`,
+  async()=>{
+    const notes=document.getElementById('lock_notes')?.value||'';
+    const sb=getSB();if(!sb){toast('Supabase required','err');closeModal();return;}
+    try{
+      const lock={year,month,locked_at:new Date().toISOString(),locked_by:CU.email||CU.name,notes};
+      await sb.from('jps_period_locks').upsert(lock,{onConflict:'year,month'});
+      PERIOD_LOCKS=PERIOD_LOCKS.filter(l=>!(Number(l.year)===year&&Number(l.month)===month));
+      PERIOD_LOCKS.push(lock);
+      toast(`${mns[month-1]} ${year} locked ✓`,'ok');closeModal();renderPeriodClose();
+      renderSection(document.querySelector('.sec.on')?.id);
+    }catch(e){toast('Lock failed: '+e.message,'err');}
+  });
+}
+
+async function unlockPeriodPrompt(year,month){
+  if(!can('unlock_period')){alert('Admin access required.');return;}
+  const mns=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  if(!confirm(`Unlock ${mns[month-1]} ${year}? This re-opens the period for editing.`))return;
+  const sb=getSB();if(!sb){toast('Supabase required','err');return;}
+  try{
+    await sb.from('jps_period_locks').delete().eq('year',year).eq('month',month);
+    PERIOD_LOCKS=PERIOD_LOCKS.filter(l=>!(Number(l.year)===year&&Number(l.month)===month));
+    toast(`${mns[month-1]} ${year} unlocked`,'ok');renderPeriodClose();
+    renderSection(document.querySelector('.sec.on')?.id);
+  }catch(e){toast('Unlock failed: '+e.message,'err');}
+}
+
+function renderPeriodClose(){
+  const el=document.getElementById('adm_period_grid');if(!el)return;
+  const mns=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  // Show current year + prior year
+  let html='';
+  for(const yr of[curYear-1,curYear]){
+    html+=`<div style="font-size:11px;font-weight:700;color:var(--text2);margin:10px 0 6px">${yr}</div>
+    <div class="period-lock-grid">`;
+    for(let m=1;m<=12;m++){
+      const locked=isPeriodLocked(yr,m);
+      const lock=PERIOD_LOCKS.find(l=>Number(l.year)===yr&&Number(l.month)===m);
+      const isCur=yr===curYear&&m===curMonth;
+      html+=`<div class="period-cell ${locked?'locked':'open'}">
+        <div class="pc-label">${mns[m-1]}${isCur?' ★':''}</div>
+        <div class="pc-status" style="color:${locked?'var(--red)':'var(--teal)'}">
+          ${locked?`🔒 Closed${lock?.locked_by?'<br><span style="font-size:8px">'+lock.locked_by+'</span>':''}` :'🟢 Open'}
+        </div>
+        ${can('lock_period')?`<button class="pc-btn" onclick="${locked?`unlockPeriodPrompt(${yr},${m})`:`lockPeriodConfirm(${yr},${m})`}">
+          ${locked?'Unlock':'Lock'}
+        </button>`:''}
+      </div>`;
+    }
+    html+='</div>';
+  }
+  el.innerHTML=html;
+}
+
+/* ── Download templates ── */
+function downloadTemplate(type){
+  const T={
+    actuals:{file:'jps_actuals_template.csv',
+      rows:[['account_number','customer_name','rate_class','parish','industry','jan_kwh','feb_kwh','mar_kwh','apr_kwh','may_kwh','jun_kwh','jul_kwh','aug_kwh','sep_kwh','oct_kwh','nov_kwh','dec_kwh'],
+            ['ACC001001','Sample Commercial Ltd','RT40','Kingston','Retail','150000','148000','152000','155000','160000','165000','162000','158000','153000','149000','147000','151000'],
+            ['ACC002001','Sample Residential','RT10','St. Andrew','N/A','350','340','360','380','400','420','410','390','370','355','340','355']]},
+    budget:{file:'jps_budget_template.csv',
+      rows:[['account_number','customer_name','rate_class','parish','industry','annual_budget_kwh','prior_year_kwh'],
+            ['ACC001001','Sample Commercial Ltd','RT40','Kingston','Retail','1850000','1800000'],
+            ['ACC002001','Sample Residential','RT10','St. Andrew','N/A','4200','4100']]},
+    net_gen:{file:'net_gen_historical_template.csv',
+      rows:[['year','month','source','mwh','notes'],
+            ['2026','1','JPS','448200','January 2026'],['2026','2','JPS','432100','February 2026'],
+            ['2026','1','IPP','52000','Wigton + Jamaica Broilers'],['2026','2','IPP','50400','']]},
+    net_billers:{file:'jps_net_billers_template.csv',
+      rows:[['year','month','rate_class','count','avg_export_kwh','total_export_kwh'],
+            ['2026','2','RT10','425','312','132600'],['2026','2','RT20','43','580','24940']]},
+    ev_accounts:{file:'jps_ev_accounts_template.csv',
+      rows:[['year','month','accounts','mwh','notes'],
+            ['2026','1','312','89','January 2026'],['2026','2','319','94','February 2026']]},
+    rr_data:{file:'jps_rr_data_template.csv',
+      rows:[['year','month','label','val_usd_000s','is_base'],
+            ['2026','2','Budget','18200','true'],['2026','2','Qty effect','-620','false'],
+            ['2026','2','Mix effect','85','false'],['2026','2','FX effect','-310','false'],
+            ['2026','2','Fuel cost','240','false'],['2026','2','IPP cost','-180','false'],
+            ['2026','2','Expected','17415','true'],['2026','2','Billing adj.','-95','false'],
+            ['2026','2','Other var.','-45','false'],['2026','2','Actual','17275','true']]},
+  };
+  const t=T[type];if(!t){toast('Unknown template type','err');return;}
+  const csv=t.rows.map(r=>r.join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=t.file;a.click();
+  URL.revokeObjectURL(a.href);
+  toast(`${t.file} downloaded ✓`,'ok');
+}
+
+/* ── DB Schema SQL ── */
+const SCHEMA_SQL=`-- JPS Sales Platform — Supabase Schema
+-- Run in: Supabase Dashboard → SQL Editor → New Query
+
+-- 1. User profiles (linked to Supabase auth.users)
+create table if not exists public.jps_sales_profiles (
+  id          uuid references auth.users primary key,
+  name        text not null,
+  email       text,
+  role        text not null default 'rep'
+              check (role in ('admin','manager','rep','view')),
+  territory   text default 'All',
+  is_active   boolean default true,
+  created_at  timestamptz default now(),
+  updated_at  timestamptz default now()
+);
+alter table public.jps_sales_profiles enable row level security;
+create policy "All users can view profiles"
+  on public.jps_sales_profiles for select using (auth.role() = 'authenticated');
+create policy "Admins can insert profiles"
+  on public.jps_sales_profiles for insert with check (
+    exists (select 1 from jps_sales_profiles where id=auth.uid() and role='admin')
+  );
+create policy "Admins can update profiles"
+  on public.jps_sales_profiles for update using (
+    exists (select 1 from jps_sales_profiles where id=auth.uid() and role='admin')
+  );
+
+-- 2. Period locks
+create table if not exists public.jps_period_locks (
+  year        smallint not null,
+  month       smallint not null check (month between 1 and 12),
+  locked_at   timestamptz,
+  locked_by   text,
+  notes       text,
+  primary key (year, month)
+);
+alter table public.jps_period_locks enable row level security;
+create policy "All authenticated users can view locks"
+  on public.jps_period_locks for select using (auth.role() = 'authenticated');
+create policy "Admins can manage locks"
+  on public.jps_period_locks for all using (
+    exists (select 1 from jps_sales_profiles where id=auth.uid() and role='admin')
+  );
+
+-- 3. Net Billers (DG / solar customers)
+create table if not exists public.jps_net_billers (
+  id              bigserial primary key,
+  year            smallint not null,
+  month           smallint not null,
+  rate_class      text not null,
+  count           int default 0,
+  avg_export_kwh  numeric(10,2) default 0,
+  total_export_kwh numeric(12,2) default 0,
+  created_at      timestamptz default now(),
+  unique (year, month, rate_class)
+);
+alter table public.jps_net_billers enable row level security;
+create policy "Authenticated users can read net billers"
+  on public.jps_net_billers for select using (auth.role() = 'authenticated');
+create policy "Managers can write net billers"
+  on public.jps_net_billers for all using (
+    exists (select 1 from jps_sales_profiles where id=auth.uid() and role in ('admin','manager'))
+  );
+
+-- 4. EV Accounts
+create table if not exists public.jps_ev_accounts (
+  id         bigserial primary key,
+  year       smallint not null,
+  month      smallint not null,
+  accounts   int default 0,
+  mwh        numeric(10,2) default 0,
+  notes      text,
+  created_at timestamptz default now(),
+  unique (year, month)
+);
+alter table public.jps_ev_accounts enable row level security;
+create policy "Authenticated users can read EV data"
+  on public.jps_ev_accounts for select using (auth.role() = 'authenticated');
+create policy "Managers can write EV data"
+  on public.jps_ev_accounts for all using (
+    exists (select 1 from jps_sales_profiles where id=auth.uid() and role in ('admin','manager'))
+  );`;
+
+function renderSchemaSQL(){
+  const el=document.getElementById('adm_schema_sql');
+  if(el)el.textContent=SCHEMA_SQL;
+}
+function copySchemaSql(){
+  navigator.clipboard?.writeText(SCHEMA_SQL).then(()=>toast('SQL copied to clipboard ✓','ok')).catch(()=>toast('Copy failed — select text manually','err'));
+}
+
+/* ==========================================
    SUPABASE — Direct SDK Connection (no proxy)
 ========================================== */
 const SB_URL = 'https://bhrswnbenkvflpdjhfpa.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJocnN3bmJlbmt2ZmxwZGpoZnBhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMTc0OTcsImV4cCI6MjA5MTg5MzQ5N30.JupFs0tnMn3k282PqFOSMi2ch-wtB7Ewv7O8fN16-94';
 
-let _sbClient=null, sbActuals=[], sbBudget=[], sbNetGen=[], sbConnected=false, sbLastSync=null;
+let _sbClient=null, sbActuals=[], sbBudget=[], sbNetGen=[], sbNetBillers=[], sbEvData=[], sbConnected=false, sbLastSync=null;
 
 function getSB(){
   if(!_sbClient&&window.supabase?.createClient)
@@ -4103,6 +4669,21 @@ async function syncSupabase(silent=false){
     const ng=await sbTable('net_gen_historical',{order:'year'});
     if(ng){sbNetGen=ng;log.push(`Net Gen: net_gen_historical (${ng.length} rows)`);}
     else log.push('Net Gen: ⚠ net_gen_historical not accessible');
+
+    // ── Net Billers ────────────────────────────────────────
+    const nb=await sbTable('jps_net_billers',{order:'year'});
+    if(nb){sbNetBillers=nb;log.push(`Net Billers: jps_net_billers (${nb.length} rows)`);}
+    else log.push('Net Billers: ⚠ jps_net_billers not found (create table to populate)');
+
+    // ── EV Data ───────────────────────────────────────────
+    const ev=await sbTable('jps_ev_accounts',{order:'year'});
+    if(ev){sbEvData=ev;log.push(`EV Data: jps_ev_accounts (${ev.length} rows)`);}
+    else log.push('EV Data: ⚠ jps_ev_accounts not found (create table to populate)');
+
+    // ── Period Locks ──────────────────────────────────────
+    const pl=await sbTable('jps_period_locks',{});
+    if(pl){PERIOD_LOCKS=pl;log.push(`Period Locks: jps_period_locks (${pl.length} locked)`);}
+    else log.push('Period Locks: ⚠ jps_period_locks not found (run schema SQL in Admin)');
 
     const anyOk=actOk||budOk||ng;
     sbConnected=anyOk;
