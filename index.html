@@ -2074,6 +2074,44 @@ async function loadExcel(input){
         })).filter(r=>r.year&&r.month);
         if(rows.length)await batchUpsert('net_gen_historical',rows,'year,month');
       }
+      // ── Budget sheet — detect commercial vs residential by columns ───
+      const budSheet=wb.Sheets['Budget']||wb.Sheets['Commercial_Budget'];
+      if(budSheet){
+        const rows=XLSX.utils.sheet_to_json(budSheet);
+        if(rows.length){
+          if(rows[0]['JPS A/c']!==undefined){
+            // Account-level → commercial budget
+            await batchUpsert('jps_commercial_budget',rows,'Month,JPS A/c');
+          } else if(rows[0]['rate_class']!==undefined){
+            // Aggregate → residential budget
+            await batchUpsert('jps_residential_budget',rows,'year,month,rate_class,parish');
+          }
+        }
+      }
+      // ── Residential Budget sheet (explicit) ───────────────
+      const resBudSheet=wb.Sheets['Residential_Budget'];
+      if(resBudSheet){
+        const rows=XLSX.utils.sheet_to_json(resBudSheet);
+        if(rows.length)await batchUpsert('jps_residential_budget',rows,'year,month,rate_class,parish');
+      }
+      // ── Account Master sheet ──────────────────────────────
+      const amSheet=wb.Sheets['Account_Master'];
+      if(amSheet){
+        const rows=XLSX.utils.sheet_to_json(amSheet);
+        if(rows.length)await batchUpsert('jps_account_master',rows,'JPS A/c');
+      }
+      // ── Industries sheet ──────────────────────────────────
+      const indSheet=wb.Sheets['Industries'];
+      if(indSheet){
+        const rows=XLSX.utils.sheet_to_json(indSheet);
+        if(rows.length)await batchUpsert('jps_industries',rows,'name');
+      }
+      // ── KAM sheet ─────────────────────────────────────────
+      const kamSheet=wb.Sheets['KAM'];
+      if(kamSheet){
+        const rows=XLSX.utils.sheet_to_json(kamSheet);
+        if(rows.length)await batchUpsert('jps_kam',rows,'email');
+      }
       // ── Net Billers sheet ──────────────────────────────────
       const nbSheet=wb.Sheets['Net_Billers']||wb.Sheets['NetBillers'];
       if(nbSheet){
@@ -2111,26 +2149,70 @@ async function loadExcel(input){
 
 function dlTemplate(){
   const wb=XLSX.utils.book_new();
-  // Sheet 1: Actuals — columns must match exactly what fcNormActuals() reads
+
+  // 1. Actuals (commercial + residential, account-level where available)
   const actHdr=[['Month','JPS A/c','Name','Rate category','Updated Parish','Industry','Sum of net_kwh_billed_consump']];
-  const actSample=[['February 2026','100001','Carib Cement Co','RT70','St. Elizabeth','Manufacturing',1900000]];
+  const actSample=[
+    ['February 2026','100001','Carib Cement Co','RT70','St. Elizabeth','Manufacturing',1900000],
+    ['February 2026','200045','Residential Aggregate','RT10','Kingston','Residential',450000]
+  ];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...actHdr,...actSample]),'Actuals');
-  // Sheet 2: Budget — same structure, different kWh column
-  const budHdr=[['Month','JPS A/c','Name','Rate category','Updated Parish','Industry','Sum of Budget']];
-  const budSample=[['February 2026','100001','Carib Cement Co','RT70','St. Elizabeth','Manufacturing',2100000]];
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...budHdr,...budSample]),'Budget');
-  // Sheet 3: Net Generation
+
+  // 2. Commercial Budget — account-level, keyed by JPS A/c
+  const commBudHdr=[['Month','JPS A/c','Name','Rate category','Updated Parish','Industry','Sum of Budget']];
+  const commBudSample=[['February 2026','100001','Carib Cement Co','RT70','St. Elizabeth','Manufacturing',2100000]];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...commBudHdr,...commBudSample]),'Budget');
+
+  // 3. Residential Budget — aggregate by rate_class + parish + month (NO account numbers)
+  const resBudHdr=[['year','month','rate_class','parish','kwh_budget','customer_count_budget']];
+  const resBudSample=[
+    [2026,2,'RT10','Kingston',12500000,8500],
+    [2026,2,'RT10','St. Andrew',9800000,6600],
+    [2026,2,'RT20','Kingston',3200000,1200],
+    [2026,1,'RT10','Kingston',12200000,8400]
+  ];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...resBudHdr,...resBudSample]),'Residential_Budget');
+
+  // 4. Account Master — cross-reference with KAM and industry
+  const amHdr=[['JPS A/c','name','rate_class','parish','account_type','industry','kam_name','is_active']];
+  const amSample=[
+    ['100001','Carib Cement Co','RT70','St. Elizabeth','commercial','Manufacturing','Jane Smith',true],
+    ['200045','RT10 Kingston Block','RT10','Kingston','residential','',''  ,true]
+  ];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...amHdr,...amSample]),'Account_Master');
+
+  // 5. KAM — Key Account Managers
+  const kamHdr=[['name','email','territory','phone','accounts_assigned']];
+  const kamSample=[
+    ['Jane Smith','jsmith@jpsco.com','Commercial East','876-555-0001',''],
+    ['Mark Brown','mbrown@jpsco.com','Commercial West','876-555-0002','']
+  ];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...kamHdr,...kamSample]),'KAM');
+
+  // 6. Industries
+  const indHdr=[['name','sector','description']];
+  const indSample=[
+    ['Manufacturing','Industrial','Cement, food processing, etc.'],
+    ['Tourism','Services','Hotels, resorts, attractions'],
+    ['Residential','Residential','RT10/RT20 domestic customers']
+  ];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...indHdr,...indSample]),'Industries');
+
+  // 7. Net Generation
   const ngHdr=[['year','month','net_gen_mwh']];
   const ngSample=[[2026,2,320000],[2026,1,315000],[2025,12,308000]];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...ngHdr,...ngSample]),'Net_Generation');
-  // Sheet 4: Net Billers
-  const nbHdr=[['year','rate_class','account_count','mwh_exported']];
-  const nbSample=[[2026,'RT10',1200,4500],[2026,'RT20',85,12000]];
+
+  // 8. Net Billers
+  const nbHdr=[['year','month','rate_class','count','avg_export_kwh','total_export_kwh']];
+  const nbSample=[[2026,2,'RT10',1250,380,475000],[2026,2,'RT20',88,1200,105600]];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...nbHdr,...nbSample]),'Net_Billers');
-  // Sheet 5: EV Accounts
-  const evHdr=[['year','accounts','mwh']];
-  const evSample=[[2026,45,380],[2025,28,210]];
+
+  // 9. EV Accounts
+  const evHdr=[['year','month','accounts','mwh']];
+  const evSample=[[2026,2,45,380],[2026,1,43,365]];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...evHdr,...evSample]),'EV_Accounts');
+
   XLSX.writeFile(wb,'JPS_Data_Template.xlsx');
 }
 
@@ -4606,7 +4688,141 @@ create policy "Admins can update any profile"
   );
 
 -- ══════════════════════════════════════════════════════════
--- STEP 2: Period locks (Sales Platform)
+-- STEP 2: Reference tables — Industries, KAM, Account Master
+-- ══════════════════════════════════════════════════════════
+
+create table if not exists public.jps_industries (
+  id          bigserial primary key,
+  name        text not null unique,
+  sector      text,
+  description text,
+  created_at  timestamptz default now()
+);
+alter table public.jps_industries enable row level security;
+drop policy if exists "Authenticated users can read industries" on public.jps_industries;
+drop policy if exists "Managers can write industries"          on public.jps_industries;
+create policy "Authenticated users can read industries"
+  on public.jps_industries for select using (auth.role()='authenticated');
+create policy "Managers can write industries"
+  on public.jps_industries for all using (
+    exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager'))
+  );
+
+create table if not exists public.jps_kam (
+  id              bigserial primary key,
+  name            text not null,
+  email           text unique,
+  territory       text,
+  phone           text,
+  is_active       boolean default true,
+  created_at      timestamptz default now()
+);
+alter table public.jps_kam enable row level security;
+drop policy if exists "Authenticated users can read KAM" on public.jps_kam;
+drop policy if exists "Admins can write KAM"             on public.jps_kam;
+create policy "Authenticated users can read KAM"
+  on public.jps_kam for select using (auth.role()='authenticated');
+create policy "Admins can write KAM"
+  on public.jps_kam for all using (
+    exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager'))
+  );
+
+-- Account Master: JPS A/c is the shared PK across actuals, budget, and KAM assignment
+create table if not exists public.jps_account_master (
+  "JPS A/c"    text primary key,
+  name         text,
+  rate_class   text,
+  parish       text,
+  account_type text default 'commercial'   -- 'commercial' | 'residential'
+               check (account_type in ('commercial','residential')),
+  industry     text references public.jps_industries(name),
+  kam_name     text,                        -- denormalised for query speed; FK optional
+  is_active    boolean default true,
+  created_at   timestamptz default now(),
+  updated_at   timestamptz default now()
+);
+alter table public.jps_account_master enable row level security;
+drop policy if exists "Authenticated users can read account master" on public.jps_account_master;
+drop policy if exists "Managers can write account master"           on public.jps_account_master;
+create policy "Authenticated users can read account master"
+  on public.jps_account_master for select using (auth.role()='authenticated');
+create policy "Managers can write account master"
+  on public.jps_account_master for all using (
+    exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager'))
+  );
+
+-- ══════════════════════════════════════════════════════════
+-- STEP 3: Consumption actuals and budgets
+-- ══════════════════════════════════════════════════════════
+
+-- Actuals: account-level monthly consumption (commercial + residential aggregate rows)
+create table if not exists public.jps_actuals (
+  id                              bigserial primary key,
+  "Month"                         text not null,           -- e.g. "February 2026"
+  "JPS A/c"                       text references public.jps_account_master("JPS A/c"),
+  "Name"                          text,
+  "Rate category"                 text,
+  "Updated Parish"                text,
+  "Industry"                      text,
+  "Sum of net_kwh_billed_consump" numeric(15,2),
+  unique ("Month","JPS A/c")
+);
+alter table public.jps_actuals enable row level security;
+drop policy if exists "Authenticated users can read actuals" on public.jps_actuals;
+drop policy if exists "Managers can write actuals"           on public.jps_actuals;
+create policy "Authenticated users can read actuals"
+  on public.jps_actuals for select using (auth.role()='authenticated');
+create policy "Managers can write actuals"
+  on public.jps_actuals for all using (
+    exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager'))
+  );
+
+-- Commercial Budget: account-level, keyed by JPS A/c (same structure as actuals)
+create table if not exists public.jps_commercial_budget (
+  id               bigserial primary key,
+  "Month"          text not null,
+  "JPS A/c"        text references public.jps_account_master("JPS A/c"),
+  "Name"           text,
+  "Rate category"  text,
+  "Updated Parish" text,
+  "Industry"       text,
+  "Sum of Budget"  numeric(15,2),
+  unique ("Month","JPS A/c")
+);
+alter table public.jps_commercial_budget enable row level security;
+drop policy if exists "Authenticated users can read comm budget" on public.jps_commercial_budget;
+drop policy if exists "Managers can write comm budget"           on public.jps_commercial_budget;
+create policy "Authenticated users can read comm budget"
+  on public.jps_commercial_budget for select using (auth.role()='authenticated');
+create policy "Managers can write comm budget"
+  on public.jps_commercial_budget for all using (
+    exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager'))
+  );
+
+-- Residential Budget: aggregate (no account numbers) — rate_class + parish + month
+create table if not exists public.jps_residential_budget (
+  id                    bigserial primary key,
+  year                  smallint not null,
+  month                 smallint not null check (month between 1 and 12),
+  rate_class            text not null,      -- RT10, RT20
+  parish                text not null default 'All',
+  kwh_budget            numeric(15,2) default 0,
+  customer_count_budget int default 0,
+  created_at            timestamptz default now(),
+  unique (year, month, rate_class, parish)
+);
+alter table public.jps_residential_budget enable row level security;
+drop policy if exists "Authenticated users can read res budget" on public.jps_residential_budget;
+drop policy if exists "Managers can write res budget"           on public.jps_residential_budget;
+create policy "Authenticated users can read res budget"
+  on public.jps_residential_budget for select using (auth.role()='authenticated');
+create policy "Managers can write res budget"
+  on public.jps_residential_budget for all using (
+    exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager'))
+  );
+
+-- ══════════════════════════════════════════════════════════
+-- STEP 4: Period locks (Sales Platform)
 -- ══════════════════════════════════════════════════════════
 create table if not exists public.jps_period_locks (
   year        smallint not null,
@@ -4627,7 +4843,7 @@ create policy "Sales admins can manage locks"
   );
 
 -- ══════════════════════════════════════════════════════════
--- STEP 3: Net Billers
+-- STEP 5: Net Billers
 -- ══════════════════════════════════════════════════════════
 create table if not exists public.jps_net_billers (
   id               bigserial primary key,
@@ -4649,7 +4865,7 @@ create policy "Managers can write net billers"
   );
 
 -- ══════════════════════════════════════════════════════════
--- STEP 4: EV Accounts
+-- STEP 6: EV Accounts
 -- ══════════════════════════════════════════════════════════
 create table if not exists public.jps_ev_accounts (
   id         bigserial primary key,
@@ -4670,7 +4886,7 @@ create policy "Managers can write EV data"
   );
 
 -- ══════════════════════════════════════════════════════════
--- STEP 5: Create admin user (run AFTER signing up in the app)
+-- STEP 7: Create admin user (run AFTER signing up in the app)
 -- Replace the UUID with the one from auth.users for Jwilson@jpsco.com
 -- ══════════════════════════════════════════════════════════
 -- insert into public.profiles (id, name, email, role, sales_role, territory, is_active)
@@ -4701,7 +4917,15 @@ function copySchemaSql(){
 const SB_URL = 'https://bhrswnbenkvflpdjhfpa.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJocnN3bmJlbmt2ZmxwZGpoZnBhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMTc0OTcsImV4cCI6MjA5MTg5MzQ5N30.JupFs0tnMn3k282PqFOSMi2ch-wtB7Ewv7O8fN16-94';
 
-let _sbClient=null, sbActuals=[], sbBudget=[], sbNetGen=[], sbNetBillers=[], sbEvData=[], sbConnected=false, sbLastSync=null;
+let _sbClient=null,
+    sbActuals=[],       // jps_actuals          — commercial account-level monthly consumption
+    sbBudget=[],        // jps_commercial_budget — commercial account-level budget (JPS A/c keyed)
+    sbResBudget=[],     // jps_residential_budget— aggregate residential budget (rate_class+parish+month)
+    sbAccountMaster=[], // jps_account_master    — master account list (JPS A/c PK)
+    sbIndustries=[],    // jps_industries        — industry reference table
+    sbKAM=[],           // jps_kam               — key account managers
+    sbNetGen=[], sbNetBillers=[], sbEvData=[],
+    sbConnected=false, sbLastSync=null;
 
 function getSB(){
   if(!_sbClient&&window.supabase?.createClient)
@@ -4810,16 +5034,50 @@ function buildDashboardData(){
   // Refresh FC_SEGS base values from actual annual data
   FC_SEGS.forEach(s=>{s.base=CUSTOMERS.filter(c=>c.rate===s.seg).reduce((sum,c)=>sum+c.y26,0)||0;});
 
-  // Refresh SCORECARD_DATA from actual data
+  // Enrich CUSTOMERS with KAM and industry display name from reference tables
+  if(sbAccountMaster.length){
+    const amMap={};
+    sbAccountMaster.forEach(a=>amMap[String(a['JPS A/c']||a.jps_ac||'')]=a);
+    CUSTOMERS.forEach(c=>{
+      const am=amMap[String(c.num)];
+      if(am){
+        c.kam=am.kam_name||am.kam||'';
+        c.industry=am.industry||c.ind||'';
+        c.account_type=am.account_type||'commercial';
+      }
+    });
+  }
+
+  const RES_RCS=['RT10','RT20'];
+  const normA=fcNormActuals(sbActuals);
   const mIdx2=curMonth-1;
+
+  // Refresh SCORECARD_DATA — commercial uses account-level budget,
+  // residential uses aggregate jps_residential_budget table
   SCORECARD_DATA.forEach(r=>{
-    const custs=CUSTOMERS.filter(c=>c.rate===r.seg);
-    r.mtd_act=custs.reduce((s,c)=>s+(c.m[mIdx2]||0),0);
-    r.mtd_bud=custs.reduce((s,c)=>s+(c.bud/12),0);
-    r.mtd_ly=custs.reduce((s,c)=>s+(c.y25/12),0);
-    r.ytd_act=custs.reduce((s,c)=>s+c.m.slice(0,curMonth).reduce((a,v)=>a+(v||0),0),0);
-    r.ytd_bud=custs.reduce((s,c)=>s+(c.bud*(curMonth/12)),0);
-    r.ytd_ly=custs.reduce((s,c)=>s+(c.y25*(curMonth/12)),0);
+    if(RES_RCS.includes(r.seg)){
+      // ── Residential: actuals from sbActuals aggregated by rate class ──
+      const actRows=normA.filter(a=>a.rc===r.seg);
+      r.mtd_act=actRows.filter(a=>a.year===curYear&&a.month===curMonth).reduce((s,a)=>s+a.kwh,0)/1e6;
+      r.ytd_act=actRows.filter(a=>a.year===curYear&&a.month<=curMonth).reduce((s,a)=>s+a.kwh,0)/1e6;
+      r.mtd_ly =actRows.filter(a=>a.year===curYear-1&&a.month===curMonth).reduce((s,a)=>s+a.kwh,0)/1e6;
+      r.ytd_ly =actRows.filter(a=>a.year===curYear-1&&a.month<=curMonth).reduce((s,a)=>s+a.kwh,0)/1e6;
+      // Budget from jps_residential_budget
+      if(sbResBudget.length){
+        const rb=sbResBudget.filter(b=>b.rate_class===r.seg&&Number(b.year)===curYear);
+        r.mtd_bud=rb.filter(b=>Number(b.month)===curMonth).reduce((s,b)=>s+(Number(b.kwh_budget)||0),0)/1e6;
+        r.ytd_bud=rb.filter(b=>Number(b.month)<=curMonth).reduce((s,b)=>s+(Number(b.kwh_budget)||0),0)/1e6;
+      }
+    } else {
+      // ── Commercial: account-level from CUSTOMERS ──
+      const custs=CUSTOMERS.filter(c=>c.rate===r.seg);
+      r.mtd_act=custs.reduce((s,c)=>s+(c.m[mIdx2]||0),0);
+      r.mtd_bud=custs.reduce((s,c)=>s+(c.bud/12),0);
+      r.mtd_ly =custs.reduce((s,c)=>s+(c.y25/12),0);
+      r.ytd_act=custs.reduce((s,c)=>s+c.m.slice(0,curMonth).reduce((a,v)=>a+(v||0),0),0);
+      r.ytd_bud=custs.reduce((s,c)=>s+(c.bud*(curMonth/12)),0);
+      r.ytd_ly =custs.reduce((s,c)=>s+(c.y25*(curMonth/12)),0);
+    }
     const vb=r.mtd_bud>0?pct(r.mtd_act,r.mtd_bud):0;
     r.status=vb>=-3?'OK':vb>=-8?'Watch':'Risk';
   });
@@ -4835,17 +5093,35 @@ async function syncSupabase(silent=false){
   }
   const log=[];
   try{
+    // ── Reference tables (load first — actuals join against these) ──
+    const indData=await sbTable('jps_industries',{});
+    if(indData){sbIndustries=indData;log.push(`Industries: jps_industries (${indData.length} rows)`);}
+    else log.push('Industries: ⚠ jps_industries not found — run schema SQL');
+
+    const kamData=await sbTable('jps_kam',{});
+    if(kamData){sbKAM=kamData;log.push(`KAM: jps_kam (${kamData.length} rows)`);}
+    else log.push('KAM: ⚠ jps_kam not found — run schema SQL');
+
+    const amData=await sbTable('jps_account_master',{limit:50000});
+    if(amData){sbAccountMaster=amData;log.push(`Account Master: jps_account_master (${amData.length} accounts)`);}
+    else log.push('Account Master: ⚠ jps_account_master not found — run schema SQL');
+
     // ── Actuals ────────────────────────────────────────────
     const actData=await sbTable('jps_actuals',{limit:50000});
     const actOk=!!actData;
     if(actOk){sbActuals=actData;log.push(`Actuals: jps_actuals (${actData.length} rows)`);}
     else log.push('Actuals: ⚠ jps_actuals not accessible — check RLS policies');
 
-    // ── Budget ─────────────────────────────────────────────
-    const budData=await sbTable('jps_budget',{limit:10000});
+    // ── Commercial Budget ──────────────────────────────────
+    const budData=await sbTable('jps_commercial_budget',{limit:20000});
     const budOk=!!budData;
-    if(budOk){sbBudget=budData;log.push(`Budget:  jps_budget (${budData.length} rows)`);}
-    else log.push('Budget: ⚠ jps_budget not accessible — check RLS policies');
+    if(budOk){sbBudget=budData;log.push(`Comm Budget: jps_commercial_budget (${budData.length} rows)`);}
+    else log.push('Comm Budget: ⚠ jps_commercial_budget not found — run schema SQL');
+
+    // ── Residential Budget ─────────────────────────────────
+    const resBudData=await sbTable('jps_residential_budget',{limit:5000});
+    if(resBudData){sbResBudget=resBudData;log.push(`Res Budget: jps_residential_budget (${resBudData.length} rows)`);}
+    else log.push('Res Budget: ⚠ jps_residential_budget not found — run schema SQL');
 
     // ── Net Generation ─────────────────────────────────────
     const ng=await sbTable('net_gen_historical',{order:'year'});
