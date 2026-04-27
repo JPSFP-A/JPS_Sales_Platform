@@ -1639,7 +1639,8 @@ async function doLogin(){
     const{data,error}=await sb.auth.signInWithPassword({email,password:pwd});
     if(error){showErr(error.message);if(btn){btn.textContent='Sign In →';btn.disabled=false;}return;}
     // Fetch profile for role
-    const{data:profile}=await sb.from('profiles').select('*').eq('id',data.user.id).single().catch(()=>({data:null}));
+    let profile=null;
+    try{const r=await sb.from('profiles').select('*').eq('id',data.user.id).single();profile=r.data;}catch(e){}
     _applyLogin({
       id:data.user.id,email:data.user.email,
       name:profile?.name||data.user.email.split('@')[0],
@@ -1693,7 +1694,8 @@ async function doRegister(){
     const{data,error}=await sb.auth.signUp({email,password:pwd,options:{data:{name}}});
     if(error){showErr(error.message);if(btn){btn.textContent='Create Account →';btn.disabled=false;}return;}
     // Determine role: first user in profiles gets admin, others get view
-    const{count}=await sb.from('profiles').select('*',{count:'exact',head:true}).catch(()=>({count:1}));
+    let count=1;
+    try{const r=await sb.from('profiles').select('*',{count:'exact',head:true});count=r.count??1;}catch(e){}
     const isFirst=(count===0||count===null);
     const salesRole=isFirst?'admin':'view';
     const fpaRole  =isFirst?'admin':'viewer';
