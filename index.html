@@ -360,7 +360,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
     <div class="nav-lbl" style="margin-top:8px">Reference</div>
     <div class="ni" onclick="sw('ar',this)"><span class="ni-icon">🔗</span>Account Recon</div>
     <div class="ni" onclick="sw('gl',this)"><span class="ni-icon">📖</span>Glossary</div>
-    <div class="ni admin-only" onclick="sw('adm',this)"><span class="ni-icon">🔐</span>Admin</div>
+    <div class="ni" onclick="sw('adm',this)"><span class="ni-icon">🔐</span>Admin</div>
   </div>
   <div class="sb-bottom">
     <div class="fl">Segment</div>
@@ -418,38 +418,36 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
       <option value="1">Q1</option><option value="2">Q2</option>
       <option value="3">Q3</option><option value="4">Q4</option>
     </select>
-    <label style="margin-left:8px">Upload Data:</label>
-    <select id="uploadMode" class="psel" style="font-size:10px;padding:3px 6px" title="How to handle existing data for the same month">
+    <!-- hidden upload mode — still read by loadExcel(), set from Admin page -->
+    <select id="uploadMode" style="display:none">
       <option value="overwrite">Overwrite month</option>
       <option value="append">Append / upsert</option>
     </select>
-    <label class="upload-btn" style="cursor:pointer">📂 Load Excel<input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="loadExcel(this)"/></label>
-    <button class="pbtn" style="background:rgba(232,64,64,.15);color:var(--red);border-color:var(--red)" onclick="showDeleteMonth()" title="Delete all actuals for a specific month">🗑 Delete Month</button>
-    <span class="data-status" id="uploadStatus">No data — upload or sync DB</span>
-    <!-- Delete month modal -->
-    <div id="delMonthPanel" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center">
-      <div style="background:var(--navy2);border:1px solid var(--border);border-radius:10px;padding:24px;width:320px">
-        <div style="font-size:13px;font-weight:800;color:var(--red);margin-bottom:16px">🗑 Delete Month Data</div>
-        <div style="font-size:11px;color:var(--text2);margin-bottom:14px">Permanently removes all actuals rows for the selected month. This cannot be undone.</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
-          <div><label style="font-size:10px;color:var(--text3)">Year</label>
-            <select id="delYear" class="sel" style="width:100%;margin-top:3px">
-              <option>2026</option><option>2025</option><option>2024</option>
-            </select></div>
-          <div><label style="font-size:10px;color:var(--text3)">Month</label>
-            <select id="delMonth" class="sel" style="width:100%;margin-top:3px">
-              <option value="1">January</option><option value="2">February</option><option value="3">March</option>
-              <option value="4">April</option><option value="5">May</option><option value="6">June</option>
-              <option value="7">July</option><option value="8">August</option><option value="9">September</option>
-              <option value="10">October</option><option value="11">November</option><option value="12">December</option>
-            </select></div>
-        </div>
-        <div style="display:flex;gap:8px">
-          <button onclick="doDeleteMonth()" style="flex:1;padding:9px;background:var(--red);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;font-size:12px">Delete →</button>
-          <button onclick="document.getElementById('delMonthPanel').style.display='none'" style="flex:1;padding:9px;background:var(--navy3);color:var(--text);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px">Cancel</button>
-        </div>
-        <div id="delMonthMsg" style="margin-top:10px;font-size:10px;color:var(--teal);display:none"></div>
+  </div>
+
+  <!-- Delete month modal (global, triggered from Admin) -->
+  <div id="delMonthPanel" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center">
+    <div style="background:var(--navy2);border:1px solid var(--border);border-radius:10px;padding:24px;width:320px">
+      <div style="font-size:13px;font-weight:800;color:var(--red);margin-bottom:16px">🗑 Delete Month Data</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:14px">Permanently removes all actuals rows for the selected month. This cannot be undone.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+        <div><label style="font-size:10px;color:var(--text3)">Year</label>
+          <select id="delYear" class="sel" style="width:100%;margin-top:3px">
+            <option>2026</option><option>2025</option><option>2024</option>
+          </select></div>
+        <div><label style="font-size:10px;color:var(--text3)">Month</label>
+          <select id="delMonth" class="sel" style="width:100%;margin-top:3px">
+            <option value="1">January</option><option value="2">February</option><option value="3">March</option>
+            <option value="4">April</option><option value="5">May</option><option value="6">June</option>
+            <option value="7">July</option><option value="8">August</option><option value="9">September</option>
+            <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+          </select></div>
       </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="doDeleteMonth()" style="flex:1;padding:9px;background:var(--red);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;font-size:12px">Delete →</button>
+        <button onclick="document.getElementById('delMonthPanel').style.display='none'" style="flex:1;padding:9px;background:var(--navy3);color:var(--text);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px">Cancel</button>
+      </div>
+      <div id="delMonthMsg" style="margin-top:10px;font-size:10px;color:var(--teal);display:none"></div>
     </div>
   </div>
 
@@ -801,12 +799,12 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
     </div>
 
     <!-- === ADMIN === -->
-    <div id="adm" class="sec admin-only">
+    <div id="adm" class="sec">
       <!-- Admin tab bar -->
       <div style="display:flex;gap:4px;margin-bottom:14px;flex-wrap:wrap">
         <button class="btn btn-t adm-tab on" data-adm="adm_users"    onclick="swAdm('adm_users',this)">👥 Users &amp; Roles</button>
         <button class="btn btn-o adm-tab"    data-adm="adm_periods"  onclick="swAdm('adm_periods',this)">🔒 Period Close</button>
-        <button class="btn btn-o adm-tab"    data-adm="adm_templates"onclick="swAdm('adm_templates',this)">📥 Upload Templates</button>
+        <button class="btn btn-o adm-tab"    data-adm="adm_upload"   onclick="swAdm('adm_upload',this)">📤 Upload Data</button>
         <button class="btn btn-o adm-tab"    data-adm="adm_schema"   onclick="swAdm('adm_schema',this)">🗄 DB Schema</button>
       </div>
 
@@ -857,48 +855,108 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
       </div>
 
       <!-- ── Upload Templates tab ── -->
-      <div id="adm_templates" class="adm-panel" style="display:none">
-        <div class="card">
-          <div class="ch">📥 Data Upload Templates</div>
-          <div style="margin-bottom:12px;padding:9px 13px;background:rgba(0,194,168,.07);border-left:3px solid var(--teal);border-radius:4px;font-size:11px;color:var(--text2)">
-            Download a CSV template, fill it with your data, then upload via the file upload button in each section or import directly into the Supabase table.
+      <div id="adm_upload" class="adm-panel" style="display:none">
+
+        <!-- ── Upload action card ── -->
+        <div class="card" style="margin-bottom:12px">
+          <div class="ch">📤 Load Data File
+            <span id="adm_upload_status" style="font-size:10px;color:var(--text3);font-weight:400">No file loaded</span>
           </div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px">
+          <div style="padding:4px 0 12px;font-size:11px;color:var(--text2)">
+            Upload your sales report Excel file. The workbook can contain any combination of the sheets below — only sheets that are present will be processed.
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:4px">Upload mode</div>
+              <select id="uploadModeAdm" class="psel" onchange="document.getElementById('uploadMode').value=this.value" style="font-size:11px;padding:5px 8px">
+                <option value="overwrite">Overwrite month — deletes existing rows for that month first</option>
+                <option value="append">Append / upsert — adds new rows, updates existing</option>
+              </select>
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:4px">Select file</div>
+              <label class="upload-btn" style="cursor:pointer;padding:5px 14px;font-size:12px">
+                📂 Choose Excel File
+                <input type="file" accept=".xlsx,.xls" style="display:none" onchange="document.getElementById('uploadMode').value=document.getElementById('uploadModeAdm').value;loadExcel(this)"/>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Delete month card ── -->
+        <div class="card" style="margin-bottom:12px;border-color:rgba(232,64,64,.25)">
+          <div class="ch" style="color:var(--red)">🗑 Delete Month
+            <span style="font-size:10px;color:var(--text3);font-weight:400">Admin only — permanently removes all actuals rows for a period</span>
+          </div>
+          <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-top:8px">
+            <div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:4px">Year</div>
+              <select id="delYearAdm" class="psel" style="font-size:11px;padding:5px 8px">
+                <option>2026</option><option>2025</option><option>2024</option><option>2023</option>
+              </select>
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:4px">Month</div>
+              <select id="delMonthAdm" class="psel" style="font-size:11px;padding:5px 8px">
+                <option value="1">January</option><option value="2">February</option><option value="3">March</option>
+                <option value="4">April</option><option value="5">May</option><option value="6">June</option>
+                <option value="7">July</option><option value="8">August</option><option value="9">September</option>
+                <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+              </select>
+            </div>
+            <button onclick="doDeleteMonthAdm()" style="padding:5px 16px;background:rgba(232,64,64,.15);color:var(--red);border:1px solid rgba(232,64,64,.4);border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">Delete Month →</button>
+            <span id="delMonthMsgAdm" style="font-size:10px;color:var(--teal);display:none"></span>
+          </div>
+        </div>
+
+        <!-- ── Sheet reference card ── -->
+        <div class="card">
+          <div class="ch">📋 Sheet Reference &amp; Templates
+            <button class="btn btn-t" onclick="dlTemplate()">⬇ Download Full Template</button>
+          </div>
+          <div style="margin-bottom:12px;padding:9px 13px;background:rgba(0,194,168,.07);border-left:3px solid var(--teal);border-radius:4px;font-size:11px;color:var(--text2)">
+            Your Excel file can include any of these sheet names. Only sheets present in the file will be processed — all others are skipped.
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">
             <div class="card" style="background:var(--navy3)">
-              <div style="font-weight:700;font-size:12px;margin-bottom:4px;color:var(--teal)">📊 Actuals (jps_actuals)</div>
-              <div style="font-size:10px;color:var(--text3);margin-bottom:10px">Monthly kWh per customer by rate class. One row per account.</div>
-              <div style="font-size:9px;color:var(--text3);margin-bottom:8px">Columns: account_number, customer_name, rate_class, parish, industry, jan_kwh…dec_kwh</div>
-              <button class="btn btn-t" style="width:100%" onclick="downloadTemplate('actuals')">⬇ Download Template</button>
+              <div style="font-weight:700;font-size:11px;margin-bottom:3px;color:var(--teal)">Actuals</div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">One row per account per month. Residential rows use consumption_bucket; commercial leave it blank.</div>
+              <div style="font-size:9px;color:var(--text2);background:var(--navy2);border-radius:4px;padding:5px 7px;font-family:monospace">year · month · jps_ac · name · consumption_bucket · kwh · revenue_jmd · parish · rate_class · demand_kva</div>
             </div>
             <div class="card" style="background:var(--navy3)">
-              <div style="font-weight:700;font-size:12px;margin-bottom:4px;color:var(--teal)">🎯 Budget (jps_budget)</div>
-              <div style="font-size:10px;color:var(--text3);margin-bottom:10px">Annual budget kWh per customer. Divide by 12 for monthly.</div>
-              <div style="font-size:9px;color:var(--text3);margin-bottom:8px">Columns: account_number, customer_name, rate_class, parish, industry, annual_budget_kwh, prior_year_kwh</div>
-              <button class="btn btn-t" style="width:100%" onclick="downloadTemplate('budget')">⬇ Download Template</button>
+              <div style="font-weight:700;font-size:11px;margin-bottom:3px;color:var(--teal)">Budget</div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">Commercial account-level budget, one row per account per month.</div>
+              <div style="font-size:9px;color:var(--text2);background:var(--navy2);border-radius:4px;padding:5px 7px;font-family:monospace">year · month · jps_ac · name · rate_class · parish · kwh_budget · revenue_budget · demand_budget</div>
             </div>
             <div class="card" style="background:var(--navy3)">
-              <div style="font-weight:700;font-size:12px;margin-bottom:4px;color:var(--teal)">⚡ Net Generation (net_gen_historical)</div>
-              <div style="font-size:10px;color:var(--text3);margin-bottom:10px">MWh fed into grid by year, month, and source.</div>
-              <div style="font-size:9px;color:var(--text3);margin-bottom:8px">Columns: year, month, source, mwh, notes</div>
-              <button class="btn btn-t" style="width:100%" onclick="downloadTemplate('net_gen')">⬇ Download Template</button>
+              <div style="font-weight:700;font-size:11px;margin-bottom:3px;color:var(--teal)">Residential_Budget</div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">Aggregate residential budget by rate class, parish and consumption bucket.</div>
+              <div style="font-size:9px;color:var(--text2);background:var(--navy2);border-radius:4px;padding:5px 7px;font-family:monospace">year · month · rate_class · parish · consumption_bucket · kwh_budget · customer_count_budget</div>
             </div>
             <div class="card" style="background:var(--navy3)">
-              <div style="font-weight:700;font-size:12px;margin-bottom:4px;color:var(--teal)">☀ Net Billers (jps_net_billers)</div>
-              <div style="font-size:10px;color:var(--text3);margin-bottom:10px">Registered DG customers by month, rate class, and export volume.</div>
-              <div style="font-size:9px;color:var(--text3);margin-bottom:8px">Columns: year, month, rate_class, count, avg_export_kwh, total_export_kwh</div>
-              <button class="btn btn-t" style="width:100%" onclick="downloadTemplate('net_billers')">⬇ Download Template</button>
+              <div style="font-weight:700;font-size:11px;margin-bottom:3px;color:var(--teal)">KAM</div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">Account to Key Account Manager mapping.</div>
+              <div style="font-size:9px;color:var(--text2);background:var(--navy2);border-radius:4px;padding:5px 7px;font-family:monospace">jps_ac · kam</div>
             </div>
             <div class="card" style="background:var(--navy3)">
-              <div style="font-weight:700;font-size:12px;margin-bottom:4px;color:var(--teal)">🚗 EV Accounts (jps_ev_accounts)</div>
-              <div style="font-size:10px;color:var(--text3);margin-bottom:10px">EV customer count and charging MWh by year.</div>
-              <div style="font-size:9px;color:var(--text3);margin-bottom:8px">Columns: year, month, accounts, mwh, notes</div>
-              <button class="btn btn-t" style="width:100%" onclick="downloadTemplate('ev_accounts')">⬇ Download Template</button>
+              <div style="font-weight:700;font-size:11px;margin-bottom:3px;color:var(--teal)">Industries</div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">Account to industry mapping.</div>
+              <div style="font-size:9px;color:var(--text2);background:var(--navy2);border-radius:4px;padding:5px 7px;font-family:monospace">jps_ac · industry</div>
             </div>
             <div class="card" style="background:var(--navy3)">
-              <div style="font-weight:700;font-size:12px;margin-bottom:4px;color:var(--teal)">💰 Revenue Recovery (jps_rr_data)</div>
-              <div style="font-size:10px;color:var(--text3);margin-bottom:10px">Waterfall items: budget, qty effect, mix, FX, fuel, actual.</div>
-              <div style="font-size:9px;color:var(--text3);margin-bottom:8px">Columns: year, month, label, val_usd_000s, is_base</div>
-              <button class="btn btn-t" style="width:100%" onclick="downloadTemplate('rr_data')">⬇ Download Template</button>
+              <div style="font-weight:700;font-size:11px;margin-bottom:3px;color:var(--teal)">Net_Generation</div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">DG installations and generation by month. Same format as Net_Billers.</div>
+              <div style="font-size:9px;color:var(--text2);background:var(--navy2);border-radius:4px;padding:5px 7px;font-family:monospace">year · month · rate_class · count · kwh</div>
+            </div>
+            <div class="card" style="background:var(--navy3)">
+              <div style="font-weight:700;font-size:11px;margin-bottom:3px;color:var(--teal)">Net_Billers</div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">Net billing customers and export kWh by month and rate class.</div>
+              <div style="font-size:9px;color:var(--text2);background:var(--navy2);border-radius:4px;padding:5px 7px;font-family:monospace">year · month · rate_class · count · kwh</div>
+            </div>
+            <div class="card" style="background:var(--navy3)">
+              <div style="font-weight:700;font-size:11px;margin-bottom:3px;color:var(--teal)">EV_Accounts</div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">EV customer count and charging volume by month.</div>
+              <div style="font-size:9px;color:var(--text2);background:var(--navy2);border-radius:4px;padding:5px 7px;font-family:monospace">year · month · accounts · mwh</div>
             </div>
           </div>
         </div>
@@ -2062,7 +2120,7 @@ async function loadExcel(input){
   const sb=getSB();
   if(!sb){toast('Supabase not connected — check Admin → DB Schema','err');return;}
   const mode=document.getElementById('uploadMode')?.value||'overwrite';
-  const stEl=document.getElementById('uploadStatus');
+  const stEl=document.getElementById('adm_upload_status');
   const dsEl=document.getElementById('dataStatus');
   if(stEl)stEl.textContent='Reading file…';
 
@@ -4521,6 +4579,29 @@ async function doDeleteMonth(){
   }
 }
 
+async function doDeleteMonthAdm(){
+  if(!can('lock_period')){toast('Admin only','err');return;}
+  const sb=getSB();if(!sb){toast('Supabase not connected','err');return;}
+  const year=Number(document.getElementById('delYearAdm')?.value);
+  const month=Number(document.getElementById('delMonthAdm')?.value);
+  if(!year||!month)return;
+  const msg=document.getElementById('delMonthMsgAdm');
+  if(!confirm(`Delete ALL actuals for ${year}-${String(month).padStart(2,'0')}? This cannot be undone.`))return;
+  if(msg){msg.textContent='Deleting…';msg.style.display='';}
+  try{
+    const{error,count}=await sb.from('jps_actuals').delete({count:'exact'}).eq('year',year).eq('month',month);
+    if(error)throw error;
+    if(msg){msg.textContent=`✓ Deleted ${count||'all'} rows for ${year}-${String(month).padStart(2,'0')}`;msg.style.color='var(--green)';}
+    toast(`Month ${year}-${month} deleted ✓`,'ok');
+    await syncSupabase(true);
+    buildCharts();
+    renderSection(document.querySelector('.sec.on')?.id);
+  }catch(e){
+    if(msg){msg.textContent='Error: '+e.message;msg.style.color='var(--red)';}
+    toast('Delete failed: '+e.message,'err');
+  }
+}
+
 /* ── User management ── */
 async function loadPlatformUsers(){
   const sb=getSB();if(!sb)return;
@@ -5340,7 +5421,7 @@ async function syncSupabase(silent=false){
       if(activeId==='ng')renderNetGen();
     }catch(re){console.error('Re-render error after sync:',re);}
 
-    const el=document.getElementById('uploadStatus');
+    const el=document.getElementById('adm_upload_status');
     if(el&&sbActuals.length)el.textContent=`Live · ${sbActuals.length.toLocaleString()} actuals rows`;
 
     if(!silent)alert('Supabase sync complete\n\n'+log.join('\n'));
