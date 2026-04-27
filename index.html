@@ -386,6 +386,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
       <span class="tbadge tbr" id="kpi_ytd_yoy">-- YoY</span>
       <span class="tbadge tbt" id="dataStatus">⚡ Sample Data</span>
       <span class="sb-badge sb-offline" id="sbStatus" onclick="syncSupabase()" title="Click to sync from Supabase">○ Offline</span>
+      <div id="onlineUsersPanel" style="display:flex;align-items:center"></div>
       <div class="ua" id="uAvatar" onclick="toggleMenu()">--</div>
       <div class="umenu" id="uMenu">
         <div class="umi" id="uNameDisp">--</div>
@@ -1983,6 +1984,7 @@ function sw(id,el){
   document.getElementById(id).classList.add('on');
   el.classList.add('on');
   setTimeout(()=>{buildCharts();renderSection(id);},60);
+  if(typeof _rtAnnouncePresence==='function')_rtAnnouncePresence(id);
 }
 function setPeriod(p,btn){
   curPeriod=p;
@@ -5814,9 +5816,145 @@ renderSection=function(id){
 const _origInitAll=initAll;
 initAll=function(){
   _origInitAll();
-  // Silent sync attempt on login
   syncSupabase(true).catch(()=>{});
+  _rtStartHeartbeat();
 };
+
+// ═══════════════════════════════════════════════════════
+//  REALTIME PRESENCE ENGINE (borrowed from FP&A Platform)
+//  BroadcastChannel — same-origin tabs, no server required
+// ═══════════════════════════════════════════════════════
+const _rtChannel=(typeof BroadcastChannel!=='undefined')?new BroadcastChannel('jps_sales_realtime'):null;
+const _presenceStore={};
+const _myTabId=Math.random().toString(36).slice(2,9);
+let _myPresence={};
+
+function _rtBroadcast(type,payload){
+  if(!_rtChannel)return;
+  try{_rtChannel.postMessage({type,payload,from:_myTabId,ts:Date.now()});}catch(e){}
+}
+
+function _rtAnnouncePresence(section){
+  _myPresence={
+    name:CU.name||'—',
+    role:CU.role||'view',
+    section:section||document.querySelector('.sec.on')?.id||'ov',
+    lastSeen:Date.now()
+  };
+  _presenceStore[_myTabId]=_myPresence;
+  _rtBroadcast('presence',_myPresence);
+  _renderOnlinePanel();
+}
+
+function _rtRequestPresence(){_rtBroadcast('who',{});}
+
+if(_rtChannel){
+  _rtChannel.onmessage=(e)=>{
+    const{type,payload,from,ts}=e.data;
+    if(from===_myTabId)return;
+    if(type==='presence'){
+      _presenceStore[from]={...payload,lastSeen:ts};
+      _renderOnlinePanel();
+    }else if(type==='who'){
+      _rtAnnouncePresence();
+    }else if(type==='bye'){
+      delete _presenceStore[from];
+      _renderOnlinePanel();
+    }
+  };
+}
+
+const _sectionLabel={
+  ov:'Overview',cm:'Commercial',rs:'Residential',df:'Defection',
+  fc:'Forecast',ro:'R&O',mr:'Monthly Review',ar:'AR',
+  es:'Exec Summary',vb:'Variance Bridge',rr:'Rev Recovery',
+  ng:'Net Generation',adm:'Admin'
+};
+
+function _renderOnlinePanel(){
+  const panel=document.getElementById('onlineUsersPanel');
+  if(!panel)return;
+
+  const now=Date.now();
+  Object.keys(_presenceStore).forEach(id=>{
+    if(now-(_presenceStore[id].lastSeen||0)>30000)delete _presenceStore[id];
+  });
+
+  const all=[
+    {id:_myTabId,..._myPresence,isMe:true},
+    ...Object.entries(_presenceStore)
+      .filter(([id])=>id!==_myTabId)
+      .map(([id,p])=>({id,...p,isMe:false}))
+  ].filter(u=>u.name);
+
+  const count=all.length;
+  const roleColor=r=>r==='admin'?'var(--gold)':r==='manager'?'#378add':r==='rep'?'var(--teal)':'var(--text3)';
+
+  if(count<=1){
+    panel.innerHTML=`<div style="display:flex;align-items:center;gap:5px" title="Only you are online">
+      <div style="width:7px;height:7px;border-radius:50%;background:var(--teal);flex-shrink:0"></div>
+      <span style="font-size:10px;color:var(--text3)">Only you</span>
+    </div>`;
+    return;
+  }
+
+  panel.innerHTML=`
+    <div style="position:relative" id="spOnlineWrap">
+      <div style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:3px 8px;border-radius:4px;border:1px solid var(--border);background:var(--navy3)"
+           onclick="document.getElementById('spOnlineDD').classList.toggle('sp-open')" title="Active sessions">
+        <div style="width:7px;height:7px;border-radius:50%;background:var(--teal);flex-shrink:0;box-shadow:0 0 5px var(--teal)"></div>
+        <div style="display:flex;margin-left:2px">
+          ${all.slice(0,3).map(u=>`<div style="width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,#003da5,#00aeef);display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;color:#fff;margin-left:-5px;border:1px solid var(--navy2)">${(u.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()}</div>`).join('')}
+          ${count>3?`<div style="width:20px;height:20px;border-radius:50%;background:var(--navy3);display:flex;align-items:center;justify-content:center;font-size:7px;color:var(--text3);margin-left:-5px;border:1px solid var(--navy2)">+${count-3}</div>`:''}
+        </div>
+        <span style="font-size:10px;color:var(--text);font-weight:700">${count}</span>
+      </div>
+      <div id="spOnlineDD" style="position:absolute;top:calc(100% + 6px);right:0;min-width:230px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:999;display:none;flex-direction:column;overflow:hidden">
+        <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Active Sessions (${count})</div>
+        ${all.map(u=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid rgba(255,255,255,.04)${u.isMe?';background:rgba(0,194,168,.06)':''}">
+          <div style="width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#003da5,#00aeef);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff;flex-shrink:0">${(u.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:11px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.name}${u.isMe?' <span style="font-size:9px;color:var(--text3)">(you)</span>':''}</div>
+            <div style="font-size:9px;color:var(--text3)">${_sectionLabel[u.section]||u.section||'—'}</div>
+          </div>
+          <div style="font-size:8px;font-weight:800;text-transform:uppercase;color:${roleColor(u.role)}">${u.role}</div>
+        </div>`).join('')}
+        <div style="padding:6px 12px;font-size:9px;color:var(--text3);text-align:center">Live · ${new Date().toLocaleTimeString()}</div>
+      </div>
+    </div>`;
+
+  setTimeout(()=>{
+    document.addEventListener('click',function _closeDD(e){
+      const wrap=document.getElementById('spOnlineWrap');
+      if(wrap&&!wrap.contains(e.target)){
+        const dd=document.getElementById('spOnlineDD');
+        if(dd)dd.classList.remove('sp-open');
+        document.removeEventListener('click',_closeDD);
+      }
+    });
+  },0);
+}
+
+(function(){
+  const s=document.createElement('style');
+  s.textContent='#spOnlineDD.sp-open{display:flex!important;flex-direction:column!important}';
+  document.head?.appendChild(s);
+})();
+
+let _rtHeartbeat=null;
+function _rtStartHeartbeat(){
+  if(_rtHeartbeat)clearInterval(_rtHeartbeat);
+  _rtAnnouncePresence();
+  _rtRequestPresence();
+  _rtHeartbeat=setInterval(()=>{
+    _rtAnnouncePresence(document.querySelector('.sec.on')?.id||'ov');
+  },15000);
+}
+
+window.addEventListener('beforeunload',()=>{
+  _rtBroadcast('bye',{name:CU.name});
+});
 
 </script>
 </div><!-- /app-wrap -->
