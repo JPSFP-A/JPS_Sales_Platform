@@ -4999,7 +4999,7 @@ create table if not exists public.jps_account_master (
   parish       text,
   account_type text default 'commercial'   -- 'commercial' | 'residential'
                check (account_type in ('commercial','residential')),
-  industry     text references public.jps_industries(name),
+  industry     text,
   kam_name     text,                        -- denormalised for query speed; FK optional
   is_active    boolean default true,
   created_at   timestamptz default now(),
