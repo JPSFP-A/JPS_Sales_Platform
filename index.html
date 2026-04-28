@@ -5658,7 +5658,161 @@ create policy "Managers can write EV data"
   );
 
 -- ══════════════════════════════════════════════════════════
--- STEP 7: Create admin user (run AFTER signing up in the app)
+-- STEP 7: Intelligence & commentary tables
+-- ══════════════════════════════════════════════════════════
+
+-- KAM / rep notes per account
+create table if not exists public.jps_user_notes (
+  id         bigserial primary key,
+  acct_num   text not null,
+  customer   text default '',
+  note_text  text default '',
+  author     text default '',
+  updated_at timestamptz default now(),
+  created_at timestamptz default now(),
+  unique (acct_num)
+);
+alter table public.jps_user_notes enable row level security;
+drop policy if exists "Authenticated users can read user notes" on public.jps_user_notes;
+drop policy if exists "Reps can write user notes"               on public.jps_user_notes;
+create policy "Authenticated users can read user notes"
+  on public.jps_user_notes for select using (auth.role()='authenticated');
+create policy "Reps can write user notes"
+  on public.jps_user_notes for all using (auth.role()='authenticated');
+
+-- Exec summary narrative text by period
+create table if not exists public.jps_exec_narratives (
+  id         bigserial primary key,
+  year       smallint not null,
+  month      smallint not null,
+  narrative  text default '',
+  author     text default '',
+  updated_at timestamptz default now(),
+  created_at timestamptz default now(),
+  unique (year, month)
+);
+alter table public.jps_exec_narratives enable row level security;
+drop policy if exists "Authenticated users can read exec narratives" on public.jps_exec_narratives;
+drop policy if exists "Managers can write exec narratives"           on public.jps_exec_narratives;
+create policy "Authenticated users can read exec narratives"
+  on public.jps_exec_narratives for select using (auth.role()='authenticated');
+create policy "Managers can write exec narratives"
+  on public.jps_exec_narratives for all using (
+    exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager'))
+  );
+
+-- Variance bridge driver decomposition
+create table if not exists public.jps_vb_drivers (
+  id         bigserial primary key,
+  year       smallint not null,
+  month      smallint not null,
+  label      text not null,
+  value      numeric(15,2) default 0,
+  updated_at timestamptz default now(),
+  created_at timestamptz default now()
+);
+alter table public.jps_vb_drivers enable row level security;
+drop policy if exists "Authenticated users can read vb drivers" on public.jps_vb_drivers;
+drop policy if exists "Managers can write vb drivers"           on public.jps_vb_drivers;
+create policy "Authenticated users can read vb drivers"
+  on public.jps_vb_drivers for select using (auth.role()='authenticated');
+create policy "Managers can write vb drivers"
+  on public.jps_vb_drivers for all using (
+    exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager'))
+  );
+
+-- Pivot / movers commentary by period and account
+create table if not exists public.jps_pivot_commentary (
+  id         bigserial primary key,
+  period     text not null,
+  acct_num   text not null default '',
+  customer   text default '',
+  note_text  text default '',
+  author     text default '',
+  updated_at timestamptz default now(),
+  created_at timestamptz default now(),
+  unique (period, acct_num)
+);
+alter table public.jps_pivot_commentary enable row level security;
+drop policy if exists "Authenticated users can read pivot commentary" on public.jps_pivot_commentary;
+drop policy if exists "Reps can write pivot commentary"               on public.jps_pivot_commentary;
+create policy "Authenticated users can read pivot commentary"
+  on public.jps_pivot_commentary for select using (auth.role()='authenticated');
+create policy "Reps can write pivot commentary"
+  on public.jps_pivot_commentary for all using (auth.role()='authenticated');
+
+-- Defection action tracking register
+create table if not exists public.jps_def_actions (
+  id         bigserial primary key,
+  acct_num   text not null,
+  status     text default '',
+  cause      text default '',
+  action     text default '',
+  owner      text default '',
+  due_date   text default '',
+  updated_at timestamptz default now(),
+  created_at timestamptz default now(),
+  unique (acct_num)
+);
+alter table public.jps_def_actions enable row level security;
+drop policy if exists "Authenticated users can read def actions" on public.jps_def_actions;
+drop policy if exists "Reps can write def actions"               on public.jps_def_actions;
+create policy "Authenticated users can read def actions"
+  on public.jps_def_actions for select using (auth.role()='authenticated');
+create policy "Reps can write def actions"
+  on public.jps_def_actions for all using (auth.role()='authenticated');
+
+-- Risk & opportunity pipeline register
+create table if not exists public.jps_ro_register (
+  id         bigserial primary key,
+  num        text not null,
+  name       text default '',
+  acct_num   text default '',
+  type       text default '',
+  level      text default '',
+  rate_class text default '',
+  parish     text default '',
+  sector     text default '',
+  kwh        numeric(15,2) default 0,
+  owner      text default '',
+  status     text default '',
+  source     text default '',
+  cmt        text default '',
+  updated_at timestamptz default now(),
+  created_at timestamptz default now(),
+  unique (num)
+);
+alter table public.jps_ro_register enable row level security;
+drop policy if exists "Authenticated users can read RO register" on public.jps_ro_register;
+drop policy if exists "Managers can write RO register"           on public.jps_ro_register;
+create policy "Authenticated users can read RO register"
+  on public.jps_ro_register for select using (auth.role()='authenticated');
+create policy "Managers can write RO register"
+  on public.jps_ro_register for all using (
+    exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager','rep'))
+  );
+
+-- AI commentary and general section notes
+create table if not exists public.jps_notes (
+  id         bigserial primary key,
+  section    text not null,
+  period     text not null,
+  note_text  text default '',
+  author     text default '',
+  updated_at timestamptz default now(),
+  created_at timestamptz default now(),
+  unique (section, period)
+);
+alter table public.jps_notes enable row level security;
+drop policy if exists "Authenticated users can read notes" on public.jps_notes;
+drop policy if exists "Authenticated users can write notes" on public.jps_notes;
+create policy "Authenticated users can read notes"
+  on public.jps_notes for select using (auth.role()='authenticated');
+create policy "Authenticated users can write notes"
+  on public.jps_notes for all using (auth.role()='authenticated');
+
+-- ══════════════════════════════════════════════════════════
+-- STEP 8: Create admin user (run AFTER signing up in the app)
 -- Replace the UUID with the one from auth.users for Jwilson@jpsco.com
 -- ══════════════════════════════════════════════════════════
 -- insert into public.profiles (id, name, email, role, sales_role, territory, is_active)
