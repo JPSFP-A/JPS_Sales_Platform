@@ -1348,6 +1348,23 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
       <!-- ── DB Schema tab ── -->
       <!-- ── KAM Assignment tab ── -->
       <div id="adm_kam" class="adm-panel" style="display:none">
+
+        <!-- ── CSV Import card ── -->
+        <div class="card" style="margin-bottom:12px;border-color:rgba(0,194,168,.3)">
+          <div class="ch">📥 Import KAM Assignments from CSV
+            <span style="font-size:10px;color:var(--text3);font-weight:400">Columns: Customer number, KAM</span>
+          </div>
+          <div style="padding:9px 13px;background:rgba(0,194,168,.07);border-left:3px solid var(--teal);border-radius:4px;font-size:11px;color:var(--text2);margin-bottom:10px">
+            Select your CSV file. The <strong>Customer number</strong> column (first part of the account number before the dash, e.g. <code style="background:var(--navy3);padding:1px 5px;border-radius:3px">100590</code>) will be matched against all accounts in the loaded actuals data. One customer number can map to many account numbers.
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input type="file" id="kam_csv_file" accept=".csv,.txt" style="display:none" onchange="previewKamCsv(this)"/>
+            <button class="btn btn-t" onclick="document.getElementById('kam_csv_file').click()">📂 Choose CSV File</button>
+            <span id="kam_csv_status" style="font-size:10px;color:var(--text3)">No file selected</span>
+          </div>
+          <div id="kam_csv_preview" style="display:none;margin-top:12px"></div>
+        </div>
+
         <div class="card" style="margin-bottom:12px">
           <div class="ch">👤 KAM Assignment
             <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
@@ -1356,7 +1373,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
             </div>
           </div>
           <div style="margin-bottom:10px;padding:9px 13px;background:rgba(0,194,168,.07);border-left:3px solid var(--teal);border-radius:4px;font-size:11px;color:var(--text2)">
-            Assign Key Account Managers to accounts directly here, or upload a <strong>KAM</strong> sheet via <em>Upload Data</em>. Changes save immediately to the database.
+            Assign Key Account Managers to accounts individually below, or use the CSV import above. Changes save immediately to the database.
           </div>
           <div class="tbl-controls" style="margin-bottom:10px">
             <input class="si" placeholder="🔍 Account # or name..." id="adm_kam_q" oninput="renderAdmKam()"/>
@@ -2475,7 +2492,7 @@ const GLOSSARY_DATA=[
   {term:'AI Commentary',cat:'Platform',def:'Auto-generated narrative summary computed from loaded actuals. Available on Commercial (beside the GWh chart) and Commercial → KAM & Commentary tab. Covers YTD/MTD performance, rate-class breakdown, top accounts, and outlook. Use Generate Analysis button to refresh.'},
   {term:'Period Filter',cat:'Platform',def:'The MTD / YTD / QTD / Annual buttons at the top of the screen. Changing the year selector rebuilds all CUSTOMERS, PARISHES, and INDUSTRIES arrays from the selected year\'s actuals — all charts and tables update automatically.'},
   {term:'Wipe All Actuals',cat:'Platform',def:'Admin function that deletes every row from jps_actuals across all years. Requires typing the confirmation code WIPE-ALL. Use before a full data reload. Writes an audit log entry.'},
-  {term:'KAM Upload',cat:'Platform',def:'Upload an Excel file with a sheet named KAM containing columns jps_ac and kam to assign Key Account Managers. Can also assign one-by-one in Admin → KAM Assignment.'},
+  {term:'KAM Upload',cat:'Platform',def:'Two ways to import KAM assignments: (1) CSV file — go to Admin → KAM Assignment → Import KAM from CSV. CSV must have columns "Customer number" (prefix before the dash, e.g. 100590) and "KAM". One customer number maps to all matching account numbers. (2) Excel file via Admin → Upload Data with a sheet named KAM containing columns jps_ac (full account number) and kam. Can also assign one-by-one in Admin → KAM Assignment.'},
 ];
 
 const FC_SEGS=[
@@ -5795,24 +5812,168 @@ async function kamBulkAssign(){
     ? sbActuals.filter(r=>!r.consumption_bucket).map(r=>String(r.jps_ac||'').trim()).filter((v,i,a)=>a.indexOf(v)===i).filter(ac=>{ const cur=sbKAM.find(k=>String(k.jps_ac||'').trim()===ac)?.kam||''; return cur===fromKam; })
     : sbActuals.filter(r=>!r.consumption_bucket).map(r=>String(r.jps_ac||'').trim()).filter((v,i,a)=>a.indexOf(v)===i).filter(ac=>!sbKAM.find(k=>String(k.jps_ac||'').trim()===ac));
   if(!accounts.length){if(msg)msg.textContent='No matching accounts found.';return;}
-  if(!confirm(`Assign ${accounts.length} accounts to "${toKam}"?`))return;
-  if(msg)msg.textContent='Saving…';
+  // Uses in-app modal (avoids blocked browser dialog APIs)
+  openModal('👤 Confirm Bulk KAM Assignment',`
+    <div style="padding:12px 14px;background:rgba(0,194,168,.08);border:1px solid rgba(0,194,168,.25);border-radius:7px;margin-bottom:12px;font-size:11px;color:var(--text2)">
+      Assign <strong style="color:var(--text)">${accounts.length} accounts</strong>
+      ${fromKam?` currently assigned to <strong style="color:var(--teal)">${fromKam}</strong>`:'(currently unassigned)'}
+      → <strong style="color:var(--teal)">${toKam}</strong>
+    </div>
+    <div style="font-size:11px;color:var(--text2)">This will overwrite existing KAM assignments for these accounts. Continue?</div>
+  `,async ()=>{
+    closeModal();
+    if(msg)msg.textContent='Saving…';
+    try{
+      const rows=accounts.map(ac=>({jps_ac:ac,kam:toKam}));
+      const{error}=await sb.from('jps_kam').upsert(rows,{onConflict:'jps_ac'});
+      if(error)throw error;
+      rows.forEach(r=>{
+        const idx=sbKAM.findIndex(k=>String(k.jps_ac||'').trim()===r.jps_ac);
+        if(idx>=0)sbKAM[idx].kam=toKam;else sbKAM.push(r);
+      });
+      const kamMap2={};sbKAM.forEach(k=>kamMap2[String(k.jps_ac||'').trim()]=k.kam||'');
+      CUSTOMERS.forEach(c=>{c.kam=kamMap2[c.num]||'';});
+      populateKamDropdowns();
+      renderAdmKam();
+      await writeAudit('BULK_KAM_ASSIGN',{accounts:accounts.length,from_kam:fromKam||'(unassigned)',to_kam:toKam});
+      if(msg)msg.textContent=`✓ ${accounts.length} accounts assigned to "${toKam}"`;
+      toast(`${accounts.length} accounts → ${toKam}`,'ok');
+    }catch(e){if(msg)msg.textContent='Error: '+e.message;toast('Bulk assign failed: '+e.message,'err');}
+  });
+}
+
+// ── KAM CSV Import ─────────────────────────────────────────────
+function previewKamCsv(input){
+  const file=input.files[0];if(!file)return;
+  const status=document.getElementById('kam_csv_status');
+  const preview=document.getElementById('kam_csv_preview');
+  status.textContent=`Reading ${file.name}…`;
+  preview.style.display='none';
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const lines=e.target.result.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').map(l=>l.trim()).filter(Boolean);
+      if(!lines.length){status.textContent='File is empty.';return;}
+      // Parse header — find customer number column and KAM column
+      const rawHdr=lines[0];
+      // Handle comma-separated, possibly quoted
+      const splitCsv=row=>row.split(',').map(c=>c.replace(/^["']|["']$/g,'').trim());
+      const header=splitCsv(rawHdr).map(h=>h.toLowerCase());
+      const custCol=header.findIndex(h=>h.includes('customer')||h==='jps_ac'||h==='account'||h==='acct');
+      const kamCol=header.findIndex(h=>h==='kam'||h.includes('key account')||h.includes('manager'));
+      if(custCol<0||kamCol<0){
+        status.textContent=`Could not find required columns. Found: ${header.join(', ')}. Expected: "Customer number" and "KAM".`;
+        return;
+      }
+      // Parse rows — deduplicate: first KAM found per customer number wins
+      const csvMap={};
+      for(let i=1;i<lines.length;i++){
+        const cols=splitCsv(lines[i]);
+        const custNum=(cols[custCol]||'').trim();
+        const kamName=(cols[kamCol]||'').trim();
+        if(!custNum||!kamName)continue;
+        if(custNum.toLowerCase()==='customer number'||kamName.toLowerCase()==='kam')continue;
+        if(!csvMap[custNum])csvMap[custNum]=kamName;
+      }
+      const uniqueCusts=Object.keys(csvMap);
+      if(!uniqueCusts.length){status.textContent='No data rows found in CSV.';return;}
+      // Match to full account numbers from loaded actuals
+      const uniqueAcs=[...new Set(sbActuals.filter(r=>!r.consumption_bucket).map(r=>String(r.jps_ac||'').trim()).filter(Boolean))];
+      if(!uniqueAcs.length){
+        status.textContent='No commercial actuals loaded — sync the database first, then import.';
+        return;
+      }
+      // Build index: customerNum prefix → [full account numbers]
+      const prefixIdx={};
+      uniqueAcs.forEach(ac=>{
+        const prefix=ac.split('-')[0];
+        if(!prefixIdx[prefix])prefixIdx[prefix]=[];
+        prefixIdx[prefix].push(ac);
+      });
+      const assignments=[];
+      const unmatched=[];
+      uniqueCusts.forEach(custNum=>{
+        const matches=prefixIdx[custNum]||[];
+        if(matches.length){
+          matches.forEach(ac=>assignments.push({jps_ac:ac,kam:csvMap[custNum]}));
+        }else{
+          unmatched.push(custNum);
+        }
+      });
+      if(!assignments.length){
+        status.textContent=`No matches found. ${uniqueCusts.length} customer numbers in CSV but none matched actuals. Ensure actuals are loaded.`;
+        return;
+      }
+      // Store pending
+      window._kamCsvPending=assignments;
+      // Group by KAM for preview
+      const byKam={};
+      assignments.forEach(a=>{if(!byKam[a.kam])byKam[a.kam]=0;byKam[a.kam]++;});
+      const kamRows=Object.entries(byKam).sort((a,b)=>b[1]-a[1]);
+      status.textContent=`${file.name} — ${uniqueCusts.length} customer numbers → ${assignments.length} account assignments`;
+      preview.style.display='';
+      preview.innerHTML=`
+        <div style="background:rgba(0,194,168,.07);border:1px solid rgba(0,194,168,.25);border-radius:7px;padding:12px;margin-bottom:10px">
+          <div style="font-weight:700;font-size:11px;color:var(--teal);margin-bottom:8px">Preview — ${assignments.length} assignments across ${kamRows.length} KAMs</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:5px;font-size:11px;margin-bottom:8px">
+            ${kamRows.map(([k,n])=>`<div style="color:var(--text2)"><span style="color:var(--teal);font-weight:600">${k}</span> — ${n} accounts</div>`).join('')}
+          </div>
+          ${unmatched.length?`<div style="font-size:10px;color:var(--amber);margin-top:6px">&#9888; ${unmatched.length} customer number${unmatched.length>1?'s':''} not found in loaded actuals: <span style="color:var(--text2)">${unmatched.slice(0,8).join(', ')}${unmatched.length>8?` … +${unmatched.length-8} more`:''}</span></div>`:''}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-t" onclick="saveKamCsv()">💾 Save ${assignments.length} Assignments →</button>
+          <button class="btn btn-o" onclick="cancelKamCsvImport()">✕ Cancel</button>
+        </div>`;
+    }catch(err){
+      status.textContent='Error parsing CSV: '+err.message;
+      console.error(err);
+    }
+  };
+  reader.onerror=()=>{status.textContent='Could not read file.';};
+  reader.readAsText(file);
+}
+
+function cancelKamCsvImport(){
+  window._kamCsvPending=null;
+  const f=document.getElementById('kam_csv_file');if(f)f.value='';
+  const p=document.getElementById('kam_csv_preview');if(p)p.style.display='none';
+  const s=document.getElementById('kam_csv_status');if(s)s.textContent='Cancelled.';
+}
+
+async function saveKamCsv(){
+  const assignments=window._kamCsvPending;
+  if(!assignments||!assignments.length){toast('No assignments pending','err');return;}
+  const sb=getSB();if(!sb){toast('Not connected','err');return;}
+  const preview=document.getElementById('kam_csv_preview');
+  if(preview)preview.innerHTML='<div style="font-size:11px;color:var(--text2);padding:8px 0">&#8987; Saving '+assignments.length+' assignments…</div>';
   try{
-    const rows=accounts.map(ac=>({jps_ac:ac,kam:toKam}));
-    const{error}=await sb.from('jps_kam').upsert(rows,{onConflict:'jps_ac'});
-    if(error)throw error;
-    rows.forEach(r=>{
-      const idx=sbKAM.findIndex(k=>String(k.jps_ac||'').trim()===r.jps_ac);
-      if(idx>=0)sbKAM[idx].kam=toKam;else sbKAM.push(r);
+    // Upsert in batches of 500
+    for(let i=0;i<assignments.length;i+=500){
+      const batch=assignments.slice(i,i+500);
+      const{error}=await sb.from('jps_kam').upsert(batch,{onConflict:'jps_ac'});
+      if(error)throw error;
+    }
+    // Update local sbKAM cache
+    assignments.forEach(a=>{
+      const idx=sbKAM.findIndex(k=>String(k.jps_ac||'').trim()===a.jps_ac);
+      if(idx>=0)sbKAM[idx].kam=a.kam;else sbKAM.push({jps_ac:a.jps_ac,kam:a.kam});
     });
-    const kamMap2={};sbKAM.forEach(k=>kamMap2[String(k.jps_ac||'').trim()]=k.kam||'');
-    CUSTOMERS.forEach(c=>{c.kam=kamMap2[c.num]||'';});
+    // Refresh CUSTOMERS and dropdowns
+    const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
+    CUSTOMERS.forEach(c=>{c.kam=kamMap[c.num]||'';});
     populateKamDropdowns();
     renderAdmKam();
-    await writeAudit('BULK_KAM_ASSIGN',{accounts:accounts.length,from_kam:fromKam||'(unassigned)',to_kam:toKam});
-    if(msg)msg.textContent=`✓ ${accounts.length} accounts assigned to "${toKam}"`;
-    toast(`${accounts.length} accounts → ${toKam}`,'ok');
-  }catch(e){if(msg)msg.textContent='Error: '+e.message;toast('Bulk assign failed: '+e.message,'err');}
+    await writeAudit('BULK_KAM_ASSIGN',{source:'CSV import',accounts:assignments.length,kams:Object.keys(assignments.reduce((m,a)=>{m[a.kam]=1;return m;},{})).length});
+    if(preview)preview.style.display='none';
+    const f=document.getElementById('kam_csv_file');if(f)f.value='';
+    window._kamCsvPending=null;
+    const s=document.getElementById('kam_csv_status');
+    if(s)s.textContent=`✓ ${assignments.length} assignments saved successfully`;
+    toast(`${assignments.length} KAM assignments imported ✓`,'ok');
+  }catch(err){
+    toast('Import failed: '+err.message,'err');
+    if(preview)preview.innerHTML=`<div style="color:var(--red);font-size:11px;padding:8px 0">Error: ${err.message}</div>`;
+  }
 }
 
 function populateKamDropdowns(){
@@ -8222,7 +8383,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.17';
+const APP_VERSION = '1.0.18';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
