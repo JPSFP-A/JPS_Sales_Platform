@@ -3,9 +3,12 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <title>JPS Sales Analytics Platform</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- XLSX loaded lazily on first upload/download — saves ~1MB on initial page load -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 :root{
@@ -380,12 +383,15 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
       <span class="tbadge tba" id="periodLabel">-- · MTD</span>
       <span class="tbadge tbr" id="kpi_ytd_yoy">-- YoY</span>
       <span class="tbadge tbt" id="dataStatus">⚡ Sample Data</span>
-      <span class="sb-badge sb-offline" id="sbStatus" onclick="syncSupabase()" title="Click to sync from Supabase">○ Offline</span>
+      <a href="https://jps-fp-a.vercel.app" target="_blank" style="font-size:10px;font-weight:600;color:var(--teal);text-decoration:none;padding:3px 8px;border:1px solid rgba(0,194,168,.3);border-radius:5px;white-space:nowrap" title="Open FP&amp;A Platform">FP&amp;A ↗</a>
+      <span class="sb-badge sb-syncing" id="sbStatus" onclick="syncSupabase()" title="Click to sync from Supabase">↻ Connecting…</span>
+      <span id="appVersion" style="font-size:9px;color:var(--text3);opacity:0.6"></span>
       <div id="onlineUsersPanel" style="display:flex;align-items:center"></div>
       <div class="ua" id="uAvatar" onclick="toggleMenu()">--</div>
       <div class="umenu" id="uMenu">
         <div class="umi" id="uNameDisp">--</div>
-        <div class="umi" style="border-top:1px solid var(--border);margin-top:3px;padding-top:7px" onclick="dlTemplate()">📥 Download Template</div>
+        <div class="umi" style="border-top:1px solid var(--border);margin-top:3px;padding-top:7px" onclick="window.open('https://jps-fp-a.vercel.app','_blank')">📊 FP&amp;A Platform ↗</div>
+        <div class="umi" onclick="dlTemplate()">📥 Download Template</div>
         <div class="umi" onclick="doLogout()">🚪 Sign Out</div>
       </div>
     </div>
@@ -398,8 +404,10 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
     <button class="pbtn" onclick="setPeriod('QTD',this)">QTD</button>
     <button class="pbtn" onclick="setPeriod('YTD',this)">YTD</button>
     <button class="pbtn" onclick="setPeriod('Annual',this)">Annual</button>
-    <select class="psel" id="selYear"><option value="2026">2026</option><option value="2025">2025</option></select>
-    <select class="psel" id="selMonth">
+    <select class="psel" id="selYear" onchange="curYear=Number(this.value);document.getElementById('periodLabel').textContent=curPeriod+' · '+curYear;renderSection(document.querySelector('.sec.on')?.id)">
+      <option value="2026">2026</option><option value="2025">2025</option>
+    </select>
+    <select class="psel" id="selMonth" onchange="curMonth=Number(this.value);renderSection(document.querySelector('.sec.on')?.id)">
       <option value="2">Feb</option><option value="1">Jan</option>
       <option value="12">Dec</option><option value="11">Nov</option>
       <option value="10">Oct</option><option value="9">Sep</option>
@@ -407,7 +415,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
       <option value="6">Jun</option><option value="5">May</option>
       <option value="4">Apr</option><option value="3">Mar</option>
     </select>
-    <select class="psel" id="selQtr" style="display:none">
+    <select class="psel" id="selQtr" style="display:none" onchange="curQtr=Number(this.value);renderSection(document.querySelector('.sec.on')?.id)">
       <option value="1">Q1</option><option value="2">Q2</option>
       <option value="3">Q3</option><option value="4">Q4</option>
     </select>
@@ -1055,6 +1063,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
         <button class="btn btn-o adm-tab"    data-adm="adm_upload"   onclick="swAdm('adm_upload',this)">📤 Upload Data</button>
         <button class="btn btn-o adm-tab"    data-adm="adm_kam"      onclick="swAdm('adm_kam',this)">👤 KAM Assignment</button>
         <button class="btn btn-o adm-tab"    data-adm="adm_schema"   onclick="swAdm('adm_schema',this)">🗄 DB Schema</button>
+        <button class="btn btn-o adm-tab"    data-adm="adm_audit"    onclick="swAdm('adm_audit',this);renderAuditLog()">📋 Audit Trail</button>
       </div>
 
       <!-- ── Users & Roles tab ── -->
@@ -1265,6 +1274,24 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
             Run the SQL below in your Supabase dashboard → SQL Editor → New Query. This creates the two tables required for role security and period locking.
           </div>
           <pre id="adm_schema_sql" style="background:var(--navy3);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:10px;color:var(--teal);overflow-x:auto;white-space:pre-wrap;line-height:1.6"></pre>
+        </div>
+      </div>
+
+      <!-- ── Audit Trail tab ── -->
+      <div id="adm_audit" class="adm-panel" style="display:none">
+        <div class="card">
+          <div class="ch">📋 Audit Trail
+            <button class="btn btn-o" onclick="renderAuditLog()">🔄 Refresh</button>
+          </div>
+          <div style="margin-bottom:10px;font-size:11px;color:var(--text2)">
+            Immutable record of all data uploads, deletions, period locks, KAM assignments and user changes. Last 200 entries shown, newest first.
+          </div>
+          <div style="margin-bottom:10px;padding:9px 13px;background:rgba(55,138,221,.07);border-left:3px solid var(--blue);border-radius:4px;font-size:11px;color:var(--text2)">
+            <strong>Actions tracked:</strong> UPLOAD_DATA · DELETE_DATA · PERIOD_LOCK · PERIOD_UNLOCK · KAM_ASSIGN · BULK_KAM_ASSIGN · USER_ROLE_CHANGE · USER_ACTIVATE · USER_DEACTIVATE
+          </div>
+          <div class="tbl-wrap" id="adm_audit_tbl">
+            <div style="color:var(--text3);font-size:12px;padding:16px">Click Refresh to load audit entries.</div>
+          </div>
         </div>
       </div>
     </div>
@@ -2670,10 +2697,15 @@ function renderSidebarFilters(){
 function setPeriod(p,btn){
   curPeriod=p;
   document.querySelectorAll('.pbtn').forEach(b=>b.classList.remove('on'));
-  btn.classList.add('on');
+  if(btn) btn.classList.add('on');
   document.getElementById('selMonth').style.display=(p==='MTD'||p==='Annual')?'':'none';
   document.getElementById('selQtr').style.display=(p==='QTD')?'':'none';
+  // sync year/month from selectors in case user changed them
+  const sy=document.getElementById('selYear'); if(sy) curYear=Number(sy.value)||curYear;
+  const sm=document.getElementById('selMonth'); if(sm&&p==='MTD') curMonth=Number(sm.value)||curMonth;
+  const sq=document.getElementById('selQtr'); if(sq&&p==='QTD') curQtr=Number(sq.value)||curQtr;
   document.getElementById('periodLabel').textContent=`${p} · ${curYear}`;
+  buildCharts();
   renderSection(document.querySelector('.sec.on')?.id);
 }
 function renderSection(id){
@@ -2715,6 +2747,8 @@ async function loadExcel(input){
   if(!file)return;
   const sb=getSB();
   if(!sb){toast('Supabase not connected — check Admin → DB Schema','err');return;}
+  // Ensure XLSX library is loaded (deferred for faster initial page load)
+  try{await loadXLSX();}catch(e){toast('Could not load Excel library: '+e.message,'err');return;}
   const mode=document.getElementById('uploadMode')?.value||'overwrite';
   const stEl=document.getElementById('adm_upload_status');
   const dsEl=document.getElementById('dataStatus');
@@ -2876,6 +2910,7 @@ async function loadExcel(input){
       if(totalRows===0){toast('No data rows found — check sheet names and column headers','w');if(stEl)stEl.textContent='No rows found';input.value='';return;}
       if(stEl){stEl.textContent=`✓ ${totalRows.toLocaleString()} rows uploaded (${mode})`;stEl.classList.add('live');}
       if(dsEl){dsEl.textContent='📊 Live Data';dsEl.className='tbadge tbg';}
+      await writeAudit('UPLOAD_DATA',{rows:totalRows,mode,file:input.files[0]?.name||'unknown'});
       toast(`Uploaded ${totalRows.toLocaleString()} rows — refreshing…`,'ok');
       input.value='';
       await syncSupabase(true);
@@ -2891,8 +2926,19 @@ async function loadExcel(input){
   reader.readAsBinaryString(file);
 }
 
+/* Lazy-load XLSX (~1MB) only when first needed — keeps initial page load fast */
+function loadXLSX(){
+  return new Promise((resolve,reject)=>{
+    if(typeof XLSX!=='undefined'){resolve();return;}
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload=resolve;s.onerror=()=>reject(new Error('Failed to load Excel library'));
+    document.head.appendChild(s);
+  });
+}
+
 function dlTemplate(){
-  if(typeof XLSX==='undefined'){toast('Excel library not loaded yet — please wait a few seconds and try again','err');return;}
+  loadXLSX().then(()=>{
   const wb=XLSX.utils.book_new();
 
   // 1. Actuals — flat dump format, same columns for commercial and residential
@@ -2953,6 +2999,8 @@ function dlTemplate(){
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...evHdr,...evSample]),'EV_Accounts');
 
   XLSX.writeFile(wb,'JPS_Data_Template.xlsx');
+  toast('Template downloaded ✓ — check your Downloads folder','ok');
+  }).catch(e=>toast('Could not load Excel library: '+e.message,'err'));
 }
 
 /* ==========================================
@@ -2987,11 +3035,12 @@ function makeSortable(tableId){
 
 function exportTableCSV(tableId,filename){
   const tbl=document.getElementById(tableId);
-  if(!tbl){alert('Table not found');return;}
+  if(!tbl){toast('Table not found','err');return;}
   const rows=[...tbl.querySelectorAll('tr')];
   const csv=rows.map(r=>[...r.querySelectorAll('th,td')].map(c=>'"'+c.textContent.trim().replace(/"/g,'""')+'"').join(',')).join('\n');
   const blob=new Blob([csv],{type:'text/csv'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename+'.csv';a.click();
+  toast(`${filename}.csv downloaded ✓`,'ok');
 }
 
 /* ==========================================
@@ -3565,7 +3614,7 @@ function saveFcVal(mkey,num,val,avg3,pyAvg){
     if(!note){
       setTimeout(()=>{
         editFcNote(num,CUSTOMERS.find(c=>c.num===num)?.name||num);
-        alert('⚠ Off-trend forecast detected. Please add an explanation note.');
+        toast('⚠ Off-trend forecast — please add an explanation note in the modal','w');
       },200);
     }
   }
@@ -3575,7 +3624,7 @@ function saveFcAll(){
   document.querySelectorAll('[id^="fci_"]').forEach(inp=>{
     if(inp.value){const parts=inp.id.split('_');saveFcVal(parts.slice(1,4).join('_'),parts[4],inp.value,inp.placeholder,'0.1');}
   });
-  alert('All forecasts saved.');
+  toast('All forecasts saved ✓','ok');
 }
 function editFcNote(num,name){
   openModal(`Forecast Note: ${name}`,`<textarea id="fcn_ta" placeholder="Explain forecast assumptions, off-trend rationale, customer intelligence...">${S.get(`fc_note_${num}`,'')}</textarea>`,
@@ -3879,6 +3928,7 @@ function exportReview(){
   txt+=`FORECAST ADJUSTMENTS:\n`;
   FC_SEGS.forEach(s=>{const a=S.get(`${mrPeriod}_fc_${s.seg}`,{val:0});if(a.val){const i=calcFcImp(s.base,a);txt+=`  ${s.lbl}: ${i.disp}\n`;}});
   const b=new Blob([txt],{type:'text/plain'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`JPS_Review_${mrPeriod}.txt`;a.click();
+  toast(`Review exported ✓ — JPS_Review_${mrPeriod}.txt`,'ok');
 }
 
 /* ==========================================
@@ -4316,7 +4366,7 @@ function addBridgeDriver() {
   const seg  = document.getElementById('vb_d_seg')?.value  || 'All';
   const cat  = document.getElementById('vb_d_cat')?.value  || 'Other known';
   const type = document.getElementById('vb_d_type')?.value || 'Temporary';
-  if(!desc || !gwh) { alert('Please enter a description and GWh impact.'); return; }
+  if(!desc || !gwh) { toast('Please enter a description and GWh impact','err'); return; }
   const drivers = getBridgeDrivers();
   drivers.push({desc, seg, gwh, cat, type});
   S.set('vb_drivers', drivers);
@@ -5269,6 +5319,7 @@ async function doDeleteMonthAdm(){
     const{error,count}=await sb.from('jps_actuals').delete({count:'exact'}).eq('year',year).eq('month',month);
     if(error)throw error;
     if(msg){msg.textContent=`✓ Deleted ${count||'all'} rows for ${year}-${String(month).padStart(2,'0')}`;msg.style.color='var(--green)';}
+    await writeAudit('DELETE_DATA',{table:'jps_actuals',year,month,rows_deleted:count||'all'});
     toast(`Month ${year}-${month} deleted ✓`,'ok');
     await syncSupabase(true);
     buildCharts();
@@ -5372,6 +5423,7 @@ async function saveKamAssignment(ac){
     const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
     CUSTOMERS.forEach(c=>{c.kam=kamMap[c.num]||'';});
     populateKamDropdowns();
+    await writeAudit('KAM_ASSIGN',{jps_ac:ac,kam:newKam||'(removed)'});
     toast(`KAM saved for ${ac}`,'ok');
   }catch(e){toast('Save failed: '+e.message,'err');}
 }
@@ -5401,6 +5453,7 @@ async function kamBulkAssign(){
     CUSTOMERS.forEach(c=>{c.kam=kamMap2[c.num]||'';});
     populateKamDropdowns();
     renderAdmKam();
+    await writeAudit('BULK_KAM_ASSIGN',{accounts:accounts.length,from_kam:fromKam||'(unassigned)',to_kam:toKam});
     if(msg)msg.textContent=`✓ ${accounts.length} accounts assigned to "${toKam}"`;
     toast(`${accounts.length} accounts → ${toKam}`,'ok');
   }catch(e){if(msg)msg.textContent='Error: '+e.message;toast('Bulk assign failed: '+e.message,'err');}
@@ -5442,52 +5495,59 @@ function renderAdm(){
     }
     el.innerHTML=`<table class="dt" id="users_dt">
       <thead><tr><th>Name</th><th>Email</th><th>Sales Role</th><th>FP&amp;A Role</th><th>Territory</th><th>Status</th><th>Actions</th></tr></thead>
-      <tbody>${PLATFORM_USERS.map(u=>`<tr>
-        <td style="font-weight:600">${u.name}</td>
+      <tbody>${PLATFORM_USERS.map(u=>{
+        const isPending=u._pending===true;
+        return`<tr style="${isPending?'opacity:0.6':''}">
+        <td style="font-weight:600">${u.name}${isPending?' <span style="font-size:9px;color:var(--amber)">(pending registration)</span>':''}</td>
         <td style="font-size:11px;color:var(--text3)">${u.email||'--'}</td>
-        <td>${can('manage_users')
+        <td>${(!isPending&&can('manage_users'))
           ?`<select class="sel" style="font-size:10px;padding:3px" onchange="changeUserRole('${u.id}',this.value)">
               ${['admin','manager','rep','view'].map(r=>`<option${(u.sales_role||u.role||'view')===r?' selected':''}>${r}</option>`).join('')}
             </select>`
           :`<span class="pill ${(u.sales_role==='admin'||u.sales_role==='manager')?'pa':'pt'}">${u.sales_role||'view'}</span>`}</td>
         <td><span class="pill pgr" style="font-size:9px">${u.role||'viewer'}</span></td>
         <td style="font-size:11px">${u.territory||'All'}</td>
-        <td><span class="pill ${u.is_active!==false?'pg':'pr'}">${u.is_active!==false?'Active':'Inactive'}</span></td>
-        <td>${can('manage_users')
+        <td><span class="pill ${isPending?'pa':u.is_active!==false?'pg':'pr'}">${isPending?'Invited':u.is_active!==false?'Active':'Inactive'}</span></td>
+        <td>${(!isPending&&can('manage_users'))
           ?`<button class="btn btn-o" style="font-size:9px;padding:2px 8px" onclick="toggleUserActive('${u.id}',${u.is_active!==false})">${u.is_active!==false?'Deactivate':'Activate'}</button>`
           :'--'}</td>
-      </tr>`).join('')}</tbody></table>`;
+      </tr>`;}).join('')}</tbody></table>`;
     makeSortable('users_dt');
   });
 }
 
 async function changeUserRole(userId,newRole){
-  if(!can('manage_users')){alert('Admin access required.');return;}
+  if(!can('manage_users')){toast('Admin access required','err');return;}
   const sb=getSB();if(!sb){toast('Supabase required','err');return;}
   try{
     await sb.from('profiles').update({sales_role:newRole,updated_at:new Date().toISOString()}).eq('id',userId);
-    const u=PLATFORM_USERS.find(x=>x.id===userId);if(u)u.sales_role=newRole;
+    const u=PLATFORM_USERS.find(x=>x.id===userId);
+    const oldRole=u?.sales_role||'unknown';
+    if(u)u.sales_role=newRole;
+    await writeAudit('USER_ROLE_CHANGE',{user_id:userId,user_name:u?.name||u?.email||userId,from_role:oldRole,to_role:newRole});
     toast('Role updated ✓','ok');renderAdm();
   }catch(e){toast('Failed: '+e.message,'err');}
 }
 
 async function toggleUserActive(userId,currently){
-  if(!can('manage_users')){alert('Admin access required.');return;}
+  if(!can('manage_users')){toast('Admin access required','err');return;}
   const sb=getSB();if(!sb){toast('Supabase required','err');return;}
   try{
     await sb.from('profiles').update({is_active:!currently,updated_at:new Date().toISOString()}).eq('id',userId);
     const u=PLATFORM_USERS.find(x=>x.id===userId);if(u)u.is_active=!currently;
+    await writeAudit(currently?'USER_DEACTIVATE':'USER_ACTIVATE',{user_id:userId,user_name:u?.name||u?.email||userId});
     toast(`User ${!currently?'activated':'deactivated'}`,'ok');renderAdm();
   }catch(e){toast('Failed: '+e.message,'err');}
 }
 
 function showInviteUser(){
-  if(!can('invite_user')){alert('Admin access required to invite users.');return;}
-  openModal('Invite New User',`
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+  if(!can('invite_user')){toast('Admin access required to invite users','err');return;}
+  const platformUrl=window.location.href.split('?')[0];
+  openModal('Add New User',`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
       <div class="lf"><label>Full Name</label><input class="si" id="inv_name" placeholder="Jane Smith"/></div>
       <div class="lf"><label>Email</label><input class="si" id="inv_email" type="email" placeholder="jane@jps.com"/></div>
-      <div class="lf"><label>Role</label>
+      <div class="lf"><label>Intended Role</label>
         <select class="sel" style="width:100%" id="inv_role">
           <option value="rep">Sales Rep</option><option value="manager">Manager</option>
           <option value="view">View Only</option><option value="admin">Admin</option>
@@ -5499,25 +5559,41 @@ function showInviteUser(){
         </select>
       </div>
     </div>
-    <div style="font-size:10px;color:var(--teal);margin-top:10px;padding:8px;background:rgba(0,194,168,.07);border-radius:6px">
-      An invitation email will be sent via Supabase Auth. The user sets their own password on first sign-in.
-    </div>`,
+    <div style="background:rgba(0,194,168,.07);border:1px solid rgba(0,194,168,.25);border-radius:8px;padding:10px;margin-bottom:10px">
+      <div style="font-size:10px;font-weight:700;color:var(--teal);margin-bottom:6px">📋 How to add a user</div>
+      <div style="font-size:10px;color:var(--text2);line-height:1.7">
+        1. Fill in the name and email above, then click <strong>Save</strong>.<br>
+        2. Share the platform URL with the user:<br>
+        <div style="display:flex;align-items:center;gap:6px;margin:5px 0">
+          <code style="font-size:9px;background:var(--navy3);padding:4px 7px;border-radius:4px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="inv_url">${platformUrl}</code>
+          <button class="btn btn-t" style="font-size:9px;padding:3px 9px;white-space:nowrap" onclick="navigator.clipboard.writeText('${platformUrl}').then(()=>toast('URL copied ✓','ok'))">Copy URL</button>
+        </div>
+        3. They click <strong>"First time? Register →"</strong> and sign up with the email above.<br>
+        4. Come back to <strong>Admin → Users</strong> and set their role to <strong id="inv_role_preview">Sales Rep</strong>.
+      </div>
+    </div>
+    <div style="font-size:9px;color:var(--text3)">💡 Tip: You can also send invites directly from your <a href="https://supabase.com/dashboard" target="_blank" style="color:var(--teal)">Supabase Dashboard</a> → Authentication → Users → Invite User.</div>`,
   async()=>{
     const name=(document.getElementById('inv_name')?.value||'').trim();
     const email=(document.getElementById('inv_email')?.value||'').trim();
     const role=document.getElementById('inv_role')?.value||'rep';
-    const territory=document.getElementById('inv_territory')?.value||'All';
+    const roleLabels={admin:'Admin',manager:'Manager',rep:'Sales Rep',view:'View Only'};
     if(!name||!email){toast('Name and email required','err');return;}
-    const sb=getSB();
-    if(!sb){toast('Supabase required to send invitations','err');closeModal();return;}
-    try{
-      // Insert profile — auth user created when they accept the invite
-      await sb.from('profiles').insert({name,email,sales_role:role,territory,is_active:true,created_at:new Date().toISOString()});
-      PLATFORM_USERS.push({name,email,sales_role:role,territory,is_active:true});
-      toast(`${name} added. Send them the platform URL and their email to sign up.`,'ok');
-      closeModal();renderAdm();
-    }catch(e){toast('Failed: '+e.message,'err');}
+    // Store as a pending invite note (no auth user yet — FK prevents profile insert without auth.users row)
+    // Record is kept in memory so admin can reference it; role set after user self-registers
+    PLATFORM_USERS.push({id:'pending_'+Date.now(),name,email,sales_role:role,territory:document.getElementById('inv_territory')?.value||'All',is_active:false,_pending:true});
+    toast(`Instructions ready — share the platform URL with ${name} (${email}). After they register, set their role to ${roleLabels[role]||role}.`,'ok');
+    closeModal();renderAdm();
   });
+  // Wire role label preview
+  setTimeout(()=>{
+    const sel=document.getElementById('inv_role');
+    const prev=document.getElementById('inv_role_preview');
+    if(sel&&prev){
+      const labels={admin:'Admin',manager:'Manager',rep:'Sales Rep',view:'View Only'};
+      sel.onchange=()=>{prev.textContent=labels[sel.value]||sel.value;};
+    }
+  },50);
 }
 
 /* ── Period close ── */
@@ -5559,7 +5635,7 @@ function maybeShowLockBanner(sectionId){
 }
 
 async function lockPeriodConfirm(year,month){
-  if(!can('lock_period')){alert('Admin access required.');return;}
+  if(!can('lock_period')){toast('Admin access required','err');return;}
   const mns=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   openModal(`Lock ${mns[month-1]} ${year}`,`
     <div style="color:var(--text2);font-size:12px;margin-bottom:12px">This will make <strong>${mns[month-1]} ${year}</strong> read-only. All saves will be blocked for this period.</div>
@@ -5572,6 +5648,7 @@ async function lockPeriodConfirm(year,month){
       await sb.from('jps_period_locks').upsert(lock,{onConflict:'year,month'});
       PERIOD_LOCKS=PERIOD_LOCKS.filter(l=>!(Number(l.year)===year&&Number(l.month)===month));
       PERIOD_LOCKS.push(lock);
+      await writeAudit('PERIOD_LOCK',{year,month,locked_by:lock.locked_by,notes:lock.notes||''});
       toast(`${mns[month-1]} ${year} locked ✓`,'ok');closeModal();renderPeriodClose();
       renderSection(document.querySelector('.sec.on')?.id);
     }catch(e){toast('Lock failed: '+e.message,'err');}
@@ -5579,13 +5656,14 @@ async function lockPeriodConfirm(year,month){
 }
 
 async function unlockPeriodPrompt(year,month){
-  if(!can('unlock_period')){alert('Admin access required.');return;}
+  if(!can('unlock_period')){toast('Admin access required','err');return;}
   const mns=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   if(!confirm(`Unlock ${mns[month-1]} ${year}? This re-opens the period for editing.`))return;
   const sb=getSB();if(!sb){toast('Supabase required','err');return;}
   try{
     await sb.from('jps_period_locks').delete().eq('year',year).eq('month',month);
     PERIOD_LOCKS=PERIOD_LOCKS.filter(l=>!(Number(l.year)===year&&Number(l.month)===month));
+    await writeAudit('PERIOD_UNLOCK',{year,month,unlocked_by:CU?.email||CU?.name||'Unknown'});
     toast(`${mns[month-1]} ${year} unlocked`,'ok');renderPeriodClose();
     renderSection(document.querySelector('.sec.on')?.id);
   }catch(e){toast('Unlock failed: '+e.message,'err');}
@@ -5685,13 +5763,11 @@ alter table public.profiles add column if not exists updated_at timestamptz defa
 -- Enable RLS (idempotent)
 alter table public.profiles enable row level security;
 
--- Policies (drop first if they already exist to avoid conflicts)
-drop policy if exists "Users can view all profiles"                 on public.profiles;
-drop policy if exists "Users can update own profile"                on public.profiles;
-drop policy if exists "Admins can insert profiles"                  on public.profiles;
-drop policy if exists "Admins can update profiles"                  on public.profiles;
-drop policy if exists "Admins can update any profile"               on public.profiles;
-drop policy if exists "Authenticated users can view all profiles"   on public.profiles;
+-- Drop ALL existing policies on profiles (dynamic — safe to re-run regardless of names)
+do $$ declare r record; begin
+  for r in select policyname from pg_policies where schemaname='public' and tablename='profiles'
+  loop execute format('drop policy if exists %I on public.profiles', r.policyname); end loop;
+end $$;
 
 create policy "Authenticated users can view all profiles"
   on public.profiles for select using (auth.role() = 'authenticated');
@@ -5719,8 +5795,7 @@ create table if not exists public.jps_industries (
   created_at timestamptz default now()
 );
 alter table public.jps_industries enable row level security;
-drop policy if exists "Authenticated users can read industries" on public.jps_industries;
-drop policy if exists "Managers can write industries"          on public.jps_industries;
+do $$ declare r record; begin for r in select policyname from pg_policies where schemaname='public' and tablename='jps_industries' loop execute format('drop policy if exists %I on public.jps_industries', r.policyname); end loop; end $$;
 create policy "Authenticated users can read industries"
   on public.jps_industries for select using (auth.role()='authenticated');
 create policy "Managers can write industries"
@@ -5735,8 +5810,7 @@ create table if not exists public.jps_kam (
   created_at timestamptz default now()
 );
 alter table public.jps_kam enable row level security;
-drop policy if exists "Authenticated users can read KAM" on public.jps_kam;
-drop policy if exists "Admins can write KAM"             on public.jps_kam;
+do $$ declare r record; begin for r in select policyname from pg_policies where schemaname='public' and tablename='jps_kam' loop execute format('drop policy if exists %I on public.jps_kam', r.policyname); end loop; end $$;
 create policy "Authenticated users can read KAM"
   on public.jps_kam for select using (auth.role()='authenticated');
 create policy "Admins can write KAM"
@@ -5759,8 +5833,7 @@ create table if not exists public.jps_account_master (
   updated_at   timestamptz default now()
 );
 alter table public.jps_account_master enable row level security;
-drop policy if exists "Authenticated users can read account master" on public.jps_account_master;
-drop policy if exists "Managers can write account master"           on public.jps_account_master;
+do $$ declare r record; begin for r in select policyname from pg_policies where schemaname='public' and tablename='jps_account_master' loop execute format('drop policy if exists %I on public.jps_account_master', r.policyname); end loop; end $$;
 create policy "Authenticated users can read account master"
   on public.jps_account_master for select using (auth.role()='authenticated');
 create policy "Managers can write account master"
@@ -5791,8 +5864,7 @@ create table if not exists public.jps_actuals (
   unique (year, month, jps_ac, consumption_bucket)
 );
 alter table public.jps_actuals enable row level security;
-drop policy if exists "Authenticated users can read actuals" on public.jps_actuals;
-drop policy if exists "Managers can write actuals"           on public.jps_actuals;
+do $$ declare r record; begin for r in select policyname from pg_policies where schemaname='public' and tablename='jps_actuals' loop execute format('drop policy if exists %I on public.jps_actuals', r.policyname); end loop; end $$;
 create policy "Authenticated users can read actuals"
   on public.jps_actuals for select using (auth.role()='authenticated');
 create policy "Managers can write actuals"
@@ -5816,8 +5888,7 @@ create table if not exists public.jps_commercial_budget (
   unique (year, month, jps_ac)
 );
 alter table public.jps_commercial_budget enable row level security;
-drop policy if exists "Authenticated users can read comm budget" on public.jps_commercial_budget;
-drop policy if exists "Managers can write comm budget"           on public.jps_commercial_budget;
+do $$ declare r record; begin for r in select policyname from pg_policies where schemaname='public' and tablename='jps_commercial_budget' loop execute format('drop policy if exists %I on public.jps_commercial_budget', r.policyname); end loop; end $$;
 create policy "Authenticated users can read comm budget"
   on public.jps_commercial_budget for select using (auth.role()='authenticated');
 create policy "Managers can write comm budget"
@@ -5839,8 +5910,7 @@ create table if not exists public.jps_residential_budget (
   unique (year, month, rate_class, parish, consumption_bucket)
 );
 alter table public.jps_residential_budget enable row level security;
-drop policy if exists "Authenticated users can read res budget" on public.jps_residential_budget;
-drop policy if exists "Managers can write res budget"           on public.jps_residential_budget;
+do $$ declare r record; begin for r in select policyname from pg_policies where schemaname='public' and tablename='jps_residential_budget' loop execute format('drop policy if exists %I on public.jps_residential_budget', r.policyname); end loop; end $$;
 create policy "Authenticated users can read res budget"
   on public.jps_residential_budget for select using (auth.role()='authenticated');
 create policy "Managers can write res budget"
@@ -5860,10 +5930,7 @@ create table if not exists public.jps_period_locks (
   primary key (year, month)
 );
 alter table public.jps_period_locks enable row level security;
-drop policy if exists "All authenticated users can view locks" on public.jps_period_locks;
-drop policy if exists "Admins can manage locks"               on public.jps_period_locks;
-drop policy if exists "Authenticated users can view locks"    on public.jps_period_locks;
-drop policy if exists "Sales admins can manage locks"         on public.jps_period_locks;
+do $$ declare r record; begin for r in select policyname from pg_policies where schemaname='public' and tablename='jps_period_locks' loop execute format('drop policy if exists %I on public.jps_period_locks', r.policyname); end loop; end $$;
 create policy "Authenticated users can view locks"
   on public.jps_period_locks for select using (auth.role() = 'authenticated');
 create policy "Sales admins can manage locks"
@@ -5888,8 +5955,7 @@ create table if not exists public.net_gen_historical (
   unique (year, month, rate_class)
 );
 alter table public.net_gen_historical enable row level security;
-drop policy if exists "Authenticated users can read net gen" on public.net_gen_historical;
-drop policy if exists "Managers can write net gen"           on public.net_gen_historical;
+do $$ declare r record; begin for r in select policyname from pg_policies where schemaname='public' and tablename='net_gen_historical' loop execute format('drop policy if exists %I on public.net_gen_historical', r.policyname); end loop; end $$;
 create policy "Authenticated users can read net gen"
   on public.net_gen_historical for select using (auth.role() = 'authenticated');
 create policy "Managers can write net gen"
@@ -5908,8 +5974,7 @@ create table if not exists public.jps_net_billers (
   unique (year, month, rate_class)
 );
 alter table public.jps_net_billers enable row level security;
-drop policy if exists "Authenticated users can read net billers" on public.jps_net_billers;
-drop policy if exists "Managers can write net billers"           on public.jps_net_billers;
+do $$ declare r record; begin for r in select policyname from pg_policies where schemaname='public' and tablename='jps_net_billers' loop execute format('drop policy if exists %I on public.jps_net_billers', r.policyname); end loop; end $$;
 create policy "Authenticated users can read net billers"
   on public.jps_net_billers for select using (auth.role() = 'authenticated');
 create policy "Managers can write net billers"
@@ -5931,8 +5996,7 @@ create table if not exists public.jps_ev_accounts (
   unique (year, month)
 );
 alter table public.jps_ev_accounts enable row level security;
-drop policy if exists "Authenticated users can read EV data" on public.jps_ev_accounts;
-drop policy if exists "Managers can write EV data"           on public.jps_ev_accounts;
+do $$ declare r record; begin for r in select policyname from pg_policies where schemaname='public' and tablename='jps_ev_accounts' loop execute format('drop policy if exists %I on public.jps_ev_accounts', r.policyname); end loop; end $$;
 create policy "Authenticated users can read EV data"
   on public.jps_ev_accounts for select using (auth.role() = 'authenticated');
 create policy "Managers can write EV data"
@@ -5956,8 +6020,10 @@ create table if not exists public.jps_user_notes (
   unique (acct_num)
 );
 alter table public.jps_user_notes enable row level security;
-drop policy if exists "Authenticated users can read user notes" on public.jps_user_notes;
-drop policy if exists "Reps can write user notes"               on public.jps_user_notes;
+do $$ declare r record; begin
+  for r in select policyname from pg_policies where schemaname='public' and tablename='jps_user_notes'
+  loop execute format('drop policy if exists %I on public.jps_user_notes', r.policyname); end loop;
+end $$;
 create policy "Authenticated users can read user notes"
   on public.jps_user_notes for select using (auth.role()='authenticated');
 create policy "Reps can write user notes"
@@ -5975,8 +6041,10 @@ create table if not exists public.jps_exec_narratives (
   unique (year, month)
 );
 alter table public.jps_exec_narratives enable row level security;
-drop policy if exists "Authenticated users can read exec narratives" on public.jps_exec_narratives;
-drop policy if exists "Managers can write exec narratives"           on public.jps_exec_narratives;
+do $$ declare r record; begin
+  for r in select policyname from pg_policies where schemaname='public' and tablename='jps_exec_narratives'
+  loop execute format('drop policy if exists %I on public.jps_exec_narratives', r.policyname); end loop;
+end $$;
 create policy "Authenticated users can read exec narratives"
   on public.jps_exec_narratives for select using (auth.role()='authenticated');
 create policy "Managers can write exec narratives"
@@ -5995,8 +6063,10 @@ create table if not exists public.jps_vb_drivers (
   created_at timestamptz default now()
 );
 alter table public.jps_vb_drivers enable row level security;
-drop policy if exists "Authenticated users can read vb drivers" on public.jps_vb_drivers;
-drop policy if exists "Managers can write vb drivers"           on public.jps_vb_drivers;
+do $$ declare r record; begin
+  for r in select policyname from pg_policies where schemaname='public' and tablename='jps_vb_drivers'
+  loop execute format('drop policy if exists %I on public.jps_vb_drivers', r.policyname); end loop;
+end $$;
 create policy "Authenticated users can read vb drivers"
   on public.jps_vb_drivers for select using (auth.role()='authenticated');
 create policy "Managers can write vb drivers"
@@ -6017,8 +6087,10 @@ create table if not exists public.jps_pivot_commentary (
   unique (period, acct_num)
 );
 alter table public.jps_pivot_commentary enable row level security;
-drop policy if exists "Authenticated users can read pivot commentary" on public.jps_pivot_commentary;
-drop policy if exists "Reps can write pivot commentary"               on public.jps_pivot_commentary;
+do $$ declare r record; begin
+  for r in select policyname from pg_policies where schemaname='public' and tablename='jps_pivot_commentary'
+  loop execute format('drop policy if exists %I on public.jps_pivot_commentary', r.policyname); end loop;
+end $$;
 create policy "Authenticated users can read pivot commentary"
   on public.jps_pivot_commentary for select using (auth.role()='authenticated');
 create policy "Reps can write pivot commentary"
@@ -6038,8 +6110,10 @@ create table if not exists public.jps_def_actions (
   unique (acct_num)
 );
 alter table public.jps_def_actions enable row level security;
-drop policy if exists "Authenticated users can read def actions" on public.jps_def_actions;
-drop policy if exists "Reps can write def actions"               on public.jps_def_actions;
+do $$ declare r record; begin
+  for r in select policyname from pg_policies where schemaname='public' and tablename='jps_def_actions'
+  loop execute format('drop policy if exists %I on public.jps_def_actions', r.policyname); end loop;
+end $$;
 create policy "Authenticated users can read def actions"
   on public.jps_def_actions for select using (auth.role()='authenticated');
 create policy "Reps can write def actions"
@@ -6066,8 +6140,10 @@ create table if not exists public.jps_ro_register (
   unique (num)
 );
 alter table public.jps_ro_register enable row level security;
-drop policy if exists "Authenticated users can read RO register" on public.jps_ro_register;
-drop policy if exists "Managers can write RO register"           on public.jps_ro_register;
+do $$ declare r record; begin
+  for r in select policyname from pg_policies where schemaname='public' and tablename='jps_ro_register'
+  loop execute format('drop policy if exists %I on public.jps_ro_register', r.policyname); end loop;
+end $$;
 create policy "Authenticated users can read RO register"
   on public.jps_ro_register for select using (auth.role()='authenticated');
 create policy "Managers can write RO register"
@@ -6087,8 +6163,10 @@ create table if not exists public.jps_notes (
   unique (section, period)
 );
 alter table public.jps_notes enable row level security;
-drop policy if exists "Authenticated users can read notes" on public.jps_notes;
-drop policy if exists "Authenticated users can write notes" on public.jps_notes;
+do $$ declare r record; begin
+  for r in select policyname from pg_policies where schemaname='public' and tablename='jps_notes'
+  loop execute format('drop policy if exists %I on public.jps_notes', r.policyname); end loop;
+end $$;
 create policy "Authenticated users can read notes"
   on public.jps_notes for select using (auth.role()='authenticated');
 create policy "Authenticated users can write notes"
@@ -6142,6 +6220,40 @@ function getSB(){
   return _sbClient;
 }
 
+/* ── Audit Trail ───────────────────────────────────────────────────────── */
+async function writeAudit(action, details={}){
+  try{
+    const sb=getSB(); if(!sb) return;
+    const userName = CU?.name || CU?.email || 'Unknown';
+    await sb.from('audit_log').insert({
+      user_name: userName,
+      action,
+      details,
+      created_at: new Date().toISOString()
+    });
+  }catch(e){ console.warn('Audit log write failed:',e.message); }
+}
+
+async function renderAuditLog(){
+  const el=document.getElementById('adm_audit_tbl'); if(!el) return;
+  el.innerHTML='<div style="color:var(--text3);font-size:12px;padding:16px">Loading…</div>';
+  try{
+    const sb=getSB(); if(!sb){el.innerHTML='<div style="color:var(--red);padding:16px">Not connected</div>';return;}
+    const{data,error}=await sb.from('audit_log').select('*').order('created_at',{ascending:false}).limit(200);
+    if(error) throw error;
+    if(!data||!data.length){el.innerHTML='<div style="color:var(--text3);font-size:12px;padding:16px">No audit entries yet.</div>';return;}
+    const fmt=ts=>{try{return new Date(ts).toLocaleString('en-JM',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});}catch{return ts;}};
+    const actionColor={UPLOAD_DATA:'var(--teal)',DELETE_DATA:'var(--red)',PERIOD_LOCK:'var(--blue)',PERIOD_UNLOCK:'var(--yellow)',KAM_ASSIGN:'var(--green)',BULK_KAM_ASSIGN:'var(--green)',USER_ROLE_CHANGE:'var(--purple)',USER_ACTIVATE:'var(--green)',USER_DEACTIVATE:'var(--red)',AUTO_ALLOCATION:'var(--text3)'};
+    el.innerHTML=`<table class="dt"><thead><tr><th>Date/Time</th><th>User</th><th>Action</th><th>Details</th></tr></thead><tbody>`+
+      data.map(r=>{
+        const det=typeof r.details==='object'?Object.entries(r.details).map(([k,v])=>`<span style="color:var(--text3)">${k}:</span> ${v}`).join(' &nbsp;·&nbsp; '):String(r.details||'');
+        const col=actionColor[r.action]||'var(--text2)';
+        return `<tr><td style="font-size:10px;white-space:nowrap;color:var(--text3)">${fmt(r.created_at)}</td><td style="font-size:11px">${r.user_name||''}</td><td><span style="font-size:10px;font-weight:600;color:${col};background:${col}22;padding:2px 7px;border-radius:10px">${r.action}</span></td><td style="font-size:10px;color:var(--text2)">${det}</td></tr>`;
+      }).join('')+
+      '</tbody></table>';
+  }catch(e){el.innerHTML=`<div style="color:var(--red);padding:16px">Error: ${e.message}</div>`;}
+}
+
 function updateSbStatus(state){
   const el=document.getElementById('sbStatus');
   if(!el)return;
@@ -6178,7 +6290,7 @@ async function sbTable(tbl,opts={}){
   let q=sb.from(tbl).select(opts.cols||'*').limit(opts.limit||10000);
   if(opts.order)q=q.order(opts.order,{ascending:true});
   const{data,error}=await q;
-  return(!error&&data&&data.length)?data:null;
+  return(!error&&Array.isArray(data))?data:null;
 }
 
 async function sbStorage(bucket,file){
@@ -6191,7 +6303,20 @@ async function sbStorage(bucket,file){
 
 function buildDashboardData(){
   if(!sbActuals.length)return;
+
+  // Normalise ONCE — reused for all downstream calculations (was called twice before)
   const rows=fcNormActuals(sbActuals);
+
+  // ── Pre-build O(1) lookup: rcIdx[rc][year*100+month] = total kWh ──
+  // Replaces 28 separate .filter() scans over 50k rows in SCORECARD_DATA loop
+  const rcIdx={};
+  rows.forEach(r=>{
+    if(!rcIdx[r.rc])rcIdx[r.rc]={};
+    const key=r.year*100+r.month;
+    rcIdx[r.rc][key]=(rcIdx[r.rc][key]||0)+r.kwh;
+  });
+  // Helper: sum kWh for rc+year across months 1..toMonth using the index (O(toMonth) not O(n))
+  const _rcSum=(rc,year,fromM,toM)=>{const m=rcIdx[rc]||{};let s=0;for(let i=fromM;i<=toM;i++)s+=(m[year*100+i]||0);return s;};
 
   // CUSTOMERS — one row per account
   const custMap={};
@@ -6214,21 +6339,20 @@ function buildDashboardData(){
   }
   CUSTOMERS=Object.values(custMap).filter(c=>c.y25>0||c.y26>0).sort((a,b)=>b.y25-a.y25);
 
-  // PARISHES — grouped by parish, 2026 vs 2025, with commercial split
-  const COMM_RCS=['RT40','RT50','RT60','RT70','BU'];
+  // PARISHES — single pass (was 2 passes before)
+  const COMM_RCS_SET=new Set(['RT40','RT50','RT60','RT70','BU']);
   const parMap={};
   rows.forEach(r=>{
     const p=r.parish||'Unknown';
     if(!parMap[p])parMap[p]={name:p,curr:0,prev:0,rc:0,rp:0};
-    const gwh=r.kwh/1e6;
-    if(r.year===2026){parMap[p].curr+=gwh;if(COMM_RCS.includes(r.rc))parMap[p].rc+=gwh;}
-    if(r.year===2025){parMap[p].prev+=gwh;if(COMM_RCS.includes(r.rc))parMap[p].rp+=gwh;}
+    const gwh=r.kwh/1e6,isComm=COMM_RCS_SET.has(r.rc);
+    if(r.year===2026){parMap[p].curr+=gwh;if(isComm)parMap[p].rc+=gwh;}
+    if(r.year===2025){parMap[p].prev+=gwh;if(isComm)parMap[p].rp+=gwh;}
   });
   PARISHES=Object.values(parMap).sort((a,b)=>b.curr-a.curr);
 
-  // INDUSTRIES — grouped by industry segment
-  const indRcMap={};
-  const indMap={};
+  // INDUSTRIES — single pass
+  const indRcMap={},indMap={};
   rows.forEach(r=>{
     const i=r.industry||'Other';
     if(!indMap[i]){indMap[i]={name:i,y25:0,y26:0,note:''};indRcMap[i]=new Set();}
@@ -6240,43 +6364,38 @@ function buildDashboardData(){
   Object.values(indMap).forEach(i=>{i.rc=[...indRcMap[i.name]].join('/');});
   INDUSTRIES=Object.values(indMap).filter(i=>i.y25>0||i.y26>0).sort((a,b)=>b.y25-a.y25);
 
-  // Refresh FC_SEGS base values from actual annual data
+  // FC_SEGS base values
   FC_SEGS.forEach(s=>{s.base=CUSTOMERS.filter(c=>c.rate===s.seg).reduce((sum,c)=>sum+c.y26,0)||0;});
 
-  // Enrich CUSTOMERS with KAM and industry from their respective lookup tables
-  if(sbKAM.length){
-    const kamMap={};
-    sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
-    CUSTOMERS.forEach(c=>{if(kamMap[String(c.num)])c.kam=kamMap[String(c.num)];});
-  }
-  if(sbIndustries.length){
-    const indMap={};
-    sbIndustries.forEach(i=>indMap[String(i.jps_ac||'').trim()]=i.industry||'');
-    CUSTOMERS.forEach(c=>{if(indMap[String(c.num)])c.industry=indMap[String(c.num)];});
-  }
+  // Enrich CUSTOMERS with KAM + industry lookups
+  if(sbKAM.length){const m={};sbKAM.forEach(k=>m[String(k.jps_ac||'').trim()]=k.kam||'');CUSTOMERS.forEach(c=>{if(m[String(c.num)])c.kam=m[String(c.num)];});}
+  if(sbIndustries.length){const m={};sbIndustries.forEach(i=>m[String(i.jps_ac||'').trim()]=i.industry||'');CUSTOMERS.forEach(c=>{if(m[String(c.num)])c.industry=m[String(c.num)];});}
 
+  // ── SCORECARD_DATA — now O(1) per cell via pre-built rcIdx ──
+  // Previously: 28 .filter() calls over 50k rows = ~1.4M comparisons
+  // Now: index lookups — negligible CPU
   const RES_RCS=['RT10','RT20'];
-  const normA=fcNormActuals(sbActuals);
   const mIdx2=curMonth-1;
+  // Pre-build residential budget index too
+  const resBudIdx={};
+  if(sbResBudget.length){
+    sbResBudget.forEach(b=>{
+      const rc=b.rate_class,y=Number(b.year),m=Number(b.month),v=Number(b.kwh_budget)||0;
+      if(!resBudIdx[rc])resBudIdx[rc]={};
+      resBudIdx[rc][y*100+m]=(resBudIdx[rc][y*100+m]||0)+v;
+    });
+  }
+  const _rbSum=(rc,year,fromM,toM)=>{const m=resBudIdx[rc]||{};let s=0;for(let i=fromM;i<=toM;i++)s+=(m[year*100+i]||0);return s;};
 
-  // Refresh SCORECARD_DATA — commercial uses account-level budget,
-  // residential uses aggregate jps_residential_budget table
   SCORECARD_DATA.forEach(r=>{
     if(RES_RCS.includes(r.seg)){
-      // ── Residential: actuals from sbActuals aggregated by rate class ──
-      const actRows=normA.filter(a=>a.rc===r.seg);
-      r.mtd_act=actRows.filter(a=>a.year===curYear&&a.month===curMonth).reduce((s,a)=>s+a.kwh,0)/1e6;
-      r.ytd_act=actRows.filter(a=>a.year===curYear&&a.month<=curMonth).reduce((s,a)=>s+a.kwh,0)/1e6;
-      r.mtd_ly =actRows.filter(a=>a.year===curYear-1&&a.month===curMonth).reduce((s,a)=>s+a.kwh,0)/1e6;
-      r.ytd_ly =actRows.filter(a=>a.year===curYear-1&&a.month<=curMonth).reduce((s,a)=>s+a.kwh,0)/1e6;
-      // Budget from jps_residential_budget
-      if(sbResBudget.length){
-        const rb=sbResBudget.filter(b=>b.rate_class===r.seg&&Number(b.year)===curYear);
-        r.mtd_bud=rb.filter(b=>Number(b.month)===curMonth).reduce((s,b)=>s+(Number(b.kwh_budget)||0),0)/1e6;
-        r.ytd_bud=rb.filter(b=>Number(b.month)<=curMonth).reduce((s,b)=>s+(Number(b.kwh_budget)||0),0)/1e6;
-      }
+      r.mtd_act=_rcSum(r.seg,curYear,curMonth,curMonth)/1e6;
+      r.ytd_act=_rcSum(r.seg,curYear,1,curMonth)/1e6;
+      r.mtd_ly =_rcSum(r.seg,curYear-1,curMonth,curMonth)/1e6;
+      r.ytd_ly =_rcSum(r.seg,curYear-1,1,curMonth)/1e6;
+      r.mtd_bud=_rbSum(r.seg,curYear,curMonth,curMonth)/1e6;
+      r.ytd_bud=_rbSum(r.seg,curYear,1,curMonth)/1e6;
     } else {
-      // ── Commercial: account-level from CUSTOMERS ──
       const custs=CUSTOMERS.filter(c=>c.rate===r.seg);
       r.mtd_act=custs.reduce((s,c)=>s+(c.m[mIdx2]||0),0);
       r.mtd_bud=custs.reduce((s,c)=>s+(c.bud/12),0);
@@ -6290,63 +6409,71 @@ function buildDashboardData(){
   });
 }
 
+let _sbSyncing=false; // mutex — prevents double-sync
+
 async function syncSupabase(silent=false){
+  if(_sbSyncing){return;} // already in progress — skip
+  _sbSyncing=true;
   updateSbStatus('syncing');
   const sb=getSB();
   if(!sb){
     updateSbStatus('offline');
-    if(!silent)alert('Supabase SDK not ready. Check your connection.');
+    if(!silent)toast('Supabase SDK not ready — check your connection','err');
     return;
   }
   const log=[];
   try{
-    // ── Reference tables (load first — actuals join against these) ──
-    const indData=await sbTable('jps_industries',{});
+    // ── Fire ALL queries in parallel — massive speedup vs sequential awaits ──
+    const [
+      indData,kamData,amData,actData,
+      jbData,cbData,resBudData,
+      ng,nb,ev,pl
+    ] = await Promise.all([
+      sbTable('jps_industries',{}),
+      sbTable('jps_kam',{}),
+      sbTable('jps_account_master',{limit:50000}),
+      sbTable('jps_actuals',{limit:50000}),
+      sbTable('jps_budget',{limit:20000}),
+      sbTable('jps_commercial_budget',{limit:20000}),
+      sbTable('jps_residential_budget',{limit:5000}),
+      sbTable('net_gen_historical',{order:'year'}),
+      sbTable('jps_net_billers',{order:'year'}),
+      sbTable('jps_ev_accounts',{order:'year'}),
+      sbTable('jps_period_locks',{})
+    ]);
+
+    // ── Process results ────────────────────────────────────
     if(indData){sbIndustries=indData;log.push(`Industries: jps_industries (${indData.length} rows)`);}
     else log.push('Industries: ⚠ jps_industries not found — run schema SQL');
 
-    const kamData=await sbTable('jps_kam',{});
     if(kamData){sbKAM=kamData;log.push(`KAM: jps_kam (${kamData.length} rows)`);}
     else log.push('KAM: ⚠ jps_kam not found — run schema SQL');
 
-    const amData=await sbTable('jps_account_master',{limit:50000});
     if(amData){sbAccountMaster=amData;log.push(`Account Master: jps_account_master (${amData.length} accounts)`);}
     else log.push('Account Master: ⚠ jps_account_master not found — run schema SQL');
 
-    // ── Actuals ────────────────────────────────────────────
-    const actData=await sbTable('jps_actuals',{limit:50000});
     const actOk=!!actData;
     if(actOk){sbActuals=actData;log.push(`Actuals: jps_actuals (${actData.length} rows)`);}
     else log.push('Actuals: ⚠ jps_actuals not accessible — check RLS policies');
 
-    // ── Commercial Budget ──────────────────────────────────
-    const budData=await sbTable('jps_commercial_budget',{limit:20000});
-    const budOk=!!budData;
-    if(budOk){sbBudget=budData;log.push(`Comm Budget: jps_commercial_budget (${budData.length} rows)`);}
-    else log.push('Comm Budget: ⚠ jps_commercial_budget not found — run schema SQL');
+    sbBudget=[];
+    if(jbData&&jbData.length){sbBudget=[...sbBudget,...jbData];log.push(`Budget: jps_budget (${jbData.length} rows)`);}
+    else log.push('Budget: jps_budget (0 rows — no data uploaded yet)');
+    if(cbData&&cbData.length){sbBudget=[...sbBudget,...cbData];log.push(`Comm Budget (acct-level): jps_commercial_budget (${cbData.length} rows)`);}
+    const budOk=sbBudget.length>0;
 
-    // ── Residential Budget ─────────────────────────────────
-    const resBudData=await sbTable('jps_residential_budget',{limit:5000});
     if(resBudData){sbResBudget=resBudData;log.push(`Res Budget: jps_residential_budget (${resBudData.length} rows)`);}
-    else log.push('Res Budget: ⚠ jps_residential_budget not found — run schema SQL');
+    else log.push('Res Budget: jps_residential_budget (0 rows — no data uploaded yet)');
 
-    // ── Net Generation ─────────────────────────────────────
-    const ng=await sbTable('net_gen_historical',{order:'year'});
     if(ng){sbNetGen=ng;log.push(`Net Gen: net_gen_historical (${ng.length} rows)`);}
     else log.push('Net Gen: ⚠ net_gen_historical not accessible');
 
-    // ── Net Billers ────────────────────────────────────────
-    const nb=await sbTable('jps_net_billers',{order:'year'});
     if(nb){sbNetBillers=nb;log.push(`Net Billers: jps_net_billers (${nb.length} rows)`);}
     else log.push('Net Billers: ⚠ jps_net_billers not found (create table to populate)');
 
-    // ── EV Data ───────────────────────────────────────────
-    const ev=await sbTable('jps_ev_accounts',{order:'year'});
     if(ev){sbEvData=ev;log.push(`EV Data: jps_ev_accounts (${ev.length} rows)`);}
     else log.push('EV Data: ⚠ jps_ev_accounts not found (create table to populate)');
 
-    // ── Period Locks ──────────────────────────────────────
-    const pl=await sbTable('jps_period_locks',{});
     if(pl){PERIOD_LOCKS=pl;log.push(`Period Locks: jps_period_locks (${pl.length} locked)`);}
     else log.push('Period Locks: ⚠ jps_period_locks not found (run schema SQL in Admin)');
 
@@ -6354,8 +6481,8 @@ async function syncSupabase(silent=false){
     sbConnected=anyOk;
     sbLastSync=new Date();
     S.set('sb_last_sync',sbLastSync.toLocaleString());
-    // Core tables: actuals + at least one budget. Reference tables (KAM, Industry, EV, Locks) missing = optional, not "partial"
-    const coreMissing=log.filter(l=>l.includes('⚠')&&(l.startsWith('Actuals')||l.startsWith('Comm Budget')||l.startsWith('Res Budget')));
+    // Core = actuals accessible. Budget/ref tables missing data is a warning only.
+    const coreMissing=log.filter(l=>l.includes('⚠')&&l.startsWith('Actuals'));
     if(!anyOk){updateSbStatus('offline');}
     else if(coreMissing.length){
       const el=document.getElementById('sbStatus');
@@ -6393,28 +6520,39 @@ async function syncSupabase(silent=false){
       }
     }
 
+    // Build dashboard data synchronously (now fast with index-based SCORECARD computation)
     try{buildDashboardData();}catch(be){console.error('buildDashboardData error:',be);}
     renderSidebarFilters();
     populateKamDropdowns();
 
-    // Hydrate user-generated data (notes, narratives, R&O, defection actions, etc.) from DB
+    // Hydrate user-generated data from DB
     try{await loadAllUserData();}catch(ue){console.warn('loadAllUserData error:',ue);}
 
+    // Defer chart rendering — yield to browser so UI paints first, then render charts
     leEngine=null;
     const activeId=document.querySelector('.sec.on')?.id;
-    try{
-      if(activeId==='le')renderLE();
-      if(activeId==='ng')renderNetGen();
-    }catch(re){console.error('Re-render error after sync:',re);}
+    setTimeout(()=>{
+      try{
+        renderSection(activeId||'ov');
+        if(activeId==='le')renderLE();
+        if(activeId==='ng')renderNetGen();
+      }catch(re){console.error('Re-render error after sync:',re);}
+    },0);
 
     const el=document.getElementById('adm_upload_status');
     if(el&&sbActuals.length)el.textContent=`Live · ${sbActuals.length.toLocaleString()} actuals rows`;
 
-    if(!silent)alert('Supabase sync complete\n\n'+log.join('\n'));
+    if(!silent){
+      const warn=log.filter(l=>l.includes('⚠'));
+      if(warn.length) toast('Sync complete — some tables empty:\n'+warn.join('\n'),'w');
+      else toast(`Sync complete ✓  ${sbActuals.length.toLocaleString()} actuals · ${sbBudget.length.toLocaleString()} budget rows`,'ok');
+    }
   }catch(e){
     sbConnected=false;
     updateSbStatus('offline');
-    if(!silent)alert('Supabase sync failed:\n'+e.message+'\n\nCheck Supabase URL, key, and RLS policies.');
+    if(!silent)toast('Sync failed: '+e.message,'err');
+  }finally{
+    _sbSyncing=false; // always release mutex
   }
 }
 
@@ -7536,6 +7674,43 @@ function _rtStartHeartbeat(){
 window.addEventListener('beforeunload',()=>{
   _rtBroadcast('bye',{name:CU.name});
 });
+
+/* ── App version ────────────────────────────────────────────────────── */
+const APP_VERSION = '1.0.12';
+
+// Stamp version into navbar once DOM is ready
+(function stampVersion(){
+  const stamp = () => { const el=document.getElementById('appVersion'); if(el) el.textContent='v'+APP_VERSION; };
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', stamp);
+  else stamp();
+})();
+
+// Session restore — starts data sync immediately once session is confirmed,
+// then fetches profile in parallel so UI is never stuck waiting on sequential calls
+(async function restoreSession(){
+  try{
+    const sb=getSB(); if(!sb){ updateSbStatus('offline'); return; }
+    const {data:{session}}=await sb.auth.getSession();
+    if(!session?.user){ updateSbStatus('offline'); return; }
+    const userId=session.user.id;
+    // Kick off data sync AND profile fetch at the same time — no waiting in line
+    const [syncResult, profileResult] = await Promise.allSettled([
+      syncSupabase(true),
+      sb.from('profiles').select('*').eq('id',userId).single()
+    ]);
+    const {data:profile,error}=profileResult.value||{};
+    // Only apply login if we got a real profile with a real role
+    if(error||!profile||!profile.sales_role) return;
+    // _applyLogin → initAll → syncSupabase, but mutex prevents double-sync
+    _applyLogin({
+      id:userId, email:session.user.email,
+      name:profile.name||session.user.email.split('@')[0],
+      role:profile.sales_role,
+      fpa_role:profile.role||'viewer',
+      territory:profile.territory||'All',
+    });
+  }catch(e){ console.warn('Session restore:',e.message); updateSbStatus('offline'); }
+})();
 
 </script>
 </div><!-- /app-wrap -->

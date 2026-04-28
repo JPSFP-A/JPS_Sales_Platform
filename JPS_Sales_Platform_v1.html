@@ -8,7 +8,7 @@
 <meta http-equiv="Expires" content="0"/>
 <title>JPS Sales Analytics Platform</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- XLSX loaded lazily on first upload/download — saves ~1MB on initial page load -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 :root{
@@ -383,13 +383,15 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
       <span class="tbadge tba" id="periodLabel">-- · MTD</span>
       <span class="tbadge tbr" id="kpi_ytd_yoy">-- YoY</span>
       <span class="tbadge tbt" id="dataStatus">⚡ Sample Data</span>
-      <span class="sb-badge sb-offline" id="sbStatus" onclick="syncSupabase()" title="Click to sync from Supabase">○ Offline</span>
+      <a href="https://jps-fp-a.vercel.app" target="_blank" style="font-size:10px;font-weight:600;color:var(--teal);text-decoration:none;padding:3px 8px;border:1px solid rgba(0,194,168,.3);border-radius:5px;white-space:nowrap" title="Open FP&amp;A Platform">FP&amp;A ↗</a>
+      <span class="sb-badge sb-syncing" id="sbStatus" onclick="syncSupabase()" title="Click to sync from Supabase">↻ Connecting…</span>
       <span id="appVersion" style="font-size:9px;color:var(--text3);opacity:0.6"></span>
       <div id="onlineUsersPanel" style="display:flex;align-items:center"></div>
       <div class="ua" id="uAvatar" onclick="toggleMenu()">--</div>
       <div class="umenu" id="uMenu">
         <div class="umi" id="uNameDisp">--</div>
-        <div class="umi" style="border-top:1px solid var(--border);margin-top:3px;padding-top:7px" onclick="dlTemplate()">📥 Download Template</div>
+        <div class="umi" style="border-top:1px solid var(--border);margin-top:3px;padding-top:7px" onclick="window.open('https://jps-fp-a.vercel.app','_blank')">📊 FP&amp;A Platform ↗</div>
+        <div class="umi" onclick="dlTemplate()">📥 Download Template</div>
         <div class="umi" onclick="doLogout()">🚪 Sign Out</div>
       </div>
     </div>
@@ -2745,6 +2747,8 @@ async function loadExcel(input){
   if(!file)return;
   const sb=getSB();
   if(!sb){toast('Supabase not connected — check Admin → DB Schema','err');return;}
+  // Ensure XLSX library is loaded (deferred for faster initial page load)
+  try{await loadXLSX();}catch(e){toast('Could not load Excel library: '+e.message,'err');return;}
   const mode=document.getElementById('uploadMode')?.value||'overwrite';
   const stEl=document.getElementById('adm_upload_status');
   const dsEl=document.getElementById('dataStatus');
@@ -2922,8 +2926,19 @@ async function loadExcel(input){
   reader.readAsBinaryString(file);
 }
 
+/* Lazy-load XLSX (~1MB) only when first needed — keeps initial page load fast */
+function loadXLSX(){
+  return new Promise((resolve,reject)=>{
+    if(typeof XLSX!=='undefined'){resolve();return;}
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload=resolve;s.onerror=()=>reject(new Error('Failed to load Excel library'));
+    document.head.appendChild(s);
+  });
+}
+
 function dlTemplate(){
-  if(typeof XLSX==='undefined'){toast('Excel library not loaded yet — please wait a few seconds and try again','err');return;}
+  loadXLSX().then(()=>{
   const wb=XLSX.utils.book_new();
 
   // 1. Actuals — flat dump format, same columns for commercial and residential
@@ -2984,6 +2999,8 @@ function dlTemplate(){
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...evHdr,...evSample]),'EV_Accounts');
 
   XLSX.writeFile(wb,'JPS_Data_Template.xlsx');
+  toast('Template downloaded ✓ — check your Downloads folder','ok');
+  }).catch(e=>toast('Could not load Excel library: '+e.message,'err'));
 }
 
 /* ==========================================
@@ -3018,11 +3035,12 @@ function makeSortable(tableId){
 
 function exportTableCSV(tableId,filename){
   const tbl=document.getElementById(tableId);
-  if(!tbl){alert('Table not found');return;}
+  if(!tbl){toast('Table not found','err');return;}
   const rows=[...tbl.querySelectorAll('tr')];
   const csv=rows.map(r=>[...r.querySelectorAll('th,td')].map(c=>'"'+c.textContent.trim().replace(/"/g,'""')+'"').join(',')).join('\n');
   const blob=new Blob([csv],{type:'text/csv'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename+'.csv';a.click();
+  toast(`${filename}.csv downloaded ✓`,'ok');
 }
 
 /* ==========================================
@@ -3596,7 +3614,7 @@ function saveFcVal(mkey,num,val,avg3,pyAvg){
     if(!note){
       setTimeout(()=>{
         editFcNote(num,CUSTOMERS.find(c=>c.num===num)?.name||num);
-        alert('⚠ Off-trend forecast detected. Please add an explanation note.');
+        toast('⚠ Off-trend forecast — please add an explanation note in the modal','w');
       },200);
     }
   }
@@ -3606,7 +3624,7 @@ function saveFcAll(){
   document.querySelectorAll('[id^="fci_"]').forEach(inp=>{
     if(inp.value){const parts=inp.id.split('_');saveFcVal(parts.slice(1,4).join('_'),parts[4],inp.value,inp.placeholder,'0.1');}
   });
-  alert('All forecasts saved.');
+  toast('All forecasts saved ✓','ok');
 }
 function editFcNote(num,name){
   openModal(`Forecast Note: ${name}`,`<textarea id="fcn_ta" placeholder="Explain forecast assumptions, off-trend rationale, customer intelligence...">${S.get(`fc_note_${num}`,'')}</textarea>`,
@@ -3910,6 +3928,7 @@ function exportReview(){
   txt+=`FORECAST ADJUSTMENTS:\n`;
   FC_SEGS.forEach(s=>{const a=S.get(`${mrPeriod}_fc_${s.seg}`,{val:0});if(a.val){const i=calcFcImp(s.base,a);txt+=`  ${s.lbl}: ${i.disp}\n`;}});
   const b=new Blob([txt],{type:'text/plain'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`JPS_Review_${mrPeriod}.txt`;a.click();
+  toast(`Review exported ✓ — JPS_Review_${mrPeriod}.txt`,'ok');
 }
 
 /* ==========================================
@@ -4347,7 +4366,7 @@ function addBridgeDriver() {
   const seg  = document.getElementById('vb_d_seg')?.value  || 'All';
   const cat  = document.getElementById('vb_d_cat')?.value  || 'Other known';
   const type = document.getElementById('vb_d_type')?.value || 'Temporary';
-  if(!desc || !gwh) { alert('Please enter a description and GWh impact.'); return; }
+  if(!desc || !gwh) { toast('Please enter a description and GWh impact','err'); return; }
   const drivers = getBridgeDrivers();
   drivers.push({desc, seg, gwh, cat, type});
   S.set('vb_drivers', drivers);
@@ -5476,27 +5495,29 @@ function renderAdm(){
     }
     el.innerHTML=`<table class="dt" id="users_dt">
       <thead><tr><th>Name</th><th>Email</th><th>Sales Role</th><th>FP&amp;A Role</th><th>Territory</th><th>Status</th><th>Actions</th></tr></thead>
-      <tbody>${PLATFORM_USERS.map(u=>`<tr>
-        <td style="font-weight:600">${u.name}</td>
+      <tbody>${PLATFORM_USERS.map(u=>{
+        const isPending=u._pending===true;
+        return`<tr style="${isPending?'opacity:0.6':''}">
+        <td style="font-weight:600">${u.name}${isPending?' <span style="font-size:9px;color:var(--amber)">(pending registration)</span>':''}</td>
         <td style="font-size:11px;color:var(--text3)">${u.email||'--'}</td>
-        <td>${can('manage_users')
+        <td>${(!isPending&&can('manage_users'))
           ?`<select class="sel" style="font-size:10px;padding:3px" onchange="changeUserRole('${u.id}',this.value)">
               ${['admin','manager','rep','view'].map(r=>`<option${(u.sales_role||u.role||'view')===r?' selected':''}>${r}</option>`).join('')}
             </select>`
           :`<span class="pill ${(u.sales_role==='admin'||u.sales_role==='manager')?'pa':'pt'}">${u.sales_role||'view'}</span>`}</td>
         <td><span class="pill pgr" style="font-size:9px">${u.role||'viewer'}</span></td>
         <td style="font-size:11px">${u.territory||'All'}</td>
-        <td><span class="pill ${u.is_active!==false?'pg':'pr'}">${u.is_active!==false?'Active':'Inactive'}</span></td>
-        <td>${can('manage_users')
+        <td><span class="pill ${isPending?'pa':u.is_active!==false?'pg':'pr'}">${isPending?'Invited':u.is_active!==false?'Active':'Inactive'}</span></td>
+        <td>${(!isPending&&can('manage_users'))
           ?`<button class="btn btn-o" style="font-size:9px;padding:2px 8px" onclick="toggleUserActive('${u.id}',${u.is_active!==false})">${u.is_active!==false?'Deactivate':'Activate'}</button>`
           :'--'}</td>
-      </tr>`).join('')}</tbody></table>`;
+      </tr>`;}).join('')}</tbody></table>`;
     makeSortable('users_dt');
   });
 }
 
 async function changeUserRole(userId,newRole){
-  if(!can('manage_users')){alert('Admin access required.');return;}
+  if(!can('manage_users')){toast('Admin access required','err');return;}
   const sb=getSB();if(!sb){toast('Supabase required','err');return;}
   try{
     await sb.from('profiles').update({sales_role:newRole,updated_at:new Date().toISOString()}).eq('id',userId);
@@ -5509,7 +5530,7 @@ async function changeUserRole(userId,newRole){
 }
 
 async function toggleUserActive(userId,currently){
-  if(!can('manage_users')){alert('Admin access required.');return;}
+  if(!can('manage_users')){toast('Admin access required','err');return;}
   const sb=getSB();if(!sb){toast('Supabase required','err');return;}
   try{
     await sb.from('profiles').update({is_active:!currently,updated_at:new Date().toISOString()}).eq('id',userId);
@@ -5520,12 +5541,13 @@ async function toggleUserActive(userId,currently){
 }
 
 function showInviteUser(){
-  if(!can('invite_user')){alert('Admin access required to invite users.');return;}
-  openModal('Invite New User',`
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+  if(!can('invite_user')){toast('Admin access required to invite users','err');return;}
+  const platformUrl=window.location.href.split('?')[0];
+  openModal('Add New User',`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
       <div class="lf"><label>Full Name</label><input class="si" id="inv_name" placeholder="Jane Smith"/></div>
       <div class="lf"><label>Email</label><input class="si" id="inv_email" type="email" placeholder="jane@jps.com"/></div>
-      <div class="lf"><label>Role</label>
+      <div class="lf"><label>Intended Role</label>
         <select class="sel" style="width:100%" id="inv_role">
           <option value="rep">Sales Rep</option><option value="manager">Manager</option>
           <option value="view">View Only</option><option value="admin">Admin</option>
@@ -5537,25 +5559,41 @@ function showInviteUser(){
         </select>
       </div>
     </div>
-    <div style="font-size:10px;color:var(--teal);margin-top:10px;padding:8px;background:rgba(0,194,168,.07);border-radius:6px">
-      An invitation email will be sent via Supabase Auth. The user sets their own password on first sign-in.
-    </div>`,
+    <div style="background:rgba(0,194,168,.07);border:1px solid rgba(0,194,168,.25);border-radius:8px;padding:10px;margin-bottom:10px">
+      <div style="font-size:10px;font-weight:700;color:var(--teal);margin-bottom:6px">📋 How to add a user</div>
+      <div style="font-size:10px;color:var(--text2);line-height:1.7">
+        1. Fill in the name and email above, then click <strong>Save</strong>.<br>
+        2. Share the platform URL with the user:<br>
+        <div style="display:flex;align-items:center;gap:6px;margin:5px 0">
+          <code style="font-size:9px;background:var(--navy3);padding:4px 7px;border-radius:4px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="inv_url">${platformUrl}</code>
+          <button class="btn btn-t" style="font-size:9px;padding:3px 9px;white-space:nowrap" onclick="navigator.clipboard.writeText('${platformUrl}').then(()=>toast('URL copied ✓','ok'))">Copy URL</button>
+        </div>
+        3. They click <strong>"First time? Register →"</strong> and sign up with the email above.<br>
+        4. Come back to <strong>Admin → Users</strong> and set their role to <strong id="inv_role_preview">Sales Rep</strong>.
+      </div>
+    </div>
+    <div style="font-size:9px;color:var(--text3)">💡 Tip: You can also send invites directly from your <a href="https://supabase.com/dashboard" target="_blank" style="color:var(--teal)">Supabase Dashboard</a> → Authentication → Users → Invite User.</div>`,
   async()=>{
     const name=(document.getElementById('inv_name')?.value||'').trim();
     const email=(document.getElementById('inv_email')?.value||'').trim();
     const role=document.getElementById('inv_role')?.value||'rep';
-    const territory=document.getElementById('inv_territory')?.value||'All';
+    const roleLabels={admin:'Admin',manager:'Manager',rep:'Sales Rep',view:'View Only'};
     if(!name||!email){toast('Name and email required','err');return;}
-    const sb=getSB();
-    if(!sb){toast('Supabase required to send invitations','err');closeModal();return;}
-    try{
-      // Insert profile — auth user created when they accept the invite
-      await sb.from('profiles').insert({name,email,sales_role:role,territory,is_active:true,created_at:new Date().toISOString()});
-      PLATFORM_USERS.push({name,email,sales_role:role,territory,is_active:true});
-      toast(`${name} added. Send them the platform URL and their email to sign up.`,'ok');
-      closeModal();renderAdm();
-    }catch(e){toast('Failed: '+e.message,'err');}
+    // Store as a pending invite note (no auth user yet — FK prevents profile insert without auth.users row)
+    // Record is kept in memory so admin can reference it; role set after user self-registers
+    PLATFORM_USERS.push({id:'pending_'+Date.now(),name,email,sales_role:role,territory:document.getElementById('inv_territory')?.value||'All',is_active:false,_pending:true});
+    toast(`Instructions ready — share the platform URL with ${name} (${email}). After they register, set their role to ${roleLabels[role]||role}.`,'ok');
+    closeModal();renderAdm();
   });
+  // Wire role label preview
+  setTimeout(()=>{
+    const sel=document.getElementById('inv_role');
+    const prev=document.getElementById('inv_role_preview');
+    if(sel&&prev){
+      const labels={admin:'Admin',manager:'Manager',rep:'Sales Rep',view:'View Only'};
+      sel.onchange=()=>{prev.textContent=labels[sel.value]||sel.value;};
+    }
+  },50);
 }
 
 /* ── Period close ── */
@@ -5597,7 +5635,7 @@ function maybeShowLockBanner(sectionId){
 }
 
 async function lockPeriodConfirm(year,month){
-  if(!can('lock_period')){alert('Admin access required.');return;}
+  if(!can('lock_period')){toast('Admin access required','err');return;}
   const mns=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   openModal(`Lock ${mns[month-1]} ${year}`,`
     <div style="color:var(--text2);font-size:12px;margin-bottom:12px">This will make <strong>${mns[month-1]} ${year}</strong> read-only. All saves will be blocked for this period.</div>
@@ -5618,7 +5656,7 @@ async function lockPeriodConfirm(year,month){
 }
 
 async function unlockPeriodPrompt(year,month){
-  if(!can('unlock_period')){alert('Admin access required.');return;}
+  if(!can('unlock_period')){toast('Admin access required','err');return;}
   const mns=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   if(!confirm(`Unlock ${mns[month-1]} ${year}? This re-opens the period for editing.`))return;
   const sb=getSB();if(!sb){toast('Supabase required','err');return;}
@@ -6265,7 +6303,20 @@ async function sbStorage(bucket,file){
 
 function buildDashboardData(){
   if(!sbActuals.length)return;
+
+  // Normalise ONCE — reused for all downstream calculations (was called twice before)
   const rows=fcNormActuals(sbActuals);
+
+  // ── Pre-build O(1) lookup: rcIdx[rc][year*100+month] = total kWh ──
+  // Replaces 28 separate .filter() scans over 50k rows in SCORECARD_DATA loop
+  const rcIdx={};
+  rows.forEach(r=>{
+    if(!rcIdx[r.rc])rcIdx[r.rc]={};
+    const key=r.year*100+r.month;
+    rcIdx[r.rc][key]=(rcIdx[r.rc][key]||0)+r.kwh;
+  });
+  // Helper: sum kWh for rc+year across months 1..toMonth using the index (O(toMonth) not O(n))
+  const _rcSum=(rc,year,fromM,toM)=>{const m=rcIdx[rc]||{};let s=0;for(let i=fromM;i<=toM;i++)s+=(m[year*100+i]||0);return s;};
 
   // CUSTOMERS — one row per account
   const custMap={};
@@ -6288,21 +6339,20 @@ function buildDashboardData(){
   }
   CUSTOMERS=Object.values(custMap).filter(c=>c.y25>0||c.y26>0).sort((a,b)=>b.y25-a.y25);
 
-  // PARISHES — grouped by parish, 2026 vs 2025, with commercial split
-  const COMM_RCS=['RT40','RT50','RT60','RT70','BU'];
+  // PARISHES — single pass (was 2 passes before)
+  const COMM_RCS_SET=new Set(['RT40','RT50','RT60','RT70','BU']);
   const parMap={};
   rows.forEach(r=>{
     const p=r.parish||'Unknown';
     if(!parMap[p])parMap[p]={name:p,curr:0,prev:0,rc:0,rp:0};
-    const gwh=r.kwh/1e6;
-    if(r.year===2026){parMap[p].curr+=gwh;if(COMM_RCS.includes(r.rc))parMap[p].rc+=gwh;}
-    if(r.year===2025){parMap[p].prev+=gwh;if(COMM_RCS.includes(r.rc))parMap[p].rp+=gwh;}
+    const gwh=r.kwh/1e6,isComm=COMM_RCS_SET.has(r.rc);
+    if(r.year===2026){parMap[p].curr+=gwh;if(isComm)parMap[p].rc+=gwh;}
+    if(r.year===2025){parMap[p].prev+=gwh;if(isComm)parMap[p].rp+=gwh;}
   });
   PARISHES=Object.values(parMap).sort((a,b)=>b.curr-a.curr);
 
-  // INDUSTRIES — grouped by industry segment
-  const indRcMap={};
-  const indMap={};
+  // INDUSTRIES — single pass
+  const indRcMap={},indMap={};
   rows.forEach(r=>{
     const i=r.industry||'Other';
     if(!indMap[i]){indMap[i]={name:i,y25:0,y26:0,note:''};indRcMap[i]=new Set();}
@@ -6314,43 +6364,38 @@ function buildDashboardData(){
   Object.values(indMap).forEach(i=>{i.rc=[...indRcMap[i.name]].join('/');});
   INDUSTRIES=Object.values(indMap).filter(i=>i.y25>0||i.y26>0).sort((a,b)=>b.y25-a.y25);
 
-  // Refresh FC_SEGS base values from actual annual data
+  // FC_SEGS base values
   FC_SEGS.forEach(s=>{s.base=CUSTOMERS.filter(c=>c.rate===s.seg).reduce((sum,c)=>sum+c.y26,0)||0;});
 
-  // Enrich CUSTOMERS with KAM and industry from their respective lookup tables
-  if(sbKAM.length){
-    const kamMap={};
-    sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
-    CUSTOMERS.forEach(c=>{if(kamMap[String(c.num)])c.kam=kamMap[String(c.num)];});
-  }
-  if(sbIndustries.length){
-    const indMap={};
-    sbIndustries.forEach(i=>indMap[String(i.jps_ac||'').trim()]=i.industry||'');
-    CUSTOMERS.forEach(c=>{if(indMap[String(c.num)])c.industry=indMap[String(c.num)];});
-  }
+  // Enrich CUSTOMERS with KAM + industry lookups
+  if(sbKAM.length){const m={};sbKAM.forEach(k=>m[String(k.jps_ac||'').trim()]=k.kam||'');CUSTOMERS.forEach(c=>{if(m[String(c.num)])c.kam=m[String(c.num)];});}
+  if(sbIndustries.length){const m={};sbIndustries.forEach(i=>m[String(i.jps_ac||'').trim()]=i.industry||'');CUSTOMERS.forEach(c=>{if(m[String(c.num)])c.industry=m[String(c.num)];});}
 
+  // ── SCORECARD_DATA — now O(1) per cell via pre-built rcIdx ──
+  // Previously: 28 .filter() calls over 50k rows = ~1.4M comparisons
+  // Now: index lookups — negligible CPU
   const RES_RCS=['RT10','RT20'];
-  const normA=fcNormActuals(sbActuals);
   const mIdx2=curMonth-1;
+  // Pre-build residential budget index too
+  const resBudIdx={};
+  if(sbResBudget.length){
+    sbResBudget.forEach(b=>{
+      const rc=b.rate_class,y=Number(b.year),m=Number(b.month),v=Number(b.kwh_budget)||0;
+      if(!resBudIdx[rc])resBudIdx[rc]={};
+      resBudIdx[rc][y*100+m]=(resBudIdx[rc][y*100+m]||0)+v;
+    });
+  }
+  const _rbSum=(rc,year,fromM,toM)=>{const m=resBudIdx[rc]||{};let s=0;for(let i=fromM;i<=toM;i++)s+=(m[year*100+i]||0);return s;};
 
-  // Refresh SCORECARD_DATA — commercial uses account-level budget,
-  // residential uses aggregate jps_residential_budget table
   SCORECARD_DATA.forEach(r=>{
     if(RES_RCS.includes(r.seg)){
-      // ── Residential: actuals from sbActuals aggregated by rate class ──
-      const actRows=normA.filter(a=>a.rc===r.seg);
-      r.mtd_act=actRows.filter(a=>a.year===curYear&&a.month===curMonth).reduce((s,a)=>s+a.kwh,0)/1e6;
-      r.ytd_act=actRows.filter(a=>a.year===curYear&&a.month<=curMonth).reduce((s,a)=>s+a.kwh,0)/1e6;
-      r.mtd_ly =actRows.filter(a=>a.year===curYear-1&&a.month===curMonth).reduce((s,a)=>s+a.kwh,0)/1e6;
-      r.ytd_ly =actRows.filter(a=>a.year===curYear-1&&a.month<=curMonth).reduce((s,a)=>s+a.kwh,0)/1e6;
-      // Budget from jps_residential_budget
-      if(sbResBudget.length){
-        const rb=sbResBudget.filter(b=>b.rate_class===r.seg&&Number(b.year)===curYear);
-        r.mtd_bud=rb.filter(b=>Number(b.month)===curMonth).reduce((s,b)=>s+(Number(b.kwh_budget)||0),0)/1e6;
-        r.ytd_bud=rb.filter(b=>Number(b.month)<=curMonth).reduce((s,b)=>s+(Number(b.kwh_budget)||0),0)/1e6;
-      }
+      r.mtd_act=_rcSum(r.seg,curYear,curMonth,curMonth)/1e6;
+      r.ytd_act=_rcSum(r.seg,curYear,1,curMonth)/1e6;
+      r.mtd_ly =_rcSum(r.seg,curYear-1,curMonth,curMonth)/1e6;
+      r.ytd_ly =_rcSum(r.seg,curYear-1,1,curMonth)/1e6;
+      r.mtd_bud=_rbSum(r.seg,curYear,curMonth,curMonth)/1e6;
+      r.ytd_bud=_rbSum(r.seg,curYear,1,curMonth)/1e6;
     } else {
-      // ── Commercial: account-level from CUSTOMERS ──
       const custs=CUSTOMERS.filter(c=>c.rate===r.seg);
       r.mtd_act=custs.reduce((s,c)=>s+(c.m[mIdx2]||0),0);
       r.mtd_bud=custs.reduce((s,c)=>s+(c.bud/12),0);
@@ -6364,66 +6409,71 @@ function buildDashboardData(){
   });
 }
 
+let _sbSyncing=false; // mutex — prevents double-sync
+
 async function syncSupabase(silent=false){
+  if(_sbSyncing){return;} // already in progress — skip
+  _sbSyncing=true;
   updateSbStatus('syncing');
   const sb=getSB();
   if(!sb){
     updateSbStatus('offline');
-    if(!silent)alert('Supabase SDK not ready. Check your connection.');
+    if(!silent)toast('Supabase SDK not ready — check your connection','err');
     return;
   }
   const log=[];
   try{
-    // ── Reference tables (load first — actuals join against these) ──
-    const indData=await sbTable('jps_industries',{});
+    // ── Fire ALL queries in parallel — massive speedup vs sequential awaits ──
+    const [
+      indData,kamData,amData,actData,
+      jbData,cbData,resBudData,
+      ng,nb,ev,pl
+    ] = await Promise.all([
+      sbTable('jps_industries',{}),
+      sbTable('jps_kam',{}),
+      sbTable('jps_account_master',{limit:50000}),
+      sbTable('jps_actuals',{limit:50000}),
+      sbTable('jps_budget',{limit:20000}),
+      sbTable('jps_commercial_budget',{limit:20000}),
+      sbTable('jps_residential_budget',{limit:5000}),
+      sbTable('net_gen_historical',{order:'year'}),
+      sbTable('jps_net_billers',{order:'year'}),
+      sbTable('jps_ev_accounts',{order:'year'}),
+      sbTable('jps_period_locks',{})
+    ]);
+
+    // ── Process results ────────────────────────────────────
     if(indData){sbIndustries=indData;log.push(`Industries: jps_industries (${indData.length} rows)`);}
     else log.push('Industries: ⚠ jps_industries not found — run schema SQL');
 
-    const kamData=await sbTable('jps_kam',{});
     if(kamData){sbKAM=kamData;log.push(`KAM: jps_kam (${kamData.length} rows)`);}
     else log.push('KAM: ⚠ jps_kam not found — run schema SQL');
 
-    const amData=await sbTable('jps_account_master',{limit:50000});
     if(amData){sbAccountMaster=amData;log.push(`Account Master: jps_account_master (${amData.length} accounts)`);}
     else log.push('Account Master: ⚠ jps_account_master not found — run schema SQL');
 
-    // ── Actuals ────────────────────────────────────────────
-    const actData=await sbTable('jps_actuals',{limit:50000});
     const actOk=!!actData;
     if(actOk){sbActuals=actData;log.push(`Actuals: jps_actuals (${actData.length} rows)`);}
     else log.push('Actuals: ⚠ jps_actuals not accessible — check RLS policies');
 
-    // ── Budget — read jps_budget (aggregate) + jps_commercial_budget (account-level) and merge ──
     sbBudget=[];
-    const jbData=await sbTable('jps_budget',{limit:20000});
     if(jbData&&jbData.length){sbBudget=[...sbBudget,...jbData];log.push(`Budget: jps_budget (${jbData.length} rows)`);}
     else log.push('Budget: jps_budget (0 rows — no data uploaded yet)');
-    const cbData=await sbTable('jps_commercial_budget',{limit:20000});
     if(cbData&&cbData.length){sbBudget=[...sbBudget,...cbData];log.push(`Comm Budget (acct-level): jps_commercial_budget (${cbData.length} rows)`);}
     const budOk=sbBudget.length>0;
 
-    // ── Residential Budget ─────────────────────────────────
-    const resBudData=await sbTable('jps_residential_budget',{limit:5000});
     if(resBudData){sbResBudget=resBudData;log.push(`Res Budget: jps_residential_budget (${resBudData.length} rows)`);}
     else log.push('Res Budget: jps_residential_budget (0 rows — no data uploaded yet)');
 
-    // ── Net Generation ─────────────────────────────────────
-    const ng=await sbTable('net_gen_historical',{order:'year'});
     if(ng){sbNetGen=ng;log.push(`Net Gen: net_gen_historical (${ng.length} rows)`);}
     else log.push('Net Gen: ⚠ net_gen_historical not accessible');
 
-    // ── Net Billers ────────────────────────────────────────
-    const nb=await sbTable('jps_net_billers',{order:'year'});
     if(nb){sbNetBillers=nb;log.push(`Net Billers: jps_net_billers (${nb.length} rows)`);}
     else log.push('Net Billers: ⚠ jps_net_billers not found (create table to populate)');
 
-    // ── EV Data ───────────────────────────────────────────
-    const ev=await sbTable('jps_ev_accounts',{order:'year'});
     if(ev){sbEvData=ev;log.push(`EV Data: jps_ev_accounts (${ev.length} rows)`);}
     else log.push('EV Data: ⚠ jps_ev_accounts not found (create table to populate)');
 
-    // ── Period Locks ──────────────────────────────────────
-    const pl=await sbTable('jps_period_locks',{});
     if(pl){PERIOD_LOCKS=pl;log.push(`Period Locks: jps_period_locks (${pl.length} locked)`);}
     else log.push('Period Locks: ⚠ jps_period_locks not found (run schema SQL in Admin)');
 
@@ -6470,19 +6520,24 @@ async function syncSupabase(silent=false){
       }
     }
 
+    // Build dashboard data synchronously (now fast with index-based SCORECARD computation)
     try{buildDashboardData();}catch(be){console.error('buildDashboardData error:',be);}
     renderSidebarFilters();
     populateKamDropdowns();
 
-    // Hydrate user-generated data (notes, narratives, R&O, defection actions, etc.) from DB
+    // Hydrate user-generated data from DB
     try{await loadAllUserData();}catch(ue){console.warn('loadAllUserData error:',ue);}
 
+    // Defer chart rendering — yield to browser so UI paints first, then render charts
     leEngine=null;
     const activeId=document.querySelector('.sec.on')?.id;
-    try{
-      if(activeId==='le')renderLE();
-      if(activeId==='ng')renderNetGen();
-    }catch(re){console.error('Re-render error after sync:',re);}
+    setTimeout(()=>{
+      try{
+        renderSection(activeId||'ov');
+        if(activeId==='le')renderLE();
+        if(activeId==='ng')renderNetGen();
+      }catch(re){console.error('Re-render error after sync:',re);}
+    },0);
 
     const el=document.getElementById('adm_upload_status');
     if(el&&sbActuals.length)el.textContent=`Live · ${sbActuals.length.toLocaleString()} actuals rows`;
@@ -6496,6 +6551,8 @@ async function syncSupabase(silent=false){
     sbConnected=false;
     updateSbStatus('offline');
     if(!silent)toast('Sync failed: '+e.message,'err');
+  }finally{
+    _sbSyncing=false; // always release mutex
   }
 }
 
@@ -7619,7 +7676,7 @@ window.addEventListener('beforeunload',()=>{
 });
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.6';
+const APP_VERSION = '1.0.12';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
@@ -7628,16 +7685,23 @@ const APP_VERSION = '1.0.6';
   else stamp();
 })();
 
-// Session restore — only run if we get a valid profile with a real role back
+// Session restore — starts data sync immediately once session is confirmed,
+// then fetches profile in parallel so UI is never stuck waiting on sequential calls
 (async function restoreSession(){
   try{
-    const sb=getSB(); if(!sb) return;
+    const sb=getSB(); if(!sb){ updateSbStatus('offline'); return; }
     const {data:{session}}=await sb.auth.getSession();
-    if(!session?.user) return;
+    if(!session?.user){ updateSbStatus('offline'); return; }
     const userId=session.user.id;
-    const {data:profile,error}=await sb.from('profiles').select('*').eq('id',userId).single();
-    // Only restore if we got a profile with a proper role — never default to 'view' which disables all buttons
+    // Kick off data sync AND profile fetch at the same time — no waiting in line
+    const [syncResult, profileResult] = await Promise.allSettled([
+      syncSupabase(true),
+      sb.from('profiles').select('*').eq('id',userId).single()
+    ]);
+    const {data:profile,error}=profileResult.value||{};
+    // Only apply login if we got a real profile with a real role
     if(error||!profile||!profile.sales_role) return;
+    // _applyLogin → initAll → syncSupabase, but mutex prevents double-sync
     _applyLogin({
       id:userId, email:session.user.email,
       name:profile.name||session.user.email.split('@')[0],
@@ -7645,7 +7709,7 @@ const APP_VERSION = '1.0.6';
       fpa_role:profile.role||'viewer',
       territory:profile.territory||'All',
     });
-  }catch(e){ console.warn('Session restore:',e.message); }
+  }catch(e){ console.warn('Session restore:',e.message); updateSbStatus('offline'); }
 })();
 
 </script>
