@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <title>JPS Sales Analytics Platform</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -381,6 +384,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
       <span class="tbadge tbr" id="kpi_ytd_yoy">-- YoY</span>
       <span class="tbadge tbt" id="dataStatus">⚡ Sample Data</span>
       <span class="sb-badge sb-offline" id="sbStatus" onclick="syncSupabase()" title="Click to sync from Supabase">○ Offline</span>
+      <span id="appVersion" style="font-size:9px;color:var(--text3);opacity:0.6"></span>
       <div id="onlineUsersPanel" style="display:flex;align-items:center"></div>
       <div class="ua" id="uAvatar" onclick="toggleMenu()">--</div>
       <div class="umenu" id="uMenu">
@@ -6476,11 +6480,15 @@ async function syncSupabase(silent=false){
     const el=document.getElementById('adm_upload_status');
     if(el&&sbActuals.length)el.textContent=`Live · ${sbActuals.length.toLocaleString()} actuals rows`;
 
-    if(!silent)alert('Supabase sync complete\n\n'+log.join('\n'));
+    if(!silent){
+      const warn=log.filter(l=>l.includes('⚠'));
+      if(warn.length) toast('Sync complete — some tables empty:\n'+warn.join('\n'),'w');
+      else toast(`Sync complete ✓  ${sbActuals.length.toLocaleString()} actuals · ${sbBudget.length.toLocaleString()} budget rows`,'ok');
+    }
   }catch(e){
     sbConnected=false;
     updateSbStatus('offline');
-    if(!silent)alert('Supabase sync failed:\n'+e.message+'\n\nCheck Supabase URL, key, and RLS policies.');
+    if(!silent)toast('Sync failed: '+e.message,'err');
   }
 }
 
@@ -7601,6 +7609,36 @@ function _rtStartHeartbeat(){
 
 window.addEventListener('beforeunload',()=>{
   _rtBroadcast('bye',{name:CU.name});
+});
+
+/* ── App version + session restore on load ──────────────────────────── */
+const APP_VERSION = '1.0.5';
+
+// Show version in footer/navbar for diagnostics
+document.addEventListener('DOMContentLoaded', async ()=>{
+  // Stamp version in page so we can confirm which build is running
+  const vEl = document.getElementById('appVersion');
+  if(vEl) vEl.textContent = 'v' + APP_VERSION;
+
+  // Restore previous Supabase session — so user doesn't need to re-login on every reload
+  try{
+    const sb = getSB();
+    if(!sb) return;
+    const { data: { session } } = await sb.auth.getSession();
+    if(session?.user){
+      const userId = session.user.id;
+      let profile = null;
+      try{ const r = await sb.from('profiles').select('*').eq('id', userId).single(); profile = r.data; }catch(e){}
+      _applyLogin({
+        id: userId,
+        email: session.user.email,
+        name: profile?.name || session.user.email.split('@')[0],
+        role: profile?.sales_role || 'view',
+        fpa_role: profile?.role || 'viewer',
+        territory: profile?.territory || 'All',
+      });
+    }
+  }catch(e){ console.warn('Session restore failed:', e.message); }
 });
 
 </script>
