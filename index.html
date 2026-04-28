@@ -5403,12 +5403,12 @@ alter table public.profiles add column if not exists updated_at timestamptz defa
 alter table public.profiles enable row level security;
 
 -- Policies (drop first if they already exist to avoid conflicts)
-drop policy if exists "Users can view all profiles"   on public.profiles;
-drop policy if exists "Users can update own profile"  on public.profiles;
+drop policy if exists "Users can view all profiles"                 on public.profiles;
+drop policy if exists "Users can update own profile"                on public.profiles;
 drop policy if exists "Admins can insert profiles"                  on public.profiles;
 drop policy if exists "Admins can update profiles"                  on public.profiles;
+drop policy if exists "Admins can update any profile"               on public.profiles;
 drop policy if exists "Authenticated users can view all profiles"   on public.profiles;
-drop policy if exists "Users can update own profile"                on public.profiles;
 
 create policy "Authenticated users can view all profiles"
   on public.profiles for select using (auth.role() = 'authenticated');
@@ -5416,7 +5416,7 @@ create policy "Users can update own profile"
   on public.profiles for update using (auth.uid() = id);
 create policy "Admins can insert profiles"
   on public.profiles for insert with check (
-    (select count(*) from profiles) = 0   -- first user always allowed
+    (select count(*) from profiles) = 0
     or exists (select 1 from profiles where id=auth.uid() and sales_role='admin')
     or exists (select 1 from profiles where id=auth.uid() and role='admin')
   );
@@ -5579,6 +5579,8 @@ create table if not exists public.jps_period_locks (
 alter table public.jps_period_locks enable row level security;
 drop policy if exists "All authenticated users can view locks" on public.jps_period_locks;
 drop policy if exists "Admins can manage locks"               on public.jps_period_locks;
+drop policy if exists "Authenticated users can view locks"    on public.jps_period_locks;
+drop policy if exists "Sales admins can manage locks"         on public.jps_period_locks;
 create policy "Authenticated users can view locks"
   on public.jps_period_locks for select using (auth.role() = 'authenticated');
 create policy "Sales admins can manage locks"
@@ -5623,6 +5625,8 @@ create table if not exists public.jps_net_billers (
   unique (year, month, rate_class)
 );
 alter table public.jps_net_billers enable row level security;
+drop policy if exists "Authenticated users can read net billers" on public.jps_net_billers;
+drop policy if exists "Managers can write net billers"           on public.jps_net_billers;
 create policy "Authenticated users can read net billers"
   on public.jps_net_billers for select using (auth.role() = 'authenticated');
 create policy "Managers can write net billers"
@@ -5644,6 +5648,8 @@ create table if not exists public.jps_ev_accounts (
   unique (year, month)
 );
 alter table public.jps_ev_accounts enable row level security;
+drop policy if exists "Authenticated users can read EV data" on public.jps_ev_accounts;
+drop policy if exists "Managers can write EV data"           on public.jps_ev_accounts;
 create policy "Authenticated users can read EV data"
   on public.jps_ev_accounts for select using (auth.role() = 'authenticated');
 create policy "Managers can write EV data"
