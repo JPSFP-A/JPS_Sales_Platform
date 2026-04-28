@@ -1109,7 +1109,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
         <div class="card help-card" data-tags="admin upload wipe delete month period lock users roles kam assignment audit">
           <div class="ch" style="cursor:pointer" onclick="toggleHelp(this)">🔐 Admin — Data Management &amp; Controls <span style="font-size:10px;color:var(--text3);font-weight:400">▾</span></div>
           <div class="help-body" style="display:none;font-size:11px;color:var(--text2);line-height:1.9;padding-top:8px">
-            <p><strong style="color:var(--text)">Upload Data tab:</strong> Upload an Excel workbook (.xlsx) with one or more of the supported sheet names (Actuals, Budget, Residential_Budget, KAM, Industries, Net_Generation, Net_Billers, EV_Accounts). Use Overwrite Month to replace a period, or Append/Upsert for incremental updates. Download the full template via the <em>⬇ Download Full Template</em> button.</p>
+            <p><strong style="color:var(--text)">Upload Data tab:</strong> Upload an Excel workbook (.xlsx) with one or more of the supported sheet names (Actuals, Budget, Residential_Budget, KAM, Industries, Net_Generation, Net_Billers, EV_Accounts). Use Overwrite Month to replace a period, or Append/Upsert for incremental updates. Click <em>⬇ Download Full Template</em> to get a pre-built <code>JPS_Data_Template.xls</code> file with all 8 sheets and sample rows — opens in Excel, no internet needed.</p>
             <p><strong style="color:var(--text)">Delete Month:</strong> Removes all actuals rows for a selected year and month. Use before re-uploading corrected data for a specific period.</p>
             <p><strong style="color:var(--red)">Wipe ALL Actuals:</strong> Deletes every row across all years. Requires typing the confirmation code <strong>WIPE-ALL</strong> in the confirmation modal. Use only before a full data reload. This action writes an entry to the Audit Trail.</p>
             <p><strong style="color:var(--text)">KAM Assignment tab:</strong> Assign Key Account Managers to accounts individually or in bulk. Changes save immediately. Alternatively, upload a KAM sheet in the Excel file. KAM assignments affect the Commercial tab filter dropdowns, KAM Performance table, and forecast accuracy ranking.</p>
@@ -1190,6 +1190,11 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 
     <!-- === ADMIN === -->
     <div id="adm" class="sec">
+      <!-- Role status banner — shows when user is not admin -->
+      <div id="adm_role_banner" style="display:none;padding:10px 14px;background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.35);border-radius:7px;margin-bottom:12px;font-size:11px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div><span style="color:var(--amber);font-weight:700">⚠ Your current role: </span><span id="adm_role_lbl" style="color:var(--text);font-weight:700">--</span> <span style="color:var(--text2)">— Delete Month, Wipe Actuals and Period locks require <strong>Admin</strong> role.</span></div>
+        <button class="btn btn-a" style="font-size:10px;padding:3px 10px;white-space:nowrap" onclick="claimAdminRole()">🔑 Claim Admin (first user)</button>
+      </div>
       <!-- Admin tab bar -->
       <div style="display:flex;gap:4px;margin-bottom:14px;flex-wrap:wrap">
         <button class="btn btn-t adm-tab on" data-adm="adm_users"    onclick="swAdm('adm_users',this)">👥 Users &amp; Roles</button>
@@ -1315,6 +1320,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
           </div>
           <div style="margin-bottom:12px;padding:9px 13px;background:rgba(0,194,168,.07);border-left:3px solid var(--teal);border-radius:4px;font-size:11px;color:var(--text2)">
             Your Excel file can include any of these sheet names. Only sheets present in the file will be processed — all others are skipped.
+            The <strong>⬇ Download Full Template</strong> button generates a ready-to-use <code>JPS_Data_Template.xls</code> file (8 sheets, sample rows) instantly — no internet connection required.
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">
             <div class="card" style="background:var(--navy3)">
@@ -2154,7 +2160,23 @@ async function doLogin(){
     if(error){showErr(error.message);if(btn){btn.textContent='Sign In →';btn.disabled=false;}return;}
     // Fetch profile for role
     let profile=null;
-    try{const r=await sb.from('profiles').select('*').eq('id',data.user.id).single();profile=r.data;}catch(e){}
+    try{
+      const r=await sb.from('profiles').select('*').eq('id',data.user.id).single();
+      if(r.error){
+        // Profile row missing — auto-create. Check if first user.
+        let isFirst=false;
+        try{const cnt=await sb.from('profiles').select('id',{count:'exact',head:true});isFirst=(cnt.count||0)===0;}catch(e2){}
+        const salesRole=isFirst?'admin':'view';
+        const fpaRole  =isFirst?'admin':'viewer';
+        const nm=data.user.email.split('@')[0];
+        try{await sb.from('profiles').upsert({id:data.user.id,name:nm,email:data.user.email,role:fpaRole,sales_role:salesRole,territory:'All',is_active:true,created_at:new Date().toISOString()},{onConflict:'id'});}catch(e3){}
+        profile={id:data.user.id,name:nm,email:data.user.email,sales_role:salesRole,role:fpaRole,territory:'All'};
+        if(isFirst)toast('First-time setup: your account has been set as Admin','ok');
+        else toast('Profile created with View access — Admin can upgrade your role in Admin → Users','w');
+      } else {
+        profile=r.data;
+      }
+    }catch(e){toast('Could not load your profile — using view-only access','w');}
     _applyLogin({
       id:data.user.id,email:data.user.email,
       name:profile?.name||data.user.email.split('@')[0],
@@ -2920,7 +2942,7 @@ function renderSection(id){
   else if(id==='gl'){renderGloss();}
   else if(id==='help'){/* static content, no render needed */}
   else if(id==='vld'){runValidation();}
-  else if(id==='adm'){renderAdm();renderAdmKam();}
+  else if(id==='adm'){renderAdm();renderAdmKam();renderAdmRoleBanner();}
   else if(id==='es'){renderExecSummary();}
   else if(id==='vb'){renderVarianceBridge();}
   else if(id==='rr'){renderRevenueRecovery();}
@@ -3140,107 +3162,81 @@ function loadXLSX(){
 }
 
 function dlTemplate(){
-  toast('Preparing template…','ok');
-  loadXLSX().then(()=>{
-  const wb=XLSX.utils.book_new();
+  // Pure client-side SpreadsheetML XML — no CDN dependency, instant download
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const cell=c=>{
+    if(c===''||c==null) return '<Cell><Data ss:Type="String"></Data></Cell>';
+    return typeof c==='number'
+      ? `<Cell><Data ss:Type="Number">${c}</Data></Cell>`
+      : `<Cell><Data ss:Type="String">${esc(c)}</Data></Cell>`;
+  };
+  const mkRows=rows=>rows.map(row=>'<Row>'+row.map(cell).join('')+'</Row>').join('');
+  const mkSheet=(name,rows)=>`<Worksheet ss:Name="${esc(name)}"><Table>${mkRows(rows)}</Table></Worksheet>`;
 
-  // 1. Actuals — flat dump format, same columns for commercial and residential
-  //    For residential: consumption_bucket is required; demand_kva = 0
-  //    For commercial:  consumption_bucket = '' (blank); demand_kva filled
-  const actHdr=[['year','month','jps_ac','name','consumption_bucket','kwh','revenue_jmd','parish','rate_class','demand_kva']];
-  const actSample=[
-    [2026,2,'100001','Carib Cement Co','',1900000,45000000,'St. Elizabeth','RT70',2500],
-    [2026,2,'200045','','0-150',450000,28000000,'Kingston','RT10',0],
-    [2026,2,'200046','','150-300',320000,22000000,'Kingston','RT10',0],
-    [2026,2,'200047','','300-500',180000,14000000,'St. Andrew','RT20',0],
+  const SHEETS=[
+    ['Actuals',[
+      ['year','month','jps_ac','name','consumption_bucket','kwh','revenue_jmd','parish','rate_class','demand_kva'],
+      [2026,2,'100001','Carib Cement Co','',1900000,45000000,'St. Elizabeth','RT70',2500],
+      [2026,2,'200045','','0-150',450000,28000000,'Kingston','RT10',0],
+      [2026,2,'200046','','150-300',320000,22000000,'Kingston','RT10',0],
+      [2026,2,'200047','','300-500',180000,14000000,'St. Andrew','RT20',0],
+    ]],
+    ['Budget',[
+      ['year','month','jps_ac','name','rate_class','parish','kwh_budget','revenue_budget','demand_budget'],
+      [2026,2,'100001','Carib Cement Co','RT70','St. Elizabeth',2100000,48000000,2600],
+    ]],
+    ['Residential_Budget',[
+      ['year','month','rate_class','parish','consumption_bucket','kwh_budget','customer_count_budget'],
+      [2026,2,'RT10','Kingston','0-150',12500000,8500],
+      [2026,2,'RT10','Kingston','150-300',9800000,3200],
+      [2026,2,'RT10','Kingston','300-500',4200000,840],
+      [2026,2,'RT10','St. Andrew','0-150',10100000,6800],
+      [2026,2,'RT20','Kingston','0-150',3200000,1200],
+    ]],
+    ['KAM',[
+      ['jps_ac','kam'],
+      ['100001','Jane Smith'],
+      ['100045','Michael Brown'],
+    ]],
+    ['Industries',[
+      ['jps_ac','industry'],
+      ['100001','Manufacturing'],
+      ['100045','Retail'],
+    ]],
+    ['Net_Generation',[
+      ['year','month','rate_class','count','kwh'],
+      [2026,2,'ALL',0,320000000],
+      [2026,2,'Solar',245,185000000],
+      [2026,1,'ALL',0,315000000],
+    ]],
+    ['Net_Billers',[
+      ['year','month','rate_class','count','kwh'],
+      [2026,2,'RT10',1250,475000],
+      [2026,2,'RT20',380,142000],
+    ]],
+    ['EV_Accounts',[
+      ['year','month','accounts','mwh'],
+      [2026,2,45,380],
+    ]],
   ];
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...actHdr,...actSample]),'Actuals');
 
-  // 2. Residential Budget — aggregate by rate_class + parish + consumption_bucket + month
-  const resBudHdr=[['year','month','rate_class','parish','consumption_bucket','kwh_budget','customer_count_budget']];
-  const resBudSample=[
-    [2026,2,'RT10','Kingston','0-150',12500000,8500],
-    [2026,2,'RT10','Kingston','150-300',9800000,3200],
-    [2026,2,'RT10','Kingston','300-500',4200000,840],
-    [2026,2,'RT10','St. Andrew','0-150',10100000,6800],
-    [2026,2,'RT20','Kingston','0-150',3200000,1200],
-  ];
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...resBudHdr,...resBudSample]),'Residential_Budget');
-
-  // 3. Commercial Budget — account-level, same flat format as actuals (no consumption_bucket / demand optional)
-  //    kwh_budget = consumption kwh budget; revenue_budget = JMD revenue budget; demand_budget = kVA demand budget
-  const commBudHdr=[['year','month','jps_ac','name','rate_class','parish','kwh_budget','revenue_budget','demand_budget']];
-  const commBudSample=[[2026,2,'100001','Carib Cement Co','RT70','St. Elizabeth',2100000,48000000,2600]];
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...commBudHdr,...commBudSample]),'Budget');
-
-  // 4. KAM — account to Key Account Manager mapping
-  const kamHdr=[['jps_ac','kam']];
-  const kamSample=[['100001','Jane Smith'],['100045','Michael Brown']];
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...kamHdr,...kamSample]),'KAM');
-
-  // 4b. Industries — account to industry mapping
-  const indHdr=[['jps_ac','industry']];
-  const indSample=[['100001','Manufacturing'],['100045','Retail']];
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...indHdr,...indSample]),'Industries');
-
-  // 5. Net Generation (DG) — same format as Net Billers
-  //    rate_class: generating technology or rate class (e.g. 'Solar','Wind','ALL')
-  //    count: number of DG installations; kwh: total generation in kWh
-  const ngHdr=[['year','month','rate_class','count','kwh']];
-  const ngSample=[[2026,2,'ALL',0,320000000],[2026,2,'Solar',245,185000000],[2026,1,'ALL',0,315000000]];
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...ngHdr,...ngSample]),'Net_Generation');
-
-  // 6. Net Billers — same format as Net Generation
-  //    rate_class: customer rate class; count: number of net billing customers; kwh: total export kWh
-  const nbHdr=[['year','month','rate_class','count','kwh']];
-  const nbSample=[[2026,2,'RT10',1250,475000],[2026,2,'RT20',380,142000]];
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...nbHdr,...nbSample]),'Net_Billers');
-
-  // 7. EV
-  const evHdr=[['year','month','accounts','mwh']];
-  const evSample=[[2026,2,45,380]];
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...evHdr,...evSample]),'EV_Accounts');
+  const xml='<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?>'
+    +'<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'
+    +SHEETS.map(([n,rows])=>mkSheet(n,rows)).join('')
+    +'</Workbook>';
 
   try{
-    XLSX.writeFile(wb,'JPS_Data_Template.xlsx');
-    toast('Template downloaded ✓ — check your Downloads folder','ok');
-  }catch(we){
-    // writeFile failed (e.g. browser security) — fall back to CSV download of Actuals sheet
-    console.warn('XLSX writeFile failed, using CSV fallback:',we.message);
-    _dlTemplateCsvFallback();
-  }
-  }).catch(e=>{
-    console.warn('XLSX library load failed:',e.message);
-    // XLSX library unavailable — offer CSV fallback
-    _dlTemplateCsvFallback();
-  });
-}
-function _dlTemplateCsvFallback(){
-  // Generate the most important sheet (Actuals) as a CSV when XLSX is unavailable
-  const sheets={
-    'Actuals':         'year,month,jps_ac,name,consumption_bucket,kwh,revenue_jmd,parish,rate_class,demand_kva\n2026,1,100001,Sample Commercial Co,,1900000,45000000,Kingston,RT40,500\n2026,1,200001,,0-150,450,28000,Kingston,RT10,0',
-    'Budget':          'year,month,jps_ac,name,rate_class,parish,kwh_budget,revenue_budget,demand_budget\n2026,1,100001,Sample Commercial Co,RT40,Kingston,2000000,48000000,520',
-    'Residential_Budget':'year,month,rate_class,parish,consumption_bucket,kwh_budget,customer_count_budget\n2026,1,RT10,Kingston,0-150,12500000,8500',
-    'KAM':             'jps_ac,kam\n100001,Jane Smith\n100045,Michael Brown',
-    'Industries':      'jps_ac,industry\n100001,Manufacturing\n100045,Retail',
-    'Net_Generation':  'year,month,rate_class,count,kwh\n2026,1,ALL,0,320000000\n2026,1,Solar,245,185000000',
-    'Net_Billers':     'year,month,rate_class,count,kwh\n2026,1,RT10,1250,475000\n2026,1,RT20,380,142000',
-    'EV_Accounts':     'year,month,accounts,mwh\n2026,1,45,380',
-  };
-  // Download each as a separate CSV file (one at a time with short delay)
-  let i=0;
-  const keys=Object.keys(sheets);
-  const dlNext=()=>{
-    if(i>=keys.length){toast(`${keys.length} CSV template files downloaded ✓`,'ok');return;}
-    const name=keys[i],csv=sheets[name];
+    const blob=new Blob([xml],{type:'application/vnd.ms-excel'});
     const a=document.createElement('a');
-    a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
-    a.download=`JPS_Template_${name}.csv`;
+    a.href=URL.createObjectURL(blob);
+    a.download='JPS_Data_Template.xls';
     document.body.appendChild(a);a.click();document.body.removeChild(a);
-    i++;setTimeout(dlNext,400);
-  };
-  toast('Excel library unavailable — downloading CSV templates instead','w');
-  setTimeout(dlNext,300);
+    URL.revokeObjectURL(a.href);
+    toast('Template downloaded — JPS_Data_Template.xls (8 sheets)','ok');
+  }catch(e){
+    console.error('dlTemplate failed:',e);
+    toast('Template download failed: '+e.message,'err');
+  }
 }
 
 /* ==========================================
@@ -6015,6 +6011,41 @@ async function loadPlatformUsers(){
   catch(e){console.warn('loadPlatformUsers:',e);}
 }
 
+function renderAdmRoleBanner(){
+  const banner=document.getElementById('adm_role_banner');
+  const lbl=document.getElementById('adm_role_lbl');
+  if(!banner)return;
+  const role=CU.role||'view';
+  if(role==='admin'){
+    banner.style.display='none';
+  } else {
+    banner.style.display='flex';
+    if(lbl)lbl.textContent=role;
+  }
+}
+
+async function claimAdminRole(){
+  const sb=getSB();if(!sb){toast('Not connected to database','err');return;}
+  try{
+    // Only allow if the profiles table has zero or one admin
+    const r=await sb.from('profiles').select('id',{count:'exact',head:true}).eq('sales_role','admin');
+    const adminCount=r.count||0;
+    if(adminCount>0){
+      toast('An admin already exists — ask them to upgrade your role in Admin → Users & Roles','w');
+      return;
+    }
+    // No admin exists — claim it
+    await sb.from('profiles').upsert({
+      id:CU.id,name:CU.name,email:CU.email,
+      sales_role:'admin',role:'admin',territory:'All',is_active:true
+    },{onConflict:'id'});
+    CU.role='admin';
+    renderAdmRoleBanner();
+    toast('Admin role claimed ✓ — you now have full access','ok');
+    renderAdm();
+  }catch(e){toast('Could not claim admin: '+e.message,'err');}
+}
+
 function renderAdm(){
   loadPlatformUsers().then(()=>{
     const el=document.getElementById('adm_users_tbl');if(!el)return;
@@ -8407,7 +8438,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.19';
+const APP_VERSION = '1.0.20';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
