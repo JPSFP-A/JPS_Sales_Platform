@@ -7101,14 +7101,14 @@ async function syncSupabase(silent=false){
   }
   const log=[];
   try{
+    // Detect the year column name BEFORE loading — must complete before any write ops
+    await detectYearCol(sb);
+
     // ── Fire ALL queries in parallel — massive speedup vs sequential awaits ──
     const [
       indData,kamData,amData,actData,
       jbData,cbData,resBudData,
       ng,nb,ev,pl
-    // Detect the year column name BEFORE loading — must complete before any write ops
-    await detectYearCol(sb);
-
     ] = await Promise.all([
       sbTable('jps_industries',{}),
       sbTable('jps_kam',{}),
@@ -8557,7 +8557,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.25';
+const APP_VERSION = '1.0.26';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
