@@ -306,7 +306,6 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
     <div class="lerr" id="lErr">Invalid email or password.</div>
     <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center">
       <span style="font-size:9px;color:var(--teal);cursor:pointer" onclick="showRegister()">First time? Register →</span>
-      <span style="font-size:9px;color:var(--text3);cursor:pointer" onclick="showDemoLogin()">Demo mode</span>
     </div>
     <!-- Register panel -->
     <div id="registerPanel" style="display:none;margin-top:14px;padding:12px;background:rgba(55,138,221,.07);border:1px solid var(--blue);border-radius:8px">
@@ -316,20 +315,6 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
       <div class="lf" style="margin-bottom:8px"><label>Password</label><input class="si" id="rPass" type="password" placeholder="Min 8 characters"/></div>
       <button class="login-btn" id="rBtn" onclick="doRegister()" style="background:var(--blue);color:#fff">Create Account →</button>
       <div style="font-size:9px;color:var(--text3);margin-top:8px">First account created is automatically Admin. Subsequent accounts start as View — Admin upgrades roles in-app.</div>
-    </div>
-    <!-- Demo mode (offline / no Supabase) -->
-    <div id="demoPanel" style="display:none;margin-top:14px;padding:12px;background:rgba(0,194,168,0.07);border:1px solid var(--teal);border-radius:8px">
-      <div style="font-size:10px;color:var(--teal);font-weight:700;margin-bottom:8px">DEMO / OFFLINE MODE</div>
-      <div class="lf" style="margin-bottom:8px">
-        <label>Select demo user</label>
-        <select id="lDemoUser" style="width:100%;background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px;font-size:12px">
-          <option value="admin">Admin (full access)</option>
-          <option value="manager">Manager (upload + approve)</option>
-          <option value="rep">Sales Rep (own territory)</option>
-          <option value="view">View Only (read-only)</option>
-        </select>
-      </div>
-      <button class="login-btn" onclick="demoLogin()" style="background:var(--teal);color:#000">Enter Demo →</button>
     </div>
   </div>
 </div>
@@ -460,7 +445,6 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
         <div class="kpi kt"><div class="kl">MTD Sales</div><div class="kv" id="kpi_mtd_sales">--</div><div class="ks nt" id="kpi_mtd_vs_bud">-- vs Budget</div></div>
         <div class="kpi kr"><div class="kl">YTD Sales</div><div class="kv" id="kpi_ytd_sales">--</div><div class="ks nt" id="kpi_ytd_yoy_sub">-- YoY</div></div>
         <div class="kpi ka"><div class="kl">vs Budget (MTD)</div><div class="kv" id="kpi_vs_bud">--</div><div class="ks nt" id="kpi_bud_note">Upload data</div></div>
-        <div class="kpi kg"><div class="kl">Net Billers</div><div class="kv" id="kpi_net_billers">--</div><div class="ks nt" id="kpi_nb_note">Registered DG</div></div>
         <div class="kpi kr"><div class="kl">Defectors flagged</div><div class="kv" id="kpi_defectors">--</div><div class="ks dn">↓ &lt;80% YoY avg</div></div>
         <div class="kpi ka"><div class="kl">Forecast accuracy</div><div class="kv" id="kpi_accuracy">--</div><div class="ks nt">Last month MAPE</div></div>
       </div>
@@ -516,8 +500,32 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 
       <!-- YTD/MTD/YoY Variance -->
       <div class="card">
-        <div class="ch">MTD · YTD · YoY Variance Summary <span>All segments</span></div>
+        <div class="ch">MTD · YTD · YoY Variance Summary <span>All segments</span>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-o" onclick="window.print()">🖨 Print</button>
+            <button class="btn btn-o" onclick="exportTableCSV('variance_tbl_inner','variance_summary')">⬇ CSV</button>
+          </div>
+        </div>
         <div class="tbl-wrap" id="variance_tbl"></div>
+      </div>
+
+      <!-- AI Commentary -->
+      <div class="card" style="border-color:rgba(0,194,168,.3)">
+        <div class="ch" style="cursor:pointer" onclick="toggleAiPanel('ov_ai_body')">
+          ✨ AI Commentary — Overview
+          <div style="display:flex;gap:6px;align-items:center">
+            <button class="btn btn-t" onclick="event.stopPropagation();generateCommentary('ov')">Generate Analysis</button>
+            <span style="font-size:10px;color:var(--text3)" id="ov_ai_ts"></span>
+            <span style="font-size:11px;color:var(--text3)">▾</span>
+          </div>
+        </div>
+        <div id="ov_ai_body" style="padding:10px 0 4px">
+          <div id="ov_ai_out" style="font-size:11px;color:var(--text2);line-height:1.8;white-space:pre-wrap;padding:10px 14px;background:var(--navy3);border-radius:6px;min-height:40px">Click <strong>Generate Analysis</strong> to produce a narrative summary of the current period.</div>
+          <div style="display:flex;gap:6px;margin-top:8px">
+            <button class="btn btn-o" onclick="copyAiOut('ov_ai_out')">📋 Copy</button>
+            <button class="btn btn-o" onclick="saveAiNote('ov')">💾 Save as Note</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -526,7 +534,6 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
       <!-- Commercial sub-tabs -->
       <div class="stabs" id="cm_subtabs" style="margin-bottom:12px">
         <button class="stab on" id="cm_tab_customers" onclick="swCm('customers',this)">🏢 Customers</button>
-        <button class="stab" id="cm_tab_pivot"     onclick="swCm('pivot',this)">🔀 Pivot / Movers</button>
         <button class="stab" id="cm_tab_defection" onclick="swCm('defection',this)">📉 Defection</button>
         <button class="stab" id="cm_tab_ro"        onclick="swCm('ro',this)">⚠ Risk &amp; Opportunity</button>
       </div>
@@ -560,7 +567,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 
       <!-- Customers panel (shown when Customers tab active) -->
       <div id="cm_customers_wrap">
-        <div class="g2">
+        <div>
           <div class="card">
             <div class="ch">GWh by Rate Class <span>Click bar → customer drilldown below</span></div>
             <div class="chart-actions">
@@ -570,14 +577,6 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
             </div>
             <div class="leg"><span><span class="ld" style="background:#378ADD"></span>2025</span><span><span class="ld" style="background:#00c2a8"></span>2026</span></div>
             <div class="cw" style="height:200px"><canvas id="c_cm1"></canvas></div>
-          </div>
-          <div class="card">
-            <div class="ch">Industry Revenue <span>YTD · JMD Billions · Click industry</span></div>
-            <div class="chart-actions">
-              <button class="btn btn-o" onclick="printChart('c_ind')">🖨 Print</button>
-              <button class="btn btn-o" onclick="exportChart('c_ind')">💾 Save</button>
-            </div>
-            <div class="cw" style="height:200px"><canvas id="c_ind"></canvas></div>
           </div>
         </div>
         <div class="card">
@@ -621,65 +620,25 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
         </div>
       </div>
 
-      <!-- Pivot / Movers panel (shown when Pivot tab active) -->
-      <div id="cm_pivot_wrap" style="display:none">
-        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
-          <select class="sel" id="pv_period_cm" onchange="renderCmPivot()">
-            <option value="mtd">MTD</option>
-            <option value="ytd" selected>YTD</option>
-            <option value="12m">Rolling 12M</option>
-          </select>
-          <select class="sel" id="pv_rc_cm" onchange="renderCmPivot()">
-            <option value="">All rate classes</option>
-            <option value="RT40">RT40</option>
-            <option value="RT50">RT50</option>
-            <option value="RT70">RT70</option>
-          </select>
-          <button class="btn btn-o" onclick="exportTableCSV('pv_gainers_tbl','cm_gainers')">⬇ Gainers CSV</button>
-          <button class="btn btn-o" onclick="exportTableCSV('pv_decliners_tbl','cm_decliners')">⬇ Decliners CSV</button>
-        </div>
-        <div class="g2">
-          <div class="card">
-            <div class="ch" style="color:var(--green)">📈 Top Gainers <span id="pv_gainers_lbl" style="color:var(--text3)">YoY kWh increase</span></div>
-            <div class="tbl-wrap" id="pv_gainers_tbl"></div>
-          </div>
-          <div class="card">
-            <div class="ch" style="color:var(--red)">📉 Top Decliners <span id="pv_decliners_lbl" style="color:var(--text3)">YoY kWh decline</span></div>
-            <div class="tbl-wrap" id="pv_decliners_tbl"></div>
-          </div>
-        </div>
-        <div class="card" style="margin-top:10px">
-          <div class="ch">All Movers — Full Account List
-            <button class="btn btn-o" onclick="exportTableCSV('pv_all_tbl','cm_movers_all')">⬇ CSV</button>
-          </div>
-          <div class="tbl-controls">
-            <input class="si" placeholder="🔍 Name or account #" id="pv_q_cm" oninput="renderCmPivot()"/>
-            <select class="sel" id="pv_dir_cm" onchange="renderCmPivot()">
-              <option value="">All directions</option>
-              <option value="up">Gainers ↑</option>
-              <option value="dn">Decliners ↓</option>
-            </select>
-            <span class="row-count" id="pv_count_cm"></span>
-          </div>
-          <div class="tbl-wrap" id="pv_all_tbl"></div>
-        </div>
-      </div>
     </div>
 
     <!-- === RESIDENTIAL === -->
     <div id="rs" class="sec">
       <div class="krow">
         <div class="kpi kt"><div class="kl">MTD Residential</div><div class="kv" id="rs_kpi_mtd">--</div><div class="ks nt" id="rs_kpi_vs_bud">-- vs budget</div></div>
-        <div class="kpi ka"><div class="kl">Net Billers</div><div class="kv" id="rs_kpi_nb">--</div><div class="ks nt">Registered DG</div></div>
         <div class="kpi kr"><div class="kl">Unlicensed DG</div><div class="kv" id="rs_kpi_udg">--</div><div class="ks nt">Sync DB to populate</div></div>
         <div class="kpi kg"><div class="kl">Customer Growth</div><div class="kv" id="rs_kpi_cg">--</div><div class="ks nt">vs prior year</div></div>
-        <div class="kpi ka"><div class="kl">RT10 Net Billers</div><div class="kv" id="rs_kpi_rt10nb">--</div><div class="ks nt">Sync DB to populate</div></div>
-        <div class="kpi kp"><div class="kl">Avg NB Export</div><div class="kv" id="rs_kpi_nbexp">--</div><div class="ks nt">Sync DB to populate</div></div>
       </div>
       <div class="g2">
         <div class="card">
-          <div class="ch">Net Billing Growth <span id="nb_period_lbl">sync DB to populate</span></div>
-          <div class="cw" style="height:200px"><canvas id="c_nb"></canvas></div>
+          <div class="ch">Consumption Bracket Distribution <span>kWh by bracket vs prior year</span>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-o" onclick="printChart('c_bracket_dist')">🖨 Print</button>
+              <button class="btn btn-o" onclick="exportChart('c_bracket_dist')">💾 Save</button>
+            </div>
+          </div>
+          <div class="leg"><span><span class="ld" style="background:#378ADD"></span>Prior Year</span><span><span class="ld" style="background:#00c2a8"></span>Current Year</span></div>
+          <div class="cw" style="height:200px"><canvas id="c_bracket_dist"></canvas></div>
         </div>
         <div class="card">
           <div class="ch">EV Sales &amp; Accounts <span id="ev_period_lbl">sync DB to populate</span></div>
@@ -707,7 +666,6 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
     <div id="df" class="sec">
       <div class="stabs" style="margin-bottom:12px">
         <button class="stab" onclick="sw('cm',document.querySelector('.ni[onclick*=\'cm\']'))">🏢 Customers</button>
-        <button class="stab" onclick="sw('cm',document.querySelector('.ni[onclick*=\'cm\']'));setTimeout(()=>swCm('pivot',document.getElementById('cm_tab_pivot')),80)">🔀 Pivot / Movers</button>
         <button class="stab on">📉 Defection</button>
         <button class="stab" onclick="sw('ro',document.querySelector('.ni[onclick*=\'ro_adv\']'))">⚠ Risk &amp; Opportunity</button>
       </div>
@@ -763,7 +721,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
             <input class="si" style="max-width:200px" placeholder="🔍 Search customer..." id="fc_q" oninput="renderFcEntry()"/>
             <select class="sel" id="fc_rc" onchange="renderFcEntry()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
-            <select class="sel" id="fc_kam" onchange="renderFcEntry()"><option value="">All KAMs</option></select>
+            <select class="sel" id="fc_kam" onchange="clearTimeout(this._t);this._t=setTimeout(()=>renderFcEntry(),250)"><option value="">All KAMs</option></select>
             <button class="btn btn-t" onclick="saveFcAll()">💾 Save All Forecasts</button>
             <button class="btn btn-o" onclick="exportTableCSV('fc_tbl','forecast_entry')">⬇ Export</button>
           </div>
@@ -790,7 +748,6 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
     <div id="ro" class="sec">
       <div class="stabs" style="margin-bottom:12px">
         <button class="stab" onclick="sw('cm',document.querySelector('.ni[onclick*=\'cm\']'))">🏢 Customers</button>
-        <button class="stab" onclick="sw('cm',document.querySelector('.ni[onclick*=\'cm\']'));setTimeout(()=>swCm('pivot',document.getElementById('cm_tab_pivot')),80)">🔀 Pivot / Movers</button>
         <button class="stab" onclick="sw('df',document.querySelector('.ni[onclick*=\'df\']'))">📉 Defection</button>
         <button class="stab on">⚠ Risk &amp; Opportunity</button>
       </div>
@@ -1064,6 +1021,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
         <button class="btn btn-o adm-tab"    data-adm="adm_kam"      onclick="swAdm('adm_kam',this)">👤 KAM Assignment</button>
         <button class="btn btn-o adm-tab"    data-adm="adm_schema"   onclick="swAdm('adm_schema',this)">🗄 DB Schema</button>
         <button class="btn btn-o adm-tab"    data-adm="adm_audit"    onclick="swAdm('adm_audit',this);renderAuditLog()">📋 Audit Trail</button>
+        <button class="adm-tab" onclick="swAdm('adm_comments',this)">💬 Comments</button>
       </div>
 
       <!-- ── Users & Roles tab ── -->
@@ -1293,6 +1251,12 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
             <div style="color:var(--text3);font-size:12px;padding:16px">Click Refresh to load audit entries.</div>
           </div>
         </div>
+      </div>
+
+      <!-- ── Comments tab ── -->
+      <div id="adm_comments" class="adm-sec" style="display:none">
+        <div class="ch">Saved Comments &amp; Narratives</div>
+        <div id="adm_comments_body" style="max-height:500px;overflow-y:auto"></div>
       </div>
     </div>
 
@@ -1720,7 +1684,6 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
         <button class="stab"    id="le_btn_adv"  onclick="swLE('adv',this)">🎛 LE Advanced</button>
         <button class="stab"    id="le_btn_risk" onclick="swLE('risk',this)">⚠ Customer Risk</button>
         <button class="stab"    id="le_btn_var"  onclick="swLE('var',this)">📐 Variance</button>
-        <button class="stab"    id="le_btn_pivot" onclick="swLE('pivot',this)">🔀 Pivot / Movers</button>
         <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
           <button class="btn btn-t" onclick="syncSupabase()">🔄 Sync</button>
           <span id="le_last_sync" style="font-size:10px;color:var(--text3)">No data — upload or sync DB</span>
@@ -1858,67 +1821,6 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
             </div>
           </div>
           <div class="tbl-wrap" id="le_risk_tbl"></div>
-        </div>
-      </div>
-
-      <!-- ── PIVOT / MOVERS ─────────────────────────────── -->
-      <div id="le_tab_pivot" class="le-subtab">
-        <!-- Controls -->
-        <div class="card" style="margin-bottom:10px">
-          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-            <div>
-              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Timeframe</div>
-              <select class="sel" id="pv_timeframe" onchange="renderLEPivot()">
-                <option value="FY">Full Year (FY)</option>
-                <option value="YTD">YTD</option>
-                <option value="MTD">MTD (latest actual month)</option>
-              </select>
-            </div>
-            <div>
-              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Scenario</div>
-              <select class="sel" id="pv_scenario" onchange="renderLEPivot()">
-                <option value="base">LE Base</option>
-                <option value="cust">LE Cust Vol</option>
-                <option value="rc">LE RC Vol</option>
-                <option value="adv">LE Advanced</option>
-                <option value="bud">Budget + Actuals</option>
-              </select>
-            </div>
-            <div>
-              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">RC Filter (Movers)</div>
-              <select class="sel" id="pv_rc" onchange="renderMovers()">
-                <option value="">All Commercial</option>
-              </select>
-            </div>
-            <button class="btn btn-o" style="margin-top:14px" onclick="exportTableCSV('pv_pivot_tbl','pivot_matrix')">⬇ Pivot CSV</button>
-          </div>
-        </div>
-
-        <!-- Top & Bottom movers side by side -->
-        <div class="g2" style="margin-bottom:10px">
-          <div class="card">
-            <div class="ch" style="color:var(--green)">🏆 Top Performers <span style="color:var(--text3)">2026 vs 2025 · GWh incline</span></div>
-            <div class="tbl-wrap" style="max-height:220px;overflow-y:auto" id="pv_top_tbl"></div>
-          </div>
-          <div class="card">
-            <div class="ch" style="color:var(--red)">📉 Bottom Performers <span style="color:var(--text3)">2026 vs 2025 · GWh decline</span></div>
-            <div class="tbl-wrap" style="max-height:220px;overflow-y:auto" id="pv_bot_tbl"></div>
-          </div>
-        </div>
-
-        <!-- RC × Month pivot matrix -->
-        <div class="card">
-          <div class="ch">Combined Scenario Pivot — net kWh billed (GWh) <span>Click RC row to expand customers</span></div>
-          <div class="tbl-wrap" id="pv_pivot_tbl" style="overflow-x:auto;max-height:400px;overflow-y:auto"></div>
-        </div>
-
-        <!-- Customer Commentary Log -->
-        <div class="card" style="margin-top:10px">
-          <div class="ch">Customer Commentary Log
-            <span style="color:var(--text3);font-weight:400">All saved notes by period — full detail report</span>
-            <button class="btn btn-o" style="margin-left:auto" onclick="exportTableCSV('pv_notes_tbl','commentary_log')">⬇ Export</button>
-          </div>
-          <div class="tbl-wrap" id="pv_notes_tbl"></div>
         </div>
       </div>
 
@@ -3127,20 +3029,8 @@ function buildCharts(){
       {label:'2026',data:INDUSTRIES.map(i=>i.y26),backgroundColor:'rgba(0,194,168,0.45)',borderRadius:2},
     ]},options:{...co(),indexAxis:'y',scales:{y:{ticks:{color:TC,font:{size:9}},grid:{color:CC}},x:{ticks:{color:TC},grid:{color:CC}}}}});
 
-  // Net Biller chart — sourced from sbNetBillers (jps_net_billers table); zeros until loaded
+  // EV + brackets charts block
   (()=>{
-    const nbYears = sbNetBillers.length ? [...new Set(sbNetBillers.map(r=>String(r.year)))].sort() : [];
-    const nbRCs   = ['RT10','RT20','RT40'];
-    const nbData  = nbRCs.map(rc => nbYears.map(y => {
-      const rows = sbNetBillers.filter(r=>String(r.year)===y&&r.rate_class===rc);
-      return rows.reduce((s,r)=>s+(r.count||0),0);
-    }));
-    const nbLbl   = document.getElementById('nb_period_lbl');
-    if(nbLbl) nbLbl.textContent = nbYears.length ? `${nbYears[0]}–${nbYears[nbYears.length-1]}` : 'sync DB to populate';
-    mkChart('c_nb',{type:'bar',data:{
-      labels: nbYears.length ? nbYears : ['--'],
-      datasets: nbRCs.map((rc,i)=>({label:rc,data:nbYears.length?nbData[i]:[0],backgroundColor:['#00c2a8','#378ADD','#f5a623'][i],stack:'s',borderRadius:2}))
-    },options:co({scales:{x:{ticks:{color:TC},grid:{color:CC},stacked:true},y:{ticks:{color:TC},grid:{color:CC},stacked:true}}})});
 
     // EV chart — sourced from sbEvData (jps_ev_accounts table); zeros until loaded
     const evYears = sbEvData.length ? [...new Set(sbEvData.map(r=>String(r.year)))].sort() : [];
@@ -3175,6 +3065,23 @@ function buildCharts(){
       {label:'Actual GWh',data:accAct,borderColor:'#00c2a8',backgroundColor:'rgba(0,194,168,0.07)',tension:.3,pointRadius:4,fill:true},
       {label:'Forecast GWh',data:accFc,borderColor:'#f5a623',borderDash:[4,2],backgroundColor:'transparent',tension:.3,pointRadius:4},
     ]},options:co()});
+
+  // Consumption bracket distribution chart (residential)
+  const BKTS=['0-150','150-300','300-500','500+'];
+  const bktAct=[],bktPY=[];
+  if(sbActuals.length){
+    const normB=fcNormActuals(sbActuals);
+    BKTS.forEach(bk=>{
+      bktAct.push(normB.filter(r=>r.bucket===bk&&r.year===curYear&&r.month<=curMonth).reduce((s,r)=>s+r.kwh,0)/1e6);
+      bktPY.push(normB.filter(r=>r.bucket===bk&&r.year===curYear-1&&r.month<=curMonth).reduce((s,r)=>s+r.kwh,0)/1e6);
+    });
+  }else{BKTS.forEach(()=>{bktAct.push(0);bktPY.push(0);});}
+  mkChart('c_bracket_dist',{type:'bar',data:{
+    labels:BKTS,
+    datasets:[
+      {label:'Prior Year',data:bktPY,backgroundColor:'rgba(55,138,221,0.5)',borderColor:'#378ADD',borderWidth:1,borderRadius:3},
+      {label:'Current Year',data:bktAct,backgroundColor:'rgba(0,194,168,0.6)',borderColor:'#00c2a8',borderWidth:1,borderRadius:3},
+    ]},options:{...co()}});
 }
 
 /* ==========================================
@@ -3711,7 +3618,7 @@ function editRONote(num){
   openModal(`Note: ${r.name}`,`<textarea id="ro_note_ta">${r.cmt||''}</textarea>`,()=>{r.cmt=document.getElementById('ro_note_ta').value;closeModal();saveROItemToDB(r).catch(e=>console.warn('DB R&O note save:',e));filterRO();});
 }
 function addROItem(){
-  if(checkPeriodLock())return;
+  if(checkPeriodLock()){toast('Period is locked — unlock in Admin → Period Close','err');return;}
   if(!can('add_ro_item')){toast('Sales Rep or above required to add items','err');return;}
   openModal('Add Risk / Opportunity Item',`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
@@ -4189,24 +4096,31 @@ function saveExecNarrative() {
   saveNarrative(curYear, curMonth, text).catch(e=>console.warn('DB narrative save:',e));
   const t = document.getElementById('es_saved');
   if(t){t.classList.add('sh'); setTimeout(()=>t.classList.remove('sh'),2000);}
+  toast('Narrative saved ✓','ok');
 }
 
-function exportExecSummary() {
+function exportExecSummary(){
   const ms=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const lbl = `${ms[curMonth-1]} ${curYear}`;
-  const narrative = S.get(`es_narrative_${curYear}_${curMonth}`, '(No narrative saved)');
-  let txt = `JPS EXECUTIVE SUMMARY -- ${lbl}\n${'='.repeat(55)}\n\n`;
-  txt += `MANAGEMENT NARRATIVE:\n${narrative}\n\n`;
-  txt += `SEGMENT SCORECARD:\n`;
-  SCORECARD_DATA.forEach(r => {
-    const vb = pct(r.mtd_act, r.mtd_bud);
-    txt += `  ${r.seg}: ${r.mtd_act.toFixed(1)} GWh MTD (${vb>=0?'+':''}${vb.toFixed(1)}% vs bud) -- ${r.status}\n`;
-  });
-  const blob = new Blob([txt], {type:'text/plain'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `JPS_ExecSummary_${curYear}_${String(curMonth).padStart(2,'0')}.txt`;
-  a.click();
+  const lbl=`${ms[curMonth-1]} ${curYear}`;
+  const narrative=S.get(`es_narrative_${curYear}_${curMonth}`,'(No narrative saved)');
+  // Build a printable HTML page and open in new tab
+  const scoreRows=SCORECARD_DATA.map(r=>{
+    const vb=r.mtd_bud>0?pct(r.mtd_act,r.mtd_bud):0;
+    const col=vb>=0?'#27c485':vb>=-5?'#f5a623':'#e84040';
+    return`<tr><td>${r.seg}</td><td>${r.mtd_act.toFixed(2)} GWh</td><td>${r.mtd_bud.toFixed(2)} GWh</td><td style="color:${col};font-weight:700">${vb>=0?'+':''}${vb.toFixed(1)}%</td><td>${r.ytd_act.toFixed(2)} GWh</td><td style="color:${col}">${r.status}</td></tr>`;
+  }).join('');
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>JPS Executive Summary — ${lbl}</title>
+  <style>body{font-family:Arial,sans-serif;padding:30px;color:#111}h1{color:#0d1b2a;font-size:18px;margin-bottom:4px}h2{font-size:13px;color:#555;margin:20px 0 6px}p{font-size:12px;line-height:1.7;white-space:pre-wrap}table{width:100%;border-collapse:collapse;font-size:11px}th{background:#0d1b2a;color:#fff;padding:6px 10px;text-align:left}td{padding:5px 10px;border-bottom:1px solid #ddd}@media print{button{display:none}}</style>
+  </head><body>
+  <h1>JPS Sales Analytics — Executive Summary</h1><p style="font-size:11px;color:#777">${lbl} · Generated ${new Date().toLocaleDateString()}</p>
+  <button onclick="window.print()" style="margin:10px 0;padding:6px 16px;background:#0d1b2a;color:#fff;border:none;border-radius:4px;cursor:pointer">🖨 Print / Save as PDF</button>
+  <h2>Management Narrative</h2><p>${narrative}</p>
+  <h2>Segment Scorecard</h2>
+  <table><thead><tr><th>Segment</th><th>MTD Actual</th><th>MTD Budget</th><th>vs Budget</th><th>YTD Actual</th><th>Status</th></tr></thead><tbody>${scoreRows}</tbody></table>
+  </body></html>`;
+  const w=window.open('','_blank');
+  if(w){w.document.write(html);w.document.close();}
+  else toast('Please allow pop-ups to export the summary','w');
 }
 
 /* =====================================================
@@ -5271,11 +5185,39 @@ function printReport() {
 ========================================== */
 function swAdm(id,btn){
   document.querySelectorAll('.adm-panel').forEach(p=>p.style.display='none');
+  document.querySelectorAll('.adm-sec').forEach(p=>p.style.display='none');
   document.querySelectorAll('.adm-tab').forEach(b=>{b.classList.remove('on');b.classList.add('btn-o');b.classList.remove('btn-t');});
   const panel=document.getElementById(id);if(panel)panel.style.display='';
   if(btn){btn.classList.add('on');btn.classList.remove('btn-o');btn.classList.add('btn-t');}
   if(id==='adm_periods')renderPeriodClose();
   if(id==='adm_schema')renderSchemaSQL();
+  if(id==='adm_comments') renderAdmComments();
+}
+
+function renderAdmComments(){
+  const el=document.getElementById('adm_comments_body');if(!el)return;
+  const ms=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const rows=[];
+  // Exec narratives
+  for(let y=2024;y<=2027;y++){
+    for(let m=1;m<=12;m++){
+      const txt=S.get(`es_narrative_${y}_${m}`,'');
+      if(txt) rows.push({type:'Exec Narrative',period:`${ms[m-1]} ${y}`,text:txt,author:'--'});
+    }
+  }
+  // AI notes
+  ['ov','cm','rs','le'].forEach(sec=>{
+    const note=S.get(`ai_note_${sec}`,'');
+    if(note) rows.push({type:`AI Note (${sec})`,period:'--',text:note,author:'AI'});
+  });
+  if(!rows.length){el.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3)">No saved comments yet. Save a narrative or AI note to see it here.</div>';return;}
+  el.innerHTML=rows.map(r=>`<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;background:var(--navy3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <span style="font-size:10px;font-weight:700;color:var(--teal)">${r.type}</span>
+      <span style="font-size:10px;color:var(--text3)">${r.period}</span>
+    </div>
+    <div style="font-size:11px;color:var(--text2);line-height:1.6;white-space:pre-wrap">${r.text.substring(0,300)}${r.text.length>300?'…':''}</div>
+  </div>`).join('');
 }
 
 function showDeleteMonth(){
@@ -7676,7 +7618,7 @@ window.addEventListener('beforeunload',()=>{
 });
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.12';
+const APP_VERSION = '1.0.13';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
