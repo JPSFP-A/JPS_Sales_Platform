@@ -1434,8 +1434,12 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
           <div class="ch">🗄 Supabase Schema SQL
             <button class="btn btn-o" onclick="copySchemaSql()">📋 Copy SQL</button>
           </div>
+          <div style="margin-bottom:10px;padding:9px 13px;background:rgba(245,158,11,.1);border-left:3px solid var(--amber);border-radius:4px;font-size:11px;color:var(--text2)">
+            <strong style="color:var(--amber)">Getting "column does not exist" errors?</strong>
+            Run the full SQL below — it includes safe <code>RENAME COLUMN</code> migrations that fix legacy column names (e.g. <code>cal_year → year</code>) from the FP&amp;A platform. Safe to re-run at any time.
+          </div>
           <div style="margin-bottom:10px;font-size:11px;color:var(--text2)">
-            Run the SQL below in your Supabase dashboard → SQL Editor → New Query. This creates the two tables required for role security and period locking.
+            Run the SQL below in your Supabase dashboard → <strong>SQL Editor → New Query</strong>. Creates all tables and fixes any column naming mismatches from prior deployments.
           </div>
           <pre id="adm_schema_sql" style="background:var(--navy3);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:10px;color:var(--teal);overflow-x:auto;white-space:pre-wrap;line-height:1.6"></pre>
         </div>
@@ -6433,6 +6437,37 @@ create policy "Managers can write account master"
 -- STEP 3: Consumption actuals and budgets
 -- ══════════════════════════════════════════════════════════
 
+-- ── MIGRATION: if jps_actuals already exists with cal_year (legacy FP&A column name),
+--    rename it to year so all Sales Platform queries work correctly.
+do $$ begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='jps_actuals' and column_name='cal_year'
+  ) then
+    alter table public.jps_actuals rename column cal_year to year;
+  end if;
+end $$;
+
+-- Same migration for jps_commercial_budget if it has cal_year
+do $$ begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='jps_commercial_budget' and column_name='cal_year'
+  ) then
+    alter table public.jps_commercial_budget rename column cal_year to year;
+  end if;
+end $$;
+
+-- Same migration for jps_residential_budget if it has cal_year
+do $$ begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='jps_residential_budget' and column_name='cal_year'
+  ) then
+    alter table public.jps_residential_budget rename column cal_year to year;
+  end if;
+end $$;
+
 -- Actuals: flat dump format — one row per account per month
 -- Commercial rows: jps_ac + name + rate_class + kwh + revenue + demand; consumption_bucket = ''
 -- Residential rows: jps_ac (can be a bucket-level ID) + rate_class + consumption_bucket + kwh + revenue; demand = 0
@@ -8459,7 +8494,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.21';
+const APP_VERSION = '1.0.22';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
