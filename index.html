@@ -2112,6 +2112,7 @@ let PERIOD_LOCKS=[];   // loaded from jps_period_locks
 
 let curPeriod='MTD', curYear=2026, curMonth=2, curQtr=1;
 let YEAR_COL='year'; // auto-detected at sync — set to 'cal_year' on FP&A-seeded databases
+let _schemaFixApplied=false; // jps_normalize_schema RPC called once per session
 let mrPeriod='2026-02', mrRepName='', mrActiveSec='mr_ov';
 let cmDim='industry', cmDrillRC='', _modalFn=null;
 let chartInstances={};
@@ -2144,6 +2145,24 @@ function toast(msg, type){
 async function detectYearCol(sb){
   if(!sb) return;
 
+  // Priority 0: call jps_normalize_schema() via RPC — once per session.
+  // This function (created by running SCHEMA_SQL) renames cal_year→year in the DB
+  // AND sends NOTIFY pgrst,'reload schema' to flush PostgREST's schema cache.
+  // Without this, a stale PostgREST cache can pass column-name validation even when
+  // the underlying PostgreSQL column name has changed — causing the 42703 error.
+  if(!_schemaFixApplied){
+    try{
+      const{error:rpcErr}=await sb.rpc('jps_normalize_schema');
+      if(!rpcErr){
+        _schemaFixApplied=true;
+        YEAR_COL='year'; // after normalization the column is always 'year'
+        console.log('[JPS] jps_normalize_schema OK — YEAR_COL=year');
+        return;
+      }
+      // RPC not found (SCHEMA_SQL not yet run) — fall through to probe detection
+    }catch(e){}
+  }
+
   // Priority 1: check rows already in memory from a previous sync
   if(sbActuals && sbActuals.length > 0){
     const r = sbActuals[0];
@@ -2152,25 +2171,25 @@ async function detectYearCol(sb){
   }
 
   // Priority 2: try each candidate column name — whichever gives no error wins
-  // Try cal_year first: FP&A-seeded DBs have cal_year; trying it first avoids any console noise
+  // Try cal_year first: FP&A-seeded DBs have cal_year; avoids any console noise
   for(const col of ['cal_year','year']){
     try{
-      const {error} = await sb.from('jps_actuals').select(col).limit(1);
+      const{error}=await sb.from('jps_actuals').select(col).limit(1);
       if(!error){ YEAR_COL=col; console.log('[JPS] year col detected:',col); return; }
     }catch(e){}
   }
 
-  // Priority 3: read column list from information_schema (works with authenticated role)
+  // Priority 3: read column list from information_schema
   try{
-    const {data:cols} = await sb
+    const{data:cols}=await sb
       .from('information_schema.columns')
       .select('column_name')
       .eq('table_schema','public')
       .eq('table_name','jps_actuals');
-    if(cols && cols.length){
-      const names = cols.map(c=>c.column_name);
+    if(cols&&cols.length){
+      const names=cols.map(c=>c.column_name);
       console.log('[JPS] jps_actuals columns via info_schema:',names.join(','));
-      const found = ['year','cal_year'].find(c=>names.includes(c));
+      const found=['year','cal_year'].find(c=>names.includes(c));
       if(found){ YEAR_COL=found; return; }
     }
   }catch(e){}
@@ -6859,7 +6878,52 @@ create policy "Authenticated users can write notes"
   on public.jps_notes for all using (auth.role()='authenticated');
 
 -- ══════════════════════════════════════════════════════════
--- STEP 8: Create admin user (run AFTER signing up in the app)
+-- STEP 8: Schema normalisation function  ← RUN THIS
+-- Renames cal_year → year wherever the FP&A platform left it,
+-- then notifies PostgREST to reload its schema cache.
+-- Safe to run repeatedly — completely idempotent.
+-- The app calls this automatically via sb.rpc('jps_normalize_schema').
+-- ══════════════════════════════════════════════════════════
+create or replace function public.jps_normalize_schema()
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actions text[] := '{}';
+begin
+  -- jps_actuals
+  if exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='jps_actuals' and column_name='cal_year') then
+    alter table public.jps_actuals rename column cal_year to year;
+    actions := array_append(actions, 'jps_actuals.cal_year → year');
+  end if;
+  -- jps_commercial_budget
+  if exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='jps_commercial_budget' and column_name='cal_year') then
+    alter table public.jps_commercial_budget rename column cal_year to year;
+    actions := array_append(actions, 'jps_commercial_budget.cal_year → year');
+  end if;
+  -- jps_residential_budget
+  if exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='jps_residential_budget' and column_name='cal_year') then
+    alter table public.jps_residential_budget rename column cal_year to year;
+    actions := array_append(actions, 'jps_residential_budget.cal_year → year');
+  end if;
+  -- Reload PostgREST schema cache so renamed columns take effect immediately
+  notify pgrst, 'reload schema';
+  return case when array_length(actions,1)>0
+    then 'Fixed: ' || array_to_string(actions,'; ')
+    else 'ok'
+  end;
+end;
+$$;
+revoke all on function public.jps_normalize_schema() from public;
+grant execute on function public.jps_normalize_schema() to authenticated;
+
+-- ══════════════════════════════════════════════════════════
+-- STEP 9: Create admin user (run AFTER signing up in the app)
 -- Replace the UUID with the one from auth.users for Jwilson@jpsco.com
 -- ══════════════════════════════════════════════════════════
 -- insert into public.profiles (id, name, email, role, sales_role, territory, is_active)
@@ -8576,7 +8640,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.27';
+const APP_VERSION = '1.0.28';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
