@@ -63,6 +63,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 .chips{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
 .chip{padding:2px 6px;border-radius:4px;font-size:9px;font-weight:600;background:var(--navy3);color:var(--text2);cursor:pointer;border:1px solid var(--border);transition:all .13s}
 .chip.on{background:var(--teal);color:#000;border-color:var(--teal)}
+.theme-btn.on{background:var(--teal3)!important;outline:2px solid var(--teal);outline-offset:-1px}
 
 /* MAIN */
 .main{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
@@ -433,11 +434,26 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
       <span class="tbadge tbt" id="dataStatus">⚡ Sample Data</span>
       <a href="https://jps-fp-a.vercel.app" target="_blank" style="font-size:10px;font-weight:600;color:var(--teal);text-decoration:none;padding:3px 8px;border:1px solid rgba(0,194,168,.3);border-radius:5px;white-space:nowrap" title="Open FP&amp;A Platform">FP&amp;A ↗</a>
       <span class="sb-badge sb-syncing" id="sbStatus" onclick="syncSupabase()" title="Click to sync from Supabase">↻ Connecting…</span>
+      <!-- Theme quick-switch -->
+      <div style="display:flex;gap:2px;border:1px solid var(--border);border-radius:7px;padding:2px;background:var(--navy3)" title="Switch theme">
+        <button onclick="setTheme('dark')"  data-theme="dark"  class="theme-btn on"  style="width:22px;height:22px;border:none;border-radius:5px;cursor:pointer;font-size:12px;background:transparent;line-height:1" title="Dark">🌙</button>
+        <button onclick="setTheme('light')" data-theme="light" class="theme-btn"     style="width:22px;height:22px;border:none;border-radius:5px;cursor:pointer;font-size:12px;background:transparent;line-height:1" title="Light">☀️</button>
+        <button onclick="setTheme('jps')"   data-theme="jps"   class="theme-btn"     style="width:22px;height:22px;border:none;border-radius:5px;cursor:pointer;font-size:12px;background:transparent;line-height:1" title="JPS">⚡</button>
+      </div>
       <span id="appVersion" style="font-size:9px;color:var(--text3);opacity:0.6"></span>
       <div id="onlineUsersPanel" style="display:flex;align-items:center"></div>
       <div class="ua" id="uAvatar" onclick="toggleMenu()">--</div>
       <div class="umenu" id="uMenu">
         <div class="umi" id="uNameDisp">--</div>
+        <!-- Theme switcher -->
+        <div style="padding:6px 10px 4px;border-top:1px solid var(--border);margin-top:3px">
+          <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">Theme</div>
+          <div style="display:flex;gap:5px">
+            <button class="chip theme-btn on" data-theme="dark"  onclick="setTheme('dark');toggleMenu()"  title="Dark">🌙 Dark</button>
+            <button class="chip theme-btn"    data-theme="light" onclick="setTheme('light');toggleMenu()" title="Light">☀️ Light</button>
+            <button class="chip theme-btn"    data-theme="jps"   onclick="setTheme('jps');toggleMenu()"   title="JPS Orange">⚡ JPS</button>
+          </div>
+        </div>
         <div class="umi" style="border-top:1px solid var(--border);margin-top:3px;padding-top:7px" onclick="window.open('https://jps-fp-a.vercel.app','_blank')">📊 FP&amp;A Platform ↗</div>
         <div class="umi" onclick="dlTemplate()">📥 Download Template</div>
         <div class="umi" onclick="doLogout()">🚪 Sign Out</div>
@@ -4667,10 +4683,10 @@ function removeBridgeDriver(idx) {
 }
 
 function clearBridgeDrivers() {
-  if(!confirm('Reset drivers to default?')) return;
-  S.del('vb_drivers');
-  saveBridgeDriversToDB([]).catch(e=>console.warn('DB bridge clear:',e));
-  renderVarianceBridge();
+  openModal('↺ Reset Variance Bridge',
+    '<div style="font-size:11px;color:var(--text2)">Reset all variance bridge drivers back to defaults? Custom entries will be lost.</div>',
+    ()=>{ closeModal(); S.del('vb_drivers'); saveBridgeDriversToDB([]).catch(e=>console.warn('DB bridge clear:',e)); renderVarianceBridge(); }
+  );
 }
 
 /* =====================================================
@@ -5695,12 +5711,10 @@ function doWipeAllActuals(){
       if(msg){msg.textContent='Error: '+e.message;msg.style.color='var(--red)';}
       toast('Wipe failed: '+e.message,'err');
     }
-  });
-  // Start with save button disabled until correct code entered
-  setTimeout(()=>{
-    const btn=document.getElementById('modal_save_btn');
-    if(btn){btn.textContent='🗑 Wipe ALL Actuals';btn.style.background='var(--red)';btn.style.color='#fff';btn.style.opacity='0.35';btn.style.pointerEvents='none';}
-  },30);
+  },'🗑 Wipe ALL Actuals','var(--red)');
+  // Start disabled — oninput above enables it when correct code is typed
+  const _wBtn=document.getElementById('modal_save_btn');
+  if(_wBtn){_wBtn.style.color='#fff';_wBtn.style.opacity='0.35';_wBtn.style.pointerEvents='none';}
 }
 
 /* ── KAM Assignment (Admin) ── */
@@ -6175,15 +6189,20 @@ async function lockPeriodConfirm(year,month){
 async function unlockPeriodPrompt(year,month){
   if(!can('unlock_period')){toast('Admin access required','err');return;}
   const mns=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  if(!confirm(`Unlock ${mns[month-1]} ${year}? This re-opens the period for editing.`))return;
-  const sb=getSB();if(!sb){toast('Supabase required','err');return;}
-  try{
-    await sb.from('jps_period_locks').delete().eq('year',year).eq('month',month);
-    PERIOD_LOCKS=PERIOD_LOCKS.filter(l=>!(Number(l.year)===year&&Number(l.month)===month));
-    await writeAudit('PERIOD_UNLOCK',{year,month,unlocked_by:CU?.email||CU?.name||'Unknown'});
-    toast(`${mns[month-1]} ${year} unlocked`,'ok');renderPeriodClose();
-    renderSection(document.querySelector('.sec.on')?.id);
-  }catch(e){toast('Unlock failed: '+e.message,'err');}
+  openModal(`🔓 Unlock ${mns[month-1]} ${year}`,
+    `<div style="font-size:11px;color:var(--text2)">Re-open <strong style="color:var(--text)">${mns[month-1]} ${year}</strong> for editing? Users will be able to modify actuals for this period.</div>`,
+    async ()=>{
+      closeModal();
+      const sb=getSB();if(!sb){toast('Supabase required','err');return;}
+      try{
+        await sb.from('jps_period_locks').delete().eq('year',year).eq('month',month);
+        PERIOD_LOCKS=PERIOD_LOCKS.filter(l=>!(Number(l.year)===year&&Number(l.month)===month));
+        await writeAudit('PERIOD_UNLOCK',{year,month,unlocked_by:CU?.email||CU?.name||'Unknown'});
+        toast(`${mns[month-1]} ${year} unlocked`,'ok');renderPeriodClose();
+        renderSection(document.querySelector('.sec.on')?.id);
+      }catch(e){toast('Unlock failed: '+e.message,'err');}
+    },'🔓 Unlock Period','var(--amber)'
+  );
 }
 
 function renderPeriodClose(){
@@ -7901,12 +7920,17 @@ function renderLEVariance(){
 ========================================== */
 
 async function clearNetGenData(){
-  if(!confirm('Delete ALL rows from net_gen_historical? This cannot be undone.'))return;
-  const sb=getSB();if(!sb)return;
-  const{error}=await sb.from('net_gen_historical').delete().neq('id',0);
-  if(error){toast('Clear failed: '+error.message,'err');return;}
-  sbNetGen=[];toast('net_gen_historical cleared','ok');
-  renderNetGen();
+  openModal('🗑 Clear Net Generation Data',
+    '<div style="background:rgba(232,64,64,.1);border:1px solid rgba(232,64,64,.3);border-radius:7px;padding:10px 12px;font-size:11px;color:var(--text2)"><strong style="color:var(--red)">⚠ Cannot be undone.</strong> This will delete ALL rows from <code>net_gen_historical</code>.</div>',
+    async ()=>{
+      closeModal();
+      const sb=getSB();if(!sb)return;
+      const{error}=await sb.from('net_gen_historical').delete().neq('id',0);
+      if(error){toast('Clear failed: '+error.message,'err');return;}
+      sbNetGen=[];toast('net_gen_historical cleared','ok');
+      renderNetGen();
+    },'🗑 Delete All','var(--red)'
+  );
 }
 
 function renderNetGen(){
@@ -8383,7 +8407,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.18';
+const APP_VERSION = '1.0.19';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
