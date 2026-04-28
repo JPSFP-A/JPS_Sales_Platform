@@ -1055,6 +1055,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
         <button class="btn btn-o adm-tab"    data-adm="adm_upload"   onclick="swAdm('adm_upload',this)">📤 Upload Data</button>
         <button class="btn btn-o adm-tab"    data-adm="adm_kam"      onclick="swAdm('adm_kam',this)">👤 KAM Assignment</button>
         <button class="btn btn-o adm-tab"    data-adm="adm_schema"   onclick="swAdm('adm_schema',this)">🗄 DB Schema</button>
+        <button class="btn btn-o adm-tab"    data-adm="adm_audit"    onclick="swAdm('adm_audit',this);renderAuditLog()">📋 Audit Trail</button>
       </div>
 
       <!-- ── Users & Roles tab ── -->
@@ -1265,6 +1266,24 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
             Run the SQL below in your Supabase dashboard → SQL Editor → New Query. This creates the two tables required for role security and period locking.
           </div>
           <pre id="adm_schema_sql" style="background:var(--navy3);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:10px;color:var(--teal);overflow-x:auto;white-space:pre-wrap;line-height:1.6"></pre>
+        </div>
+      </div>
+
+      <!-- ── Audit Trail tab ── -->
+      <div id="adm_audit" class="adm-panel" style="display:none">
+        <div class="card">
+          <div class="ch">📋 Audit Trail
+            <button class="btn btn-o" onclick="renderAuditLog()">🔄 Refresh</button>
+          </div>
+          <div style="margin-bottom:10px;font-size:11px;color:var(--text2)">
+            Immutable record of all data uploads, deletions, period locks, KAM assignments and user changes. Last 200 entries shown, newest first.
+          </div>
+          <div style="margin-bottom:10px;padding:9px 13px;background:rgba(55,138,221,.07);border-left:3px solid var(--blue);border-radius:4px;font-size:11px;color:var(--text2)">
+            <strong>Actions tracked:</strong> UPLOAD_DATA · DELETE_DATA · PERIOD_LOCK · PERIOD_UNLOCK · KAM_ASSIGN · BULK_KAM_ASSIGN · USER_ROLE_CHANGE · USER_ACTIVATE · USER_DEACTIVATE
+          </div>
+          <div class="tbl-wrap" id="adm_audit_tbl">
+            <div style="color:var(--text3);font-size:12px;padding:16px">Click Refresh to load audit entries.</div>
+          </div>
         </div>
       </div>
     </div>
@@ -2876,6 +2895,7 @@ async function loadExcel(input){
       if(totalRows===0){toast('No data rows found — check sheet names and column headers','w');if(stEl)stEl.textContent='No rows found';input.value='';return;}
       if(stEl){stEl.textContent=`✓ ${totalRows.toLocaleString()} rows uploaded (${mode})`;stEl.classList.add('live');}
       if(dsEl){dsEl.textContent='📊 Live Data';dsEl.className='tbadge tbg';}
+      await writeAudit('UPLOAD_DATA',{rows:totalRows,mode,file:input.files[0]?.name||'unknown'});
       toast(`Uploaded ${totalRows.toLocaleString()} rows — refreshing…`,'ok');
       input.value='';
       await syncSupabase(true);
@@ -5269,6 +5289,7 @@ async function doDeleteMonthAdm(){
     const{error,count}=await sb.from('jps_actuals').delete({count:'exact'}).eq('year',year).eq('month',month);
     if(error)throw error;
     if(msg){msg.textContent=`✓ Deleted ${count||'all'} rows for ${year}-${String(month).padStart(2,'0')}`;msg.style.color='var(--green)';}
+    await writeAudit('DELETE_DATA',{table:'jps_actuals',year,month,rows_deleted:count||'all'});
     toast(`Month ${year}-${month} deleted ✓`,'ok');
     await syncSupabase(true);
     buildCharts();
@@ -5372,6 +5393,7 @@ async function saveKamAssignment(ac){
     const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
     CUSTOMERS.forEach(c=>{c.kam=kamMap[c.num]||'';});
     populateKamDropdowns();
+    await writeAudit('KAM_ASSIGN',{jps_ac:ac,kam:newKam||'(removed)'});
     toast(`KAM saved for ${ac}`,'ok');
   }catch(e){toast('Save failed: '+e.message,'err');}
 }
@@ -5401,6 +5423,7 @@ async function kamBulkAssign(){
     CUSTOMERS.forEach(c=>{c.kam=kamMap2[c.num]||'';});
     populateKamDropdowns();
     renderAdmKam();
+    await writeAudit('BULK_KAM_ASSIGN',{accounts:accounts.length,from_kam:fromKam||'(unassigned)',to_kam:toKam});
     if(msg)msg.textContent=`✓ ${accounts.length} accounts assigned to "${toKam}"`;
     toast(`${accounts.length} accounts → ${toKam}`,'ok');
   }catch(e){if(msg)msg.textContent='Error: '+e.message;toast('Bulk assign failed: '+e.message,'err');}
@@ -5466,7 +5489,10 @@ async function changeUserRole(userId,newRole){
   const sb=getSB();if(!sb){toast('Supabase required','err');return;}
   try{
     await sb.from('profiles').update({sales_role:newRole,updated_at:new Date().toISOString()}).eq('id',userId);
-    const u=PLATFORM_USERS.find(x=>x.id===userId);if(u)u.sales_role=newRole;
+    const u=PLATFORM_USERS.find(x=>x.id===userId);
+    const oldRole=u?.sales_role||'unknown';
+    if(u)u.sales_role=newRole;
+    await writeAudit('USER_ROLE_CHANGE',{user_id:userId,user_name:u?.name||u?.email||userId,from_role:oldRole,to_role:newRole});
     toast('Role updated ✓','ok');renderAdm();
   }catch(e){toast('Failed: '+e.message,'err');}
 }
@@ -5477,6 +5503,7 @@ async function toggleUserActive(userId,currently){
   try{
     await sb.from('profiles').update({is_active:!currently,updated_at:new Date().toISOString()}).eq('id',userId);
     const u=PLATFORM_USERS.find(x=>x.id===userId);if(u)u.is_active=!currently;
+    await writeAudit(currently?'USER_DEACTIVATE':'USER_ACTIVATE',{user_id:userId,user_name:u?.name||u?.email||userId});
     toast(`User ${!currently?'activated':'deactivated'}`,'ok');renderAdm();
   }catch(e){toast('Failed: '+e.message,'err');}
 }
@@ -5572,6 +5599,7 @@ async function lockPeriodConfirm(year,month){
       await sb.from('jps_period_locks').upsert(lock,{onConflict:'year,month'});
       PERIOD_LOCKS=PERIOD_LOCKS.filter(l=>!(Number(l.year)===year&&Number(l.month)===month));
       PERIOD_LOCKS.push(lock);
+      await writeAudit('PERIOD_LOCK',{year,month,locked_by:lock.locked_by,notes:lock.notes||''});
       toast(`${mns[month-1]} ${year} locked ✓`,'ok');closeModal();renderPeriodClose();
       renderSection(document.querySelector('.sec.on')?.id);
     }catch(e){toast('Lock failed: '+e.message,'err');}
@@ -5586,6 +5614,7 @@ async function unlockPeriodPrompt(year,month){
   try{
     await sb.from('jps_period_locks').delete().eq('year',year).eq('month',month);
     PERIOD_LOCKS=PERIOD_LOCKS.filter(l=>!(Number(l.year)===year&&Number(l.month)===month));
+    await writeAudit('PERIOD_UNLOCK',{year,month,unlocked_by:CU?.email||CU?.name||'Unknown'});
     toast(`${mns[month-1]} ${year} unlocked`,'ok');renderPeriodClose();
     renderSection(document.querySelector('.sec.on')?.id);
   }catch(e){toast('Unlock failed: '+e.message,'err');}
@@ -6140,6 +6169,40 @@ function getSB(){
   if(!_sbClient&&window.supabase?.createClient)
     _sbClient=window.supabase.createClient(SB_URL,SB_KEY);
   return _sbClient;
+}
+
+/* ── Audit Trail ───────────────────────────────────────────────────────── */
+async function writeAudit(action, details={}){
+  try{
+    const sb=getSB(); if(!sb) return;
+    const userName = CU?.name || CU?.email || 'Unknown';
+    await sb.from('audit_log').insert({
+      user_name: userName,
+      action,
+      details,
+      created_at: new Date().toISOString()
+    });
+  }catch(e){ console.warn('Audit log write failed:',e.message); }
+}
+
+async function renderAuditLog(){
+  const el=document.getElementById('adm_audit_tbl'); if(!el) return;
+  el.innerHTML='<div style="color:var(--text3);font-size:12px;padding:16px">Loading…</div>';
+  try{
+    const sb=getSB(); if(!sb){el.innerHTML='<div style="color:var(--red);padding:16px">Not connected</div>';return;}
+    const{data,error}=await sb.from('audit_log').select('*').order('created_at',{ascending:false}).limit(200);
+    if(error) throw error;
+    if(!data||!data.length){el.innerHTML='<div style="color:var(--text3);font-size:12px;padding:16px">No audit entries yet.</div>';return;}
+    const fmt=ts=>{try{return new Date(ts).toLocaleString('en-JM',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});}catch{return ts;}};
+    const actionColor={UPLOAD_DATA:'var(--teal)',DELETE_DATA:'var(--red)',PERIOD_LOCK:'var(--blue)',PERIOD_UNLOCK:'var(--yellow)',KAM_ASSIGN:'var(--green)',BULK_KAM_ASSIGN:'var(--green)',USER_ROLE_CHANGE:'var(--purple)',USER_ACTIVATE:'var(--green)',USER_DEACTIVATE:'var(--red)',AUTO_ALLOCATION:'var(--text3)'};
+    el.innerHTML=`<table class="dt"><thead><tr><th>Date/Time</th><th>User</th><th>Action</th><th>Details</th></tr></thead><tbody>`+
+      data.map(r=>{
+        const det=typeof r.details==='object'?Object.entries(r.details).map(([k,v])=>`<span style="color:var(--text3)">${k}:</span> ${v}`).join(' &nbsp;·&nbsp; '):String(r.details||'');
+        const col=actionColor[r.action]||'var(--text2)';
+        return `<tr><td style="font-size:10px;white-space:nowrap;color:var(--text3)">${fmt(r.created_at)}</td><td style="font-size:11px">${r.user_name||''}</td><td><span style="font-size:10px;font-weight:600;color:${col};background:${col}22;padding:2px 7px;border-radius:10px">${r.action}</span></td><td style="font-size:10px;color:var(--text2)">${det}</td></tr>`;
+      }).join('')+
+      '</tbody></table>';
+  }catch(e){el.innerHTML=`<div style="color:var(--red);padding:16px">Error: ${e.message}</div>`;}
 }
 
 function updateSbStatus(state){
