@@ -274,6 +274,60 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 .suite-nav a.sn-back{margin-left:auto;color:rgba(255,255,255,.35);font-size:10px;text-decoration:none;padding:0 10px;height:30px;display:flex;align-items:center;gap:4px}
 .suite-nav a.sn-back:hover{color:var(--teal)}
 .app-wrap{display:flex;flex:1;min-height:0;overflow:hidden;height:0}
+
+/* ─── THEME SYSTEM ──────────────────────────────────── */
+/* Light theme */
+[data-theme="light"]{
+  --navy:#f4f6f9;--navy2:#ffffff;--navy3:#eef1f5;--navy4:#e2e8ef;
+  --teal:#0096a7;--teal2:#007a8c;--teal3:rgba(0,150,167,0.12);
+  --amber:#c97a00;--red:#c62828;--green:#1b7a45;--blue:#1a5fb4;
+  --purple:#4a44ab;
+  --text:#1e293b;--text2:#475569;--text3:#94a3b8;
+  --border:rgba(0,0,0,0.10);--card:#ffffff;
+}
+[data-theme="light"] body{background:var(--navy)}
+[data-theme="light"] .suite-nav{background:#e8ecf1;border-bottom-color:rgba(0,0,0,0.10)}
+[data-theme="light"] .suite-nav .sn-brand{color:rgba(0,0,0,.45)}
+[data-theme="light"] .suite-nav a.sn-link{color:rgba(0,0,0,.55);border-color:rgba(0,0,0,.10)}
+[data-theme="light"] .suite-nav a.sn-link:hover{color:#1e293b;background:rgba(0,0,0,.04)}
+[data-theme="light"] .suite-nav a.sn-link.sn-active{color:var(--teal);background:rgba(0,150,167,.08)}
+[data-theme="light"] .suite-nav a.sn-back{color:rgba(0,0,0,.35)}
+[data-theme="light"] .dt tr:hover td{background:rgba(0,0,0,.025)}
+[data-theme="light"] .hn{background:rgba(0,0,0,.05);color:var(--text2)}
+[data-theme="light"] .pgr{background:rgba(0,0,0,.06);color:var(--text2)}
+[data-theme="light"] .def-watch{background:rgba(0,0,0,.05);color:var(--text2)}
+[data-theme="light"] .sb-offline{background:rgba(0,0,0,.06);color:var(--text3);border-color:var(--border)}
+[data-theme="light"] .umenu{background:#ffffff}
+[data-theme="light"] .login-screen{background:var(--navy)}
+[data-theme="light"] .login-card{background:#ffffff;box-shadow:0 4px 24px rgba(0,0,0,.10)}
+[data-theme="light"] .period-cell{background:#eef1f5}
+[data-theme="light"] .period-cell.locked{background:rgba(198,40,40,.05)}
+[data-theme="light"] .period-cell.open{background:rgba(0,150,167,.05)}
+[data-theme="light"] .cpanel{background:#f4f6f9}
+[data-theme="light"] .modal-bg{background:rgba(0,0,0,.5)}
+[data-theme="light"] .modal{background:#ffffff}
+[data-theme="light"] .stab{color:var(--text2)}
+[data-theme="light"] .stab.on{color:#fff}
+[data-theme="light"] .btn-o{color:var(--text2);border-color:var(--border)}
+[data-theme="light"] input,.lf input,[data-theme="light"] .lf select{background:var(--navy3)}
+[data-theme="light"] code{background:#eef1f5;color:var(--text2);padding:1px 4px;border-radius:3px}
+
+/* JPS Orange theme (dark with JPS brand accent) */
+[data-theme="jps"]{
+  --navy:#0f1a25;--navy2:#162130;--navy3:#1d2c3d;--navy4:#253647;
+  --teal:#FF7A1A;--teal2:#cc5f0e;--teal3:rgba(255,122,26,0.15);
+  --amber:#FFB800;--red:#e84040;--green:#27c485;--blue:#378ADD;
+  --purple:#b07aff;
+  --text:#f4ece0;--text2:#a89070;--text3:#6a5c48;
+  --border:rgba(255,255,255,0.07);--card:rgba(255,255,255,0.04);
+}
+[data-theme="jps"] .suite-nav{background:#090f16;border-bottom-color:rgba(255,122,26,0.25)}
+[data-theme="jps"] .suite-nav a.sn-link.sn-active{color:var(--teal);background:rgba(255,122,26,.1)}
+[data-theme="jps"] .stab.on{background:var(--teal);color:#fff;border-color:var(--teal)}
+[data-theme="jps"] .pbtn.on{background:var(--teal);color:#fff;border-color:var(--teal)}
+[data-theme="jps"] .chip.on{background:var(--teal);color:#fff;border-color:var(--teal)}
+[data-theme="jps"] .btn-t{color:#fff}
+[data-theme="jps"] .login-btn{color:#fff}
 </style>
 </head>
 <body>
@@ -355,6 +409,14 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
     <div class="chips" id="segChips"><span style="font-size:9px;color:var(--text3)">No data</span></div>
     <div class="fl">Year</div>
     <div class="chips" id="yearChips"><span style="font-size:9px;color:var(--text3)">No data</span></div>
+    <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+      <div class="fl">Theme</div>
+      <div style="display:flex;gap:4px">
+        <button class="chip theme-btn on" data-theme="dark" onclick="setTheme('dark')" title="Dark theme">🌙 Dark</button>
+        <button class="chip theme-btn" data-theme="light" onclick="setTheme('light')" title="Light theme">☀️ Light</button>
+        <button class="chip theme-btn" data-theme="jps" onclick="setTheme('jps')" title="JPS Orange theme">⚡ JPS</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1048,6 +1110,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
       <div class="krow">
         <div class="kpi kr"><div class="kl">Dropped Accounts</div><div class="kv" id="vld_dropped_count">--</div><div class="ks dn" id="vld_dropped_gwh">-- GWh lost</div></div>
         <div class="kpi ka"><div class="kl">GWh Deflections</div><div class="kv" id="vld_deflect_count">--</div><div class="ks dn" id="vld_deflect_gwh">-- GWh at risk</div></div>
+        <div class="kpi kt"><div class="kl">No History Groups</div><div class="kv" id="vld_nohistory_count">--</div><div class="ks nt">accounts with no prior year</div></div>
         <div class="kpi ka"><div class="kl">MoM Anomalies</div><div class="kv" id="vld_anom_count">--</div><div class="ks dn">events &gt;25% swing</div></div>
         <div class="kpi kt"><div class="kl">Last Validated</div><div class="kv" id="vld_ts" style="font-size:11px">--</div><div class="ks nt">Sync DB to refresh</div></div>
       </div>
@@ -1101,7 +1164,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
           <input class="si" placeholder="🔍 Account # or name..." id="vld_anom_q" oninput="renderVldAnomalies()"/>
           <select class="sel" id="vld_anom_rc" onchange="renderVldAnomalies()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
           <select class="sel" id="vld_anom_yr" onchange="renderVldAnomalies()">
-            <option value="">All years</option><option value="2026">2026</option><option value="2025">2025</option>
+            <option value="">All years</option><option id="vld_anom_yr_cy" value="2026">2026</option><option id="vld_anom_yr_py" value="2025">2025</option>
           </select>
           <span class="row-count" id="vld_anom_count_lbl"></span>
         </div>
@@ -2170,6 +2233,20 @@ async function doLogout(){
 }
 function toggleMenu(){document.getElementById('uMenu').classList.toggle('sh');}
 document.addEventListener('click',e=>{if(!e.target.closest('#uAvatar')&&!e.target.closest('#uMenu'))document.getElementById('uMenu').classList.remove('sh');});
+
+function setTheme(t){
+  document.documentElement.setAttribute('data-theme',t);
+  S.set('theme',t);
+  // Update active state on theme buttons
+  document.querySelectorAll('.theme-btn').forEach(b=>b.classList.toggle('on',b.dataset.theme===t));
+  // Rebuild charts with new colors
+  try{buildCharts();}catch(e){}
+}
+function applyStoredTheme(){
+  const t=S.get('theme','dark');
+  document.documentElement.setAttribute('data-theme',t);
+  document.querySelectorAll('.theme-btn').forEach(b=>b.classList.toggle('on',b.dataset.theme===t));
+}
 
 /* ==========================================
    STORAGE — localStorage cache + Supabase DB
@@ -4079,10 +4156,18 @@ function renderGloss(){
 /* ==========================================
    MODAL
 ========================================== */
-function openModal(title,bodyHtml,saveFn){
+function openModal(title,bodyHtml,saveFn,saveBtnText,saveBtnColor){
   document.getElementById('modal_title').textContent=title;
   document.getElementById('modal_body').innerHTML=bodyHtml;
   _modalFn=saveFn;
+  const btn=document.getElementById('modal_save_btn');
+  if(btn){
+    btn.textContent=saveBtnText||'💾 Save';
+    btn.style.background=saveBtnColor||'';
+    btn.style.borderColor=saveBtnColor||'';
+    btn.style.opacity='1';
+    btn.style.pointerEvents='';
+  }
   document.getElementById('modal').classList.add('sh');
 }
 function closeModal(){document.getElementById('modal').classList.remove('sh');_modalFn=null;}
@@ -4181,6 +4266,7 @@ function renderCommercialKPIs(){
    INIT
 ========================================== */
 function initAll(){
+  applyStoredTheme();
   buildCharts();
   renderSection('ov');
   document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>c.classList.toggle('on'));
@@ -5519,22 +5605,35 @@ async function doDeleteMonthAdm(){
   const year=Number(document.getElementById('delYearAdm')?.value);
   const month=Number(document.getElementById('delMonthAdm')?.value);
   if(!year||!month)return;
-  const msg=document.getElementById('delMonthMsgAdm');
-  if(!confirm(`Delete ALL actuals for ${year}-${String(month).padStart(2,'0')}? This cannot be undone.`))return;
-  if(msg){msg.textContent='Deleting…';msg.style.display='';}
-  try{
-    const{error,count}=await sb.from('jps_actuals').delete({count:'exact'}).eq('year',year).eq('month',month);
-    if(error)throw error;
-    if(msg){msg.textContent=`✓ Deleted ${count||'all'} rows for ${year}-${String(month).padStart(2,'0')}`;msg.style.color='var(--green)';}
-    await writeAudit('DELETE_DATA',{table:'jps_actuals',year,month,rows_deleted:count||'all'});
-    toast(`Month ${year}-${month} deleted ✓`,'ok');
-    await syncSupabase(true);
-    buildCharts();
-    renderSection(document.querySelector('.sec.on')?.id);
-  }catch(e){
-    if(msg){msg.textContent='Error: '+e.message;msg.style.color='var(--red)';}
-    toast('Delete failed: '+e.message,'err');
-  }
+  const monthStr=String(month).padStart(2,'0');
+  openModal('🗑 Confirm — Delete Month',`
+    <div style="background:rgba(232,64,64,.1);border:1px solid rgba(232,64,64,.35);border-radius:7px;padding:12px 14px;margin-bottom:14px">
+      <div style="font-weight:700;color:var(--red);margin-bottom:6px;font-size:12px">⚠ THIS CANNOT BE UNDONE</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.7">
+        This will permanently delete all actuals for <strong style="color:var(--text)">${year}-${monthStr}</strong>. This cannot be undone.
+      </div>
+    </div>
+  `,async ()=>{
+    closeModal();
+    const _year=Number(document.getElementById('delYearAdm')?.value);
+    const _month=Number(document.getElementById('delMonthAdm')?.value);
+    const _sb=getSB();
+    const _msg=document.getElementById('delMonthMsgAdm');
+    if(_msg){_msg.textContent='Deleting…';_msg.style.display='';}
+    try{
+      const{error,count}=await _sb.from('jps_actuals').delete({count:'exact'}).eq('year',_year).eq('month',_month);
+      if(error)throw error;
+      if(_msg){_msg.textContent=`✓ Deleted ${count||'all'} rows for ${_year}-${String(_month).padStart(2,'0')}`;_msg.style.color='var(--green)';}
+      await writeAudit('DELETE_DATA',{table:'jps_actuals',year:_year,month:_month,rows_deleted:count||'all'});
+      toast(`Month ${_year}-${_month} deleted ✓`,'ok');
+      await syncSupabase(true);
+      buildCharts();
+      renderSection(document.querySelector('.sec.on')?.id);
+    }catch(e){
+      if(_msg){_msg.textContent='Error: '+e.message;_msg.style.color='var(--red)';}
+      toast('Delete failed: '+e.message,'err');
+    }
+  },'Delete →','var(--red)');
 }
 
 function doWipeAllActuals(){
@@ -7992,6 +8091,13 @@ function runValidation(){
     .map(a=>({...a,ratio:a.cy/a.py,pct:(a.cy/a.py*100),cyGwh:a.cy/1e6,pyGwh:a.py/1e6,atRisk:(a.py-a.cy)/1e6,severity:a.cy/a.py<0.5?'Critical':'Moderate'}))
     .sort((a,b)=>b.atRisk-a.atRisk);
 
+  // ── 4. No History Groups ─────────────────────────────
+  // Accounts in current year but not in prior year at all
+  const _vldNoHistory = Object.values(acSums)
+    .filter(a => a.py === 0 && a.cy > 0)
+    .map(a => ({...a, cyGwh: a.cy/1e6}))
+    .sort((a,b) => b.cyGwh - a.cyGwh);
+
   // ── 3. Month-on-Month Anomalies ──────────────────────
   // For each account × year, find consecutive months where kWh swings >25%
   const momData={};
@@ -8024,12 +8130,18 @@ function runValidation(){
   setEl('vld_deflect_count',_vldDeflections.length.toLocaleString());
   setEl('vld_deflect_gwh',totalDefGwh.toFixed(2)+' GWh at risk');
   setEl('vld_anom_count',_vldAnomalies.length.toLocaleString());
+  setEl('vld_nohistory_count',_vldNoHistory.length.toLocaleString());
   setEl('vld_ts',new Date().toLocaleTimeString());
+  // Update dynamic year options
+  const cyOpt=document.getElementById('vld_anom_yr_cy');
+  const pyOpt=document.getElementById('vld_anom_yr_py');
+  if(cyOpt){cyOpt.value=String(cy);cyOpt.textContent=String(cy);}
+  if(pyOpt){pyOpt.value=String(py);pyOpt.textContent=String(py);}
 
   renderVldDropped();
   renderVldDeflections();
   renderVldAnomalies();
-  toast(`Validation complete — ${_vldDropped.length} dropped, ${_vldDeflections.length} deflections, ${_vldAnomalies.length} anomalies`,'ok');
+  toast(`Validation complete — ${_vldDropped.length} dropped, ${_vldDeflections.length} deflections, ${_vldAnomalies.length} anomalies, ${_vldNoHistory.length} no-history`,'ok');
 }
 
 function renderVldDropped(){
@@ -8110,7 +8222,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.16';
+const APP_VERSION = '1.0.17';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
