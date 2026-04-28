@@ -2139,22 +2139,42 @@ function toast(msg, type){
 
 /* ── Year-column auto-detection ──
    FP&A platform originally created jps_actuals with 'cal_year'.
-   Sales platform uses 'year'. Detect once per sync, apply everywhere. */
+   Sales platform schema uses 'year'. Probe the live DB each time to
+   avoid any mismatch. Called at sync start AND at upload start. */
 async function detectYearCol(sb){
-  // Priority 1: check data already in memory
+  if(!sb) return;
+
+  // Priority 1: check rows already in memory from a previous sync
   if(sbActuals && sbActuals.length > 0){
-    YEAR_COL = ('cal_year' in sbActuals[0]) ? 'cal_year' : 'year';
-    return;
+    const r = sbActuals[0];
+    if('cal_year' in r){ YEAR_COL='cal_year'; return; }
+    if('year'     in r){ YEAR_COL='year';     return; }
   }
-  // Priority 2: probe the table with a lightweight column-specific select
+
+  // Priority 2: try each candidate column name — whichever gives no error wins
+  for(const col of ['year','cal_year']){
+    try{
+      const {error} = await sb.from('jps_actuals').select(col).limit(1);
+      if(!error){ YEAR_COL=col; console.log('[JPS] year col detected:',col); return; }
+    }catch(e){}
+  }
+
+  // Priority 3: read column list from information_schema (works with authenticated role)
   try{
-    const {error} = await sb.from('jps_actuals').select('year').limit(1);
-    if(error && /year.*does not exist|does not exist.*year/i.test(error.message)){
-      YEAR_COL = 'cal_year';
-    } else {
-      YEAR_COL = 'year';
+    const {data:cols} = await sb
+      .from('information_schema.columns')
+      .select('column_name')
+      .eq('table_schema','public')
+      .eq('table_name','jps_actuals');
+    if(cols && cols.length){
+      const names = cols.map(c=>c.column_name);
+      console.log('[JPS] jps_actuals columns via info_schema:',names.join(','));
+      const found = ['year','cal_year'].find(c=>names.includes(c));
+      if(found){ YEAR_COL=found; return; }
     }
-  }catch(e){ YEAR_COL = 'year'; }
+  }catch(e){}
+
+  console.warn('[JPS] Could not detect year column — using default:',YEAR_COL);
 }
 
 /* ── Permission helper ── */
@@ -3006,6 +3026,8 @@ async function loadExcel(input){
   if(!file)return;
   const sb=getSB();
   if(!sb){toast('Supabase not connected — check Admin → DB Schema','err');return;}
+  // Detect year column name before ANY DB operation (handles first upload before sync)
+  await detectYearCol(sb);
   // Ensure XLSX library is loaded (deferred for faster initial page load)
   try{await loadXLSX();}catch(e){toast('Could not load Excel library: '+e.message,'err');return;}
   const mode=document.getElementById('uploadMode')?.value||'overwrite';
@@ -7075,6 +7097,9 @@ async function syncSupabase(silent=false){
       indData,kamData,amData,actData,
       jbData,cbData,resBudData,
       ng,nb,ev,pl
+    // Detect the year column name BEFORE loading — must complete before any write ops
+    await detectYearCol(sb);
+
     ] = await Promise.all([
       sbTable('jps_industries',{}),
       sbTable('jps_kam',{}),
@@ -7100,10 +7125,16 @@ async function syncSupabase(silent=false){
     else log.push('Account Master: ⚠ jps_account_master not found — run schema SQL');
 
     const actOk=!!actData;
-    if(actOk){sbActuals=actData;log.push(`Actuals: jps_actuals (${actData.length} rows)`);}
+    if(actOk){
+      sbActuals=actData;
+      log.push(`Actuals: jps_actuals (${actData.length} rows)`);
+      // Re-confirm YEAR_COL from actual returned data (rows have the real column names)
+      if(actData.length>0){
+        YEAR_COL=('cal_year' in actData[0])?'cal_year':'year';
+        console.log('[JPS] year col confirmed from data:',YEAR_COL);
+      }
+    }
     else log.push('Actuals: ⚠ jps_actuals not accessible — check RLS policies');
-    // Auto-detect year column name ('year' vs 'cal_year') — works whether or not rows exist
-    await detectYearCol(sb);
 
     sbBudget=[];
     if(jbData&&jbData.length){sbBudget=[...sbBudget,...jbData];log.push(`Budget: jps_budget (${jbData.length} rows)`);}
@@ -8517,7 +8548,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.23';
+const APP_VERSION = '1.0.24';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
