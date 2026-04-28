@@ -2250,8 +2250,10 @@ async function doLogin(){
       fpa_role:profile?.role||'viewer',
       territory:profile?.territory||'All',
     });
-    // Listen for session expiry
-    sb.auth.onAuthStateChange((ev)=>{if(ev==='SIGNED_OUT')doLogout();});
+    // Listen for session expiry — only react to events from this app's own session
+    sb.auth.onAuthStateChange((ev,session)=>{
+      if(ev==='SIGNED_OUT'&&CU&&CU.id) doLogout();
+    });
   }catch(e){showErr('Sign in failed: '+e.message);if(btn){btn.textContent='Sign In →';btn.disabled=false;}}
 }
 
@@ -6882,7 +6884,14 @@ let _sbClient=null,
 
 function getSB(){
   if(!_sbClient&&window.supabase?.createClient)
-    _sbClient=window.supabase.createClient(SB_URL,SB_KEY);
+    _sbClient=window.supabase.createClient(SB_URL,SB_KEY,{
+      auth:{
+        storageKey:'jps_sales_v1',   // isolates this app's session from the FP&A platform
+        autoRefreshToken:true,
+        persistSession:true,
+        detectSessionInUrl:false,    // prevents grabbing tokens meant for the FP&A redirect
+      }
+    });
   return _sbClient;
 }
 
@@ -8548,7 +8557,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.24';
+const APP_VERSION = '1.0.25';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
