@@ -582,11 +582,23 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
           <div class="tbl-controls">
             <input class="si" placeholder="🔍 Name or account #" id="cm_q" oninput="renderCmCust()"/>
             <select class="sel" id="cm_rc" onchange="renderCmCust()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
+            <select class="sel" id="cm_kam_f" onchange="renderCmCust()"><option value="">All KAMs</option></select>
             <select class="sel" id="cm_trend_f" onchange="renderCmCust()"><option value="">All trends</option><option value="up">Increasing ↑</option><option value="dn">Declining ↓</option></select>
             <span class="row-count" id="cm_count"></span>
           </div>
           <div class="tbl-wrap" id="cm_cust_tbl"></div>
         </div>
+
+        <!-- KAM Performance Summary -->
+        <div class="card">
+          <div class="ch">👤 KAM Performance Summary <span id="kam_perf_period"></span>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-o" onclick="exportTableCSV('kam_perf_tbl','kam_performance')">⬇ CSV</button>
+            </div>
+          </div>
+          <div class="tbl-wrap" id="kam_perf_tbl"><div style="padding:16px;font-size:11px;color:var(--text3);text-align:center">KAM data not loaded — upload a KAM sheet or assign accounts in Admin → KAM Assignment.</div></div>
+        </div>
+
         <div class="card">
           <div class="ch">Monthly Commercial Commentary
             <div class="stabs" style="margin:0" id="cm_dim_tabs">
@@ -743,6 +755,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
             <input class="si" style="max-width:200px" placeholder="🔍 Search customer..." id="fc_q" oninput="renderFcEntry()"/>
             <select class="sel" id="fc_rc" onchange="renderFcEntry()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
+            <select class="sel" id="fc_kam" onchange="renderFcEntry()"><option value="">All KAMs</option></select>
             <button class="btn btn-t" onclick="saveFcAll()">💾 Save All Forecasts</button>
             <button class="btn btn-o" onclick="exportTableCSV('fc_tbl','forecast_entry')">⬇ Export</button>
           </div>
@@ -1040,6 +1053,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
         <button class="btn btn-t adm-tab on" data-adm="adm_users"    onclick="swAdm('adm_users',this)">👥 Users &amp; Roles</button>
         <button class="btn btn-o adm-tab"    data-adm="adm_periods"  onclick="swAdm('adm_periods',this)">🔒 Period Close</button>
         <button class="btn btn-o adm-tab"    data-adm="adm_upload"   onclick="swAdm('adm_upload',this)">📤 Upload Data</button>
+        <button class="btn btn-o adm-tab"    data-adm="adm_kam"      onclick="swAdm('adm_kam',this)">👤 KAM Assignment</button>
         <button class="btn btn-o adm-tab"    data-adm="adm_schema"   onclick="swAdm('adm_schema',this)">🗄 DB Schema</button>
       </div>
 
@@ -1198,6 +1212,50 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
       </div>
 
       <!-- ── DB Schema tab ── -->
+      <!-- ── KAM Assignment tab ── -->
+      <div id="adm_kam" class="adm-panel" style="display:none">
+        <div class="card" style="margin-bottom:12px">
+          <div class="ch">👤 KAM Assignment
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+              <button class="btn btn-t" onclick="renderAdmKam()">🔄 Refresh</button>
+              <button class="btn btn-o" onclick="exportTableCSV('adm_kam_tbl','kam_assignments')">⬇ Export CSV</button>
+            </div>
+          </div>
+          <div style="margin-bottom:10px;padding:9px 13px;background:rgba(0,194,168,.07);border-left:3px solid var(--teal);border-radius:4px;font-size:11px;color:var(--text2)">
+            Assign Key Account Managers to accounts directly here, or upload a <strong>KAM</strong> sheet via <em>Upload Data</em>. Changes save immediately to the database.
+          </div>
+          <div class="tbl-controls" style="margin-bottom:10px">
+            <input class="si" placeholder="🔍 Account # or name..." id="adm_kam_q" oninput="renderAdmKam()"/>
+            <select class="sel" id="adm_kam_rc" onchange="renderAdmKam()">
+              <option value="">All rate classes</option>
+              <option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option>
+            </select>
+            <select class="sel" id="adm_kam_filter" onchange="renderAdmKam()">
+              <option value="">All KAMs</option>
+              <option value="_unassigned">Unassigned only</option>
+            </select>
+          </div>
+          <div class="tbl-wrap" id="adm_kam_tbl"></div>
+        </div>
+
+        <!-- Quick bulk-assign panel -->
+        <div class="card">
+          <div class="ch">⚡ Quick Assign — Change KAM for Multiple Accounts</div>
+          <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-top:8px">
+            <div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:4px">From KAM (leave blank for unassigned)</div>
+              <input class="si" placeholder="Current KAM name..." id="kam_bulk_from" style="width:200px"/>
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:4px">Assign to KAM</div>
+              <input class="si" placeholder="New KAM name..." id="kam_bulk_to" style="width:200px"/>
+            </div>
+            <button class="btn btn-t" onclick="kamBulkAssign()">Assign All →</button>
+            <span id="kam_bulk_msg" style="font-size:10px;color:var(--teal)"></span>
+          </div>
+        </div>
+      </div>
+
       <div id="adm_schema" class="adm-panel" style="display:none">
         <div class="card">
           <div class="ch">🗄 Supabase Schema SQL
@@ -2639,7 +2697,7 @@ function renderSection(id){
   else if(id==='ar'){renderRecon();renderArKPIs();}
   else if(id==='gl'){renderGloss();}
   else if(id==='help'){/* static content, no render needed */}
-  else if(id==='adm'){renderAdm();}
+  else if(id==='adm'){renderAdm();renderAdmKam();}
   else if(id==='es'){renderExecSummary();}
   else if(id==='vb'){renderVarianceBridge();}
   else if(id==='rr'){renderRevenueRecovery();}
@@ -3190,15 +3248,25 @@ function resetCmDrill(){cmDrillRC='';document.getElementById('cm_rc').value='';d
 function renderCmCust(){
   const q=(document.getElementById('cm_q')?.value||'').toLowerCase();
   const rc=document.getElementById('cm_rc')?.value||cmDrillRC||'';
+  const kamF=document.getElementById('cm_kam_f')?.value||'';
   const tr=document.getElementById('cm_trend_f')?.value||'';
-  const d=CUSTOMERS.filter(c=>c.rate!=='RT10'&&c.rate!=='RT20'&&(!q||(c.name.toLowerCase().includes(q)||c.num.includes(q)))&&(!rc||c.rate===rc)&&(!tr||(tr==='up'?c.y26>=c.y25:c.y26<c.y25)));
+  const d=CUSTOMERS.filter(c=>{
+    if(c.rate==='RT10'||c.rate==='RT20')return false;
+    if(q&&!c.name.toLowerCase().includes(q)&&!c.num.includes(q))return false;
+    if(rc&&c.rate!==rc)return false;
+    if(kamF&&(c.kam||'')!==kamF)return false;
+    if(tr==='up'&&c.y26<c.y25)return false;
+    if(tr==='dn'&&c.y26>=c.y25)return false;
+    return true;
+  });
   document.getElementById('cm_count').textContent=d.length+' customers';
   document.getElementById('cm_cust_tbl').innerHTML=`<table class="dt" id="cm_dt">
-    <thead><tr><th>Acct #</th><th>Customer</th><th>Rate</th><th>Industry</th><th>Parish</th><th>2025 YTD</th><th>2026 YTD</th><th>Budget (Est.)</th><th>vs Budget</th><th>YoY</th><th>Comment / Note</th></tr></thead>
-    <tbody>${d.map(c=>{const saved=S.get(`note_${c.num}`,'');return`<tr>
+    <thead><tr><th>Acct #</th><th>Customer</th><th>Rate</th><th>KAM</th><th>Industry</th><th>Parish</th><th>${curYear-1} YTD</th><th>${curYear} YTD</th><th>Budget</th><th>vs Budget</th><th>YoY</th><th>Note</th></tr></thead>
+    <tbody>${d.map(c=>{const saved=S.get(`note_${c.num}`,'');const kamName=c.kam||'--';return`<tr>
       <td style="font-size:10px;color:var(--text3)">${c.num}</td>
       <td style="font-weight:500">${c.name}</td>
       <td><span class="pill pt">${c.rate}</span></td>
+      <td style="font-size:10px;color:var(--teal);cursor:pointer" onclick="filterByKam('${(c.kam||'').replace(/'/g,"\\'")}',event)" title="Click to filter by this KAM">${kamName}</td>
       <td>${c.ind}</td><td>${c.parish}</td>
       <td>${c.y25.toFixed(1)}</td><td style="font-weight:600">${c.y26.toFixed(1)}</td>
       <td style="color:var(--text3)">${c.bud.toFixed(1)}</td>
@@ -3208,6 +3276,68 @@ function renderCmCust(){
     </tr>`;}).join('')}
     </tbody></table>`;
   makeSortable('cm_dt');
+  renderKamPerformance();
+}
+
+function filterByKam(kam,e){
+  if(e)e.stopPropagation();
+  if(!kam||kam==='--')return;
+  const sel=document.getElementById('cm_kam_f');
+  if(sel){sel.value=kam;renderCmCust();}
+}
+
+function renderKamPerformance(){
+  const tbl=document.getElementById('kam_perf_tbl');
+  const lbl=document.getElementById('kam_perf_period');
+  if(!tbl)return;
+  if(!sbKAM.length){
+    tbl.innerHTML='<div style="padding:16px;font-size:11px;color:var(--text3);text-align:center">KAM data not loaded — upload a KAM sheet or assign accounts in Admin → KAM Assignment.</div>';
+    return;
+  }
+  const cy=curYear,py=cy-1;
+  const ytdMos=Array.from({length:curMonth},(_,i)=>i+1);
+  const comm=sbActuals.filter(r=>!r.consumption_bucket);
+  const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
+  // Build per-KAM totals
+  const kams={};
+  comm.forEach(r=>{
+    const ac=String(r.jps_ac||'').trim();
+    const kam=kamMap[ac]||'Unassigned';
+    if(!kams[kam])kams[kam]={kam,accounts:new Set(),cy:0,py:0,bud:0};
+    kams[kam].accounts.add(ac);
+    const yr=Number(r.year),mo=Number(r.month),kwh=Number(r.kwh||0);
+    if(yr===cy&&ytdMos.includes(mo))kams[kam].cy+=kwh;
+    if(yr===py&&ytdMos.includes(mo))kams[kam].py+=kwh;
+  });
+  // Budget per KAM
+  if(sbBudget?.length){
+    sbBudget.forEach(b=>{
+      const ac=String(b.jps_ac||'').trim();
+      const kam=kamMap[ac]||'Unassigned';
+      if(kams[kam]&&ytdMos.includes(Number(b.month))&&Number(b.year)===cy)
+        kams[kam].bud+=Number(b.kwh_budget||0);
+    });
+  }
+  const rows=Object.values(kams).sort((a,b)=>b.cy-a.cy);
+  if(lbl)lbl.textContent=`YTD ${cy} vs ${py}`;
+  if(!rows.length){tbl.innerHTML='<div style="padding:16px;font-size:11px;color:var(--text3);text-align:center">No commercial actuals loaded.</div>';return;}
+  tbl.innerHTML=`<table class="dt" id="kamp_dt">
+    <thead><tr><th>KAM</th><th># Accounts</th><th>${py} YTD GWh</th><th>${cy} YTD GWh</th><th>YoY</th><th>Budget GWh</th><th>vs Budget</th></tr></thead>
+    <tbody>${rows.map(k=>{
+      const yoy=k.py?((k.cy-k.py)/k.py*100):null;
+      const vsBud=k.bud?((k.cy-k.bud)/k.bud*100):null;
+      return`<tr style="cursor:pointer" onclick="filterByKam('${k.kam.replace(/'/g,"\\'")}',event)" title="Click to filter customers to this KAM">
+        <td style="font-weight:600;color:var(--teal)">${k.kam}</td>
+        <td>${k.accounts.size}</td>
+        <td>${(k.py/1e6).toFixed(2)}</td>
+        <td style="font-weight:600">${(k.cy/1e6).toFixed(2)}</td>
+        <td><span class="${yoy!=null?(yoy>=0?'up':'dn'):''}">${yoy!=null?(yoy>=0?'+':'')+yoy.toFixed(1)+'%':'--'}</span></td>
+        <td style="color:var(--text3)">${k.bud?(k.bud/1e6).toFixed(2):'--'}</td>
+        <td>${vsBud!=null?`<span class="heat ${hc(vsBud)}">${vsBud>=0?'+':''}${vsBud.toFixed(1)}%</span>`:'--'}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+  makeSortable('kamp_dt');
 }
 function renderCmIndTbl(){
   document.getElementById('cm_ind_tbl') && (document.getElementById('cm_ind_tbl').innerHTML=`<table class="dt" id="cmind_dt">
@@ -3381,9 +3511,16 @@ function renderFcKPIs(){
 function renderFcEntry(){
   const q=(document.getElementById('fc_q')?.value||'').toLowerCase();
   const rc=document.getElementById('fc_rc')?.value||'';
+  const kamF=document.getElementById('fc_kam')?.value||'';
   const months=getFcMonths();
   document.getElementById('fc_months_hdr').textContent='Forecasting: '+months.map(m=>m.label).join(' · ');
-  const custData=CUSTOMERS.filter(c=>c.rate!=='RT10'&&c.rate!=='RT20'&&(!q||(c.name.toLowerCase().includes(q)||c.num.includes(q)))&&(!rc||c.rate===rc));
+  const custData=CUSTOMERS.filter(c=>{
+    if(c.rate==='RT10'||c.rate==='RT20')return false;
+    if(q&&!c.name.toLowerCase().includes(q)&&!c.num.includes(q))return false;
+    if(rc&&c.rate!==rc)return false;
+    if(kamF&&(c.kam||'')!==kamF)return false;
+    return true;
+  });
   const rows=custData.map(c=>{
     const hist3=c.m.slice(-3);const avg3=hist3.reduce((s,x)=>s+x,0)/hist3.length;
     const py3=c.m.slice(0,3);const pyAvg=py3.reduce((s,x)=>s+x,0)/py3.length;
@@ -3398,13 +3535,14 @@ function renderFcEntry(){
       <td style="font-size:10px;color:var(--text3)">${c.num}</td>
       <td style="font-weight:500;white-space:nowrap">${c.name}</td>
       <td><span class="pill pt">${c.rate}</span></td>
+      <td style="font-size:10px;color:var(--teal)">${c.kam||'--'}</td>
       <td style="font-size:10px;color:var(--text3)">${avg3.toFixed(3)}</td>
       ${fcCells}
       <td><span style="font-size:10px;color:var(--teal);cursor:pointer" onclick="editFcNote('${c.num}','${c.name.replace(/'/g,"\\'")}')">✏</span></td>
     </tr>`;
   }).join('');
   document.getElementById('fc_tbl').innerHTML=`<table class="dt" id="fce_dt">
-    <thead><tr><th>Acct #</th><th>Customer</th><th>Rate</th><th>3m Avg</th>${months.map(m=>`<th>${m.label}</th>`).join('')}<th>Note</th></tr></thead>
+    <thead><tr><th>Acct #</th><th>Customer</th><th>Rate</th><th>KAM</th><th>3m Avg</th>${months.map(m=>`<th>${m.label}</th>`).join('')}<th>Note</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
   makeSortable('fce_dt');
@@ -5141,6 +5279,151 @@ async function doDeleteMonthAdm(){
   }
 }
 
+/* ── KAM Assignment (Admin) ── */
+function renderAdmKam(){
+  const tbl=document.getElementById('adm_kam_tbl');
+  if(!tbl)return;
+  const q=(document.getElementById('adm_kam_q')?.value||'').toLowerCase();
+  const rcF=document.getElementById('adm_kam_rc')?.value||'';
+  const kamF=document.getElementById('adm_kam_filter')?.value||'';
+
+  // Build account list from actuals (unique accounts, commercial only)
+  const seen={};
+  sbActuals.filter(r=>!r.consumption_bucket).forEach(r=>{
+    const ac=String(r.jps_ac||'').trim();
+    if(!ac||seen[ac])return;
+    seen[ac]={ac,name:String(r.name||'').trim(),rc:String(r.rate_class||'').trim()};
+  });
+  const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
+
+  let rows=Object.values(seen).map(a=>({...a,kam:kamMap[a.ac]||''}));
+  if(q)rows=rows.filter(r=>r.ac.includes(q)||r.name.toLowerCase().includes(q));
+  if(rcF)rows=rows.filter(r=>r.rc===rcF);
+  if(kamF==='_unassigned')rows=rows.filter(r=>!r.kam);
+  else if(kamF)rows=rows.filter(r=>r.kam===kamF);
+  rows.sort((a,b)=>a.name.localeCompare(b.name));
+
+  const uniqueKams=[...new Set(sbKAM.map(k=>k.kam||'').filter(Boolean))].sort();
+
+  if(!rows.length){
+    tbl.innerHTML='<div style="padding:20px;text-align:center;font-size:11px;color:var(--text3)">No accounts found — sync DB first.</div>';
+    return;
+  }
+  tbl.innerHTML=`<table class="dt" id="adm_kam_dt">
+    <thead><tr><th>Acct #</th><th>Account Name</th><th>Rate</th><th>Assigned KAM</th><th>Actions</th></tr></thead>
+    <tbody>${rows.map(r=>`<tr id="kamrow_${r.ac}">
+      <td style="font-size:10px;color:var(--text3)">${r.ac}</td>
+      <td style="font-weight:500">${r.name}</td>
+      <td><span class="pill pt">${r.rc}</span></td>
+      <td id="kamdisplay_${r.ac}" style="color:${r.kam?'var(--teal)':'var(--text3)'}">${r.kam||'<em>Unassigned</em>'}</td>
+      <td>
+        <div id="kamedit_${r.ac}" style="display:none;display:flex;gap:4px;align-items:center">
+          <input class="si" style="width:160px;padding:3px 7px;font-size:11px" id="kaminput_${r.ac}" value="${r.kam}" placeholder="KAM name..." list="kam_datalist"/>
+          <button class="btn btn-t" style="padding:3px 10px;font-size:10px" onclick="saveKamAssignment('${r.ac}')">Save</button>
+          <button class="btn btn-o" style="padding:3px 10px;font-size:10px" onclick="cancelKamEdit('${r.ac}')">✕</button>
+        </div>
+        <div id="kamview_${r.ac}">
+          <button class="btn btn-o" style="padding:2px 10px;font-size:10px" onclick="startKamEdit('${r.ac}','${(r.kam||'').replace(/'/g,"\\'")}')">✏ Edit</button>
+        </div>
+      </td>
+    </tr>`).join('')}</tbody>
+  </table>
+  <datalist id="kam_datalist">${uniqueKams.map(k=>`<option value="${k}">`).join('')}</datalist>`;
+  makeSortable('adm_kam_dt');
+}
+
+function startKamEdit(ac,current){
+  const editDiv=document.getElementById('kamedit_'+ac);
+  const viewDiv=document.getElementById('kamview_'+ac);
+  const inp=document.getElementById('kaminput_'+ac);
+  if(editDiv)editDiv.style.display='flex';
+  if(viewDiv)viewDiv.style.display='none';
+  if(inp){inp.value=current;inp.focus();}
+}
+function cancelKamEdit(ac){
+  const editDiv=document.getElementById('kamedit_'+ac);
+  const viewDiv=document.getElementById('kamview_'+ac);
+  if(editDiv)editDiv.style.display='none';
+  if(viewDiv)viewDiv.style.display='';
+}
+async function saveKamAssignment(ac){
+  const inp=document.getElementById('kaminput_'+ac);
+  const newKam=(inp?.value||'').trim();
+  const sb=getSB();if(!sb){toast('Not connected','err');return;}
+  try{
+    if(newKam){
+      const{error}=await sb.from('jps_kam').upsert({jps_ac:ac,kam:newKam},{onConflict:'jps_ac'});
+      if(error)throw error;
+    } else {
+      await sb.from('jps_kam').delete().eq('jps_ac',ac);
+    }
+    // Update local cache
+    const idx=sbKAM.findIndex(k=>String(k.jps_ac||'').trim()===ac);
+    if(newKam){
+      if(idx>=0)sbKAM[idx].kam=newKam;else sbKAM.push({jps_ac:ac,kam:newKam});
+    } else {
+      if(idx>=0)sbKAM.splice(idx,1);
+    }
+    // Update display
+    const dispEl=document.getElementById('kamdisplay_'+ac);
+    if(dispEl){dispEl.innerHTML=newKam?newKam:'<em>Unassigned</em>';dispEl.style.color=newKam?'var(--teal)':'var(--text3)';}
+    cancelKamEdit(ac);
+    // Refresh CUSTOMERS kam field
+    const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
+    CUSTOMERS.forEach(c=>{c.kam=kamMap[c.num]||'';});
+    populateKamDropdowns();
+    toast(`KAM saved for ${ac}`,'ok');
+  }catch(e){toast('Save failed: '+e.message,'err');}
+}
+
+async function kamBulkAssign(){
+  const fromKam=(document.getElementById('kam_bulk_from')?.value||'').trim();
+  const toKam=(document.getElementById('kam_bulk_to')?.value||'').trim();
+  const msg=document.getElementById('kam_bulk_msg');
+  if(!toKam){toast('Enter a target KAM name','err');return;}
+  const sb=getSB();if(!sb){toast('Not connected','err');return;}
+  // Find accounts matching fromKam
+  const accounts=fromKam
+    ? sbActuals.filter(r=>!r.consumption_bucket).map(r=>String(r.jps_ac||'').trim()).filter((v,i,a)=>a.indexOf(v)===i).filter(ac=>{ const cur=sbKAM.find(k=>String(k.jps_ac||'').trim()===ac)?.kam||''; return cur===fromKam; })
+    : sbActuals.filter(r=>!r.consumption_bucket).map(r=>String(r.jps_ac||'').trim()).filter((v,i,a)=>a.indexOf(v)===i).filter(ac=>!sbKAM.find(k=>String(k.jps_ac||'').trim()===ac));
+  if(!accounts.length){if(msg)msg.textContent='No matching accounts found.';return;}
+  if(!confirm(`Assign ${accounts.length} accounts to "${toKam}"?`))return;
+  if(msg)msg.textContent='Saving…';
+  try{
+    const rows=accounts.map(ac=>({jps_ac:ac,kam:toKam}));
+    const{error}=await sb.from('jps_kam').upsert(rows,{onConflict:'jps_ac'});
+    if(error)throw error;
+    rows.forEach(r=>{
+      const idx=sbKAM.findIndex(k=>String(k.jps_ac||'').trim()===r.jps_ac);
+      if(idx>=0)sbKAM[idx].kam=toKam;else sbKAM.push(r);
+    });
+    const kamMap2={};sbKAM.forEach(k=>kamMap2[String(k.jps_ac||'').trim()]=k.kam||'');
+    CUSTOMERS.forEach(c=>{c.kam=kamMap2[c.num]||'';});
+    populateKamDropdowns();
+    renderAdmKam();
+    if(msg)msg.textContent=`✓ ${accounts.length} accounts assigned to "${toKam}"`;
+    toast(`${accounts.length} accounts → ${toKam}`,'ok');
+  }catch(e){if(msg)msg.textContent='Error: '+e.message;toast('Bulk assign failed: '+e.message,'err');}
+}
+
+function populateKamDropdowns(){
+  const kams=[...new Set(sbKAM.map(k=>k.kam||'').filter(Boolean))].sort();
+  const opts='<option value="">All KAMs</option>'+kams.map(k=>`<option value="${k}">${k}</option>`).join('');
+  ['cm_kam_f','fc_kam'].forEach(id=>{
+    const el=document.getElementById(id);if(!el)return;
+    const cur=el.value;
+    el.innerHTML=opts;
+    if(kams.includes(cur))el.value=cur;
+  });
+  // Admin filter
+  const af=document.getElementById('adm_kam_filter');
+  if(af){
+    const cur=af.value;
+    af.innerHTML='<option value="">All KAMs</option><option value="_unassigned">Unassigned only</option>'+kams.map(k=>`<option value="${k}">${k}</option>`).join('');
+    if(cur)af.value=cur;
+  }
+}
+
 /* ── User management ── */
 async function loadPlatformUsers(){
   const sb=getSB();if(!sb)return;
@@ -6112,6 +6395,7 @@ async function syncSupabase(silent=false){
 
     try{buildDashboardData();}catch(be){console.error('buildDashboardData error:',be);}
     renderSidebarFilters();
+    populateKamDropdowns();
 
     // Hydrate user-generated data (notes, narratives, R&O, defection actions, etc.) from DB
     try{await loadAllUserData();}catch(ue){console.warn('loadAllUserData error:',ue);}
