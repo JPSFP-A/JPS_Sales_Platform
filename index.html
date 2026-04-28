@@ -2100,62 +2100,6 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 
 <script>
 /* ==========================================
-   TOAST — lightweight notification system
-   Usage: toast('message')           → neutral
-          toast('message', 'ok')     → green  ✓
-          toast('message', 'err')    → red    ✗
-          toast('message', 'w')      → amber  ⚠
-========================================== */
-(function(){
-  // Inject stylesheet once
-  const STYLE_ID = '_toast_styles';
-  if (!document.getElementById(STYLE_ID)) {
-    const s = document.createElement('style');
-    s.id = STYLE_ID;
-    s.textContent = [
-      '#_toastWrap{position:fixed;bottom:24px;right:24px;z-index:99999',
-        'display:flex;flex-direction:column;gap:8px;pointer-events:none}',
-      '._toast{display:flex;align-items:center;gap:10px',
-        'padding:11px 16px;border-radius:10px;font-size:12px;font-weight:600',
-        'color:#fff;min-width:220px;max-width:380px',
-        'box-shadow:0 4px 20px rgba(0,0,0,.45)',
-        'animation:_tIn .22s ease;pointer-events:none;line-height:1.4}',
-      '@keyframes _tIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}',
-      '@keyframes _tOut{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(12px)}}',
-      '._toast.out{animation:_tOut .25s ease forwards}',
-    ].join('');
-    document.head.appendChild(s);
-  }
-
-  window.toast = function(msg, type) {
-    let wrap = document.getElementById('_toastWrap');
-    if (!wrap) {
-      wrap = document.createElement('div');
-      wrap.id = '_toastWrap';
-      document.body.appendChild(wrap);
-    }
-    const bg = type === 'ok'  ? '#15803d'
-              : type === 'err' ? '#b91c1c'
-              : type === 'w'   ? '#b45309'
-              :                  '#1e3a5f';
-    const icon = type === 'ok'  ? '✓'
-               : type === 'err' ? '✕'
-               : type === 'w'   ? '⚠'
-               :                  'ℹ';
-    const el = document.createElement('div');
-    el.className = '_toast';
-    el.style.background = bg;
-    el.innerHTML = '<span style="font-size:14px;flex-shrink:0">' + icon + '</span>'
-                 + '<span>' + String(msg) + '</span>';
-    wrap.appendChild(el);
-    setTimeout(() => {
-      el.classList.add('out');
-      setTimeout(() => el.remove(), 280);
-    }, type === 'err' ? 4500 : 3000);
-  };
-})();
-
-/* ==========================================
    AUTH — Supabase Auth + role-based access
 ========================================== */
 let CU={id:'',role:'',name:'',email:'',territory:'All'};
@@ -2166,6 +2110,27 @@ let curPeriod='MTD', curYear=2026, curMonth=2, curQtr=1;
 let mrPeriod='2026-02', mrRepName='', mrActiveSec='mr_ov';
 let cmDim='industry', cmDrillRC='', _modalFn=null;
 let chartInstances={};
+
+/* ── Toast notifications ── */
+function toast(msg, type){
+  let wrap=document.getElementById('_toast_wrap');
+  if(!wrap){
+    wrap=document.createElement('div');
+    wrap.id='_toast_wrap';
+    wrap.style.cssText='position:fixed;bottom:22px;right:22px;z-index:99999;display:flex;flex-direction:column;gap:8px;pointer-events:none;max-width:340px';
+    document.body.appendChild(wrap);
+  }
+  const bg={ok:'#00c2a8',err:'#e84040',w:'#f59e0b'}[type]||'#00c2a8';
+  const t=document.createElement('div');
+  t.style.cssText='background:'+bg+';color:#fff;padding:10px 16px;border-radius:8px;font-size:12px;font-weight:500;box-shadow:0 4px 18px rgba(0,0,0,0.35);opacity:0;transform:translateY(8px);transition:opacity .2s ease,transform .2s ease;pointer-events:none;line-height:1.5;word-break:break-word';
+  t.textContent=msg;
+  wrap.appendChild(t);
+  requestAnimationFrame(()=>{t.style.opacity='1';t.style.transform='translateY(0)';});
+  setTimeout(()=>{
+    t.style.opacity='0';t.style.transform='translateY(8px)';
+    setTimeout(()=>{if(t.parentNode)t.parentNode.removeChild(t);},250);
+  },type==='err'?5000:3000);
+}
 
 /* ── Permission helper ── */
 function can(action){
@@ -8494,7 +8459,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.20';
+const APP_VERSION = '1.0.21';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
