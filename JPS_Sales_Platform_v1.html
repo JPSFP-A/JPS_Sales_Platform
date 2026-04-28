@@ -6319,16 +6319,19 @@ async function syncSupabase(silent=false){
     if(actOk){sbActuals=actData;log.push(`Actuals: jps_actuals (${actData.length} rows)`);}
     else log.push('Actuals: ⚠ jps_actuals not accessible — check RLS policies');
 
-    // ── Commercial Budget ──────────────────────────────────
-    const budData=await sbTable('jps_commercial_budget',{limit:20000});
-    const budOk=!!budData;
-    if(budOk){sbBudget=budData;log.push(`Comm Budget: jps_commercial_budget (${budData.length} rows)`);}
-    else log.push('Comm Budget: ⚠ jps_commercial_budget not found — run schema SQL');
+    // ── Budget — read jps_budget (aggregate) + jps_commercial_budget (account-level) and merge ──
+    sbBudget=[];
+    const jbData=await sbTable('jps_budget',{limit:20000});
+    if(jbData&&jbData.length){sbBudget=[...sbBudget,...jbData];log.push(`Budget: jps_budget (${jbData.length} rows)`);}
+    else log.push('Budget: jps_budget (0 rows — no data uploaded yet)');
+    const cbData=await sbTable('jps_commercial_budget',{limit:20000});
+    if(cbData&&cbData.length){sbBudget=[...sbBudget,...cbData];log.push(`Comm Budget (acct-level): jps_commercial_budget (${cbData.length} rows)`);}
+    const budOk=sbBudget.length>0;
 
     // ── Residential Budget ─────────────────────────────────
     const resBudData=await sbTable('jps_residential_budget',{limit:5000});
     if(resBudData){sbResBudget=resBudData;log.push(`Res Budget: jps_residential_budget (${resBudData.length} rows)`);}
-    else log.push('Res Budget: ⚠ jps_residential_budget not found — run schema SQL');
+    else log.push('Res Budget: jps_residential_budget (0 rows — no data uploaded yet)');
 
     // ── Net Generation ─────────────────────────────────────
     const ng=await sbTable('net_gen_historical',{order:'year'});
@@ -6354,8 +6357,8 @@ async function syncSupabase(silent=false){
     sbConnected=anyOk;
     sbLastSync=new Date();
     S.set('sb_last_sync',sbLastSync.toLocaleString());
-    // Core tables: actuals + at least one budget. Reference tables (KAM, Industry, EV, Locks) missing = optional, not "partial"
-    const coreMissing=log.filter(l=>l.includes('⚠')&&(l.startsWith('Actuals')||l.startsWith('Comm Budget')||l.startsWith('Res Budget')));
+    // Core = actuals accessible. Budget/ref tables missing data is a warning only.
+    const coreMissing=log.filter(l=>l.includes('⚠')&&l.startsWith('Actuals'));
     if(!anyOk){updateSbStatus('offline');}
     else if(coreMissing.length){
       const el=document.getElementById('sbStatus');
