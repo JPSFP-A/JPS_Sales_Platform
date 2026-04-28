@@ -358,6 +358,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
     <div class="nav-lbl" style="margin-top:8px">Reference</div>
     <div class="ni" onclick="sw('ar',this)"><span class="ni-icon">🔗</span>Account Recon</div>
     <div class="ni" onclick="sw('gl',this)"><span class="ni-icon">📖</span>Glossary</div>
+    <div class="ni" onclick="sw('help',this)"><span class="ni-icon">📚</span>User Guide</div>
     <div class="ni" onclick="sw('adm',this)"><span class="ni-icon">🔐</span>Admin</div>
   </div>
   <div class="sb-bottom">
@@ -530,56 +531,118 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
         <div class="kpi kp"><div class="kl">Customers</div><div class="kv" id="kpi_cm_custs">--</div><div class="ks nt">commercial accounts</div></div>
       </div>
 
-      <div class="g2">
-        <div class="card">
-          <div class="ch">GWh by Rate Class <span>Click bar → customer drilldown below</span></div>
-          <div class="chart-actions">
-            <button class="btn btn-o" onclick="printChart('c_cm1')">🖨 Print</button>
-            <button class="btn btn-o" onclick="exportChart('c_cm1')">💾 Save</button>
-            <span class="chart-info" id="cm_drill_info">Click a bar to filter customers</span>
-          </div>
-          <div class="leg"><span><span class="ld" style="background:#378ADD"></span>2025</span><span><span class="ld" style="background:#00c2a8"></span>2026</span></div>
-          <div class="cw" style="height:200px"><canvas id="c_cm1"></canvas></div>
-        </div>
-        <div class="card">
-          <div class="ch">Industry Revenue <span>YTD · JMD Billions · Click industry</span></div>
-          <div class="chart-actions">
-            <button class="btn btn-o" onclick="printChart('c_ind')">🖨 Print</button>
-            <button class="btn btn-o" onclick="exportChart('c_ind')">💾 Save</button>
-          </div>
-          <div class="cw" style="height:200px"><canvas id="c_ind"></canvas></div>
-        </div>
-      </div>
-
-      <!-- Commercial customer drilldown (chart-linked) -->
-      <div class="card">
-        <div class="ch">Customer Detail -- <span id="cm_drill_title">All Commercial</span>
+      <!-- AI Commentary card (always visible in Commercial) -->
+      <div class="card" id="cm_ai_card" style="margin-bottom:10px;border-color:rgba(0,194,168,.3)">
+        <div class="ch" style="cursor:pointer" onclick="toggleAiPanel('cm_ai_body')">
+          ✨ AI Commentary
           <div style="display:flex;gap:6px;align-items:center">
-            <button class="btn btn-o" onclick="resetCmDrill()">Reset filter</button>
-            <button class="btn btn-o" onclick="exportTableCSV('cm_cust_tbl','commercial_customers')">⬇ CSV</button>
+            <button class="btn btn-t" onclick="event.stopPropagation();generateCommentary('cm')">Generate Analysis</button>
+            <span style="font-size:10px;color:var(--text3)" id="cm_ai_ts"></span>
+            <span style="font-size:11px;color:var(--text3)">▾</span>
           </div>
         </div>
-        <div class="tbl-controls">
-          <input class="si" placeholder="🔍 Name or account #" id="cm_q" oninput="renderCmCust()"/>
-          <select class="sel" id="cm_rc" onchange="renderCmCust()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
-          <select class="sel" id="cm_trend_f" onchange="renderCmCust()"><option value="">All trends</option><option value="up">Increasing ↑</option><option value="dn">Declining ↓</option></select>
-          <span class="row-count" id="cm_count"></span>
+        <div id="cm_ai_body" style="display:none;padding:10px 0 4px">
+          <div id="cm_ai_out" style="font-size:11px;color:var(--text2);line-height:1.8;white-space:pre-wrap;padding:10px 14px;background:var(--navy3);border-radius:6px;min-height:40px">Click <strong>Generate Analysis</strong> to produce a narrative summary of the current Commercial data.</div>
+          <div style="display:flex;gap:6px;margin-top:8px">
+            <button class="btn btn-o" onclick="copyAiOut('cm_ai_out')">📋 Copy</button>
+            <button class="btn btn-o" onclick="saveAiNote('cm')">💾 Save as Note</button>
+          </div>
         </div>
-        <div class="tbl-wrap" id="cm_cust_tbl"></div>
       </div>
 
-      <!-- Commercial monthly comment panel -->
-      <div class="card">
-        <div class="ch">Monthly Commercial Commentary
-          <div class="stabs" style="margin:0" id="cm_dim_tabs">
-            <button class="stab on" onclick="setCmDim('industry',this)">Industry</button>
-            <button class="stab" onclick="setCmDim('rateclass',this)">Rate Class</button>
-            <button class="stab" onclick="setCmDim('drivers',this)">Drivers</button>
-            <button class="stab" onclick="setCmDim('variance',this)">Variance</button>
-            <button class="stab" onclick="setCmDim('customers',this)">Key Customers</button>
+      <!-- Customers panel (shown when Customers tab active) -->
+      <div id="cm_customers_wrap">
+        <div class="g2">
+          <div class="card">
+            <div class="ch">GWh by Rate Class <span>Click bar → customer drilldown below</span></div>
+            <div class="chart-actions">
+              <button class="btn btn-o" onclick="printChart('c_cm1')">🖨 Print</button>
+              <button class="btn btn-o" onclick="exportChart('c_cm1')">💾 Save</button>
+              <span class="chart-info" id="cm_drill_info">Click a bar to filter customers</span>
+            </div>
+            <div class="leg"><span><span class="ld" style="background:#378ADD"></span>2025</span><span><span class="ld" style="background:#00c2a8"></span>2026</span></div>
+            <div class="cw" style="height:200px"><canvas id="c_cm1"></canvas></div>
+          </div>
+          <div class="card">
+            <div class="ch">Industry Revenue <span>YTD · JMD Billions · Click industry</span></div>
+            <div class="chart-actions">
+              <button class="btn btn-o" onclick="printChart('c_ind')">🖨 Print</button>
+              <button class="btn btn-o" onclick="exportChart('c_ind')">💾 Save</button>
+            </div>
+            <div class="cw" style="height:200px"><canvas id="c_ind"></canvas></div>
           </div>
         </div>
-        <div id="cm_cmt_wrap"></div>
+        <div class="card">
+          <div class="ch">Customer Detail -- <span id="cm_drill_title">All Commercial</span>
+            <div style="display:flex;gap:6px;align-items:center">
+              <button class="btn btn-o" onclick="resetCmDrill()">Reset filter</button>
+              <button class="btn btn-o" onclick="exportTableCSV('cm_cust_tbl','commercial_customers')">⬇ CSV</button>
+            </div>
+          </div>
+          <div class="tbl-controls">
+            <input class="si" placeholder="🔍 Name or account #" id="cm_q" oninput="renderCmCust()"/>
+            <select class="sel" id="cm_rc" onchange="renderCmCust()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
+            <select class="sel" id="cm_trend_f" onchange="renderCmCust()"><option value="">All trends</option><option value="up">Increasing ↑</option><option value="dn">Declining ↓</option></select>
+            <span class="row-count" id="cm_count"></span>
+          </div>
+          <div class="tbl-wrap" id="cm_cust_tbl"></div>
+        </div>
+        <div class="card">
+          <div class="ch">Monthly Commercial Commentary
+            <div class="stabs" style="margin:0" id="cm_dim_tabs">
+              <button class="stab on" onclick="setCmDim('industry',this)">Industry</button>
+              <button class="stab" onclick="setCmDim('rateclass',this)">Rate Class</button>
+              <button class="stab" onclick="setCmDim('drivers',this)">Drivers</button>
+              <button class="stab" onclick="setCmDim('variance',this)">Variance</button>
+              <button class="stab" onclick="setCmDim('customers',this)">Key Customers</button>
+            </div>
+          </div>
+          <div id="cm_cmt_wrap"></div>
+        </div>
+      </div>
+
+      <!-- Pivot / Movers panel (shown when Pivot tab active) -->
+      <div id="cm_pivot_wrap" style="display:none">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+          <select class="sel" id="pv_period_cm" onchange="renderCmPivot()">
+            <option value="mtd">MTD</option>
+            <option value="ytd" selected>YTD</option>
+            <option value="12m">Rolling 12M</option>
+          </select>
+          <select class="sel" id="pv_rc_cm" onchange="renderCmPivot()">
+            <option value="">All rate classes</option>
+            <option value="RT40">RT40</option>
+            <option value="RT50">RT50</option>
+            <option value="RT70">RT70</option>
+          </select>
+          <button class="btn btn-o" onclick="exportTableCSV('pv_gainers_tbl','cm_gainers')">⬇ Gainers CSV</button>
+          <button class="btn btn-o" onclick="exportTableCSV('pv_decliners_tbl','cm_decliners')">⬇ Decliners CSV</button>
+        </div>
+        <div class="g2">
+          <div class="card">
+            <div class="ch" style="color:var(--green)">📈 Top Gainers <span id="pv_gainers_lbl" style="color:var(--text3)">YoY kWh increase</span></div>
+            <div class="tbl-wrap" id="pv_gainers_tbl"></div>
+          </div>
+          <div class="card">
+            <div class="ch" style="color:var(--red)">📉 Top Decliners <span id="pv_decliners_lbl" style="color:var(--text3)">YoY kWh decline</span></div>
+            <div class="tbl-wrap" id="pv_decliners_tbl"></div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:10px">
+          <div class="ch">All Movers — Full Account List
+            <button class="btn btn-o" onclick="exportTableCSV('pv_all_tbl','cm_movers_all')">⬇ CSV</button>
+          </div>
+          <div class="tbl-controls">
+            <input class="si" placeholder="🔍 Name or account #" id="pv_q_cm" oninput="renderCmPivot()"/>
+            <select class="sel" id="pv_dir_cm" onchange="renderCmPivot()">
+              <option value="">All directions</option>
+              <option value="up">Gainers ↑</option>
+              <option value="dn">Decliners ↓</option>
+            </select>
+            <span class="row-count" id="pv_count_cm"></span>
+          </div>
+          <div class="tbl-wrap" id="pv_all_tbl"></div>
+        </div>
       </div>
     </div>
 
@@ -624,7 +687,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
     <div id="df" class="sec">
       <div class="stabs" style="margin-bottom:12px">
         <button class="stab" onclick="sw('cm',document.querySelector('.ni[onclick*=\'cm\']'))">🏢 Customers</button>
-        <button class="stab" onclick="swCmPivot()">🔀 Pivot / Movers</button>
+        <button class="stab" onclick="sw('cm',document.querySelector('.ni[onclick*=\'cm\']'));setTimeout(()=>swCm('pivot',document.getElementById('cm_tab_pivot')),80)">🔀 Pivot / Movers</button>
         <button class="stab on">📉 Defection</button>
         <button class="stab" onclick="sw('ro',document.querySelector('.ni[onclick*=\'ro_adv\']'))">⚠ Risk &amp; Opportunity</button>
       </div>
@@ -706,7 +769,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
     <div id="ro" class="sec">
       <div class="stabs" style="margin-bottom:12px">
         <button class="stab" onclick="sw('cm',document.querySelector('.ni[onclick*=\'cm\']'))">🏢 Customers</button>
-        <button class="stab" onclick="swCmPivot()">🔀 Pivot / Movers</button>
+        <button class="stab" onclick="sw('cm',document.querySelector('.ni[onclick*=\'cm\']'));setTimeout(()=>swCm('pivot',document.getElementById('cm_tab_pivot')),80)">🔀 Pivot / Movers</button>
         <button class="stab" onclick="sw('df',document.querySelector('.ni[onclick*=\'df\']'))">📉 Defection</button>
         <button class="stab on">⚠ Risk &amp; Opportunity</button>
       </div>
@@ -804,9 +867,170 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
       <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap">
         <h2 style="font-size:14px;font-weight:700;color:var(--text)">📖 Glossary</h2>
         <input class="si" style="max-width:240px" placeholder="🔍 Search terms..." id="gl_q" oninput="renderGloss()"/>
-        <select class="sel" id="gl_cat" onchange="renderGloss()"><option value="">All categories</option><option value="Rate Class">Rate Classes</option><option value="Metric">Metrics</option><option value="Process">Processes</option><option value="Market">Market</option></select>
+        <select class="sel" id="gl_cat" onchange="renderGloss()"><option value="">All categories</option><option value="Rate Class">Rate Classes</option><option value="Metric">Metrics</option><option value="Process">Processes</option><option value="Market">Market</option><option value="Financial">Financial</option><option value="Operational">Operational</option><option value="Analytics">Analytics</option></select>
       </div>
       <div class="gloss-grid" id="gloss_wrap"></div>
+    </div>
+
+    <!-- === USER GUIDE === -->
+    <div id="help" class="sec">
+      <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
+        <h2 style="font-size:14px;font-weight:700;color:var(--text)">📚 JPS Sales Analytics — User Guide</h2>
+        <input class="si" style="max-width:240px" placeholder="🔍 Search guide..." id="help_q" oninput="filterHelp()"/>
+      </div>
+      <div id="help_sections" style="display:flex;flex-direction:column;gap:14px">
+
+        <!-- Getting Started -->
+        <div class="card help-card" data-tags="start connect setup supabase sync login">
+          <div class="ch" style="cursor:pointer" onclick="toggleHelp(this)">🚀 Getting Started <span style="font-size:10px;color:var(--text3);font-weight:400">▾</span></div>
+          <div class="help-body" style="font-size:11px;color:var(--text2);line-height:1.9;padding-top:8px">
+            <p><strong style="color:var(--text)">1. Connect to the database</strong><br>Click the <span style="color:var(--red);font-weight:700">○ Offline</span> badge in the top-right toolbar. The app will sign in to Supabase using your JPS credentials and sync all tables. The badge turns <span style="color:var(--teal);font-weight:700">● Live</span> when connected.</p>
+            <p><strong style="color:var(--text)">2. First-time setup (Admin only)</strong><br>If the badge shows <span style="color:orange;font-weight:700">⚠ Partial</span>, the database tables need to be created. Go to <strong>Admin → DB Schema</strong>, copy the SQL block, and run it in <em>Supabase Dashboard → SQL Editor → New Query</em>. Then re-sync.</p>
+            <p><strong style="color:var(--text)">3. Upload your first data file</strong><br>Go to <strong>Admin → Upload Data</strong> and click <em>Choose Excel File</em>. Your workbook must contain at minimum an <em>Actuals</em> sheet. Download the template from the same page to see the exact column format required.</p>
+            <p><strong style="color:var(--text)">4. Set the reporting period</strong><br>Use the <em>Period bar</em> below the topbar to select MTD, QTD, YTD, or Annual. Use the Year and Month dropdowns to change the reference period. All charts and KPIs update immediately.</p>
+          </div>
+        </div>
+
+        <!-- Uploading Data -->
+        <div class="card help-card" data-tags="upload excel template actuals budget kam industry net generation">
+          <div class="ch" style="cursor:pointer" onclick="toggleHelp(this)">📤 Uploading Data — Sheet Reference <span style="font-size:10px;color:var(--text3);font-weight:400">▾</span></div>
+          <div class="help-body" style="display:none;font-size:11px;color:var(--text2);line-height:1.9;padding-top:8px">
+            <p>Your Excel workbook can contain any combination of these sheets. Only sheets that are present will be processed:</p>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:6px">
+              <thead><tr style="background:var(--navy3)"><th style="padding:5px 8px;text-align:left;color:var(--teal)">Sheet Name</th><th style="padding:5px 8px;text-align:left;color:var(--teal)">Purpose</th><th style="padding:5px 8px;text-align:left;color:var(--teal)">Key Columns</th></tr></thead>
+              <tbody>
+                <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Actuals</td><td style="padding:5px 8px">Monthly billed kWh &amp; revenue by account</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">year, month, jps_ac, name, consumption_bucket, kwh, revenue_jmd, parish, rate_class, demand_kva</td></tr>
+                <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Budget</td><td style="padding:5px 8px">Commercial account-level budget</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">year, month, jps_ac, name, rate_class, parish, kwh_budget, revenue_budget, demand_budget</td></tr>
+                <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Residential_Budget</td><td style="padding:5px 8px">Residential aggregate budget</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">year, month, rate_class, parish, consumption_bucket, kwh_budget, customer_count_budget</td></tr>
+                <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">KAM</td><td style="padding:5px 8px">Account → Key Account Manager</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">jps_ac, kam</td></tr>
+                <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Industries</td><td style="padding:5px 8px">Account → Industry segment</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">jps_ac, industry</td></tr>
+                <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Net_Generation</td><td style="padding:5px 8px">DG generation by month &amp; type</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">year, month, rate_class, count, kwh</td></tr>
+                <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Net_Billers</td><td style="padding:5px 8px">Net billing customers &amp; export kWh</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">year, month, rate_class, count, kwh</td></tr>
+                <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">EV_Accounts</td><td style="padding:5px 8px">Electric vehicle account counts &amp; MWh</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">year, month, accounts, mwh</td></tr>
+              </tbody>
+            </table>
+            <p style="margin-top:10px"><strong style="color:var(--text)">Upload modes:</strong><br>
+            <em>Overwrite month</em> — deletes all existing rows for the selected year/month first, then inserts. Use when re-uploading corrected data for a period already in the DB.<br>
+            <em>Append / upsert</em> — adds new rows and updates existing ones based on the unique key. Use for incremental updates.</p>
+            <p><strong style="color:var(--text)">Residential vs Commercial in Actuals:</strong><br>
+            Commercial rows leave <em>consumption_bucket</em> blank and fill <em>demand_kva</em>.<br>
+            Residential rows fill <em>consumption_bucket</em> (e.g. "0-150", "150-300") and set <em>demand_kva = 0</em>.</p>
+          </div>
+        </div>
+
+        <!-- Reading the Dashboard -->
+        <div class="card help-card" data-tags="overview dashboard kpi mtd ytd charts interpret read">
+          <div class="ch" style="cursor:pointer" onclick="toggleHelp(this)">📊 Reading the Dashboard — Overview &amp; KPIs <span style="font-size:10px;color:var(--text3);font-weight:400">▾</span></div>
+          <div class="help-body" style="display:none;font-size:11px;color:var(--text2);line-height:1.9;padding-top:8px">
+            <p><strong style="color:var(--text)">Period selector:</strong> MTD = month-to-date (1st to reporting date), QTD = quarter-to-date, YTD = year-to-date, Annual = full calendar year. The date dropdowns set which year/month is considered "current".</p>
+            <p><strong style="color:var(--text)">Traffic-light KPI colours:</strong><br>
+            🟢 Green = ≥ +5% vs prior period / budget<br>
+            🟡 Amber = between -5% and +5%<br>
+            🔴 Red = &lt; -5% vs prior period / budget</p>
+            <p><strong style="color:var(--text)">Overview section:</strong> Shows total kWh billed across all rate classes. The <em>Profile</em> bar charts break down by Customer (top accounts), Industry, Rate Class, and Parish. Click any bar to drilldown to that segment. The <em>Variance Summary</em> table shows MTD, YTD, and YoY comparison for each rate class.</p>
+            <p><strong style="color:var(--text)">Chart controls:</strong> Use 🖨 Print to open a print-ready version and 💾 Save to download the chart as a PNG image. ⬇ CSV downloads the underlying table data.</p>
+          </div>
+        </div>
+
+        <!-- Commercial section -->
+        <div class="card help-card" data-tags="commercial rt40 rt50 rt70 customer drilldown pivot movers defection industry">
+          <div class="ch" style="cursor:pointer" onclick="toggleHelp(this)">🏢 Commercial Section — Customers, Pivot, Defection, R&amp;O <span style="font-size:10px;color:var(--text3);font-weight:400">▾</span></div>
+          <div class="help-body" style="display:none;font-size:11px;color:var(--text2);line-height:1.9;padding-top:8px">
+            <p><strong style="color:var(--text)">Customers tab:</strong> The main commercial view. KPI cards show MTD commercial GWh, RT40/RT50 gap vs budget, top industry, and defector count. The bar chart is clickable — click any rate class bar to filter the customer table below to that segment. Use the search box and dropdowns to further filter. <em>Increasing ↑ / Declining ↓</em> trend filter compares current YTD to prior YTD.</p>
+            <p><strong style="color:var(--text)">Pivot / Movers tab:</strong> Shows which accounts gained or lost the most kWh compared to the same period in the prior year. Use the period selector (MTD / YTD / Rolling 12M) and rate class filter to focus your analysis. Top Gainers and Top Decliners panels rank accounts by absolute kWh change. The full mover list can be exported as CSV.</p>
+            <p><strong style="color:var(--text)">Defection tab:</strong> Flags customers whose 3-month rolling average kWh has dropped below 80% of the same 3-month window in the prior year. Severity grades: <span style="color:#ff4f4f">Critical &lt;50%</span>, <span style="color:orange">Severe 50–65%</span>, <span style="color:#ffd166">Moderate 65–80%</span>. Each flagged account requires a validated cause (Solar/DG, Hurricane, Closure, Unknown) before it is counted as a confirmed structural defector.</p>
+            <p><strong style="color:var(--text)">Risk &amp; Opportunity tab:</strong> Manual pipeline of commercial risks and opportunities. Risks are negative expected kWh impact (e.g. planned DG install, site closure). Opportunities are positive impact (e.g. new connection, expanded load). Use this to track and manage the forward commercial outlook.</p>
+            <p><strong style="color:var(--text)">AI Commentary:</strong> Click <em>Generate Analysis</em> in the AI Commentary card at the top of Commercial to produce a written narrative of the current period's commercial performance. Copy it to clipboard for use in reports or management presentations.</p>
+          </div>
+        </div>
+
+        <!-- Residential section -->
+        <div class="card help-card" data-tags="residential rt10 rt20 net biller ev electric vehicle parish bracket">
+          <div class="ch" style="cursor:pointer" onclick="toggleHelp(this)">🏠 Residential Section <span style="font-size:10px;color:var(--text3);font-weight:400">▾</span></div>
+          <div class="help-body" style="display:none;font-size:11px;color:var(--text2);line-height:1.9;padding-top:8px">
+            <p><strong style="color:var(--text)">KPIs:</strong> MTD residential GWh, net biller count (requires Net_Billers sheet upload), EV account count, customer growth YoY. Items showing "Sync DB to populate" need the relevant tables to be populated via upload.</p>
+            <p><strong style="color:var(--text)">Parish × Consumption Bracket table:</strong> Shows kWh billed by parish broken down into consumption brackets (0–150, 150–300, 300–500, 500+). Use the bracket filter to focus on a specific usage band. This is key for identifying under- and over-performing parishes relative to prior year.</p>
+            <p><strong style="color:var(--text)">Net Billing chart:</strong> Tracks the number of net billing customers and their total export kWh over time. Growth in net billers directly reduces billed consumption on the residential tariff.</p>
+            <p><strong style="color:var(--text)">EV chart:</strong> Tracks EV accounts and associated MWh. Early growth signal for load addition from EV charging.</p>
+          </div>
+        </div>
+
+        <!-- LE Forecast & Forecast Accuracy -->
+        <div class="card help-card" data-tags="le forecast accuracy mape budget entry scenario pivot customer">
+          <div class="ch" style="cursor:pointer" onclick="toggleHelp(this)">📈 LE Forecast &amp; Forecast Accuracy <span style="font-size:10px;color:var(--text3);font-weight:400">▾</span></div>
+          <div class="help-body" style="display:none;font-size:11px;color:var(--text2);line-height:1.9;padding-top:8px">
+            <p><strong style="color:var(--text)">Forecast Accuracy section:</strong> Compares entered forecasts to actuals. MAPE (Mean Absolute Percentage Error) is the primary accuracy metric — target &lt;5%. Accounts are flagged "On trend" or "Off trend" based on whether actual performance matches the forecast within tolerance.</p>
+            <p><strong style="color:var(--text)">LE Forecast section:</strong> The Latest Estimate view. Sub-tabs: <em>Overview</em> (summary), <em>Monthly Trend</em>, <em>LE Base</em> (account-level base assumptions), <em>LE Cust Vol</em> / <em>LE RC Vol</em> (volume by customer and rate class), <em>LE Advanced</em>, <em>Customer Risk</em>, <em>Variance</em>, and <em>Pivot / Movers</em>. The Pivot / Movers tab here shows the LE-specific scenario pivot matrix.</p>
+            <p><strong style="color:var(--text)">Entering a forecast:</strong> Navigate to Forecast Accuracy → 6-Month Forecast Entry. Select the account, enter the forecast kWh for each future month, and click Save. Forecasts are stored in Supabase and visible to all users.</p>
+          </div>
+        </div>
+
+        <!-- Intelligence sections -->
+        <div class="card help-card" data-tags="executive summary variance bridge revenue recovery net generation intelligence">
+          <div class="ch" style="cursor:pointer" onclick="toggleHelp(this)">📰 Intelligence — Exec Summary, Variance Bridge, Revenue Recovery, Net Gen <span style="font-size:10px;color:var(--text3);font-weight:400">▾</span></div>
+          <div class="help-body" style="display:none;font-size:11px;color:var(--text2);line-height:1.9;padding-top:8px">
+            <p><strong style="color:var(--text)">Exec Summary:</strong> One-page snapshot of the most important KPIs, commentary, and charts. Designed to be printed or exported as a PDF for management reporting. Populate the narrative boxes via Monthly Review → Commentary.</p>
+            <p><strong style="color:var(--text)">Variance Bridge:</strong> Waterfall chart decomposing the kWh or revenue variance vs budget or prior year into contributing factors (volume, mix, rate, weather, etc.). The bridge is DB-driven — populate via the Revenue Recovery drivers if available.</p>
+            <p><strong style="color:var(--text)">Revenue Recovery:</strong> Tracks USD revenue performance across the billing cycle. Shows budget, quantity effect, mix effect, FX effect, fuel and IPP costs. Upload data via the <em>rr_data</em> table or enter manually.</p>
+            <p><strong style="color:var(--text)">Net Generation:</strong> Tracks distributed generation (DG) output by month and technology type (Solar, Wind, CHP, ALL). Compare DG growth against grid consumption to quantify load displacement risk. Upload via the <em>Net_Generation</em> sheet.</p>
+          </div>
+        </div>
+
+        <!-- Monthly Review & Commentary -->
+        <div class="card help-card" data-tags="monthly review commentary narrative note period close lock">
+          <div class="ch" style="cursor:pointer" onclick="toggleHelp(this)">📋 Monthly Review &amp; Commentary <span style="font-size:10px;color:var(--text3);font-weight:400">▾</span></div>
+          <div class="help-body" style="display:none;font-size:11px;color:var(--text2);line-height:1.9;padding-top:8px">
+            <p><strong style="color:var(--text)">Purpose:</strong> The Monthly Review section provides a structured area for the Sales team to document the story behind the numbers. Notes are stored in Supabase and visible to all authorised users.</p>
+            <p><strong style="color:var(--text)">Period Close:</strong> Managers and Admins can lock a period (year + month) in <strong>Admin → Period Close</strong>. A locked period prevents further edits to commentary and actuals for that month. This creates a clean audit trail for month-end sign-off.</p>
+            <p><strong style="color:var(--text)">AI Commentary:</strong> Use the <em>Generate Analysis</em> button in the AI Commentary cards (available in Commercial and Overview sections) to auto-generate a narrative draft. The commentary is based on the loaded DB data and can be copied into the Monthly Review notes box, edited, and saved.</p>
+          </div>
+        </div>
+
+        <!-- Roles & Permissions -->
+        <div class="card help-card" data-tags="roles admin manager analyst rep permission access user">
+          <div class="ch" style="cursor:pointer" onclick="toggleHelp(this)">🔐 Roles &amp; Permissions <span style="font-size:10px;color:var(--text3);font-weight:400">▾</span></div>
+          <div class="help-body" style="display:none;font-size:11px;color:var(--text2);line-height:1.9;padding-top:8px">
+            <table style="width:100%;border-collapse:collapse;font-size:11px">
+              <thead><tr style="background:var(--navy3)"><th style="padding:5px 8px;text-align:left;color:var(--teal)">Role</th><th style="padding:5px 8px;text-align:left;color:var(--teal)">Capabilities</th></tr></thead>
+              <tbody>
+                <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;color:var(--teal)">admin</td><td style="padding:5px 8px">Full access — user management, period locks, data upload, all views.</td></tr>
+                <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;color:#ffd166">manager</td><td style="padding:5px 8px">Upload data, save narratives, approve forecasts, view all sections.</td></tr>
+                <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;color:var(--text2)">rep</td><td style="padding:5px 8px">Add notes, validate defectors, enter forecasts for assigned accounts. Read-only otherwise.</td></tr>
+                <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;color:var(--text3)">analyst</td><td style="padding:5px 8px">Read-only — no edits.</td></tr>
+              </tbody>
+            </table>
+            <p style="margin-top:10px">Role assignments are managed in <strong>Admin → Users &amp; Roles</strong>. Each user can have a different role for the Sales platform and the FP&amp;A platform — they share the same login credentials but have independent role assignments.</p>
+          </div>
+        </div>
+
+        <!-- Analysing the data -->
+        <div class="card help-card" data-tags="analyse analysis interpret defection trend yoy gap variance how to">
+          <div class="ch" style="cursor:pointer" onclick="toggleHelp(this)">🔍 How to Analyse — Key Questions &amp; Workflows <span style="font-size:10px;color:var(--text3);font-weight:400">▾</span></div>
+          <div class="help-body" style="display:none;font-size:11px;color:var(--text2);line-height:1.9;padding-top:8px">
+            <p><strong style="color:var(--text)">Why are commercial kWh down vs budget?</strong><br>
+            1. Check <em>Commercial → Customers</em> — which rate class is driving the gap? RT40, RT50, or RT70?<br>
+            2. Use <em>Commercial → Pivot / Movers</em> to identify the specific accounts with the largest declines.<br>
+            3. Cross-reference with <em>Defection</em> — are the declining accounts flagged? What is the validated cause?<br>
+            4. Check <em>Net Generation</em> — is DG growth absorbing load from specific rate classes?</p>
+            <p><strong style="color:var(--text)">How to identify new solar installs causing defection?</strong><br>
+            1. Go to <em>Defection</em> tab in Commercial. Filter by cause = "Solar/DG".<br>
+            2. Cross-reference flagged accounts with the R&amp;O Pipeline — does a risk entry exist?<br>
+            3. Validate with the KAM assigned to the account — add a note via the customer drilldown table.</p>
+            <p><strong style="color:var(--text)">How to build the monthly narrative for management?</strong><br>
+            1. Sync DB to load latest actuals.<br>
+            2. Set the period to the month being reported.<br>
+            3. In Commercial, click <em>Generate Analysis</em> in the AI Commentary card.<br>
+            4. Copy the generated text, refine as needed, and paste into <em>Monthly Review → Commentary</em>.<br>
+            5. Lock the period in <em>Admin → Period Close</em> once signed off.</p>
+            <p><strong style="color:var(--text)">How to track a large account moving to self-generation?</strong><br>
+            1. Note the account in <em>R&amp;O Pipeline</em> as a Risk with expected kWh impact and timeline.<br>
+            2. Flag the account in the <em>Defection</em> register once the 3-month trigger fires.<br>
+            3. Add KAM commentary to the customer note in <em>Commercial → Customer Detail</em>.<br>
+            4. Track actuals monthly in <em>Commercial → Pivot / Movers</em>.</p>
+          </div>
+        </div>
+
+      </div>
     </div>
 
     <!-- === ADMIN === -->
@@ -2048,6 +2272,31 @@ const GLOSSARY_DATA=[
   {term:'IPP',cat:'Market',def:'Independent Power Producer -- third-party generators under contract to supply power to JPS.'},
   {term:'Hurricane Melissa',cat:'Market',def:'Category 4 hurricane, late 2025. Primary structural driver of 2026 YTD commercial sales decline — magnitude varies by period loaded.'},
   {term:'Henry Hub',cat:'Market',def:'US natural gas price benchmark for LNG fuel costs in JPS tariff calculations. YTD 2026 prices +31% vs 2025.'},
+  // Financial
+  {term:'Revenue per kWh (RpK)',cat:'Financial',def:'Total billed revenue divided by total kWh sold. Blended rate signal. Rises when higher-tariff rate classes (RT70) grow faster than lower-tariff classes (RT10).'},
+  {term:'Demand Charge',cat:'Financial',def:'Fixed charge component based on the customer\'s peak kVA demand in the billing period. Applies to RT40, RT50, RT70. Not load-sensitive — persists even if kWh consumption falls.'},
+  {term:'Energy Charge',cat:'Financial',def:'Variable charge based on kWh consumed in the billing period. Applies to all rate classes. Subject to the Fuel & Cogent Adjustment.'},
+  {term:'Fuel & Cogent Adjustment (FCA)',cat:'Financial',def:'Pass-through charge reflecting JPS\'s actual fuel cost per kWh relative to the approved base fuel rate. Can be positive (surcharge) or negative (credit). Moves monthly with fuel costs.'},
+  {term:'JMD / USD Split',cat:'Financial',def:'JPS bills in JMD but incurs significant USD-denominated costs (fuel, IPP contracts, debt service). Revenue Recovery section tracks USD performance after FX conversion.'},
+  {term:'AOP Target',cat:'Financial',def:'The approved annual budget (GWh and JMD revenue) set during the Annual Operating Plan. Variance vs AOP is the primary management KPI tracked monthly.'},
+  {term:'IPP Cost',cat:'Financial',def:'Payments to Independent Power Producers under long-term power purchase agreements. Fixed capacity charges apply regardless of dispatch. Key driver of COGS.'},
+  // Operational
+  {term:'Zero Bill',cat:'Operational',def:'Bill issued with zero or near-zero consumption — caused by disconnection, meter fault, estimated read, or outage. Widespread post-Hurricane Melissa (late 2025). Inflates customer counts without corresponding revenue.'},
+  {term:'T&D Loss / System Loss',cat:'Operational',def:'Electricity generated or purchased that is not billed to customers — includes technical losses in the network and non-technical (commercial) losses. JPS target: <17%. Affects billed kWh available for sale.'},
+  {term:'Load Factor',cat:'Operational',def:'Ratio of average demand to peak demand over a period. High load factor = stable consumption. Low load factor = peaky usage with high demand charges relative to energy used. Calculated as: (kWh / (peak kVA × hours)).'},
+  {term:'Base Load',cat:'Operational',def:'The minimum level of electricity demand that must always be met. Large industrial customers (RT70) typically have high base load — predictable and high-value. Loss of base load customers is structurally damaging.'},
+  {term:'Peak Demand (kVA)',cat:'Operational',def:'The maximum rate of electricity consumption recorded in a billing period, measured in kilovolt-amperes. Used to set the demand charge for commercial customers. Key factor in RT40/RT50/RT70 revenue even when kWh declines.'},
+  {term:'Billing Cycle',cat:'Operational',def:'JPS bills customers on a staggered monthly cycle — not all accounts are read on the same date. MTD actuals may be incomplete until all cycle reads are captured, typically by the 15th of the following month.'},
+  {term:'OUR',cat:'Operational',def:'Office of Utilities Regulation — the Jamaican regulator for electricity, water, and telecommunications. Sets JPS tariff rates through periodic rate reviews. Proposed tariff changes require OUR approval.'},
+  {term:'EGC',cat:'Operational',def:'Electricity Generation Capacity — the total installed nameplate capacity of JPS\'s generation assets plus contracted IPP capacity. Expressed in MW.'},
+  // Analytics
+  {term:'YoY Variance',cat:'Analytics',def:'The difference between the current period\'s metric and the same period in the prior year. Can be expressed in absolute terms (GWh) or percentage. Primary benchmark when budget data is unavailable.'},
+  {term:'Rolling 12-Month',cat:'Analytics',def:'A 12-month window ending on the most recent available period. Smooths out seasonality and one-off events. More stable than YTD when comparing periods of different lengths.'},
+  {term:'Mover / Pivot',cat:'Analytics',def:'An account that has materially changed its consumption between two comparable periods. Gainers = positive movers; Decliners = negative movers. The Pivot / Movers tab in Commercial ranks accounts by absolute kWh change.'},
+  {term:'Cohort Analysis',cat:'Analytics',def:'Grouping customers by a common characteristic (acquisition year, rate class, industry, KAM) and tracking their collective performance over time. Useful for identifying whether defection is concentrated in a specific segment.'},
+  {term:'Run-Rate',cat:'Analytics',def:'Annualised projection based on current MTD or YTD performance. E.g. if YTD kWh through February is X, run-rate full-year = X × (12/2). Used in LE Forecast to project year-end if current trends continue.'},
+  {term:'MAPE',cat:'Analytics',def:'Mean Absolute Percentage Error — average of |actual − forecast| / actual across all accounts. Key forecast quality KPI. Target <5%. Accounts with MAPE >15% are flagged as "Off trend" requiring explanation.'},
+  {term:'3-Month Rolling Average',cat:'Analytics',def:'Average of the most recent three months of data. Used in Defection logic — a customer is flagged when their 3-month rolling average kWh drops below 80% of the same 3-month average in the prior year.'},
 ];
 
 const FC_SEGS=[
@@ -2098,30 +2347,242 @@ function sw(id,el){
 
 // Commercial sub-tab navigation
 function swCm(panel,btn){
-  // Update active tab highlight in cm subtabs
   document.querySelectorAll('#cm_subtabs .stab').forEach(b=>b.classList.remove('on'));
   if(btn)btn.classList.add('on');
   if(panel==='defection'){
     sw('df', document.querySelector('.ni[onclick*="\'cm\'"]')||document.createElement('div'));
-    // Re-highlight cm nav
     document.querySelector('.ni[onclick*="\'cm\'"]')?.classList.add('on');
   } else if(panel==='ro'){
     sw('ro', document.querySelector('.ni[onclick*="\'cm\'"]')||document.createElement('div'));
     document.querySelector('.ni[onclick*="\'cm\'"]')?.classList.add('on');
   } else if(panel==='pivot'){
-    swCmPivot();
+    const cw=document.getElementById('cm_customers_wrap');
+    const pw=document.getElementById('cm_pivot_wrap');
+    if(cw)cw.style.display='none';
+    if(pw)pw.style.display='';
+    renderCmPivot();
+  } else {
+    // customers (default)
+    const cw=document.getElementById('cm_customers_wrap');
+    const pw=document.getElementById('cm_pivot_wrap');
+    if(cw)cw.style.display='';
+    if(pw)pw.style.display='none';
+    renderCommercialKPIs();renderCmCust();renderCmIndTbl();renderCmComment();
   }
-  // 'customers' is the default view — already visible in cm section
 }
 
-function swCmPivot(){
-  // Navigate to LE and activate pivot sub-tab
-  const leNi = document.querySelector('.ni[onclick*="\'le\'"]');
-  if(leNi) sw('le', leNi);
-  setTimeout(()=>{
-    const pivotBtn = document.getElementById('le_btn_pivot');
-    if(pivotBtn) pivotBtn.click();
-  }, 80);
+function renderCmPivot(){
+  const period = document.getElementById('pv_period_cm')?.value||'ytd';
+  const rcF    = document.getElementById('pv_rc_cm')?.value||'';
+  const q      = (document.getElementById('pv_q_cm')?.value||'').toLowerCase();
+  const dirF   = document.getElementById('pv_dir_cm')?.value||'';
+
+  // Build account-level sums for current and prior year
+  const cy = curYear, py = cy - 1;
+  const monthsInPeriod = period==='mtd' ? [curMonth]
+    : period==='ytd' ? Array.from({length:curMonth},(_,i)=>i+1)
+    : Array.from({length:12},(_,i)=>((curMonth-1-i+12)%12)+1); // rolling 12
+
+  const rows = sbActuals.filter(r=>!r.consumption_bucket); // commercial only
+  const accounts = {};
+  rows.forEach(r=>{
+    const ac=String(r.jps_ac||'').trim();
+    const rc=String(r.rate_class||'').trim();
+    if(!ac)return;
+    if(rcF&&rc!==rcF)return;
+    if(!accounts[ac])accounts[ac]={ac,name:String(r.name||'').trim(),rc,cy:0,py:0};
+    const yr=Number(r.year), mo=Number(r.month), kwh=Number(r.kwh||0);
+    if(yr===cy&&monthsInPeriod.includes(mo)) accounts[ac].cy+=kwh;
+    if(yr===py&&monthsInPeriod.includes(mo)) accounts[ac].py+=kwh;
+  });
+
+  let movers = Object.values(accounts).map(a=>({
+    ...a,
+    delta: a.cy - a.py,
+    pct: a.py ? ((a.cy-a.py)/a.py*100) : null
+  })).filter(a=>a.cy>0||a.py>0);
+
+  // Apply search + direction filter for full list
+  let filtered = movers.filter(a=>{
+    if(q&&!a.name.toLowerCase().includes(q)&&!a.ac.includes(q))return false;
+    if(dirF==='up'&&a.delta<=0)return false;
+    if(dirF==='dn'&&a.delta>=0)return false;
+    return true;
+  });
+
+  const periodLbl = period==='mtd'?`MTD ${curYear}`:period==='ytd'?`YTD ${curYear}`:`Rolling 12M`;
+  document.getElementById('pv_gainers_lbl').textContent=`${periodLbl} vs ${py} — kWh increase`;
+  document.getElementById('pv_decliners_lbl').textContent=`${periodLbl} vs ${py} — kWh decline`;
+
+  const hdr=`<thead><tr><th>Acct #</th><th>Customer</th><th>RC</th><th>${py} kWh</th><th>${cy} kWh</th><th>Δ kWh</th><th>Δ %</th></tr></thead>`;
+  const row=a=>`<tr>
+    <td>${a.ac}</td><td>${a.name||'--'}</td><td>${a.rc}</td>
+    <td>${fmtK(a.py)}</td><td>${fmtK(a.cy)}</td>
+    <td class="${a.delta>=0?'up':'dn'}">${a.delta>=0?'+':''}${fmtK(a.delta)}</td>
+    <td class="${a.delta>=0?'up':'dn'}">${a.pct!=null?(a.delta>=0?'+':'')+a.pct.toFixed(1)+'%':'N/A'}</td>
+  </tr>`;
+
+  const gainers=[...movers].sort((a,b)=>b.delta-a.delta).slice(0,15);
+  const decliners=[...movers].sort((a,b)=>a.delta-b.delta).slice(0,15);
+  filtered.sort((a,b)=>b.delta-a.delta);
+
+  const mkTbl=(rows)=>rows.length?`<table class="dt"><colgroup><col style="width:80px"><col><col style="width:45px"><col style="width:75px"><col style="width:75px"><col style="width:75px"><col style="width:60px"></colgroup>${hdr}<tbody>${rows.map(row).join('')}</tbody></table>`:'<div style="padding:20px;text-align:center;font-size:11px;color:var(--text3)">No data loaded — sync DB to populate.</div>';
+
+  document.getElementById('pv_gainers_tbl').innerHTML=mkTbl(gainers);
+  document.getElementById('pv_decliners_tbl').innerHTML=mkTbl(decliners);
+  document.getElementById('pv_all_tbl').innerHTML=mkTbl(filtered);
+  document.getElementById('pv_count_cm').textContent=`${filtered.length} accounts`;
+}
+
+// ── AI Commentary ──────────────────────────────────────────────
+function toggleAiPanel(id){
+  const el=document.getElementById(id);
+  if(!el)return;
+  el.style.display=el.style.display==='none'?'':'none';
+}
+
+function generateCommentary(section){
+  const out=document.getElementById(section+'_ai_out');
+  const ts=document.getElementById(section+'_ai_ts');
+  if(!out)return;
+  out.textContent='Generating…';
+  if(ts)ts.textContent='';
+  const aiBody=document.getElementById(section+'_ai_body');
+  if(aiBody)aiBody.style.display='';
+
+  try{
+    const lines=[];
+    const mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const pLbl=`${mn[(curMonth-1)%12]} ${curYear}`;
+
+    if(section==='cm'){
+      const cy=curYear,py=cy-1;
+      const comm=sbActuals.filter(r=>!r.consumption_bucket);
+      const sum=(yr,mos)=>comm.filter(r=>Number(r.year)===yr&&mos.includes(Number(r.month))).reduce((s,r)=>s+Number(r.kwh||0),0);
+      const ytdMos=Array.from({length:curMonth},(_,i)=>i+1);
+      const cyYtd=sum(cy,ytdMos), pyYtd=sum(py,ytdMos);
+      const cyMtd=sum(cy,[curMonth]), pyMtd=sum(py,[curMonth]);
+      const yoyYtd=pyYtd?((cyYtd-pyYtd)/pyYtd*100):null;
+      const yoyMtd=pyMtd?((cyMtd-pyMtd)/pyMtd*100):null;
+
+      // By rate class YTD
+      const rcTotals={};
+      comm.filter(r=>Number(r.year)===cy&&ytdMos.includes(Number(r.month))).forEach(r=>{
+        const rc=r.rate_class||'Other';
+        rcTotals[rc]=(rcTotals[rc]||0)+Number(r.kwh||0);
+      });
+      const topRC=Object.entries(rcTotals).sort((a,b)=>b[1]-a[1]);
+
+      // Top accounts
+      const acTotals={};
+      comm.filter(r=>Number(r.year)===cy&&ytdMos.includes(Number(r.month))).forEach(r=>{
+        const ac=r.jps_ac;
+        if(!acTotals[ac])acTotals[ac]={name:r.name||ac,kwh:0};
+        acTotals[ac].kwh+=Number(r.kwh||0);
+      });
+      const topAc=Object.values(acTotals).sort((a,b)=>b.kwh-a.kwh).slice(0,3);
+
+      // Defectors
+      const dfCount=document.getElementById('df_total')?.textContent||'--';
+
+      lines.push(`COMMERCIAL SALES ANALYSIS — ${pLbl}`);
+      lines.push('═'.repeat(50));
+      lines.push('');
+      if(cyYtd>0){
+        lines.push(`YTD PERFORMANCE`);
+        lines.push(`Commercial kWh billed YTD ${cy}: ${(cyYtd/1e6).toFixed(2)} GWh`);
+        if(pyYtd>0) lines.push(`Prior year YTD ${py}: ${(pyYtd/1e6).toFixed(2)} GWh  (${yoyYtd>=0?'+':''}${yoyYtd?.toFixed(1)||'--'}% YoY)`);
+        lines.push('');
+        if(cyMtd>0){
+          lines.push(`MTD PERFORMANCE`);
+          lines.push(`Commercial kWh billed MTD ${pLbl}: ${(cyMtd/1e6).toFixed(2)} GWh`);
+          if(pyMtd>0) lines.push(`Prior year MTD: ${(pyMtd/1e6).toFixed(2)} GWh  (${yoyMtd>=0?'+':''}${yoyMtd?.toFixed(1)||'--'}% YoY)`);
+          lines.push('');
+        }
+        if(topRC.length){
+          lines.push(`RATE CLASS BREAKDOWN (YTD ${cy})`);
+          topRC.forEach(([rc,kwh])=>lines.push(`  ${rc}: ${(kwh/1e6).toFixed(2)} GWh  (${cyYtd?(kwh/cyYtd*100).toFixed(1):'--'}% of commercial total)`));
+          lines.push('');
+        }
+        if(topAc.length){
+          lines.push(`TOP ACCOUNTS BY kWh (YTD ${cy})`);
+          topAc.forEach((a,i)=>lines.push(`  ${i+1}. ${a.name} — ${(a.kwh/1e6).toFixed(2)} GWh`));
+          lines.push('');
+        }
+      } else {
+        lines.push('No commercial actuals loaded. Sync the database to generate commentary.');
+        lines.push('');
+      }
+      lines.push(`DEFECTION`);
+      lines.push(`Customers currently flagged as defectors: ${dfCount}`);
+      lines.push('Validate flagged accounts to identify structural vs temporary causes.');
+      lines.push('');
+      lines.push(`OUTLOOK`);
+      lines.push('Review the Pivot / Movers tab to identify accounts with material YoY changes.');
+      lines.push('Cross-reference decliners against the R&O Pipeline for known risk items.');
+      lines.push('Update KAM notes for any accounts requiring follow-up.');
+    } else {
+      // Generic overview commentary
+      const totCy=sbActuals.filter(r=>Number(r.year)===curYear).reduce((s,r)=>s+Number(r.kwh||0),0);
+      lines.push(`OVERVIEW ANALYSIS — ${pLbl}`);
+      lines.push('═'.repeat(50));
+      lines.push('');
+      if(totCy>0){
+        lines.push(`Total billed kWh YTD ${curYear}: ${(totCy/1e6).toFixed(2)} GWh`);
+      } else {
+        lines.push('No actuals loaded. Sync the database to generate commentary.');
+      }
+      lines.push('');
+      lines.push('Review Commercial, Residential, and Net Generation sections for segment detail.');
+    }
+
+    out.textContent=lines.join('\n');
+    if(ts)ts.textContent=`Generated ${new Date().toLocaleTimeString()}`;
+  } catch(e){
+    out.textContent='Error generating commentary: '+e.message;
+    console.error(e);
+  }
+}
+
+function copyAiOut(id){
+  const el=document.getElementById(id);
+  if(!el)return;
+  navigator.clipboard.writeText(el.textContent).then(()=>toast('Copied to clipboard','ok')).catch(()=>{
+    const r=document.createRange();r.selectNode(el);
+    window.getSelection().removeAllRanges();window.getSelection().addRange(r);
+    document.execCommand('copy');toast('Copied','ok');
+  });
+}
+
+async function saveAiNote(section){
+  const el=document.getElementById(section+'_ai_out');
+  if(!el||!el.textContent||el.textContent.startsWith('Click'))return;
+  const sb=getSB();if(!sb){toast('Not connected','err');return;}
+  const{error}=await sb.from('jps_notes').upsert({
+    section,period:`${curYear}-${String(curMonth).padStart(2,'0')}`,
+    note_text:el.textContent,author:CU?.name||'AI',
+    updated_at:new Date().toISOString()
+  },{onConflict:'section,period'});
+  if(error)toast('Save failed: '+error.message,'err');
+  else toast('Commentary saved as note','ok');
+}
+
+// ── Help / User Guide ──────────────────────────────────────────
+function toggleHelp(hdr){
+  const body=hdr.parentElement.querySelector('.help-body');
+  if(!body)return;
+  body.style.display=body.style.display==='none'?'':'none';
+  const arrow=hdr.querySelector('span[style*="font-size:10px"]');
+  if(arrow)arrow.textContent=body.style.display===''?'▴':'▾';
+}
+
+function filterHelp(){
+  const q=(document.getElementById('help_q')?.value||'').toLowerCase();
+  document.querySelectorAll('.help-card').forEach(card=>{
+    const tags=(card.dataset.tags||'').toLowerCase();
+    const text=(card.textContent||'').toLowerCase();
+    card.style.display=(!q||tags.includes(q)||text.includes(q))?'':'none';
+  });
 }
 
 // Populate sidebar segment + year chips from actual DB data
@@ -2164,7 +2625,12 @@ function renderSection(id){
   if(lockableSections.includes(id))maybeShowLockBanner(id);
 
   if(id==='ov'){renderOverviewKPIs();renderPfCust();renderPfInd();renderPfRC();renderPfPar();renderVariance();}
-  else if(id==='cm'){renderCommercialKPIs();renderCmCust();renderCmIndTbl();renderCmComment();}
+  else if(id==='cm'){
+    renderCommercialKPIs();
+    const pvWrap=document.getElementById('cm_pivot_wrap');
+    if(pvWrap&&pvWrap.style.display!=='none') renderCmPivot();
+    else{renderCmCust();renderCmIndTbl();renderCmComment();}
+  }
   else if(id==='rs'){renderRsKPIs();renderRsPar();}
   else if(id==='df'){renderDefectors();renderDefKPIs();}
   else if(id==='fc'){renderFcEntry();renderMacroGrid();renderFcKPIs();}
@@ -2172,6 +2638,7 @@ function renderSection(id){
   else if(id==='mr'){initMrMonths();renderMrSection();}
   else if(id==='ar'){renderRecon();renderArKPIs();}
   else if(id==='gl'){renderGloss();}
+  else if(id==='help'){/* static content, no render needed */}
   else if(id==='adm'){renderAdm();}
   else if(id==='es'){renderExecSummary();}
   else if(id==='vb'){renderVarianceBridge();}
@@ -2367,6 +2834,7 @@ async function loadExcel(input){
 }
 
 function dlTemplate(){
+  if(typeof XLSX==='undefined'){toast('Excel library not loaded yet — please wait a few seconds and try again','err');return;}
   const wb=XLSX.utils.book_new();
 
   // 1. Actuals — flat dump format, same columns for commercial and residential
