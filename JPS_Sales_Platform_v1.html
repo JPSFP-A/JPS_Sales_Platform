@@ -6178,7 +6178,7 @@ async function sbTable(tbl,opts={}){
   let q=sb.from(tbl).select(opts.cols||'*').limit(opts.limit||10000);
   if(opts.order)q=q.order(opts.order,{ascending:true});
   const{data,error}=await q;
-  return(!error&&data&&data.length)?data:null;
+  return(!error&&Array.isArray(data))?data:null;
 }
 
 async function sbStorage(bucket,file){
