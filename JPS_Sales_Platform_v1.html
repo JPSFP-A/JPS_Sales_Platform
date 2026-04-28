@@ -5942,10 +5942,10 @@ create table if not exists public.jps_user_notes (
   unique (acct_num)
 );
 alter table public.jps_user_notes enable row level security;
-do $ declare r record; begin
+do $$ declare r record; begin
   for r in select policyname from pg_policies where schemaname='public' and tablename='jps_user_notes'
   loop execute format('drop policy if exists %I on public.jps_user_notes', r.policyname); end loop;
-end $;
+end $$;
 create policy "Authenticated users can read user notes"
   on public.jps_user_notes for select using (auth.role()='authenticated');
 create policy "Reps can write user notes"
@@ -5963,10 +5963,10 @@ create table if not exists public.jps_exec_narratives (
   unique (year, month)
 );
 alter table public.jps_exec_narratives enable row level security;
-do $ declare r record; begin
+do $$ declare r record; begin
   for r in select policyname from pg_policies where schemaname='public' and tablename='jps_exec_narratives'
   loop execute format('drop policy if exists %I on public.jps_exec_narratives', r.policyname); end loop;
-end $;
+end $$;
 create policy "Authenticated users can read exec narratives"
   on public.jps_exec_narratives for select using (auth.role()='authenticated');
 create policy "Managers can write exec narratives"
@@ -5985,10 +5985,10 @@ create table if not exists public.jps_vb_drivers (
   created_at timestamptz default now()
 );
 alter table public.jps_vb_drivers enable row level security;
-do $ declare r record; begin
+do $$ declare r record; begin
   for r in select policyname from pg_policies where schemaname='public' and tablename='jps_vb_drivers'
   loop execute format('drop policy if exists %I on public.jps_vb_drivers', r.policyname); end loop;
-end $;
+end $$;
 create policy "Authenticated users can read vb drivers"
   on public.jps_vb_drivers for select using (auth.role()='authenticated');
 create policy "Managers can write vb drivers"
@@ -6009,10 +6009,10 @@ create table if not exists public.jps_pivot_commentary (
   unique (period, acct_num)
 );
 alter table public.jps_pivot_commentary enable row level security;
-do $ declare r record; begin
+do $$ declare r record; begin
   for r in select policyname from pg_policies where schemaname='public' and tablename='jps_pivot_commentary'
   loop execute format('drop policy if exists %I on public.jps_pivot_commentary', r.policyname); end loop;
-end $;
+end $$;
 create policy "Authenticated users can read pivot commentary"
   on public.jps_pivot_commentary for select using (auth.role()='authenticated');
 create policy "Reps can write pivot commentary"
@@ -6032,10 +6032,10 @@ create table if not exists public.jps_def_actions (
   unique (acct_num)
 );
 alter table public.jps_def_actions enable row level security;
-do $ declare r record; begin
+do $$ declare r record; begin
   for r in select policyname from pg_policies where schemaname='public' and tablename='jps_def_actions'
   loop execute format('drop policy if exists %I on public.jps_def_actions', r.policyname); end loop;
-end $;
+end $$;
 create policy "Authenticated users can read def actions"
   on public.jps_def_actions for select using (auth.role()='authenticated');
 create policy "Reps can write def actions"
@@ -6062,10 +6062,10 @@ create table if not exists public.jps_ro_register (
   unique (num)
 );
 alter table public.jps_ro_register enable row level security;
-do $ declare r record; begin
+do $$ declare r record; begin
   for r in select policyname from pg_policies where schemaname='public' and tablename='jps_ro_register'
   loop execute format('drop policy if exists %I on public.jps_ro_register', r.policyname); end loop;
-end $;
+end $$;
 create policy "Authenticated users can read RO register"
   on public.jps_ro_register for select using (auth.role()='authenticated');
 create policy "Managers can write RO register"
@@ -6085,10 +6085,10 @@ create table if not exists public.jps_notes (
   unique (section, period)
 );
 alter table public.jps_notes enable row level security;
-do $ declare r record; begin
+do $$ declare r record; begin
   for r in select policyname from pg_policies where schemaname='public' and tablename='jps_notes'
   loop execute format('drop policy if exists %I on public.jps_notes', r.policyname); end loop;
-end $;
+end $$;
 create policy "Authenticated users can read notes"
   on public.jps_notes for select using (auth.role()='authenticated');
 create policy "Authenticated users can write notes"
