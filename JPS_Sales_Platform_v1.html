@@ -8,7 +8,7 @@
 <meta http-equiv="Expires" content="0"/>
 <title>JPS Sales Analytics Platform</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- XLSX loaded lazily on first upload/download — saves ~1MB on initial page load -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 :root{
@@ -306,7 +306,6 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
     <div class="lerr" id="lErr">Invalid email or password.</div>
     <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center">
       <span style="font-size:9px;color:var(--teal);cursor:pointer" onclick="showRegister()">First time? Register →</span>
-      <span style="font-size:9px;color:var(--text3);cursor:pointer" onclick="showDemoLogin()">Demo mode</span>
     </div>
     <!-- Register panel -->
     <div id="registerPanel" style="display:none;margin-top:14px;padding:12px;background:rgba(55,138,221,.07);border:1px solid var(--blue);border-radius:8px">
@@ -316,20 +315,6 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
       <div class="lf" style="margin-bottom:8px"><label>Password</label><input class="si" id="rPass" type="password" placeholder="Min 8 characters"/></div>
       <button class="login-btn" id="rBtn" onclick="doRegister()" style="background:var(--blue);color:#fff">Create Account →</button>
       <div style="font-size:9px;color:var(--text3);margin-top:8px">First account created is automatically Admin. Subsequent accounts start as View — Admin upgrades roles in-app.</div>
-    </div>
-    <!-- Demo mode (offline / no Supabase) -->
-    <div id="demoPanel" style="display:none;margin-top:14px;padding:12px;background:rgba(0,194,168,0.07);border:1px solid var(--teal);border-radius:8px">
-      <div style="font-size:10px;color:var(--teal);font-weight:700;margin-bottom:8px">DEMO / OFFLINE MODE</div>
-      <div class="lf" style="margin-bottom:8px">
-        <label>Select demo user</label>
-        <select id="lDemoUser" style="width:100%;background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px;font-size:12px">
-          <option value="admin">Admin (full access)</option>
-          <option value="manager">Manager (upload + approve)</option>
-          <option value="rep">Sales Rep (own territory)</option>
-          <option value="view">View Only (read-only)</option>
-        </select>
-      </div>
-      <button class="login-btn" onclick="demoLogin()" style="background:var(--teal);color:#000">Enter Demo →</button>
     </div>
   </div>
 </div>
@@ -383,13 +368,15 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
       <span class="tbadge tba" id="periodLabel">-- · MTD</span>
       <span class="tbadge tbr" id="kpi_ytd_yoy">-- YoY</span>
       <span class="tbadge tbt" id="dataStatus">⚡ Sample Data</span>
-      <span class="sb-badge sb-offline" id="sbStatus" onclick="syncSupabase()" title="Click to sync from Supabase">○ Offline</span>
+      <a href="https://jps-fp-a.vercel.app" target="_blank" style="font-size:10px;font-weight:600;color:var(--teal);text-decoration:none;padding:3px 8px;border:1px solid rgba(0,194,168,.3);border-radius:5px;white-space:nowrap" title="Open FP&amp;A Platform">FP&amp;A ↗</a>
+      <span class="sb-badge sb-syncing" id="sbStatus" onclick="syncSupabase()" title="Click to sync from Supabase">↻ Connecting…</span>
       <span id="appVersion" style="font-size:9px;color:var(--text3);opacity:0.6"></span>
       <div id="onlineUsersPanel" style="display:flex;align-items:center"></div>
       <div class="ua" id="uAvatar" onclick="toggleMenu()">--</div>
       <div class="umenu" id="uMenu">
         <div class="umi" id="uNameDisp">--</div>
-        <div class="umi" style="border-top:1px solid var(--border);margin-top:3px;padding-top:7px" onclick="dlTemplate()">📥 Download Template</div>
+        <div class="umi" style="border-top:1px solid var(--border);margin-top:3px;padding-top:7px" onclick="window.open('https://jps-fp-a.vercel.app','_blank')">📊 FP&amp;A Platform ↗</div>
+        <div class="umi" onclick="dlTemplate()">📥 Download Template</div>
         <div class="umi" onclick="doLogout()">🚪 Sign Out</div>
       </div>
     </div>
@@ -458,7 +445,6 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
         <div class="kpi kt"><div class="kl">MTD Sales</div><div class="kv" id="kpi_mtd_sales">--</div><div class="ks nt" id="kpi_mtd_vs_bud">-- vs Budget</div></div>
         <div class="kpi kr"><div class="kl">YTD Sales</div><div class="kv" id="kpi_ytd_sales">--</div><div class="ks nt" id="kpi_ytd_yoy_sub">-- YoY</div></div>
         <div class="kpi ka"><div class="kl">vs Budget (MTD)</div><div class="kv" id="kpi_vs_bud">--</div><div class="ks nt" id="kpi_bud_note">Upload data</div></div>
-        <div class="kpi kg"><div class="kl">Net Billers</div><div class="kv" id="kpi_net_billers">--</div><div class="ks nt" id="kpi_nb_note">Registered DG</div></div>
         <div class="kpi kr"><div class="kl">Defectors flagged</div><div class="kv" id="kpi_defectors">--</div><div class="ks dn">↓ &lt;80% YoY avg</div></div>
         <div class="kpi ka"><div class="kl">Forecast accuracy</div><div class="kv" id="kpi_accuracy">--</div><div class="ks nt">Last month MAPE</div></div>
       </div>
@@ -514,8 +500,32 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 
       <!-- YTD/MTD/YoY Variance -->
       <div class="card">
-        <div class="ch">MTD · YTD · YoY Variance Summary <span>All segments</span></div>
+        <div class="ch">MTD · YTD · YoY Variance Summary <span>All segments</span>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-o" onclick="window.print()">🖨 Print</button>
+            <button class="btn btn-o" onclick="exportTableCSV('variance_tbl_inner','variance_summary')">⬇ CSV</button>
+          </div>
+        </div>
         <div class="tbl-wrap" id="variance_tbl"></div>
+      </div>
+
+      <!-- AI Commentary -->
+      <div class="card" style="border-color:rgba(0,194,168,.3)">
+        <div class="ch" style="cursor:pointer" onclick="toggleAiPanel('ov_ai_body')">
+          ✨ AI Commentary — Overview
+          <div style="display:flex;gap:6px;align-items:center">
+            <button class="btn btn-t" onclick="event.stopPropagation();generateCommentary('ov')">Generate Analysis</button>
+            <span style="font-size:10px;color:var(--text3)" id="ov_ai_ts"></span>
+            <span style="font-size:11px;color:var(--text3)">▾</span>
+          </div>
+        </div>
+        <div id="ov_ai_body" style="padding:10px 0 4px">
+          <div id="ov_ai_out" style="font-size:11px;color:var(--text2);line-height:1.8;white-space:pre-wrap;padding:10px 14px;background:var(--navy3);border-radius:6px;min-height:40px">Click <strong>Generate Analysis</strong> to produce a narrative summary of the current period.</div>
+          <div style="display:flex;gap:6px;margin-top:8px">
+            <button class="btn btn-o" onclick="copyAiOut('ov_ai_out')">📋 Copy</button>
+            <button class="btn btn-o" onclick="saveAiNote('ov')">💾 Save as Note</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -524,7 +534,6 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
       <!-- Commercial sub-tabs -->
       <div class="stabs" id="cm_subtabs" style="margin-bottom:12px">
         <button class="stab on" id="cm_tab_customers" onclick="swCm('customers',this)">🏢 Customers</button>
-        <button class="stab" id="cm_tab_pivot"     onclick="swCm('pivot',this)">🔀 Pivot / Movers</button>
         <button class="stab" id="cm_tab_defection" onclick="swCm('defection',this)">📉 Defection</button>
         <button class="stab" id="cm_tab_ro"        onclick="swCm('ro',this)">⚠ Risk &amp; Opportunity</button>
       </div>
@@ -558,7 +567,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 
       <!-- Customers panel (shown when Customers tab active) -->
       <div id="cm_customers_wrap">
-        <div class="g2">
+        <div>
           <div class="card">
             <div class="ch">GWh by Rate Class <span>Click bar → customer drilldown below</span></div>
             <div class="chart-actions">
@@ -568,14 +577,6 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
             </div>
             <div class="leg"><span><span class="ld" style="background:#378ADD"></span>2025</span><span><span class="ld" style="background:#00c2a8"></span>2026</span></div>
             <div class="cw" style="height:200px"><canvas id="c_cm1"></canvas></div>
-          </div>
-          <div class="card">
-            <div class="ch">Industry Revenue <span>YTD · JMD Billions · Click industry</span></div>
-            <div class="chart-actions">
-              <button class="btn btn-o" onclick="printChart('c_ind')">🖨 Print</button>
-              <button class="btn btn-o" onclick="exportChart('c_ind')">💾 Save</button>
-            </div>
-            <div class="cw" style="height:200px"><canvas id="c_ind"></canvas></div>
           </div>
         </div>
         <div class="card">
@@ -619,65 +620,25 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
         </div>
       </div>
 
-      <!-- Pivot / Movers panel (shown when Pivot tab active) -->
-      <div id="cm_pivot_wrap" style="display:none">
-        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
-          <select class="sel" id="pv_period_cm" onchange="renderCmPivot()">
-            <option value="mtd">MTD</option>
-            <option value="ytd" selected>YTD</option>
-            <option value="12m">Rolling 12M</option>
-          </select>
-          <select class="sel" id="pv_rc_cm" onchange="renderCmPivot()">
-            <option value="">All rate classes</option>
-            <option value="RT40">RT40</option>
-            <option value="RT50">RT50</option>
-            <option value="RT70">RT70</option>
-          </select>
-          <button class="btn btn-o" onclick="exportTableCSV('pv_gainers_tbl','cm_gainers')">⬇ Gainers CSV</button>
-          <button class="btn btn-o" onclick="exportTableCSV('pv_decliners_tbl','cm_decliners')">⬇ Decliners CSV</button>
-        </div>
-        <div class="g2">
-          <div class="card">
-            <div class="ch" style="color:var(--green)">📈 Top Gainers <span id="pv_gainers_lbl" style="color:var(--text3)">YoY kWh increase</span></div>
-            <div class="tbl-wrap" id="pv_gainers_tbl"></div>
-          </div>
-          <div class="card">
-            <div class="ch" style="color:var(--red)">📉 Top Decliners <span id="pv_decliners_lbl" style="color:var(--text3)">YoY kWh decline</span></div>
-            <div class="tbl-wrap" id="pv_decliners_tbl"></div>
-          </div>
-        </div>
-        <div class="card" style="margin-top:10px">
-          <div class="ch">All Movers — Full Account List
-            <button class="btn btn-o" onclick="exportTableCSV('pv_all_tbl','cm_movers_all')">⬇ CSV</button>
-          </div>
-          <div class="tbl-controls">
-            <input class="si" placeholder="🔍 Name or account #" id="pv_q_cm" oninput="renderCmPivot()"/>
-            <select class="sel" id="pv_dir_cm" onchange="renderCmPivot()">
-              <option value="">All directions</option>
-              <option value="up">Gainers ↑</option>
-              <option value="dn">Decliners ↓</option>
-            </select>
-            <span class="row-count" id="pv_count_cm"></span>
-          </div>
-          <div class="tbl-wrap" id="pv_all_tbl"></div>
-        </div>
-      </div>
     </div>
 
     <!-- === RESIDENTIAL === -->
     <div id="rs" class="sec">
       <div class="krow">
         <div class="kpi kt"><div class="kl">MTD Residential</div><div class="kv" id="rs_kpi_mtd">--</div><div class="ks nt" id="rs_kpi_vs_bud">-- vs budget</div></div>
-        <div class="kpi ka"><div class="kl">Net Billers</div><div class="kv" id="rs_kpi_nb">--</div><div class="ks nt">Registered DG</div></div>
         <div class="kpi kr"><div class="kl">Unlicensed DG</div><div class="kv" id="rs_kpi_udg">--</div><div class="ks nt">Sync DB to populate</div></div>
         <div class="kpi kg"><div class="kl">Customer Growth</div><div class="kv" id="rs_kpi_cg">--</div><div class="ks nt">vs prior year</div></div>
-        <div class="kpi ka"><div class="kl">RT10 Net Billers</div><div class="kv" id="rs_kpi_rt10nb">--</div><div class="ks nt">Sync DB to populate</div></div>
-        <div class="kpi kp"><div class="kl">Avg NB Export</div><div class="kv" id="rs_kpi_nbexp">--</div><div class="ks nt">Sync DB to populate</div></div>
       </div>
       <div class="g2">
         <div class="card">
-          <div class="ch">Net Billing Growth <span id="nb_period_lbl">sync DB to populate</span></div>
-          <div class="cw" style="height:200px"><canvas id="c_nb"></canvas></div>
+          <div class="ch">Consumption Bracket Distribution <span>kWh by bracket vs prior year</span>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-o" onclick="printChart('c_bracket_dist')">🖨 Print</button>
+              <button class="btn btn-o" onclick="exportChart('c_bracket_dist')">💾 Save</button>
+            </div>
+          </div>
+          <div class="leg"><span><span class="ld" style="background:#378ADD"></span>Prior Year</span><span><span class="ld" style="background:#00c2a8"></span>Current Year</span></div>
+          <div class="cw" style="height:200px"><canvas id="c_bracket_dist"></canvas></div>
         </div>
         <div class="card">
           <div class="ch">EV Sales &amp; Accounts <span id="ev_period_lbl">sync DB to populate</span></div>
@@ -705,7 +666,6 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
     <div id="df" class="sec">
       <div class="stabs" style="margin-bottom:12px">
         <button class="stab" onclick="sw('cm',document.querySelector('.ni[onclick*=\'cm\']'))">🏢 Customers</button>
-        <button class="stab" onclick="sw('cm',document.querySelector('.ni[onclick*=\'cm\']'));setTimeout(()=>swCm('pivot',document.getElementById('cm_tab_pivot')),80)">🔀 Pivot / Movers</button>
         <button class="stab on">📉 Defection</button>
         <button class="stab" onclick="sw('ro',document.querySelector('.ni[onclick*=\'ro_adv\']'))">⚠ Risk &amp; Opportunity</button>
       </div>
@@ -761,7 +721,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
             <input class="si" style="max-width:200px" placeholder="🔍 Search customer..." id="fc_q" oninput="renderFcEntry()"/>
             <select class="sel" id="fc_rc" onchange="renderFcEntry()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
-            <select class="sel" id="fc_kam" onchange="renderFcEntry()"><option value="">All KAMs</option></select>
+            <select class="sel" id="fc_kam" onchange="clearTimeout(this._t);this._t=setTimeout(()=>renderFcEntry(),250)"><option value="">All KAMs</option></select>
             <button class="btn btn-t" onclick="saveFcAll()">💾 Save All Forecasts</button>
             <button class="btn btn-o" onclick="exportTableCSV('fc_tbl','forecast_entry')">⬇ Export</button>
           </div>
@@ -788,7 +748,6 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
     <div id="ro" class="sec">
       <div class="stabs" style="margin-bottom:12px">
         <button class="stab" onclick="sw('cm',document.querySelector('.ni[onclick*=\'cm\']'))">🏢 Customers</button>
-        <button class="stab" onclick="sw('cm',document.querySelector('.ni[onclick*=\'cm\']'));setTimeout(()=>swCm('pivot',document.getElementById('cm_tab_pivot')),80)">🔀 Pivot / Movers</button>
         <button class="stab" onclick="sw('df',document.querySelector('.ni[onclick*=\'df\']'))">📉 Defection</button>
         <button class="stab on">⚠ Risk &amp; Opportunity</button>
       </div>
@@ -1062,6 +1021,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
         <button class="btn btn-o adm-tab"    data-adm="adm_kam"      onclick="swAdm('adm_kam',this)">👤 KAM Assignment</button>
         <button class="btn btn-o adm-tab"    data-adm="adm_schema"   onclick="swAdm('adm_schema',this)">🗄 DB Schema</button>
         <button class="btn btn-o adm-tab"    data-adm="adm_audit"    onclick="swAdm('adm_audit',this);renderAuditLog()">📋 Audit Trail</button>
+        <button class="adm-tab" onclick="swAdm('adm_comments',this)">💬 Comments</button>
       </div>
 
       <!-- ── Users & Roles tab ── -->
@@ -1291,6 +1251,12 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
             <div style="color:var(--text3);font-size:12px;padding:16px">Click Refresh to load audit entries.</div>
           </div>
         </div>
+      </div>
+
+      <!-- ── Comments tab ── -->
+      <div id="adm_comments" class="adm-sec" style="display:none">
+        <div class="ch">Saved Comments &amp; Narratives</div>
+        <div id="adm_comments_body" style="max-height:500px;overflow-y:auto"></div>
       </div>
     </div>
 
@@ -1718,7 +1684,6 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
         <button class="stab"    id="le_btn_adv"  onclick="swLE('adv',this)">🎛 LE Advanced</button>
         <button class="stab"    id="le_btn_risk" onclick="swLE('risk',this)">⚠ Customer Risk</button>
         <button class="stab"    id="le_btn_var"  onclick="swLE('var',this)">📐 Variance</button>
-        <button class="stab"    id="le_btn_pivot" onclick="swLE('pivot',this)">🔀 Pivot / Movers</button>
         <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
           <button class="btn btn-t" onclick="syncSupabase()">🔄 Sync</button>
           <span id="le_last_sync" style="font-size:10px;color:var(--text3)">No data — upload or sync DB</span>
@@ -1856,67 +1821,6 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
             </div>
           </div>
           <div class="tbl-wrap" id="le_risk_tbl"></div>
-        </div>
-      </div>
-
-      <!-- ── PIVOT / MOVERS ─────────────────────────────── -->
-      <div id="le_tab_pivot" class="le-subtab">
-        <!-- Controls -->
-        <div class="card" style="margin-bottom:10px">
-          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-            <div>
-              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Timeframe</div>
-              <select class="sel" id="pv_timeframe" onchange="renderLEPivot()">
-                <option value="FY">Full Year (FY)</option>
-                <option value="YTD">YTD</option>
-                <option value="MTD">MTD (latest actual month)</option>
-              </select>
-            </div>
-            <div>
-              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Scenario</div>
-              <select class="sel" id="pv_scenario" onchange="renderLEPivot()">
-                <option value="base">LE Base</option>
-                <option value="cust">LE Cust Vol</option>
-                <option value="rc">LE RC Vol</option>
-                <option value="adv">LE Advanced</option>
-                <option value="bud">Budget + Actuals</option>
-              </select>
-            </div>
-            <div>
-              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">RC Filter (Movers)</div>
-              <select class="sel" id="pv_rc" onchange="renderMovers()">
-                <option value="">All Commercial</option>
-              </select>
-            </div>
-            <button class="btn btn-o" style="margin-top:14px" onclick="exportTableCSV('pv_pivot_tbl','pivot_matrix')">⬇ Pivot CSV</button>
-          </div>
-        </div>
-
-        <!-- Top & Bottom movers side by side -->
-        <div class="g2" style="margin-bottom:10px">
-          <div class="card">
-            <div class="ch" style="color:var(--green)">🏆 Top Performers <span style="color:var(--text3)">2026 vs 2025 · GWh incline</span></div>
-            <div class="tbl-wrap" style="max-height:220px;overflow-y:auto" id="pv_top_tbl"></div>
-          </div>
-          <div class="card">
-            <div class="ch" style="color:var(--red)">📉 Bottom Performers <span style="color:var(--text3)">2026 vs 2025 · GWh decline</span></div>
-            <div class="tbl-wrap" style="max-height:220px;overflow-y:auto" id="pv_bot_tbl"></div>
-          </div>
-        </div>
-
-        <!-- RC × Month pivot matrix -->
-        <div class="card">
-          <div class="ch">Combined Scenario Pivot — net kWh billed (GWh) <span>Click RC row to expand customers</span></div>
-          <div class="tbl-wrap" id="pv_pivot_tbl" style="overflow-x:auto;max-height:400px;overflow-y:auto"></div>
-        </div>
-
-        <!-- Customer Commentary Log -->
-        <div class="card" style="margin-top:10px">
-          <div class="ch">Customer Commentary Log
-            <span style="color:var(--text3);font-weight:400">All saved notes by period — full detail report</span>
-            <button class="btn btn-o" style="margin-left:auto" onclick="exportTableCSV('pv_notes_tbl','commentary_log')">⬇ Export</button>
-          </div>
-          <div class="tbl-wrap" id="pv_notes_tbl"></div>
         </div>
       </div>
 
@@ -2745,6 +2649,8 @@ async function loadExcel(input){
   if(!file)return;
   const sb=getSB();
   if(!sb){toast('Supabase not connected — check Admin → DB Schema','err');return;}
+  // Ensure XLSX library is loaded (deferred for faster initial page load)
+  try{await loadXLSX();}catch(e){toast('Could not load Excel library: '+e.message,'err');return;}
   const mode=document.getElementById('uploadMode')?.value||'overwrite';
   const stEl=document.getElementById('adm_upload_status');
   const dsEl=document.getElementById('dataStatus');
@@ -2922,8 +2828,19 @@ async function loadExcel(input){
   reader.readAsBinaryString(file);
 }
 
+/* Lazy-load XLSX (~1MB) only when first needed — keeps initial page load fast */
+function loadXLSX(){
+  return new Promise((resolve,reject)=>{
+    if(typeof XLSX!=='undefined'){resolve();return;}
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload=resolve;s.onerror=()=>reject(new Error('Failed to load Excel library'));
+    document.head.appendChild(s);
+  });
+}
+
 function dlTemplate(){
-  if(typeof XLSX==='undefined'){toast('Excel library not loaded yet — please wait a few seconds and try again','err');return;}
+  loadXLSX().then(()=>{
   const wb=XLSX.utils.book_new();
 
   // 1. Actuals — flat dump format, same columns for commercial and residential
@@ -2984,6 +2901,8 @@ function dlTemplate(){
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...evHdr,...evSample]),'EV_Accounts');
 
   XLSX.writeFile(wb,'JPS_Data_Template.xlsx');
+  toast('Template downloaded ✓ — check your Downloads folder','ok');
+  }).catch(e=>toast('Could not load Excel library: '+e.message,'err'));
 }
 
 /* ==========================================
@@ -3018,11 +2937,12 @@ function makeSortable(tableId){
 
 function exportTableCSV(tableId,filename){
   const tbl=document.getElementById(tableId);
-  if(!tbl){alert('Table not found');return;}
+  if(!tbl){toast('Table not found','err');return;}
   const rows=[...tbl.querySelectorAll('tr')];
   const csv=rows.map(r=>[...r.querySelectorAll('th,td')].map(c=>'"'+c.textContent.trim().replace(/"/g,'""')+'"').join(',')).join('\n');
   const blob=new Blob([csv],{type:'text/csv'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename+'.csv';a.click();
+  toast(`${filename}.csv downloaded ✓`,'ok');
 }
 
 /* ==========================================
@@ -3109,20 +3029,8 @@ function buildCharts(){
       {label:'2026',data:INDUSTRIES.map(i=>i.y26),backgroundColor:'rgba(0,194,168,0.45)',borderRadius:2},
     ]},options:{...co(),indexAxis:'y',scales:{y:{ticks:{color:TC,font:{size:9}},grid:{color:CC}},x:{ticks:{color:TC},grid:{color:CC}}}}});
 
-  // Net Biller chart — sourced from sbNetBillers (jps_net_billers table); zeros until loaded
+  // EV + brackets charts block
   (()=>{
-    const nbYears = sbNetBillers.length ? [...new Set(sbNetBillers.map(r=>String(r.year)))].sort() : [];
-    const nbRCs   = ['RT10','RT20','RT40'];
-    const nbData  = nbRCs.map(rc => nbYears.map(y => {
-      const rows = sbNetBillers.filter(r=>String(r.year)===y&&r.rate_class===rc);
-      return rows.reduce((s,r)=>s+(r.count||0),0);
-    }));
-    const nbLbl   = document.getElementById('nb_period_lbl');
-    if(nbLbl) nbLbl.textContent = nbYears.length ? `${nbYears[0]}–${nbYears[nbYears.length-1]}` : 'sync DB to populate';
-    mkChart('c_nb',{type:'bar',data:{
-      labels: nbYears.length ? nbYears : ['--'],
-      datasets: nbRCs.map((rc,i)=>({label:rc,data:nbYears.length?nbData[i]:[0],backgroundColor:['#00c2a8','#378ADD','#f5a623'][i],stack:'s',borderRadius:2}))
-    },options:co({scales:{x:{ticks:{color:TC},grid:{color:CC},stacked:true},y:{ticks:{color:TC},grid:{color:CC},stacked:true}}})});
 
     // EV chart — sourced from sbEvData (jps_ev_accounts table); zeros until loaded
     const evYears = sbEvData.length ? [...new Set(sbEvData.map(r=>String(r.year)))].sort() : [];
@@ -3157,6 +3065,23 @@ function buildCharts(){
       {label:'Actual GWh',data:accAct,borderColor:'#00c2a8',backgroundColor:'rgba(0,194,168,0.07)',tension:.3,pointRadius:4,fill:true},
       {label:'Forecast GWh',data:accFc,borderColor:'#f5a623',borderDash:[4,2],backgroundColor:'transparent',tension:.3,pointRadius:4},
     ]},options:co()});
+
+  // Consumption bracket distribution chart (residential)
+  const BKTS=['0-150','150-300','300-500','500+'];
+  const bktAct=[],bktPY=[];
+  if(sbActuals.length){
+    const normB=fcNormActuals(sbActuals);
+    BKTS.forEach(bk=>{
+      bktAct.push(normB.filter(r=>r.bucket===bk&&r.year===curYear&&r.month<=curMonth).reduce((s,r)=>s+r.kwh,0)/1e6);
+      bktPY.push(normB.filter(r=>r.bucket===bk&&r.year===curYear-1&&r.month<=curMonth).reduce((s,r)=>s+r.kwh,0)/1e6);
+    });
+  }else{BKTS.forEach(()=>{bktAct.push(0);bktPY.push(0);});}
+  mkChart('c_bracket_dist',{type:'bar',data:{
+    labels:BKTS,
+    datasets:[
+      {label:'Prior Year',data:bktPY,backgroundColor:'rgba(55,138,221,0.5)',borderColor:'#378ADD',borderWidth:1,borderRadius:3},
+      {label:'Current Year',data:bktAct,backgroundColor:'rgba(0,194,168,0.6)',borderColor:'#00c2a8',borderWidth:1,borderRadius:3},
+    ]},options:{...co()}});
 }
 
 /* ==========================================
@@ -3596,7 +3521,7 @@ function saveFcVal(mkey,num,val,avg3,pyAvg){
     if(!note){
       setTimeout(()=>{
         editFcNote(num,CUSTOMERS.find(c=>c.num===num)?.name||num);
-        alert('⚠ Off-trend forecast detected. Please add an explanation note.');
+        toast('⚠ Off-trend forecast — please add an explanation note in the modal','w');
       },200);
     }
   }
@@ -3606,7 +3531,7 @@ function saveFcAll(){
   document.querySelectorAll('[id^="fci_"]').forEach(inp=>{
     if(inp.value){const parts=inp.id.split('_');saveFcVal(parts.slice(1,4).join('_'),parts[4],inp.value,inp.placeholder,'0.1');}
   });
-  alert('All forecasts saved.');
+  toast('All forecasts saved ✓','ok');
 }
 function editFcNote(num,name){
   openModal(`Forecast Note: ${name}`,`<textarea id="fcn_ta" placeholder="Explain forecast assumptions, off-trend rationale, customer intelligence...">${S.get(`fc_note_${num}`,'')}</textarea>`,
@@ -3693,7 +3618,7 @@ function editRONote(num){
   openModal(`Note: ${r.name}`,`<textarea id="ro_note_ta">${r.cmt||''}</textarea>`,()=>{r.cmt=document.getElementById('ro_note_ta').value;closeModal();saveROItemToDB(r).catch(e=>console.warn('DB R&O note save:',e));filterRO();});
 }
 function addROItem(){
-  if(checkPeriodLock())return;
+  if(checkPeriodLock()){toast('Period is locked — unlock in Admin → Period Close','err');return;}
   if(!can('add_ro_item')){toast('Sales Rep or above required to add items','err');return;}
   openModal('Add Risk / Opportunity Item',`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
@@ -3910,6 +3835,7 @@ function exportReview(){
   txt+=`FORECAST ADJUSTMENTS:\n`;
   FC_SEGS.forEach(s=>{const a=S.get(`${mrPeriod}_fc_${s.seg}`,{val:0});if(a.val){const i=calcFcImp(s.base,a);txt+=`  ${s.lbl}: ${i.disp}\n`;}});
   const b=new Blob([txt],{type:'text/plain'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`JPS_Review_${mrPeriod}.txt`;a.click();
+  toast(`Review exported ✓ — JPS_Review_${mrPeriod}.txt`,'ok');
 }
 
 /* ==========================================
@@ -4170,24 +4096,31 @@ function saveExecNarrative() {
   saveNarrative(curYear, curMonth, text).catch(e=>console.warn('DB narrative save:',e));
   const t = document.getElementById('es_saved');
   if(t){t.classList.add('sh'); setTimeout(()=>t.classList.remove('sh'),2000);}
+  toast('Narrative saved ✓','ok');
 }
 
-function exportExecSummary() {
+function exportExecSummary(){
   const ms=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const lbl = `${ms[curMonth-1]} ${curYear}`;
-  const narrative = S.get(`es_narrative_${curYear}_${curMonth}`, '(No narrative saved)');
-  let txt = `JPS EXECUTIVE SUMMARY -- ${lbl}\n${'='.repeat(55)}\n\n`;
-  txt += `MANAGEMENT NARRATIVE:\n${narrative}\n\n`;
-  txt += `SEGMENT SCORECARD:\n`;
-  SCORECARD_DATA.forEach(r => {
-    const vb = pct(r.mtd_act, r.mtd_bud);
-    txt += `  ${r.seg}: ${r.mtd_act.toFixed(1)} GWh MTD (${vb>=0?'+':''}${vb.toFixed(1)}% vs bud) -- ${r.status}\n`;
-  });
-  const blob = new Blob([txt], {type:'text/plain'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `JPS_ExecSummary_${curYear}_${String(curMonth).padStart(2,'0')}.txt`;
-  a.click();
+  const lbl=`${ms[curMonth-1]} ${curYear}`;
+  const narrative=S.get(`es_narrative_${curYear}_${curMonth}`,'(No narrative saved)');
+  // Build a printable HTML page and open in new tab
+  const scoreRows=SCORECARD_DATA.map(r=>{
+    const vb=r.mtd_bud>0?pct(r.mtd_act,r.mtd_bud):0;
+    const col=vb>=0?'#27c485':vb>=-5?'#f5a623':'#e84040';
+    return`<tr><td>${r.seg}</td><td>${r.mtd_act.toFixed(2)} GWh</td><td>${r.mtd_bud.toFixed(2)} GWh</td><td style="color:${col};font-weight:700">${vb>=0?'+':''}${vb.toFixed(1)}%</td><td>${r.ytd_act.toFixed(2)} GWh</td><td style="color:${col}">${r.status}</td></tr>`;
+  }).join('');
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>JPS Executive Summary — ${lbl}</title>
+  <style>body{font-family:Arial,sans-serif;padding:30px;color:#111}h1{color:#0d1b2a;font-size:18px;margin-bottom:4px}h2{font-size:13px;color:#555;margin:20px 0 6px}p{font-size:12px;line-height:1.7;white-space:pre-wrap}table{width:100%;border-collapse:collapse;font-size:11px}th{background:#0d1b2a;color:#fff;padding:6px 10px;text-align:left}td{padding:5px 10px;border-bottom:1px solid #ddd}@media print{button{display:none}}</style>
+  </head><body>
+  <h1>JPS Sales Analytics — Executive Summary</h1><p style="font-size:11px;color:#777">${lbl} · Generated ${new Date().toLocaleDateString()}</p>
+  <button onclick="window.print()" style="margin:10px 0;padding:6px 16px;background:#0d1b2a;color:#fff;border:none;border-radius:4px;cursor:pointer">🖨 Print / Save as PDF</button>
+  <h2>Management Narrative</h2><p>${narrative}</p>
+  <h2>Segment Scorecard</h2>
+  <table><thead><tr><th>Segment</th><th>MTD Actual</th><th>MTD Budget</th><th>vs Budget</th><th>YTD Actual</th><th>Status</th></tr></thead><tbody>${scoreRows}</tbody></table>
+  </body></html>`;
+  const w=window.open('','_blank');
+  if(w){w.document.write(html);w.document.close();}
+  else toast('Please allow pop-ups to export the summary','w');
 }
 
 /* =====================================================
@@ -4347,7 +4280,7 @@ function addBridgeDriver() {
   const seg  = document.getElementById('vb_d_seg')?.value  || 'All';
   const cat  = document.getElementById('vb_d_cat')?.value  || 'Other known';
   const type = document.getElementById('vb_d_type')?.value || 'Temporary';
-  if(!desc || !gwh) { alert('Please enter a description and GWh impact.'); return; }
+  if(!desc || !gwh) { toast('Please enter a description and GWh impact','err'); return; }
   const drivers = getBridgeDrivers();
   drivers.push({desc, seg, gwh, cat, type});
   S.set('vb_drivers', drivers);
@@ -5252,11 +5185,39 @@ function printReport() {
 ========================================== */
 function swAdm(id,btn){
   document.querySelectorAll('.adm-panel').forEach(p=>p.style.display='none');
+  document.querySelectorAll('.adm-sec').forEach(p=>p.style.display='none');
   document.querySelectorAll('.adm-tab').forEach(b=>{b.classList.remove('on');b.classList.add('btn-o');b.classList.remove('btn-t');});
   const panel=document.getElementById(id);if(panel)panel.style.display='';
   if(btn){btn.classList.add('on');btn.classList.remove('btn-o');btn.classList.add('btn-t');}
   if(id==='adm_periods')renderPeriodClose();
   if(id==='adm_schema')renderSchemaSQL();
+  if(id==='adm_comments') renderAdmComments();
+}
+
+function renderAdmComments(){
+  const el=document.getElementById('adm_comments_body');if(!el)return;
+  const ms=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const rows=[];
+  // Exec narratives
+  for(let y=2024;y<=2027;y++){
+    for(let m=1;m<=12;m++){
+      const txt=S.get(`es_narrative_${y}_${m}`,'');
+      if(txt) rows.push({type:'Exec Narrative',period:`${ms[m-1]} ${y}`,text:txt,author:'--'});
+    }
+  }
+  // AI notes
+  ['ov','cm','rs','le'].forEach(sec=>{
+    const note=S.get(`ai_note_${sec}`,'');
+    if(note) rows.push({type:`AI Note (${sec})`,period:'--',text:note,author:'AI'});
+  });
+  if(!rows.length){el.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3)">No saved comments yet. Save a narrative or AI note to see it here.</div>';return;}
+  el.innerHTML=rows.map(r=>`<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;background:var(--navy3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <span style="font-size:10px;font-weight:700;color:var(--teal)">${r.type}</span>
+      <span style="font-size:10px;color:var(--text3)">${r.period}</span>
+    </div>
+    <div style="font-size:11px;color:var(--text2);line-height:1.6;white-space:pre-wrap">${r.text.substring(0,300)}${r.text.length>300?'…':''}</div>
+  </div>`).join('');
 }
 
 function showDeleteMonth(){
@@ -5476,27 +5437,29 @@ function renderAdm(){
     }
     el.innerHTML=`<table class="dt" id="users_dt">
       <thead><tr><th>Name</th><th>Email</th><th>Sales Role</th><th>FP&amp;A Role</th><th>Territory</th><th>Status</th><th>Actions</th></tr></thead>
-      <tbody>${PLATFORM_USERS.map(u=>`<tr>
-        <td style="font-weight:600">${u.name}</td>
+      <tbody>${PLATFORM_USERS.map(u=>{
+        const isPending=u._pending===true;
+        return`<tr style="${isPending?'opacity:0.6':''}">
+        <td style="font-weight:600">${u.name}${isPending?' <span style="font-size:9px;color:var(--amber)">(pending registration)</span>':''}</td>
         <td style="font-size:11px;color:var(--text3)">${u.email||'--'}</td>
-        <td>${can('manage_users')
+        <td>${(!isPending&&can('manage_users'))
           ?`<select class="sel" style="font-size:10px;padding:3px" onchange="changeUserRole('${u.id}',this.value)">
               ${['admin','manager','rep','view'].map(r=>`<option${(u.sales_role||u.role||'view')===r?' selected':''}>${r}</option>`).join('')}
             </select>`
           :`<span class="pill ${(u.sales_role==='admin'||u.sales_role==='manager')?'pa':'pt'}">${u.sales_role||'view'}</span>`}</td>
         <td><span class="pill pgr" style="font-size:9px">${u.role||'viewer'}</span></td>
         <td style="font-size:11px">${u.territory||'All'}</td>
-        <td><span class="pill ${u.is_active!==false?'pg':'pr'}">${u.is_active!==false?'Active':'Inactive'}</span></td>
-        <td>${can('manage_users')
+        <td><span class="pill ${isPending?'pa':u.is_active!==false?'pg':'pr'}">${isPending?'Invited':u.is_active!==false?'Active':'Inactive'}</span></td>
+        <td>${(!isPending&&can('manage_users'))
           ?`<button class="btn btn-o" style="font-size:9px;padding:2px 8px" onclick="toggleUserActive('${u.id}',${u.is_active!==false})">${u.is_active!==false?'Deactivate':'Activate'}</button>`
           :'--'}</td>
-      </tr>`).join('')}</tbody></table>`;
+      </tr>`;}).join('')}</tbody></table>`;
     makeSortable('users_dt');
   });
 }
 
 async function changeUserRole(userId,newRole){
-  if(!can('manage_users')){alert('Admin access required.');return;}
+  if(!can('manage_users')){toast('Admin access required','err');return;}
   const sb=getSB();if(!sb){toast('Supabase required','err');return;}
   try{
     await sb.from('profiles').update({sales_role:newRole,updated_at:new Date().toISOString()}).eq('id',userId);
@@ -5509,7 +5472,7 @@ async function changeUserRole(userId,newRole){
 }
 
 async function toggleUserActive(userId,currently){
-  if(!can('manage_users')){alert('Admin access required.');return;}
+  if(!can('manage_users')){toast('Admin access required','err');return;}
   const sb=getSB();if(!sb){toast('Supabase required','err');return;}
   try{
     await sb.from('profiles').update({is_active:!currently,updated_at:new Date().toISOString()}).eq('id',userId);
@@ -5520,12 +5483,13 @@ async function toggleUserActive(userId,currently){
 }
 
 function showInviteUser(){
-  if(!can('invite_user')){alert('Admin access required to invite users.');return;}
-  openModal('Invite New User',`
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+  if(!can('invite_user')){toast('Admin access required to invite users','err');return;}
+  const platformUrl=window.location.href.split('?')[0];
+  openModal('Add New User',`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
       <div class="lf"><label>Full Name</label><input class="si" id="inv_name" placeholder="Jane Smith"/></div>
       <div class="lf"><label>Email</label><input class="si" id="inv_email" type="email" placeholder="jane@jps.com"/></div>
-      <div class="lf"><label>Role</label>
+      <div class="lf"><label>Intended Role</label>
         <select class="sel" style="width:100%" id="inv_role">
           <option value="rep">Sales Rep</option><option value="manager">Manager</option>
           <option value="view">View Only</option><option value="admin">Admin</option>
@@ -5537,25 +5501,41 @@ function showInviteUser(){
         </select>
       </div>
     </div>
-    <div style="font-size:10px;color:var(--teal);margin-top:10px;padding:8px;background:rgba(0,194,168,.07);border-radius:6px">
-      An invitation email will be sent via Supabase Auth. The user sets their own password on first sign-in.
-    </div>`,
+    <div style="background:rgba(0,194,168,.07);border:1px solid rgba(0,194,168,.25);border-radius:8px;padding:10px;margin-bottom:10px">
+      <div style="font-size:10px;font-weight:700;color:var(--teal);margin-bottom:6px">📋 How to add a user</div>
+      <div style="font-size:10px;color:var(--text2);line-height:1.7">
+        1. Fill in the name and email above, then click <strong>Save</strong>.<br>
+        2. Share the platform URL with the user:<br>
+        <div style="display:flex;align-items:center;gap:6px;margin:5px 0">
+          <code style="font-size:9px;background:var(--navy3);padding:4px 7px;border-radius:4px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="inv_url">${platformUrl}</code>
+          <button class="btn btn-t" style="font-size:9px;padding:3px 9px;white-space:nowrap" onclick="navigator.clipboard.writeText('${platformUrl}').then(()=>toast('URL copied ✓','ok'))">Copy URL</button>
+        </div>
+        3. They click <strong>"First time? Register →"</strong> and sign up with the email above.<br>
+        4. Come back to <strong>Admin → Users</strong> and set their role to <strong id="inv_role_preview">Sales Rep</strong>.
+      </div>
+    </div>
+    <div style="font-size:9px;color:var(--text3)">💡 Tip: You can also send invites directly from your <a href="https://supabase.com/dashboard" target="_blank" style="color:var(--teal)">Supabase Dashboard</a> → Authentication → Users → Invite User.</div>`,
   async()=>{
     const name=(document.getElementById('inv_name')?.value||'').trim();
     const email=(document.getElementById('inv_email')?.value||'').trim();
     const role=document.getElementById('inv_role')?.value||'rep';
-    const territory=document.getElementById('inv_territory')?.value||'All';
+    const roleLabels={admin:'Admin',manager:'Manager',rep:'Sales Rep',view:'View Only'};
     if(!name||!email){toast('Name and email required','err');return;}
-    const sb=getSB();
-    if(!sb){toast('Supabase required to send invitations','err');closeModal();return;}
-    try{
-      // Insert profile — auth user created when they accept the invite
-      await sb.from('profiles').insert({name,email,sales_role:role,territory,is_active:true,created_at:new Date().toISOString()});
-      PLATFORM_USERS.push({name,email,sales_role:role,territory,is_active:true});
-      toast(`${name} added. Send them the platform URL and their email to sign up.`,'ok');
-      closeModal();renderAdm();
-    }catch(e){toast('Failed: '+e.message,'err');}
+    // Store as a pending invite note (no auth user yet — FK prevents profile insert without auth.users row)
+    // Record is kept in memory so admin can reference it; role set after user self-registers
+    PLATFORM_USERS.push({id:'pending_'+Date.now(),name,email,sales_role:role,territory:document.getElementById('inv_territory')?.value||'All',is_active:false,_pending:true});
+    toast(`Instructions ready — share the platform URL with ${name} (${email}). After they register, set their role to ${roleLabels[role]||role}.`,'ok');
+    closeModal();renderAdm();
   });
+  // Wire role label preview
+  setTimeout(()=>{
+    const sel=document.getElementById('inv_role');
+    const prev=document.getElementById('inv_role_preview');
+    if(sel&&prev){
+      const labels={admin:'Admin',manager:'Manager',rep:'Sales Rep',view:'View Only'};
+      sel.onchange=()=>{prev.textContent=labels[sel.value]||sel.value;};
+    }
+  },50);
 }
 
 /* ── Period close ── */
@@ -5597,7 +5577,7 @@ function maybeShowLockBanner(sectionId){
 }
 
 async function lockPeriodConfirm(year,month){
-  if(!can('lock_period')){alert('Admin access required.');return;}
+  if(!can('lock_period')){toast('Admin access required','err');return;}
   const mns=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   openModal(`Lock ${mns[month-1]} ${year}`,`
     <div style="color:var(--text2);font-size:12px;margin-bottom:12px">This will make <strong>${mns[month-1]} ${year}</strong> read-only. All saves will be blocked for this period.</div>
@@ -5618,7 +5598,7 @@ async function lockPeriodConfirm(year,month){
 }
 
 async function unlockPeriodPrompt(year,month){
-  if(!can('unlock_period')){alert('Admin access required.');return;}
+  if(!can('unlock_period')){toast('Admin access required','err');return;}
   const mns=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   if(!confirm(`Unlock ${mns[month-1]} ${year}? This re-opens the period for editing.`))return;
   const sb=getSB();if(!sb){toast('Supabase required','err');return;}
@@ -6265,7 +6245,20 @@ async function sbStorage(bucket,file){
 
 function buildDashboardData(){
   if(!sbActuals.length)return;
+
+  // Normalise ONCE — reused for all downstream calculations (was called twice before)
   const rows=fcNormActuals(sbActuals);
+
+  // ── Pre-build O(1) lookup: rcIdx[rc][year*100+month] = total kWh ──
+  // Replaces 28 separate .filter() scans over 50k rows in SCORECARD_DATA loop
+  const rcIdx={};
+  rows.forEach(r=>{
+    if(!rcIdx[r.rc])rcIdx[r.rc]={};
+    const key=r.year*100+r.month;
+    rcIdx[r.rc][key]=(rcIdx[r.rc][key]||0)+r.kwh;
+  });
+  // Helper: sum kWh for rc+year across months 1..toMonth using the index (O(toMonth) not O(n))
+  const _rcSum=(rc,year,fromM,toM)=>{const m=rcIdx[rc]||{};let s=0;for(let i=fromM;i<=toM;i++)s+=(m[year*100+i]||0);return s;};
 
   // CUSTOMERS — one row per account
   const custMap={};
@@ -6288,21 +6281,20 @@ function buildDashboardData(){
   }
   CUSTOMERS=Object.values(custMap).filter(c=>c.y25>0||c.y26>0).sort((a,b)=>b.y25-a.y25);
 
-  // PARISHES — grouped by parish, 2026 vs 2025, with commercial split
-  const COMM_RCS=['RT40','RT50','RT60','RT70','BU'];
+  // PARISHES — single pass (was 2 passes before)
+  const COMM_RCS_SET=new Set(['RT40','RT50','RT60','RT70','BU']);
   const parMap={};
   rows.forEach(r=>{
     const p=r.parish||'Unknown';
     if(!parMap[p])parMap[p]={name:p,curr:0,prev:0,rc:0,rp:0};
-    const gwh=r.kwh/1e6;
-    if(r.year===2026){parMap[p].curr+=gwh;if(COMM_RCS.includes(r.rc))parMap[p].rc+=gwh;}
-    if(r.year===2025){parMap[p].prev+=gwh;if(COMM_RCS.includes(r.rc))parMap[p].rp+=gwh;}
+    const gwh=r.kwh/1e6,isComm=COMM_RCS_SET.has(r.rc);
+    if(r.year===2026){parMap[p].curr+=gwh;if(isComm)parMap[p].rc+=gwh;}
+    if(r.year===2025){parMap[p].prev+=gwh;if(isComm)parMap[p].rp+=gwh;}
   });
   PARISHES=Object.values(parMap).sort((a,b)=>b.curr-a.curr);
 
-  // INDUSTRIES — grouped by industry segment
-  const indRcMap={};
-  const indMap={};
+  // INDUSTRIES — single pass
+  const indRcMap={},indMap={};
   rows.forEach(r=>{
     const i=r.industry||'Other';
     if(!indMap[i]){indMap[i]={name:i,y25:0,y26:0,note:''};indRcMap[i]=new Set();}
@@ -6314,43 +6306,38 @@ function buildDashboardData(){
   Object.values(indMap).forEach(i=>{i.rc=[...indRcMap[i.name]].join('/');});
   INDUSTRIES=Object.values(indMap).filter(i=>i.y25>0||i.y26>0).sort((a,b)=>b.y25-a.y25);
 
-  // Refresh FC_SEGS base values from actual annual data
+  // FC_SEGS base values
   FC_SEGS.forEach(s=>{s.base=CUSTOMERS.filter(c=>c.rate===s.seg).reduce((sum,c)=>sum+c.y26,0)||0;});
 
-  // Enrich CUSTOMERS with KAM and industry from their respective lookup tables
-  if(sbKAM.length){
-    const kamMap={};
-    sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
-    CUSTOMERS.forEach(c=>{if(kamMap[String(c.num)])c.kam=kamMap[String(c.num)];});
-  }
-  if(sbIndustries.length){
-    const indMap={};
-    sbIndustries.forEach(i=>indMap[String(i.jps_ac||'').trim()]=i.industry||'');
-    CUSTOMERS.forEach(c=>{if(indMap[String(c.num)])c.industry=indMap[String(c.num)];});
-  }
+  // Enrich CUSTOMERS with KAM + industry lookups
+  if(sbKAM.length){const m={};sbKAM.forEach(k=>m[String(k.jps_ac||'').trim()]=k.kam||'');CUSTOMERS.forEach(c=>{if(m[String(c.num)])c.kam=m[String(c.num)];});}
+  if(sbIndustries.length){const m={};sbIndustries.forEach(i=>m[String(i.jps_ac||'').trim()]=i.industry||'');CUSTOMERS.forEach(c=>{if(m[String(c.num)])c.industry=m[String(c.num)];});}
 
+  // ── SCORECARD_DATA — now O(1) per cell via pre-built rcIdx ──
+  // Previously: 28 .filter() calls over 50k rows = ~1.4M comparisons
+  // Now: index lookups — negligible CPU
   const RES_RCS=['RT10','RT20'];
-  const normA=fcNormActuals(sbActuals);
   const mIdx2=curMonth-1;
+  // Pre-build residential budget index too
+  const resBudIdx={};
+  if(sbResBudget.length){
+    sbResBudget.forEach(b=>{
+      const rc=b.rate_class,y=Number(b.year),m=Number(b.month),v=Number(b.kwh_budget)||0;
+      if(!resBudIdx[rc])resBudIdx[rc]={};
+      resBudIdx[rc][y*100+m]=(resBudIdx[rc][y*100+m]||0)+v;
+    });
+  }
+  const _rbSum=(rc,year,fromM,toM)=>{const m=resBudIdx[rc]||{};let s=0;for(let i=fromM;i<=toM;i++)s+=(m[year*100+i]||0);return s;};
 
-  // Refresh SCORECARD_DATA — commercial uses account-level budget,
-  // residential uses aggregate jps_residential_budget table
   SCORECARD_DATA.forEach(r=>{
     if(RES_RCS.includes(r.seg)){
-      // ── Residential: actuals from sbActuals aggregated by rate class ──
-      const actRows=normA.filter(a=>a.rc===r.seg);
-      r.mtd_act=actRows.filter(a=>a.year===curYear&&a.month===curMonth).reduce((s,a)=>s+a.kwh,0)/1e6;
-      r.ytd_act=actRows.filter(a=>a.year===curYear&&a.month<=curMonth).reduce((s,a)=>s+a.kwh,0)/1e6;
-      r.mtd_ly =actRows.filter(a=>a.year===curYear-1&&a.month===curMonth).reduce((s,a)=>s+a.kwh,0)/1e6;
-      r.ytd_ly =actRows.filter(a=>a.year===curYear-1&&a.month<=curMonth).reduce((s,a)=>s+a.kwh,0)/1e6;
-      // Budget from jps_residential_budget
-      if(sbResBudget.length){
-        const rb=sbResBudget.filter(b=>b.rate_class===r.seg&&Number(b.year)===curYear);
-        r.mtd_bud=rb.filter(b=>Number(b.month)===curMonth).reduce((s,b)=>s+(Number(b.kwh_budget)||0),0)/1e6;
-        r.ytd_bud=rb.filter(b=>Number(b.month)<=curMonth).reduce((s,b)=>s+(Number(b.kwh_budget)||0),0)/1e6;
-      }
+      r.mtd_act=_rcSum(r.seg,curYear,curMonth,curMonth)/1e6;
+      r.ytd_act=_rcSum(r.seg,curYear,1,curMonth)/1e6;
+      r.mtd_ly =_rcSum(r.seg,curYear-1,curMonth,curMonth)/1e6;
+      r.ytd_ly =_rcSum(r.seg,curYear-1,1,curMonth)/1e6;
+      r.mtd_bud=_rbSum(r.seg,curYear,curMonth,curMonth)/1e6;
+      r.ytd_bud=_rbSum(r.seg,curYear,1,curMonth)/1e6;
     } else {
-      // ── Commercial: account-level from CUSTOMERS ──
       const custs=CUSTOMERS.filter(c=>c.rate===r.seg);
       r.mtd_act=custs.reduce((s,c)=>s+(c.m[mIdx2]||0),0);
       r.mtd_bud=custs.reduce((s,c)=>s+(c.bud/12),0);
@@ -6364,66 +6351,71 @@ function buildDashboardData(){
   });
 }
 
+let _sbSyncing=false; // mutex — prevents double-sync
+
 async function syncSupabase(silent=false){
+  if(_sbSyncing){return;} // already in progress — skip
+  _sbSyncing=true;
   updateSbStatus('syncing');
   const sb=getSB();
   if(!sb){
     updateSbStatus('offline');
-    if(!silent)alert('Supabase SDK not ready. Check your connection.');
+    if(!silent)toast('Supabase SDK not ready — check your connection','err');
     return;
   }
   const log=[];
   try{
-    // ── Reference tables (load first — actuals join against these) ──
-    const indData=await sbTable('jps_industries',{});
+    // ── Fire ALL queries in parallel — massive speedup vs sequential awaits ──
+    const [
+      indData,kamData,amData,actData,
+      jbData,cbData,resBudData,
+      ng,nb,ev,pl
+    ] = await Promise.all([
+      sbTable('jps_industries',{}),
+      sbTable('jps_kam',{}),
+      sbTable('jps_account_master',{limit:50000}),
+      sbTable('jps_actuals',{limit:50000}),
+      sbTable('jps_budget',{limit:20000}),
+      sbTable('jps_commercial_budget',{limit:20000}),
+      sbTable('jps_residential_budget',{limit:5000}),
+      sbTable('net_gen_historical',{order:'year'}),
+      sbTable('jps_net_billers',{order:'year'}),
+      sbTable('jps_ev_accounts',{order:'year'}),
+      sbTable('jps_period_locks',{})
+    ]);
+
+    // ── Process results ────────────────────────────────────
     if(indData){sbIndustries=indData;log.push(`Industries: jps_industries (${indData.length} rows)`);}
     else log.push('Industries: ⚠ jps_industries not found — run schema SQL');
 
-    const kamData=await sbTable('jps_kam',{});
     if(kamData){sbKAM=kamData;log.push(`KAM: jps_kam (${kamData.length} rows)`);}
     else log.push('KAM: ⚠ jps_kam not found — run schema SQL');
 
-    const amData=await sbTable('jps_account_master',{limit:50000});
     if(amData){sbAccountMaster=amData;log.push(`Account Master: jps_account_master (${amData.length} accounts)`);}
     else log.push('Account Master: ⚠ jps_account_master not found — run schema SQL');
 
-    // ── Actuals ────────────────────────────────────────────
-    const actData=await sbTable('jps_actuals',{limit:50000});
     const actOk=!!actData;
     if(actOk){sbActuals=actData;log.push(`Actuals: jps_actuals (${actData.length} rows)`);}
     else log.push('Actuals: ⚠ jps_actuals not accessible — check RLS policies');
 
-    // ── Budget — read jps_budget (aggregate) + jps_commercial_budget (account-level) and merge ──
     sbBudget=[];
-    const jbData=await sbTable('jps_budget',{limit:20000});
     if(jbData&&jbData.length){sbBudget=[...sbBudget,...jbData];log.push(`Budget: jps_budget (${jbData.length} rows)`);}
     else log.push('Budget: jps_budget (0 rows — no data uploaded yet)');
-    const cbData=await sbTable('jps_commercial_budget',{limit:20000});
     if(cbData&&cbData.length){sbBudget=[...sbBudget,...cbData];log.push(`Comm Budget (acct-level): jps_commercial_budget (${cbData.length} rows)`);}
     const budOk=sbBudget.length>0;
 
-    // ── Residential Budget ─────────────────────────────────
-    const resBudData=await sbTable('jps_residential_budget',{limit:5000});
     if(resBudData){sbResBudget=resBudData;log.push(`Res Budget: jps_residential_budget (${resBudData.length} rows)`);}
     else log.push('Res Budget: jps_residential_budget (0 rows — no data uploaded yet)');
 
-    // ── Net Generation ─────────────────────────────────────
-    const ng=await sbTable('net_gen_historical',{order:'year'});
     if(ng){sbNetGen=ng;log.push(`Net Gen: net_gen_historical (${ng.length} rows)`);}
     else log.push('Net Gen: ⚠ net_gen_historical not accessible');
 
-    // ── Net Billers ────────────────────────────────────────
-    const nb=await sbTable('jps_net_billers',{order:'year'});
     if(nb){sbNetBillers=nb;log.push(`Net Billers: jps_net_billers (${nb.length} rows)`);}
     else log.push('Net Billers: ⚠ jps_net_billers not found (create table to populate)');
 
-    // ── EV Data ───────────────────────────────────────────
-    const ev=await sbTable('jps_ev_accounts',{order:'year'});
     if(ev){sbEvData=ev;log.push(`EV Data: jps_ev_accounts (${ev.length} rows)`);}
     else log.push('EV Data: ⚠ jps_ev_accounts not found (create table to populate)');
 
-    // ── Period Locks ──────────────────────────────────────
-    const pl=await sbTable('jps_period_locks',{});
     if(pl){PERIOD_LOCKS=pl;log.push(`Period Locks: jps_period_locks (${pl.length} locked)`);}
     else log.push('Period Locks: ⚠ jps_period_locks not found (run schema SQL in Admin)');
 
@@ -6470,19 +6462,24 @@ async function syncSupabase(silent=false){
       }
     }
 
+    // Build dashboard data synchronously (now fast with index-based SCORECARD computation)
     try{buildDashboardData();}catch(be){console.error('buildDashboardData error:',be);}
     renderSidebarFilters();
     populateKamDropdowns();
 
-    // Hydrate user-generated data (notes, narratives, R&O, defection actions, etc.) from DB
+    // Hydrate user-generated data from DB
     try{await loadAllUserData();}catch(ue){console.warn('loadAllUserData error:',ue);}
 
+    // Defer chart rendering — yield to browser so UI paints first, then render charts
     leEngine=null;
     const activeId=document.querySelector('.sec.on')?.id;
-    try{
-      if(activeId==='le')renderLE();
-      if(activeId==='ng')renderNetGen();
-    }catch(re){console.error('Re-render error after sync:',re);}
+    setTimeout(()=>{
+      try{
+        renderSection(activeId||'ov');
+        if(activeId==='le')renderLE();
+        if(activeId==='ng')renderNetGen();
+      }catch(re){console.error('Re-render error after sync:',re);}
+    },0);
 
     const el=document.getElementById('adm_upload_status');
     if(el&&sbActuals.length)el.textContent=`Live · ${sbActuals.length.toLocaleString()} actuals rows`;
@@ -6496,6 +6493,8 @@ async function syncSupabase(silent=false){
     sbConnected=false;
     updateSbStatus('offline');
     if(!silent)toast('Sync failed: '+e.message,'err');
+  }finally{
+    _sbSyncing=false; // always release mutex
   }
 }
 
@@ -7619,7 +7618,7 @@ window.addEventListener('beforeunload',()=>{
 });
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.6';
+const APP_VERSION = '1.0.13';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
@@ -7628,16 +7627,23 @@ const APP_VERSION = '1.0.6';
   else stamp();
 })();
 
-// Session restore — only run if we get a valid profile with a real role back
+// Session restore — starts data sync immediately once session is confirmed,
+// then fetches profile in parallel so UI is never stuck waiting on sequential calls
 (async function restoreSession(){
   try{
-    const sb=getSB(); if(!sb) return;
+    const sb=getSB(); if(!sb){ updateSbStatus('offline'); return; }
     const {data:{session}}=await sb.auth.getSession();
-    if(!session?.user) return;
+    if(!session?.user){ updateSbStatus('offline'); return; }
     const userId=session.user.id;
-    const {data:profile,error}=await sb.from('profiles').select('*').eq('id',userId).single();
-    // Only restore if we got a profile with a proper role — never default to 'view' which disables all buttons
+    // Kick off data sync AND profile fetch at the same time — no waiting in line
+    const [syncResult, profileResult] = await Promise.allSettled([
+      syncSupabase(true),
+      sb.from('profiles').select('*').eq('id',userId).single()
+    ]);
+    const {data:profile,error}=profileResult.value||{};
+    // Only apply login if we got a real profile with a real role
     if(error||!profile||!profile.sales_role) return;
+    // _applyLogin → initAll → syncSupabase, but mutex prevents double-sync
     _applyLogin({
       id:userId, email:session.user.email,
       name:profile.name||session.user.email.split('@')[0],
@@ -7645,7 +7651,7 @@ const APP_VERSION = '1.0.6';
       fpa_role:profile.role||'viewer',
       territory:profile.territory||'All',
     });
-  }catch(e){ console.warn('Session restore:',e.message); }
+  }catch(e){ console.warn('Session restore:',e.message); updateSbStatus('offline'); }
 })();
 
 </script>
