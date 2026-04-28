@@ -2100,6 +2100,62 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 
 <script>
 /* ==========================================
+   TOAST — lightweight notification system
+   Usage: toast('message')           → neutral
+          toast('message', 'ok')     → green  ✓
+          toast('message', 'err')    → red    ✗
+          toast('message', 'w')      → amber  ⚠
+========================================== */
+(function(){
+  // Inject stylesheet once
+  const STYLE_ID = '_toast_styles';
+  if (!document.getElementById(STYLE_ID)) {
+    const s = document.createElement('style');
+    s.id = STYLE_ID;
+    s.textContent = [
+      '#_toastWrap{position:fixed;bottom:24px;right:24px;z-index:99999',
+        'display:flex;flex-direction:column;gap:8px;pointer-events:none}',
+      '._toast{display:flex;align-items:center;gap:10px',
+        'padding:11px 16px;border-radius:10px;font-size:12px;font-weight:600',
+        'color:#fff;min-width:220px;max-width:380px',
+        'box-shadow:0 4px 20px rgba(0,0,0,.45)',
+        'animation:_tIn .22s ease;pointer-events:none;line-height:1.4}',
+      '@keyframes _tIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}',
+      '@keyframes _tOut{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(12px)}}',
+      '._toast.out{animation:_tOut .25s ease forwards}',
+    ].join('');
+    document.head.appendChild(s);
+  }
+
+  window.toast = function(msg, type) {
+    let wrap = document.getElementById('_toastWrap');
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.id = '_toastWrap';
+      document.body.appendChild(wrap);
+    }
+    const bg = type === 'ok'  ? '#15803d'
+              : type === 'err' ? '#b91c1c'
+              : type === 'w'   ? '#b45309'
+              :                  '#1e3a5f';
+    const icon = type === 'ok'  ? '✓'
+               : type === 'err' ? '✕'
+               : type === 'w'   ? '⚠'
+               :                  'ℹ';
+    const el = document.createElement('div');
+    el.className = '_toast';
+    el.style.background = bg;
+    el.innerHTML = '<span style="font-size:14px;flex-shrink:0">' + icon + '</span>'
+                 + '<span>' + String(msg) + '</span>';
+    wrap.appendChild(el);
+    setTimeout(() => {
+      el.classList.add('out');
+      setTimeout(() => el.remove(), 280);
+    }, type === 'err' ? 4500 : 3000);
+  };
+})();
+
+/* ==========================================
    AUTH — Supabase Auth + role-based access
 ========================================== */
 let CU={id:'',role:'',name:'',email:'',territory:'All'};
