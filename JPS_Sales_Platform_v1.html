@@ -7611,35 +7611,35 @@ window.addEventListener('beforeunload',()=>{
   _rtBroadcast('bye',{name:CU.name});
 });
 
-/* ── App version + session restore on load ──────────────────────────── */
-const APP_VERSION = '1.0.5';
+/* ── App version ────────────────────────────────────────────────────── */
+const APP_VERSION = '1.0.6';
 
-// Show version in footer/navbar for diagnostics
-document.addEventListener('DOMContentLoaded', async ()=>{
-  // Stamp version in page so we can confirm which build is running
-  const vEl = document.getElementById('appVersion');
-  if(vEl) vEl.textContent = 'v' + APP_VERSION;
+// Stamp version into navbar once DOM is ready
+(function stampVersion(){
+  const stamp = () => { const el=document.getElementById('appVersion'); if(el) el.textContent='v'+APP_VERSION; };
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', stamp);
+  else stamp();
+})();
 
-  // Restore previous Supabase session — so user doesn't need to re-login on every reload
+// Session restore — only run if we get a valid profile with a real role back
+(async function restoreSession(){
   try{
-    const sb = getSB();
-    if(!sb) return;
-    const { data: { session } } = await sb.auth.getSession();
-    if(session?.user){
-      const userId = session.user.id;
-      let profile = null;
-      try{ const r = await sb.from('profiles').select('*').eq('id', userId).single(); profile = r.data; }catch(e){}
-      _applyLogin({
-        id: userId,
-        email: session.user.email,
-        name: profile?.name || session.user.email.split('@')[0],
-        role: profile?.sales_role || 'view',
-        fpa_role: profile?.role || 'viewer',
-        territory: profile?.territory || 'All',
-      });
-    }
-  }catch(e){ console.warn('Session restore failed:', e.message); }
-});
+    const sb=getSB(); if(!sb) return;
+    const {data:{session}}=await sb.auth.getSession();
+    if(!session?.user) return;
+    const userId=session.user.id;
+    const {data:profile,error}=await sb.from('profiles').select('*').eq('id',userId).single();
+    // Only restore if we got a profile with a proper role — never default to 'view' which disables all buttons
+    if(error||!profile||!profile.sales_role) return;
+    _applyLogin({
+      id:userId, email:session.user.email,
+      name:profile.name||session.user.email.split('@')[0],
+      role:profile.sales_role,
+      fpa_role:profile.role||'viewer',
+      territory:profile.territory||'All',
+    });
+  }catch(e){ console.warn('Session restore:',e.message); }
+})();
 
 </script>
 </div><!-- /app-wrap -->
