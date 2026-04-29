@@ -1441,9 +1441,82 @@ document.getElementById('schema_stale_banner').style.display='none';
       </div>
 
       <div id="adm_schema" class="adm-panel" style="display:none">
+
+        <!-- ── QUICK FIX: Minimal standalone SQL ── -->
+        <div class="card" style="margin-bottom:12px;border-color:rgba(232,64,64,.5)">
+          <div class="ch" style="color:var(--red)">⚡ Quick Fix SQL — paste this FIRST into Supabase SQL Editor
+            <button class="btn btn-o" style="border-color:rgba(232,64,64,.4);color:var(--red)" onclick="navigator.clipboard?.writeText(document.getElementById('quick_fix_sql').textContent).then(()=>toast('Quick Fix SQL copied ✓','ok'))">📋 Copy</button>
+          </div>
+          <div style="font-size:11px;color:var(--text2);margin-bottom:8px;line-height:1.7">
+            This minimal SQL fixes the <strong style="color:var(--text)">jps_actuals schema mismatch</strong> that blocks all uploads.
+            The current <code>jps_actuals</code> table was created by the FP&amp;A platform with the wrong columns (<code>Source</code>, <code>Rate category</code>, <code>Month</code> as text, etc.).
+            This renames it to <code>jps_actuals_fpa</code> (safe backup) and creates the correct Sales Platform table.
+          </div>
+          <pre id="quick_fix_sql" style="background:var(--navy3);border:1px solid rgba(232,64,64,.3);border-radius:7px;padding:12px;font-size:10px;color:var(--teal);white-space:pre-wrap;line-height:1.6;margin:0">-- ══ JPS Sales Platform — Quick Fix ══════════════════════════════════
+-- Renames the FP&A raw-dump jps_actuals to jps_actuals_fpa (backup),
+-- then creates the correct Sales Platform table.
+-- Run in: Supabase Dashboard → SQL Editor → New Query → Run
+-- ═════════════════════════════════════════════════════════════════════
+
+do $$ begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema='public'
+      and table_name='jps_actuals'
+      and lower(column_name)='source'
+  ) then
+    drop table if exists public.jps_actuals_fpa;
+    execute 'alter table public.jps_actuals rename to jps_actuals_fpa';
+    raise notice 'Done: jps_actuals renamed to jps_actuals_fpa';
+  end if;
+end $$;
+
+create table if not exists public.jps_actuals (
+  id                 bigserial primary key,
+  year               smallint not null,
+  month              smallint not null check (month between 1 and 12),
+  jps_ac             text not null,
+  name               text default '',
+  consumption_bucket text not null default '',
+  kwh                numeric(15,2) default 0,
+  revenue_jmd        numeric(15,2) default 0,
+  parish             text default '',
+  rate_class         text default '',
+  demand_kva         numeric(10,2) default 0,
+  created_at         timestamptz default now(),
+  unique (year, month, jps_ac, consumption_bucket)
+);
+
+alter table public.jps_actuals enable row level security;
+
+do $$ declare r record; begin
+  for r in select policyname from pg_policies
+    where schemaname='public' and tablename='jps_actuals'
+  loop
+    execute format('drop policy if exists %I on public.jps_actuals', r.policyname);
+  end loop;
+end $$;
+
+create policy "Authenticated users can read actuals"
+  on public.jps_actuals for select using (auth.role()='authenticated');
+create policy "Managers can write actuals"
+  on public.jps_actuals for all using (
+    exists (select 1 from profiles where id=auth.uid()
+      and sales_role in ('admin','manager'))
+  );
+
+notify pgrst, 'reload schema';
+
+-- Verify: this should show the correct columns
+select column_name, data_type
+from information_schema.columns
+where table_schema='public' and table_name='jps_actuals'
+order by ordinal_position;</pre>
+        </div>
+
         <div class="card">
-          <div class="ch">🗄 Supabase Schema SQL
-            <button class="btn btn-o" onclick="copySchemaSql()">📋 Copy SQL</button>
+          <div class="ch">🗄 Full Supabase Schema SQL
+            <button class="btn btn-o" onclick="copySchemaSql()">📋 Copy Full SQL</button>
           </div>
           <div id="schema_fix_banner" style="margin-bottom:12px;padding:14px 16px;background:rgba(232,64,64,.12);border:2px solid rgba(232,64,64,.5);border-radius:8px">
             <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:8px">🚨 Why uploads fail — and how to fix it in 30 seconds</div>
@@ -2236,6 +2309,35 @@ async function detectYearCol(sb){
   _showSchemaBanner('unknown');
 }
 
+/* ── KAM / Industry lookup helpers ──────────────────────────────────────
+   JPS account numbers have two formats:
+     Full account: '100001-001'   (stored in jps_actuals.jps_ac)
+     Customer number: '100001'    (stored in jps_kam.jps_ac + jps_industries.jps_ac)
+   _kl() tries the exact key first, then the customer-number prefix (before the dash).
+   _buildPrefixIdx() creates a map of customerNum → [fullAccountNums] from loaded actuals. */
+function _kl(map, ac){
+  return map[ac]||map[String(ac||'').split('-')[0]]||'';
+}
+function _buildPrefixIdx(){
+  const idx={};
+  sbActuals.filter(r=>!(r.consumption_bucket||'')).forEach(r=>{
+    const ac=String(r.jps_ac||r['JPS A/c']||'').trim();
+    if(!ac)return;
+    const prefix=ac.split('-')[0];
+    if(!idx[prefix])idx[prefix]=new Set();
+    idx[prefix].add(ac);
+    if(!idx[ac])idx[ac]=new Set(); // also index full acct so exact match works
+    idx[ac].add(ac);
+  });
+  return idx;
+}
+function _expandAccounts(custNum, prefixIdx){
+  // If the value is already a full account number, return it as-is
+  const matches=prefixIdx[custNum];
+  if(matches&&matches.size>0) return [...matches];
+  return [custNum]; // fall back: store as provided
+}
+
 function _showSchemaBanner(reason){
   if(_schemaFixApplied) return;
   const b=document.getElementById('schema_stale_banner');
@@ -2904,7 +3006,7 @@ function generateCommentary(section){
       const kams={};
       comm.forEach(r=>{
         const ac=String(r.jps_ac||'').trim();
-        const kam=kamMap[ac]||'Unassigned';
+        const kam=_kl(kamMap,ac)||'Unassigned';
         if(!kams[kam])kams[kam]={kam,accounts:new Set(),cy:0,py:0};
         kams[kam].accounts.add(ac);
         const yr=Number(r.year),mo=Number(r.month),kwh=Number(r.kwh||0);
@@ -3236,23 +3338,40 @@ async function loadExcel(input){
           if(mappedCb.length)await batchUpsert('jps_commercial_budget',mappedCb,`${YEAR_COL},month,jps_ac`);
         }
       }
-      // ── KAM sheet — columns: jps_ac, kam ──────────────
+      // ── KAM sheet — columns: jps_ac (or customer number prefix), kam ────
+      // JPS account numbers: full = '100001-001', customer number = '100001'
+      // KAM files often have only the customer number. We expand to full account
+      // numbers using the prefix index built from loaded actuals.
       const kamSheet=wb.Sheets['KAM'];
       if(kamSheet){
-        const rows=XLSX.utils.sheet_to_json(kamSheet).map(r=>({
-          jps_ac:String(r.jps_ac||r['JPS A/c']||'').trim(),
+        const rawKam=XLSX.utils.sheet_to_json(kamSheet).map(r=>({
+          jps_ac:String(r.jps_ac||r['JPS A/c']||r['Customer number']||r['customer_number']||r['acct']||'').trim(),
           kam:String(r.kam||r.KAM||r.kam_name||'').trim()
         })).filter(r=>r.jps_ac&&r.kam);
-        if(rows.length)await batchUpsert('jps_kam',rows,'jps_ac');
+        if(rawKam.length){
+          const pidx=_buildPrefixIdx();
+          const kamRows=[];
+          rawKam.forEach(({jps_ac,kam})=>{
+            _expandAccounts(jps_ac,pidx).forEach(ac=>kamRows.push({jps_ac:ac,kam}));
+          });
+          if(kamRows.length)await batchUpsert('jps_kam',kamRows,'jps_ac');
+        }
       }
-      // ── Industries sheet — columns: jps_ac, industry ──
+      // ── Industries sheet — columns: jps_ac (or customer number), industry ──
       const indSheet=wb.Sheets['Industries'];
       if(indSheet){
-        const rows=XLSX.utils.sheet_to_json(indSheet).map(r=>({
-          jps_ac:String(r.jps_ac||r['JPS A/c']||'').trim(),
+        const rawInd=XLSX.utils.sheet_to_json(indSheet).map(r=>({
+          jps_ac:String(r.jps_ac||r['JPS A/c']||r['Customer number']||r['acct']||'').trim(),
           industry:String(r.industry||r.Industry||'').trim()
         })).filter(r=>r.jps_ac&&r.industry);
-        if(rows.length)await batchUpsert('jps_industries',rows,'jps_ac');
+        if(rawInd.length){
+          const pidx=_buildPrefixIdx();
+          const indRows=[];
+          rawInd.forEach(({jps_ac,industry})=>{
+            _expandAccounts(jps_ac,pidx).forEach(ac=>indRows.push({jps_ac:ac,industry}));
+          });
+          if(indRows.length)await batchUpsert('jps_industries',indRows,'jps_ac');
+        }
       }
       // ── Net Generation — columns: year, month, rate_class, count, kwh ──
       const ngSheet=wb.Sheets['Net_Generation']||wb.Sheets['NetGen'];
@@ -5932,7 +6051,7 @@ function renderAdmKam(){
   });
   const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
 
-  let rows=Object.values(seen).map(a=>({...a,kam:kamMap[a.ac]||''}));
+  let rows=Object.values(seen).map(a=>({...a,kam:_kl(kamMap,a.ac)||''}));
   if(q)rows=rows.filter(r=>r.ac.includes(q)||r.name.toLowerCase().includes(q));
   if(rcF)rows=rows.filter(r=>r.rc===rcF);
   if(kamF==='_unassigned')rows=rows.filter(r=>!r.kam);
@@ -6006,7 +6125,7 @@ async function saveKamAssignment(ac){
     cancelKamEdit(ac);
     // Refresh CUSTOMERS kam field
     const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
-    CUSTOMERS.forEach(c=>{c.kam=kamMap[c.num]||'';});
+    CUSTOMERS.forEach(c=>{c.kam=_kl(kamMap,c.num)||'';});
     populateKamDropdowns();
     await writeAudit('KAM_ASSIGN',{jps_ac:ac,kam:newKam||'(removed)'});
     toast(`KAM saved for ${ac}`,'ok');
@@ -6172,7 +6291,7 @@ async function saveKamCsv(){
     });
     // Refresh CUSTOMERS and dropdowns
     const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
-    CUSTOMERS.forEach(c=>{c.kam=kamMap[c.num]||'';});
+    CUSTOMERS.forEach(c=>{c.kam=_kl(kamMap,c.num)||'';});
     populateKamDropdowns();
     renderAdmKam();
     await writeAudit('BULK_KAM_ASSIGN',{source:'CSV import',accounts:assignments.length,kams:Object.keys(assignments.reduce((m,a)=>{m[a.kam]=1;return m;},{})).length});
@@ -6627,10 +6746,11 @@ create policy "Managers can write account master"
 -- Safe: jps_actuals_fpa preserves the original FP&A table structure for reference.
 do $$ begin
   -- Case A: FP&A raw-dump format — has "Source" column (aggregate pivot, no account numbers)
+  -- Use lower() for case-insensitive match (FP&A may have used quoted "Source" or unquoted source)
   if exists (
     select 1 from information_schema.columns
     where table_schema='public' and table_name='jps_actuals'
-      and column_name='Source'
+      and lower(column_name)='source'
   ) then
     -- Drop any existing backup first so we can re-run safely
     execute 'DROP TABLE IF EXISTS public.jps_actuals_fpa';
@@ -7014,7 +7134,7 @@ declare
 begin
   -- ── jps_actuals: FP&A raw-dump format (has "Source" column) ──────────
   if exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='jps_actuals' and column_name='Source') then
+    where table_schema='public' and table_name='jps_actuals' and lower(column_name)='source') then
     execute 'DROP TABLE IF EXISTS public.jps_actuals_fpa';
     execute 'ALTER TABLE public.jps_actuals RENAME TO jps_actuals_fpa';
     -- Create correct Sales Platform schema
@@ -7288,8 +7408,15 @@ function buildDashboardData(){
   FC_SEGS.forEach(s=>{s.base=CUSTOMERS.filter(c=>c.rate===s.seg).reduce((sum,c)=>sum+c.y26,0)||0;});
 
   // Enrich CUSTOMERS with KAM + industry lookups
-  if(sbKAM.length){const m={};sbKAM.forEach(k=>m[String(k.jps_ac||'').trim()]=k.kam||'');CUSTOMERS.forEach(c=>{if(m[String(c.num)])c.kam=m[String(c.num)];});}
-  if(sbIndustries.length){const m={};sbIndustries.forEach(i=>m[String(i.jps_ac||'').trim()]=i.industry||'');CUSTOMERS.forEach(c=>{if(m[String(c.num)])c.industry=m[String(c.num)];});}
+  // _kl() handles both full account numbers AND customer-number-only entries (prefix before dash)
+  if(sbKAM.length){
+    const m={};sbKAM.forEach(k=>m[String(k.jps_ac||'').trim()]=k.kam||'');
+    CUSTOMERS.forEach(c=>{const v=_kl(m,c.num);if(v)c.kam=v;});
+  }
+  if(sbIndustries.length){
+    const m={};sbIndustries.forEach(i=>m[String(i.jps_ac||'').trim()]=i.industry||'');
+    CUSTOMERS.forEach(c=>{const v=_kl(m,c.num);if(v)c.ind=v;});
+  }
 
   // ── SCORECARD_DATA — now O(1) per cell via pre-built rcIdx ──
   // Previously: 28 .filter() calls over 50k rows = ~1.4M comparisons
@@ -8809,7 +8936,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.31';
+const APP_VERSION = '1.0.32';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
