@@ -1478,7 +1478,7 @@ create table if not exists public.jps_actuals (
   demand_kva         numeric(10,2) default 0,
   customer_count     int default 0,
   created_at         timestamptz default now(),
-  unique (year, month, jps_ac, consumption_bucket)
+  unique (year, month, jps_ac, rate_class, parish, consumption_bucket)
 );
 
 alter table public.jps_actuals enable row level security;
@@ -3295,9 +3295,9 @@ async function loadExcel(input){
                   }
                 }
                 // Insert fresh
-                await batchUpsert('jps_actuals',rows,`${YEAR_COL},month,jps_ac,consumption_bucket`);
+                await batchUpsert('jps_actuals',rows,`${YEAR_COL},month,jps_ac,rate_class,parish,consumption_bucket`);
               } else {
-                await batchUpsert('jps_actuals',rows,`${YEAR_COL},month,jps_ac,consumption_bucket`);
+                await batchUpsert('jps_actuals',rows,`${YEAR_COL},month,jps_ac,rate_class,parish,consumption_bucket`);
               }
             }
           } else if(isBudget){
@@ -7096,7 +7096,7 @@ create table if not exists public.jps_actuals (
   demand_kva         numeric(10,2) default 0,
   customer_count     int default 0,             -- 1 for commercial rows; headcount for residential bucket rows
   created_at         timestamptz default now(),
-  unique (year, month, jps_ac, consumption_bucket)
+  unique (year, month, jps_ac, rate_class, parish, consumption_bucket)
 );
 alter table public.jps_actuals enable row level security;
 do $$ declare r record; begin for r in select policyname from pg_policies where schemaname='public' and tablename='jps_actuals' loop execute format('drop policy if exists %I on public.jps_actuals', r.policyname); end loop; end $$;
@@ -7426,7 +7426,7 @@ begin
         rate_class         text default '',
         demand_kva         numeric(10,2) default 0,
         created_at         timestamptz default now(),
-        unique (year, month, jps_ac, consumption_bucket)
+        unique (year, month, jps_ac, rate_class, parish, consumption_bucket)
       )
     $t$;
     execute 'ALTER TABLE public.jps_actuals ENABLE ROW LEVEL SECURITY';
@@ -9232,7 +9232,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.44';
+const APP_VERSION = '1.0.45';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
