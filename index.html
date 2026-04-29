@@ -343,6 +343,17 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 
 <div class="app-wrap">
 
+<!-- SCHEMA FIX BANNER — shown automatically when PostgREST cache is stale -->
+<div id="schema_stale_banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:100000;background:#b91c1c;color:#fff;padding:10px 16px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,.4)">
+  <span style="flex:1">🚨 Supabase schema cache out of date — uploads &amp; deletes will fail until you run the DB Schema SQL once.</span>
+  <button onclick="swAdm('adm_schema',document.querySelector('[data-adm=adm_schema]'));document.querySelector('[data-sec=adm]')?.click();document.getElementById('schema_stale_banner').style.display='none'" style="background:#fff;color:#b91c1c;border:none;border-radius:5px;padding:4px 12px;font-weight:700;cursor:pointer;font-size:11px">Fix Now →</button>
+  <button onclick="this.parentElement.style.display='none'" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:4px;padding:3px 8px;cursor:pointer;font-size:11px">✕</button>
+</div>
+<script>
+// Immediately hide it — will be shown by syncSupabase if schema is stale
+document.getElementById('schema_stale_banner').style.display='none';
+</script>
+
 <!-- LOGIN -->
 <div class="login-screen" id="loginScreen">
   <div class="login-card">
@@ -526,6 +537,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
         <div class="kpi ka"><div class="kl">vs Budget (MTD)</div><div class="kv" id="kpi_vs_bud">--</div><div class="ks nt" id="kpi_bud_note">Upload data</div></div>
         <div class="kpi kr"><div class="kl">Defectors flagged</div><div class="kv" id="kpi_defectors">--</div><div class="ks dn">↓ &lt;80% YoY avg</div></div>
         <div class="kpi ka"><div class="kl">Forecast accuracy</div><div class="kv" id="kpi_accuracy">--</div><div class="ks nt">Last month MAPE</div></div>
+        <div class="kpi kp"><div class="kl">Total Customers</div><div class="kv" id="kpi_total_custs">--</div><div class="ks nt" id="kpi_total_custs_note">vs budget</div></div>
       </div>
 
       <div class="g21">
@@ -623,7 +635,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
         <div class="kpi ka"><div class="kl">RT50 Gap</div><div class="kv" id="kpi_rt50_gap">--</div><div class="ks nt" id="kpi_rt50_note">vs budget</div></div>
         <div class="kpi kg"><div class="kl">Top Industry</div><div class="kv" id="kpi_top_ind">--</div><div class="ks nt" id="kpi_top_ind_note">YTD leader</div></div>
         <div class="kpi kr"><div class="kl">Commercial Defectors</div><div class="kv" id="kpi_cm_def">--</div><div class="ks nt">flagged</div></div>
-        <div class="kpi kp"><div class="kl">Customers</div><div class="kv" id="kpi_cm_custs">--</div><div class="ks nt">commercial accounts</div></div>
+        <div class="kpi kp"><div class="kl">Customers</div><div class="kv" id="kpi_cm_custs">--</div><div class="ks nt" id="kpi_cm_custs_note">commercial accounts</div></div>
       </div>
 
       <!-- Customers panel (shown when Customers tab active) -->
@@ -708,7 +720,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
       <div class="krow">
         <div class="kpi kt"><div class="kl">MTD Residential</div><div class="kv" id="rs_kpi_mtd">--</div><div class="ks nt" id="rs_kpi_vs_bud">-- vs budget</div></div>
         <div class="kpi kr"><div class="kl">Unlicensed DG</div><div class="kv" id="rs_kpi_udg">--</div><div class="ks nt">Sync DB to populate</div></div>
-        <div class="kpi kg"><div class="kl">Customer Growth</div><div class="kv" id="rs_kpi_cg">--</div><div class="ks nt">vs prior year</div></div>
+        <div class="kpi kg"><div class="kl">Residential Customers</div><div class="kv" id="rs_kpi_cg">--</div><div class="ks nt" id="rs_kpi_cg_note">vs budget</div></div>
       </div>
       <div class="g2">
         <div class="card">
@@ -958,11 +970,10 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
             <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:6px">
               <thead><tr style="background:var(--navy3)"><th style="padding:5px 8px;text-align:left;color:var(--teal)">Sheet Name</th><th style="padding:5px 8px;text-align:left;color:var(--teal)">Purpose</th><th style="padding:5px 8px;text-align:left;color:var(--teal)">Key Columns</th></tr></thead>
               <tbody>
-                <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Actuals</td><td style="padding:5px 8px">Monthly billed kWh &amp; revenue by account</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">year, month, jps_ac, name, consumption_bucket, kwh, revenue_jmd, parish, rate_class, demand_kva</td></tr>
-                <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Budget</td><td style="padding:5px 8px">Commercial account-level budget</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">year, month, jps_ac, name, rate_class, parish, kwh_budget, revenue_budget, demand_budget</td></tr>
-                <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Residential_Budget</td><td style="padding:5px 8px">Residential aggregate budget</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">year, month, rate_class, parish, consumption_bucket, kwh_budget, customer_count_budget</td></tr>
-                <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">KAM</td><td style="padding:5px 8px">Account → Key Account Manager</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">jps_ac, kam</td></tr>
-                <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Industries</td><td style="padding:5px 8px">Account → Industry segment</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">jps_ac, industry</td></tr>
+                <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Actuals</td><td style="padding:5px 8px">Monthly billed kWh &amp; revenue. Commercial: <em>customer_count=1</em>, bucket blank. Residential: fill bucket + <em>customer_count</em> = billed customers in that bracket.</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">year, month, jps_ac, name, consumption_bucket, kwh, revenue_jmd, parish, rate_class, demand_kva, <strong>customer_count</strong></td></tr>
+                <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Budget</td><td style="padding:5px 8px">Commercial + residential in one sheet. Commercial: fill <em>jps_ac</em>, blank bucket, <em>customer_count=1</em>. Residential: blank <em>jps_ac</em>, fill <em>consumption_bucket</em> &amp; <em>customer_count</em>.</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">year, month, jps_ac, name, rate_class, parish, consumption_bucket, kwh_budget, revenue_budget, demand_budget, <strong>customer_count</strong></td></tr>
+                <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">KAM</td><td style="padding:5px 8px">Account → KAM. <em>jps_ac</em> = customer number only e.g. 100001 (no dash)</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">jps_ac, kam</td></tr>
+                <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Industries</td><td style="padding:5px 8px">Account → Industry. <em>jps_ac</em> = customer number only e.g. 100001 (no dash)</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">jps_ac, industry</td></tr>
                 <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Net_Generation</td><td style="padding:5px 8px">DG generation by month &amp; type</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">year, month, rate_class, count, kwh</td></tr>
                 <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Net_Billers</td><td style="padding:5px 8px">Net billing customers &amp; export kWh</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">year, month, rate_class, count, kwh</td></tr>
                 <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">EV_Accounts</td><td style="padding:5px 8px">Electric vehicle account counts &amp; MWh</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">year, month, accounts, mwh</td></tr>
@@ -1320,32 +1331,27 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
           </div>
           <div style="margin-bottom:12px;padding:9px 13px;background:rgba(0,194,168,.07);border-left:3px solid var(--teal);border-radius:4px;font-size:11px;color:var(--text2)">
             Your Excel file can include any of these sheet names. Only sheets present in the file will be processed — all others are skipped.
-            The <strong>⬇ Download Full Template</strong> button generates a ready-to-use <code>JPS_Data_Template.xls</code> file (8 sheets, sample rows) instantly — no internet connection required.
+            The <strong>⬇ Download Full Template</strong> button generates a ready-to-use <code>JPS_Data_Template.xls</code> file (7 sheets, sample rows) instantly — no internet connection required.
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">
             <div class="card" style="background:var(--navy3)">
               <div style="font-weight:700;font-size:11px;margin-bottom:3px;color:var(--teal)">Actuals</div>
-              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">One row per account per month. Residential rows use consumption_bucket; commercial leave it blank.</div>
-              <div style="font-size:9px;color:var(--text2);background:var(--navy2);border-radius:4px;padding:5px 7px;font-family:monospace">year · month · jps_ac · name · consumption_bucket · kwh · revenue_jmd · parish · rate_class · demand_kva</div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">One row per account/bucket per month. <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">jps_ac</code> = full account no. e.g. <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">100001-001</code>. Commercial: <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">customer_count=1</code>, bucket blank. Residential: fill bucket &amp; <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">customer_count</code> = billed customers in that bracket.</div>
+              <div style="font-size:9px;color:var(--text2);background:var(--navy2);border-radius:4px;padding:5px 7px;font-family:monospace">year · month · jps_ac · name · consumption_bucket · kwh · revenue_jmd · parish · rate_class · demand_kva · <strong style="color:var(--teal)">customer_count</strong></div>
             </div>
             <div class="card" style="background:var(--navy3)">
               <div style="font-weight:700;font-size:11px;margin-bottom:3px;color:var(--teal)">Budget</div>
-              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">Commercial account-level budget, one row per account per month.</div>
-              <div style="font-size:9px;color:var(--text2);background:var(--navy2);border-radius:4px;padding:5px 7px;font-family:monospace">year · month · jps_ac · name · rate_class · parish · kwh_budget · revenue_budget · demand_budget</div>
-            </div>
-            <div class="card" style="background:var(--navy3)">
-              <div style="font-weight:700;font-size:11px;margin-bottom:3px;color:var(--teal)">Residential_Budget</div>
-              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">Aggregate residential budget by rate class, parish and consumption bucket.</div>
-              <div style="font-size:9px;color:var(--text2);background:var(--navy2);border-radius:4px;padding:5px 7px;font-family:monospace">year · month · rate_class · parish · consumption_bucket · kwh_budget · customer_count_budget</div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">Commercial + residential budget in one sheet. <strong>Commercial rows</strong>: fill <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">jps_ac</code> (e.g. <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">100001-001</code>), leave <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">consumption_bucket</code> blank, <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">customer_count=1</code>. <strong>Residential rows</strong>: leave <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">jps_ac</code> blank, fill <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">consumption_bucket</code> &amp; <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">customer_count</code>.</div>
+              <div style="font-size:9px;color:var(--text2);background:var(--navy2);border-radius:4px;padding:5px 7px;font-family:monospace">year · month · jps_ac · name · rate_class · parish · consumption_bucket · kwh_budget · revenue_budget · demand_budget · <strong style="color:var(--teal)">customer_count</strong></div>
             </div>
             <div class="card" style="background:var(--navy3)">
               <div style="font-weight:700;font-size:11px;margin-bottom:3px;color:var(--teal)">KAM</div>
-              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">Account to Key Account Manager mapping.</div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">Account → Key Account Manager. <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">jps_ac</code> = <strong>customer number only</strong> e.g. <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">100001</code> (no dash suffix). One customer number covers all sub-accounts.</div>
               <div style="font-size:9px;color:var(--text2);background:var(--navy2);border-radius:4px;padding:5px 7px;font-family:monospace">jps_ac · kam</div>
             </div>
             <div class="card" style="background:var(--navy3)">
               <div style="font-weight:700;font-size:11px;margin-bottom:3px;color:var(--teal)">Industries</div>
-              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">Account to industry mapping.</div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">Account → Industry segment. <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">jps_ac</code> = <strong>customer number only</strong> e.g. <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">100001</code> (no dash suffix).</div>
               <div style="font-size:9px;color:var(--text2);background:var(--navy2);border-radius:4px;padding:5px 7px;font-family:monospace">jps_ac · industry</div>
             </div>
             <div class="card" style="background:var(--navy3)">
@@ -1430,29 +1436,101 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
       </div>
 
       <div id="adm_schema" class="adm-panel" style="display:none">
-        <div class="card">
-          <div class="ch">🗄 Supabase Schema SQL
-            <button class="btn btn-o" onclick="copySchemaSql()">📋 Copy SQL</button>
+
+        <!-- ── QUICK FIX: Minimal standalone SQL ── -->
+        <div class="card" style="margin-bottom:12px;border-color:rgba(232,64,64,.5)">
+          <div class="ch" style="color:var(--red)">⚡ Quick Fix SQL — run this if uploads fail after a schema change
+            <button class="btn btn-o" style="border-color:rgba(232,64,64,.4);color:var(--red)" onclick="navigator.clipboard?.writeText(document.getElementById('quick_fix_sql').textContent).then(()=>toast('Quick Fix SQL copied ✓','ok'))">📋 Copy</button>
           </div>
-          <div id="schema_fix_banner" style="margin-bottom:12px;padding:14px 16px;background:rgba(232,64,64,.12);border:2px solid rgba(232,64,64,.5);border-radius:8px">
-            <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:8px">🚨 Still getting "column jps_actuals.year does not exist"?</div>
+          <div style="font-size:11px;color:var(--text2);margin-bottom:8px;line-height:1.7">
+            Use this if <code>jps_actuals</code> was created by the FP&amp;A platform with wrong columns (<code>Source</code>, <code>Rate category</code>, <code>Month</code> as text).
+            Renames the old table to <code>jps_actuals_fpa</code> (safe backup) and creates the correct Sales Platform table with all current columns including <code>customer_count</code>.
+            Also adds any missing columns to an existing correct table.
+          </div>
+          <pre id="quick_fix_sql" style="background:var(--navy3);border:1px solid rgba(232,64,64,.3);border-radius:7px;padding:12px;font-size:10px;color:var(--teal);white-space:pre-wrap;line-height:1.6;margin:0">-- ══ JPS Sales Platform — Quick Fix ══════════════════════════════════
+-- Renames the FP&A raw-dump jps_actuals to jps_actuals_fpa (backup),
+-- then creates the correct Sales Platform table.
+-- Run in: Supabase Dashboard → SQL Editor → New Query → Run
+-- ═════════════════════════════════════════════════════════════════════
+
+do $$ begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema='public'
+      and table_name='jps_actuals'
+      and lower(column_name)='source'
+  ) then
+    drop table if exists public.jps_actuals_fpa;
+    execute 'alter table public.jps_actuals rename to jps_actuals_fpa';
+    raise notice 'Done: jps_actuals renamed to jps_actuals_fpa';
+  end if;
+end $$;
+
+create table if not exists public.jps_actuals (
+  id                 bigserial primary key,
+  year               smallint not null,
+  month              smallint not null check (month between 1 and 12),
+  jps_ac             text not null,
+  name               text default '',
+  consumption_bucket text not null default '',
+  kwh                numeric(15,2) default 0,
+  revenue_jmd        numeric(15,2) default 0,
+  parish             text default '',
+  rate_class         text default '',
+  demand_kva         numeric(10,2) default 0,
+  customer_count     int default 0,
+  created_at         timestamptz default now(),
+  unique (year, month, jps_ac, consumption_bucket)
+);
+
+alter table public.jps_actuals enable row level security;
+
+do $$ declare r record; begin
+  for r in select policyname from pg_policies
+    where schemaname='public' and tablename='jps_actuals'
+  loop
+    execute format('drop policy if exists %I on public.jps_actuals', r.policyname);
+  end loop;
+end $$;
+
+create policy "Authenticated users can read actuals"
+  on public.jps_actuals for select using (auth.role()='authenticated');
+create policy "Managers can write actuals"
+  on public.jps_actuals for all using (
+    exists (select 1 from profiles where id=auth.uid()
+      and sales_role in ('admin','manager'))
+  );
+
+notify pgrst, 'reload schema';
+
+-- Verify: this should show the correct columns
+select column_name, data_type
+from information_schema.columns
+where table_schema='public' and table_name='jps_actuals'
+order by ordinal_position;</pre>
+        </div>
+
+        <div class="card">
+          <div class="ch">🗄 Full Supabase Schema SQL
+            <button class="btn btn-o" onclick="copySchemaSql()">📋 Copy Full SQL</button>
+          </div>
+          <div id="schema_fix_banner" style="margin-bottom:12px;padding:14px 16px;background:rgba(0,194,168,.07);border:1px solid rgba(0,194,168,.3);border-radius:8px">
+            <div style="font-size:13px;font-weight:700;color:var(--teal);margin-bottom:8px">ℹ️ First-time setup or new Supabase project</div>
             <div style="font-size:11px;color:var(--text2);line-height:1.8;margin-bottom:10px">
-              This error means Supabase's API layer has a <strong style="color:var(--text)">stale schema cache</strong> —
-              it still expects a column that has been renamed. JavaScript alone cannot fix this.<br>
-              You must run the Schema SQL below <strong style="color:var(--text)">once</strong> in the Supabase dashboard.
-              The SQL includes a <code>NOTIFY pgrst, 'reload schema'</code> statement that flushes the cache permanently.
+              Run this SQL once in a fresh Supabase project to create all required tables.
+              It is <strong style="color:var(--text)">safe to re-run at any time</strong> — it uses <code>CREATE TABLE IF NOT EXISTS</code> and only alters tables when a migration is needed.<br><br>
+              Tables created: <code>jps_actuals</code> · <code>jps_budget</code> · <code>jps_period_locks</code> · <code>jps_kam</code> · <code>jps_industries</code> · <code>net_gen_historical</code> · <code>jps_net_billers</code> · <code>jps_ev_accounts</code> · <code>jps_account_master</code> · <code>profiles</code>
             </div>
-            <div style="font-size:11px;color:var(--text);font-weight:600;margin-bottom:6px">Do this RIGHT NOW — takes 30 seconds:</div>
+            <div style="font-size:11px;color:var(--text);font-weight:600;margin-bottom:6px">How to run:</div>
             <ol style="font-size:11px;color:var(--text2);line-height:2;margin:0 0 0 18px;padding:0">
               <li>Click <strong style="color:var(--teal)">📋 Copy SQL</strong> above</li>
-              <li>Open <a href="https://supabase.com/dashboard" target="_blank" style="color:var(--teal)">supabase.com/dashboard</a> → your project</li>
-              <li>Go to <strong>SQL Editor → New Query</strong></li>
+              <li>Open <a href="https://supabase.com/dashboard" target="_blank" style="color:var(--teal)">supabase.com/dashboard</a> → your project → <strong>SQL Editor → New Query</strong></li>
               <li>Paste &amp; click <strong>Run</strong></li>
-              <li>Come back here and press <strong>Ctrl+Shift+R</strong> (hard refresh)</li>
+              <li>Come back here and press <strong>Ctrl+Shift+R</strong> (hard refresh) to re-sync</li>
             </ol>
           </div>
           <div style="margin-bottom:10px;font-size:11px;color:var(--text2)">
-            Safe to run at any time — idempotent. Creates missing tables, renames legacy columns, and reloads the Supabase schema cache.
+            Idempotent — safe to run multiple times. Detects FP&amp;A format conflicts, renames legacy columns, adds missing columns to existing tables, and reloads the PostgREST schema cache.
           </div>
           <pre id="adm_schema_sql" style="background:var(--navy3);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:10px;color:var(--teal);overflow-x:auto;white-space:pre-wrap;line-height:1.6"></pre>
         </div>
@@ -2151,65 +2229,120 @@ function toast(msg, type){
   },type==='err'?5000:3000);
 }
 
-/* ── Year-column auto-detection ──
-   FP&A platform originally created jps_actuals with 'cal_year'.
-   Sales platform schema uses 'year'. Probe the live DB each time to
-   avoid any mismatch. Called at sync start AND at upload start. */
+/* ── Year-column and schema-format auto-detection ──
+   Probes the live jps_actuals table to determine:
+     (a) whether it has the correct Sales Platform schema (year, month, jps_ac …)
+     (b) whether it has the FP&A raw-dump format (Source, Month-text, Rate category …)
+     (c) whether it has the legacy cal_year name instead of year
+   Shows the red schema_stale_banner if the table needs the SCHEMA_SQL run.
+   Called at sync start AND at upload start. */
 async function detectYearCol(sb){
   if(!sb) return;
 
   // Priority 0: call jps_normalize_schema() via RPC — once per session.
-  // This function (created by running SCHEMA_SQL) renames cal_year→year in the DB
-  // AND sends NOTIFY pgrst,'reload schema' to flush PostgREST's schema cache.
-  // Without this, a stale PostgREST cache can pass column-name validation even when
-  // the underlying PostgreSQL column name has changed — causing the 42703 error.
+  // This function handles BOTH cal_year rename AND FP&A raw-dump rename,
+  // then sends NOTIFY pgrst,'reload schema' to flush PostgREST's schema cache.
   if(!_schemaFixApplied){
     try{
-      const{error:rpcErr}=await sb.rpc('jps_normalize_schema');
+      const{data:rpcData,error:rpcErr}=await sb.rpc('jps_normalize_schema');
       if(!rpcErr){
         _schemaFixApplied=true;
-        YEAR_COL='year'; // after normalization the column is always 'year'
-        console.log('[JPS] jps_normalize_schema OK — YEAR_COL=year');
-        // Allow PostgREST ~500ms to finish its async schema reload before any queries
+        YEAR_COL='year';
+        console.log('[JPS] jps_normalize_schema OK:',rpcData,'— YEAR_COL=year');
         await new Promise(r=>setTimeout(r,500));
         return;
       }
-      // RPC not found (SCHEMA_SQL not yet run) — fall through to probe detection
     }catch(e){}
+    // RPC not found or failed — SCHEMA_SQL not yet run; fall through to probe
   }
 
   // Priority 1: check rows already in memory from a previous sync
   if(sbActuals && sbActuals.length > 0){
     const r = sbActuals[0];
-    if('cal_year' in r){ YEAR_COL='cal_year'; return; }
     if('year'     in r){ YEAR_COL='year';     return; }
+    if('cal_year' in r){ YEAR_COL='cal_year'; return; }
+    // FP&A raw-dump format — has "Source" not "year"
+    if('Source' in r){
+      YEAR_COL='year'; // default for uploads; banner will show
+      console.warn('[JPS] jps_actuals is FP&A raw-dump format — run SCHEMA_SQL');
+      _showSchemaBanner('fpa_raw');
+      return;
+    }
   }
 
-  // Priority 2: try each candidate column name — whichever gives no error wins
-  // Try cal_year first: FP&A-seeded DBs have cal_year; avoids any console noise
-  for(const col of ['cal_year','year']){
-    try{
-      const{error}=await sb.from('jps_actuals').select(col).limit(1);
-      if(!error){ YEAR_COL=col; console.log('[JPS] year col detected:',col); return; }
-    }catch(e){}
-  }
-
-  // Priority 3: read column list from information_schema
+  // Priority 2: probe column names directly
+  // Check for FP&A raw-dump: if "Source" column exists, the table has wrong format
   try{
-    const{data:cols}=await sb
-      .from('information_schema.columns')
-      .select('column_name')
-      .eq('table_schema','public')
-      .eq('table_name','jps_actuals');
-    if(cols&&cols.length){
-      const names=cols.map(c=>c.column_name);
-      console.log('[JPS] jps_actuals columns via info_schema:',names.join(','));
-      const found=['year','cal_year'].find(c=>names.includes(c));
-      if(found){ YEAR_COL=found; return; }
+    const{error:srcErr}=await sb.from('jps_actuals').select('Source').limit(1);
+    if(!srcErr){
+      // FP&A raw-dump confirmed — neither year nor cal_year exists
+      YEAR_COL='year'; // uploads will fail until SCHEMA_SQL is run
+      console.warn('[JPS] jps_actuals.Source detected — FP&A raw-dump format; run SCHEMA_SQL');
+      _showSchemaBanner('fpa_raw');
+      return;
     }
   }catch(e){}
 
-  console.warn('[JPS] Could not detect year column — using default:',YEAR_COL);
+  // Check for correct year column
+  for(const col of ['year','cal_year']){
+    try{
+      const{error}=await sb.from('jps_actuals').select(col).limit(1);
+      if(!error){
+        YEAR_COL=col;
+        console.log('[JPS] year col detected:',col);
+        if(col==='cal_year') _showSchemaBanner('cal_year');
+        return;
+      }
+    }catch(e){}
+  }
+
+  console.warn('[JPS] Could not detect year column — schema may need updating. Using default:',YEAR_COL);
+  _showSchemaBanner('unknown');
+}
+
+/* ── KAM / Industry lookup helpers ──────────────────────────────────────
+   JPS account numbers have two formats:
+     Full account: '100001-001'   (stored in jps_actuals.jps_ac)
+     Customer number: '100001'    (stored in jps_kam.jps_ac + jps_industries.jps_ac)
+   _kl() tries the exact key first, then the customer-number prefix (before the dash).
+   _buildPrefixIdx() creates a map of customerNum → [fullAccountNums] from loaded actuals. */
+function _kl(map, ac){
+  return map[ac]||map[String(ac||'').split('-')[0]]||'';
+}
+function _buildPrefixIdx(){
+  const idx={};
+  sbActuals.filter(r=>!(r.consumption_bucket||'')).forEach(r=>{
+    const ac=String(r.jps_ac||r['JPS A/c']||'').trim();
+    if(!ac)return;
+    const prefix=ac.split('-')[0];
+    if(!idx[prefix])idx[prefix]=new Set();
+    idx[prefix].add(ac);
+    if(!idx[ac])idx[ac]=new Set(); // also index full acct so exact match works
+    idx[ac].add(ac);
+  });
+  return idx;
+}
+function _expandAccounts(custNum, prefixIdx){
+  // If the value is already a full account number, return it as-is
+  const matches=prefixIdx[custNum];
+  if(matches&&matches.size>0) return [...matches];
+  return [custNum]; // fall back: store as provided
+}
+
+function _showSchemaBanner(reason){
+  if(_schemaFixApplied) return;
+  const b=document.getElementById('schema_stale_banner');
+  if(!b) return;
+  const msgEl=b.querySelector('span');
+  if(msgEl){
+    if(reason==='fpa_raw')
+      msgEl.textContent='🚨 jps_actuals has the wrong schema (FP&A format) — uploads will fail until you run the DB Schema SQL once.';
+    else if(reason==='cal_year')
+      msgEl.textContent='🚨 Supabase schema cache out of date — uploads & deletes will fail until you run the DB Schema SQL once.';
+    else
+      msgEl.textContent='🚨 jps_actuals schema issue detected — uploads will fail until you run the DB Schema SQL once.';
+  }
+  b.style.display='flex';
 }
 
 /* ── Permission helper ── */
@@ -2863,8 +2996,8 @@ function generateCommentary(section){
       const ytdMos=Array.from({length:curMonth},(_,i)=>i+1);
       const kams={};
       comm.forEach(r=>{
-        const ac=String(r.jps_ac||'').trim();
-        const kam=kamMap[ac]||'Unassigned';
+        const ac=_custNum(r.jps_ac||'');
+        const kam=kamMap[ac]||_kl(kamMap,ac)||'Unassigned';
         if(!kams[kam])kams[kam]={kam,accounts:new Set(),cy:0,py:0};
         kams[kam].accounts.add(ac);
         const yr=Number(r.year),mo=Number(r.month),kwh=Number(r.kwh||0);
@@ -3111,27 +3244,34 @@ async function loadExcel(input){
               }
               return{
                 [YEAR_COL]:year, month,
-                jps_ac:   String(d.jps_ac||d['JPS A/c']||'').trim(),
-                name:     (d.name||d['Name']||'').trim(),
+                jps_ac:         String(d.jps_ac||d['JPS A/c']||'').trim(),
+                name:           (d.name||d['Name']||'').trim(),
                 consumption_bucket:(d.consumption_bucket||'').trim(),
-                kwh:      Number(d.kwh||d['Sum of net_kwh_billed_consump']||0),
-                revenue_jmd:Number(d.revenue_jmd||d['Revenue (JMD)']||0),
-                parish:   (d.parish||d['Updated Parish']||d['Parish']||'').trim(),
-                rate_class:(d.rate_class||d['Rate category']||d['Rate Class']||'').trim(),
-                demand_kva:Number(d.demand_kva||d['Demand (kVA)']||d.demand||0),
+                kwh:            Number(d.kwh||d['Sum of net_kwh_billed_consump']||0),
+                revenue_jmd:    Number(d.revenue_jmd||d['Revenue (JMD)']||0),
+                parish:         (d.parish||d['Updated Parish']||d['Parish']||'').trim(),
+                rate_class:     (d.rate_class||d['Rate category']||d['Rate Class']||'').trim(),
+                demand_kva:     Number(d.demand_kva||d['Demand (kVA)']||d.demand||0),
+                customer_count: Number(d.customer_count||d['Customer Count']||d['customer count']||0),
               };
             }).filter(d=>(d.year||d.cal_year)>0&&d.month>0&&d.jps_ac);
 
             if(rows.length){
               if(mode==='overwrite'){
-                // Group by year+month and delete those months first
-                // Use r[YEAR_COL] — the row key matches whatever column the DB actually has
+                // Delete existing rows using IDs from in-memory sbActuals.
+                // This bypasses the year/cal_year column entirely — works even with
+                // a stale PostgREST schema cache that doesn't know cal_year.
                 const periods=[...new Set(rows.map(r=>`${r[YEAR_COL]}-${r.month}`))];
                 for(const p of periods){
                   const[y,m]=p.split('-');
+                  const yrN=Number(y),mN=Number(m);
+                  if(!yrN||!mN)continue;
                   if(stEl)stEl.textContent=`Clearing ${y}-${m}…`;
-                  const{error}=await sb.from('jps_actuals').delete().eq(YEAR_COL,Number(y)).eq('month',Number(m));
-                  if(error)throw new Error('Delete failed: '+error.message);
+                  const idsToRemove=sbActuals.filter(r=>Number(r.year||r.cal_year)===yrN&&Number(r.month)===mN).map(r=>r.id).filter(Boolean);
+                  for(let i=0;i<idsToRemove.length;i+=500){
+                    const{error}=await sb.from('jps_actuals').delete().in('id',idsToRemove.slice(i,i+500));
+                    if(error)throw new Error('Delete failed: '+error.message);
+                  }
                 }
                 // Insert fresh
                 await batchUpsert('jps_actuals',rows,`${YEAR_COL},month,jps_ac,consumption_bucket`);
@@ -3140,34 +3280,33 @@ async function loadExcel(input){
               }
             }
           } else if(isBudget){
-            // First sheet looks like a budget — map Excel column names to DB schema
+            // First sheet looks like a budget — unified jps_budget schema (commercial + residential)
             const mappedBud=raw.map(r=>{
               let yr,mo;
               if(r.year&&r.month){yr=Number(r.year);mo=Number(r.month);}
               else{const p=fcParseMonth(r['Month']||'');yr=p.year;mo=p.month;}
               return{
-                [YEAR_COL]:yr, month:mo,
-                jps_ac:String(r.jps_ac||r['JPS A/c']||'').trim(),
-                name:(r.name||r['Name']||'').trim(),
-                rate_class:(r.rate_class||r['Rate category']||r['Rate Class']||'').trim(),
-                parish:(r.parish||r['Updated Parish']||'').trim(),
-                kwh_budget:Number(r.kwh_budget||r['Sum of Budget']||r['KWh Budget']||0),
-                revenue_budget:Number(r.revenue_budget||r['Revenue Budget']||0),
-                demand_budget:Number(r.demand_budget||r['Demand Budget']||0)
+                [YEAR_COL]:         yr,
+                month:              mo,
+                jps_ac:             String(r.jps_ac||r['JPS A/c']||'').trim(),
+                name:               (r.name||r['Name']||'').trim(),
+                rate_class:         (r.rate_class||r['Rate category']||r['Rate Class']||'').trim(),
+                parish:             (r.parish||r['Updated Parish']||r['Parish']||'').trim(),
+                consumption_bucket: (r.consumption_bucket||r['Consumption Bucket']||'').trim(),
+                kwh_budget:         Number(r.kwh_budget||r['Sum of Budget']||r['KWh Budget']||0),
+                revenue_budget:     Number(r.revenue_budget||r['Revenue Budget']||0),
+                demand_budget:      Number(r.demand_budget||r['Demand Budget']||0),
+                customer_count:     Number(r.customer_count||r['Customer Count']||0),
               };
-            }).filter(r=>(r[YEAR_COL]||0)>0&&r.month>0&&r.jps_ac);
-            if(mappedBud.length)await batchUpsert('jps_commercial_budget',mappedBud,`${YEAR_COL},month,jps_ac`);
+            }).filter(r=>(r[YEAR_COL]||0)>0&&r.month>0);
+            if(mappedBud.length)await batchUpsert('jps_budget',mappedBud,`${YEAR_COL},month,jps_ac,rate_class,parish,consumption_bucket`);
           }
         }
       }
 
-      // ── Residential Budget sheet ───────────────────────
-      const rbSheet=wb.Sheets['Residential_Budget'];
-      if(rbSheet){
-        const rows=XLSX.utils.sheet_to_json(rbSheet);
-        if(rows.length)await batchUpsert('jps_residential_budget',rows,`${YEAR_COL},month,rate_class,parish,consumption_bucket`);
-      }
-      // ── Commercial Budget sheet — year,month,jps_ac,name,rate_class,parish,kwh_budget,revenue_budget,demand_budget ──
+      // ── Budget sheet — unified commercial + residential rows → jps_budget ──
+      // Commercial rows: jps_ac filled, consumption_bucket blank, customer_count=1
+      // Residential rows: jps_ac blank, consumption_bucket filled, customer_count=headcount in that bracket
       const cbSheet=wb.Sheets['Budget']||wb.Sheets['Commercial_Budget'];
       if(cbSheet&&cbSheet!==actSheet){
         const rawCb=XLSX.utils.sheet_to_json(cbSheet);
@@ -3177,33 +3316,39 @@ async function loadExcel(input){
             if(r.year&&r.month){year=Number(r.year);month=Number(r.month);}
             else{const p=fcParseMonth(r['Month']||'');year=p.year;month=p.month;}
             return{
-              [YEAR_COL]:year, month,
-              jps_ac:String(r.jps_ac||r['JPS A/c']||'').trim(),
-              name:(r.name||r['Name']||'').trim(),
-              rate_class:(r.rate_class||r['Rate category']||r['Rate Class']||'').trim(),
-              parish:(r.parish||r['Updated Parish']||'').trim(),
-              kwh_budget:Number(r.kwh_budget||r['Sum of Budget']||r['KWh Budget']||0),
-              revenue_budget:Number(r.revenue_budget||r['Revenue Budget']||0),
-              demand_budget:Number(r.demand_budget||r['Demand Budget']||0)
+              [YEAR_COL]:         year,
+              month,
+              jps_ac:             String(r.jps_ac||r['JPS A/c']||'').trim(),
+              name:               (r.name||r['Name']||'').trim(),
+              rate_class:         (r.rate_class||r['Rate category']||r['Rate Class']||'').trim(),
+              parish:             (r.parish||r['Updated Parish']||r['Parish']||'').trim(),
+              consumption_bucket: (r.consumption_bucket||r['Consumption Bucket']||'').trim(),
+              kwh_budget:         Number(r.kwh_budget||r['Sum of Budget']||r['KWh Budget']||0),
+              revenue_budget:     Number(r.revenue_budget||r['Revenue Budget']||0),
+              demand_budget:      Number(r.demand_budget||r['Demand Budget']||0),
+              customer_count:     Number(r.customer_count||r['Customer Count']||r['customer_count_budget']||0),
             };
-          }).filter(r=>(r.year||r.cal_year)>0&&r.month>0&&r.jps_ac);
-          if(mappedCb.length)await batchUpsert('jps_commercial_budget',mappedCb,`${YEAR_COL},month,jps_ac`);
+          }).filter(r=>(r[YEAR_COL]||r.year||0)>0&&r.month>0);
+          if(mappedCb.length)await batchUpsert('jps_budget',mappedCb,`${YEAR_COL},month,jps_ac,rate_class,parish,consumption_bucket`);
         }
       }
-      // ── KAM sheet — columns: jps_ac, kam ──────────────
+      // ── KAM sheet — columns: jps_ac (customer number), kam ──────────────
+      // jps_kam stores customer numbers (e.g. '100001'). Actuals store full account
+      // numbers ('100001-001'). fcNormActuals extracts the customer number prefix,
+      // so both sides naturally align at the customer number level.
       const kamSheet=wb.Sheets['KAM'];
       if(kamSheet){
         const rows=XLSX.utils.sheet_to_json(kamSheet).map(r=>({
-          jps_ac:String(r.jps_ac||r['JPS A/c']||'').trim(),
+          jps_ac:_custNum(r.jps_ac||r['JPS A/c']||r['Customer number']||r['customer_number']||r['acct']||''),
           kam:String(r.kam||r.KAM||r.kam_name||'').trim()
         })).filter(r=>r.jps_ac&&r.kam);
         if(rows.length)await batchUpsert('jps_kam',rows,'jps_ac');
       }
-      // ── Industries sheet — columns: jps_ac, industry ──
+      // ── Industries sheet — columns: jps_ac (customer number), industry ──
       const indSheet=wb.Sheets['Industries'];
       if(indSheet){
         const rows=XLSX.utils.sheet_to_json(indSheet).map(r=>({
-          jps_ac:String(r.jps_ac||r['JPS A/c']||'').trim(),
+          jps_ac:_custNum(r.jps_ac||r['JPS A/c']||r['Customer number']||r['acct']||''),
           industry:String(r.industry||r.Industry||'').trim()
         })).filter(r=>r.jps_ac&&r.industry);
         if(rows.length)await batchUpsert('jps_industries',rows,'jps_ac');
@@ -3252,12 +3397,17 @@ async function loadExcel(input){
       buildCharts();
       renderSection(document.querySelector('.sec.on')?.id);
     }catch(err){
-      // Detect the specific stale-schema error and give actionable guidance
-      const isYearErr=/column.*\.year|column "year"/i.test(err.message);
-      if(isYearErr){
-        toast('⚠ Schema cache error — go to Admin → DB Schema and run the SQL (see red banner)','err');
-        if(stEl)stEl.textContent='Schema error — run DB Schema SQL first';
-        // Auto-open the admin → DB Schema tab so the user can act immediately
+      // Detect schema column errors — either stale PostgREST cache OR wrong table format
+      const isSchemaErr=/column.*does not exist|column "year"|column "jps_ac"|column "kwh"|PGRST204|42703/i.test(err.message);
+      if(isSchemaErr){
+        const isFpaRaw=/column "jps_ac"|column "kwh"|column "revenue_jmd"|column "month"/i.test(err.message);
+        const msg=isFpaRaw
+          ? '⚠ jps_actuals has the wrong schema (FP&A format). Run Admin → DB Schema SQL to recreate it.'
+          : '⚠ Schema error — run Admin → DB Schema SQL to fix jps_actuals and reload the cache.';
+        toast(msg,'err');
+        if(stEl)stEl.textContent='Schema error — run DB Schema SQL first (Admin → DB Schema)';
+        _showSchemaBanner(isFpaRaw?'fpa_raw':'cal_year');
+        // Auto-open Admin → DB Schema tab
         const admTab=document.querySelector('[data-adm="adm_schema"]');
         if(admTab) admTab.click();
         const secBtn=document.querySelector('[data-sec="adm"]');
@@ -3309,23 +3459,26 @@ function dlTemplate(){
 
   const SHEETS=[
     ['Actuals',[
-      ['year','month','jps_ac','name','consumption_bucket','kwh','revenue_jmd','parish','rate_class','demand_kva'],
-      [2026,2,'100001','Carib Cement Co','',1900000,45000000,'St. Elizabeth','RT70',2500],
-      [2026,2,'200045','','0-150',450000,28000000,'Kingston','RT10',0],
-      [2026,2,'200046','','150-300',320000,22000000,'Kingston','RT10',0],
-      [2026,2,'200047','','300-500',180000,14000000,'St. Andrew','RT20',0],
+      ['year','month','jps_ac','name','consumption_bucket','kwh','revenue_jmd','parish','rate_class','demand_kva','customer_count'],
+      // Commercial: jps_ac=full account no, consumption_bucket=blank, demand_kva filled, customer_count=1 per account
+      // Residential: jps_ac=full account no, consumption_bucket filled, demand_kva=0, customer_count=billed customers in that bucket
+      [2026,2,'100001-001','Carib Cement Co','',1900000,45000000,'St. Elizabeth','RT70',2500,1],
+      [2026,2,'100001-002','Carib Cement Co - Warehouse','',820000,19500000,'St. Elizabeth','RT70',950,1],
+      [2026,2,'200045-001','','0-150',450000,28000000,'Kingston','RT10',0,8500],
+      [2026,2,'200045-001','','150-300',320000,22000000,'Kingston','RT10',0,3200],
+      [2026,2,'200046-001','','300-500',180000,14000000,'St. Andrew','RT20',0,840],
     ]],
     ['Budget',[
-      ['year','month','jps_ac','name','rate_class','parish','kwh_budget','revenue_budget','demand_budget'],
-      [2026,2,'100001','Carib Cement Co','RT70','St. Elizabeth',2100000,48000000,2600],
-    ]],
-    ['Residential_Budget',[
-      ['year','month','rate_class','parish','consumption_bucket','kwh_budget','customer_count_budget'],
-      [2026,2,'RT10','Kingston','0-150',12500000,8500],
-      [2026,2,'RT10','Kingston','150-300',9800000,3200],
-      [2026,2,'RT10','Kingston','300-500',4200000,840],
-      [2026,2,'RT10','St. Andrew','0-150',10100000,6800],
-      [2026,2,'RT20','Kingston','0-150',3200000,1200],
+      ['year','month','jps_ac','name','rate_class','parish','consumption_bucket','kwh_budget','revenue_budget','demand_budget','customer_count'],
+      // Commercial rows: jps_ac = full account no (e.g. 100001-001), consumption_bucket blank, customer_count=1
+      [2026,2,'100001-001','Carib Cement Co','RT70','St. Elizabeth','',2100000,48000000,2600,1],
+      [2026,2,'100001-002','Carib Cement Co - Warehouse','RT70','St. Elizabeth','',900000,21000000,1000,1],
+      // Residential rows: jps_ac blank, consumption_bucket filled, customer_count = budgeted headcount in that bracket
+      [2026,2,'','','RT10','Kingston','0-150',12500000,0,0,8500],
+      [2026,2,'','','RT10','Kingston','150-300',9800000,0,0,3200],
+      [2026,2,'','','RT10','Kingston','300-500',4200000,0,0,840],
+      [2026,2,'','','RT10','St. Andrew','0-150',10100000,0,0,6800],
+      [2026,2,'','','RT20','Kingston','0-150',3200000,0,0,1200],
     ]],
     ['KAM',[
       ['jps_ac','kam'],
@@ -3366,7 +3519,7 @@ function dlTemplate(){
     a.download='JPS_Data_Template.xls';
     document.body.appendChild(a);a.click();document.body.removeChild(a);
     URL.revokeObjectURL(a.href);
-    toast('Template downloaded — JPS_Data_Template.xls (8 sheets)','ok');
+    toast('Template downloaded — JPS_Data_Template.xls (7 sheets)','ok');
   }catch(e){
     console.error('dlTemplate failed:',e);
     toast('Template download failed: '+e.message,'err');
@@ -3725,19 +3878,19 @@ function renderKamPerformance(){
   // Build per-KAM totals
   const kams={};
   comm.forEach(r=>{
-    const ac=String(r.jps_ac||'').trim();
-    const kam=kamMap[ac]||'Unassigned';
+    const ac=_custNum(r.jps_ac||''); // normalise to customer number
+    const kam=kamMap[ac]||_kl(kamMap,ac)||'Unassigned';
     if(!kams[kam])kams[kam]={kam,accounts:new Set(),cy:0,py:0,bud:0};
     kams[kam].accounts.add(ac);
     const yr=Number(r.year),mo=Number(r.month),kwh=Number(r.kwh||0);
     if(yr===cy&&ytdMos.includes(mo))kams[kam].cy+=kwh;
     if(yr===py&&ytdMos.includes(mo))kams[kam].py+=kwh;
   });
-  // Budget per KAM
+  // Budget per KAM — budget jps_ac is already a customer number
   if(sbBudget?.length){
     sbBudget.forEach(b=>{
-      const ac=String(b.jps_ac||'').trim();
-      const kam=kamMap[ac]||'Unassigned';
+      const ac=_custNum(b.jps_ac||'');
+      const kam=kamMap[ac]||_kl(kamMap,ac)||'Unassigned';
       if(kams[kam]&&ytdMos.includes(Number(b.month))&&Number(b.year)===cy)
         kams[kam].bud+=Number(b.kwh_budget||0);
     });
@@ -3835,14 +3988,17 @@ function renderRsKPIs(){
   const resBud  = resCusts.reduce((s,c)=>s+(c.bud/12),0);
   const resMtdLY= resCusts.reduce((s,c)=>s+(c.y25/12),0);
   const resYoY  = resMtdLY>0?((resMtd-resMtdLY)/resMtdLY*100):null;
-  const rsCusts = resCusts.length;
-  const rsCustsLY = rsCusts; // no prior-year customer count without separate table; show current
   const rsKv = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
   rsKv('rs_kpi_mtd',    CUSTOMERS.length ? resMtd.toFixed(1)+' GWh' : '--');
   rsKv('rs_kpi_vs_bud', CUSTOMERS.length ? (resBud>0?(resMtd>=resBud?'+':'')+((resMtd-resBud)/resBud*100).toFixed(1)+'% vs budget':'-- vs budget') : '-- vs budget');
   rsKv('rs_kpi_nb',     '--'); // requires net_gen_historical or separate DG table
   rsKv('rs_kpi_udg',    '--'); // requires unlicensed DG DB table
-  rsKv('rs_kpi_cg',     CUSTOMERS.length && resYoY!==null ? (resYoY>=0?'+':'')+resYoY.toFixed(1)+'% GWh YoY' : '--');
+  // Residential customer count — sum customer_count from actuals across all buckets for RT10/RT20, curYear, curMonth
+  const resActCount=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.customer_count||0),0);
+  const resBudCount=sbBudget.filter(b=>(b.consumption_bucket||'').trim()&&Number(b.year)===curYear&&Number(b.month)===curMonth).reduce((s,b)=>s+Number(b.customer_count||0),0);
+  rsKv('rs_kpi_cg', resActCount>0 ? resActCount.toLocaleString() : '--');
+  const cgNote=document.getElementById('rs_kpi_cg_note');
+  if(cgNote)cgNote.textContent=resBudCount>0?`vs ${resBudCount.toLocaleString()} budget`:(resActCount===0?'upload customer_count column':'residential headcount');
   rsKv('rs_kpi_rt10nb', '--'); // requires net biller table
   rsKv('rs_kpi_nbexp',  '--'); // requires export kWh table
 }
@@ -3850,13 +4006,49 @@ function renderRsPar(){
   const q=(document.getElementById('rs_q')?.value||'').toLowerCase();
   const bracket=document.getElementById('rs_bracket')?.value||'';
   const BRACKETS=['0-150','150-300','300-500','500+'];
+  const resRCs=['RT10','RT20'];
+
+  // Pull residential actuals rows for current month and prior year same month
+  const curAct=sbActuals.filter(r=>
+    resRCs.includes(String(r.rate_class||''))&&
+    Number(r[YEAR_COL])===curYear&&Number(r.month)===curMonth&&
+    (r.consumption_bucket||'').trim()
+  );
+  const prevAct=sbActuals.filter(r=>
+    resRCs.includes(String(r.rate_class||''))&&
+    Number(r[YEAR_COL])===(curYear-1)&&Number(r.month)===curMonth&&
+    (r.consumption_bucket||'').trim()
+  );
+
+  // Aggregate by parish+bucket -> {kwh, customers}
+  const buildAgg=rows=>{
+    const m={};
+    rows.forEach(r=>{
+      const k=`${r.parish||''}|||${(r.consumption_bucket||'').trim()}`;
+      if(!m[k])m[k]={kwh:0,customers:0};
+      m[k].kwh+=Number(r.kwh||0);
+      m[k].customers+=Number(r.customer_count||0);
+    });
+    return m;
+  };
+  const currAgg=buildAgg(curAct);
+  const prevAgg=buildAgg(prevAct);
+
+  // All parishes present in current actuals
+  const parishes=[...new Set(curAct.map(r=>String(r.parish||'')))].filter(Boolean).sort();
+  const filtered=parishes.filter(p=>!q||p.toLowerCase().includes(q));
+
   let rows=[];
-  PARISHES.filter(p=>!q||p.name.toLowerCase().includes(q)).forEach(p=>{
+  filtered.forEach(p=>{
     BRACKETS.filter(b=>!bracket||b===bracket).forEach(b=>{
-      const factor={'0-150':0.5,'150-300':0.28,'300-500':0.14,'500+':0.08}[b]||0.25;
-      rows.push({parish:p.name,bracket:b,curr:Math.round(p.rc*factor*1000),prev:Math.round(p.rp*factor*1000),count:Math.round((b==='0-150'?15000:b==='150-300'?8000:b==='300-500'?3000:1000)*p.curr/420000)});
+      const k=`${p}|||${b}`;
+      const curr=currAgg[k]?.kwh||0;
+      const prev=prevAgg[k]?.kwh||0;
+      const count=currAgg[k]?.customers||0;
+      rows.push({parish:p,bracket:b,curr,prev,count});
     });
   });
+
   document.getElementById('rs_count').textContent=rows.length+' rows';
   document.getElementById('rs_par_tbl').innerHTML=`<table class="dt" id="rspar_dt">
     <thead><tr><th>Parish</th><th>Bracket (kWh)</th><th>Customers</th><th>Current kWh</th><th>Prior kWh</th><th>Var%</th><th>Signal</th></tr></thead>
@@ -4383,6 +4575,18 @@ function renderOverviewKPIs(){
   sv('kpi_nb_note','Registered DG');
   sv('kpi_ytd_yoy',(vYoY>=0?'+':'')+vYoY.toFixed(1)+'% YoY');
   sc('kpi_ytd_yoy',vYoY>=0?'tbadge tbg':'tbadge tbr');
+  // ── Total customer count: commercial (distinct accounts) + residential (sum customer_count) ──
+  const commRCs=new Set(['RT40','RT50','RT60','RT70','BU']);
+  const commActCount=CUSTOMERS.filter(c=>commRCs.has(c.rate)).length;
+  const resActCount=sbActuals.filter(r=>['RT10','RT20'].includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.customer_count||0),0);
+  const commBudRows2=sbBudget.filter(b=>!(b.consumption_bucket||'').trim());
+  const resBudRows2 =sbBudget.filter(b=> (b.consumption_bucket||'').trim());
+  const commBudCount=new Set(commBudRows2.filter(b=>Number(b[YEAR_COL]||b.year||0)===curYear).map(b=>_custNum(String(b.jps_ac||'')))).size;
+  const resBudCount =resBudRows2.filter(b=>Number(b.year)===curYear&&Number(b.month)===curMonth).reduce((s,b)=>s+Number(b.customer_count||0),0);
+  const totalAct=commActCount+(resActCount||0);
+  const totalBud=commBudCount+(resBudCount||0);
+  sv('kpi_total_custs',totalAct>0?totalAct.toLocaleString():'--');
+  sv('kpi_total_custs_note',totalBud>0?`vs ${totalBud.toLocaleString()} budget`:(resActCount===0&&commActCount>0?'residential: upload customer_count':'vs budget'));
   // Period Mix mini stats
   const resBudPct=resBud>0?pct(resMtd,resBud):0;
   const comBudPct=comBud>0?pct(comMtd,comBud):0;
@@ -4422,7 +4626,11 @@ function renderCommercialKPIs(){
   sv('kpi_top_ind',topInd?topInd.name.substring(0,12):'--');
   sv('kpi_top_ind_note',topInd?'#1 YTD industry':'No data');
   sv('kpi_cm_def',defs.length);
-  sv('kpi_cm_custs',comCusts.length);
+  sv('kpi_cm_custs',comCusts.length.toLocaleString());
+  // Budget account count — distinct customer numbers in commercial budget for curYear
+  const commBudAccts=new Set(sbBudget.filter(b=>!(b.consumption_bucket||'').trim()&&Number(b[YEAR_COL]||b.year||0)===curYear).map(b=>_custNum(String(b.jps_ac||'')))).size;
+  const cmCustsNote=document.getElementById('kpi_cm_custs_note');
+  if(cmCustsNote)cmCustsNote.textContent=commBudAccts?`vs ${commBudAccts.toLocaleString()} budget`:'commercial accounts';
 }
 
 /* ==========================================
@@ -5748,9 +5956,16 @@ async function doDeleteMonth(){
   const msg=document.getElementById('delMonthMsg');
   if(msg){msg.textContent='Deleting…';msg.style.display='';}
   try{
-    const{error,count}=await sb.from('jps_actuals').delete({count:'exact'}).eq(YEAR_COL,year).eq('month',month);
-    if(error)throw error;
-    if(msg){msg.textContent=`✓ Deleted ${count||'all'} rows for ${year}-${String(month).padStart(2,'0')}`;}
+    // Use IDs from in-memory sbActuals to avoid year-column PostgREST cache issues
+    const ids=sbActuals.filter(r=>Number(r.year||r.cal_year)===year&&Number(r.month)===month).map(r=>r.id).filter(Boolean);
+    if(!ids.length){if(msg)msg.textContent='No rows found for that period';return;}
+    let total=0;
+    for(let i=0;i<ids.length;i+=500){
+      const{error,count}=await sb.from('jps_actuals').delete({count:'exact'}).in('id',ids.slice(i,i+500));
+      if(error)throw error;
+      total+=(count||0);
+    }
+    if(msg){msg.textContent=`✓ Deleted ${total} rows for ${year}-${String(month).padStart(2,'0')}`;}
     toast(`Month ${year}-${month} deleted ✓`,'ok');
     await syncSupabase(true);
     buildCharts();
@@ -5784,10 +5999,21 @@ async function doDeleteMonthAdm(){
     const _msg=document.getElementById('delMonthMsgAdm');
     if(_msg){_msg.textContent='Deleting…';_msg.style.display='';}
     try{
-      const{error,count}=await _sb.from('jps_actuals').delete({count:'exact'}).eq(YEAR_COL,_year).eq('month',_month);
-      if(error)throw error;
-      if(_msg){_msg.textContent=`✓ Deleted ${count||'all'} rows for ${_year}-${String(_month).padStart(2,'0')}`;_msg.style.color='var(--green)';}
-      await writeAudit('DELETE_DATA',{table:'jps_actuals',year:_year,month:_month,rows_deleted:count||'all'});
+      // Use IDs from in-memory sbActuals — bypasses year-column PostgREST cache issues
+      const ids=sbActuals.filter(r=>Number(r.year||r.cal_year)===_year&&Number(r.month)===_month).map(r=>r.id).filter(Boolean);
+      if(!ids.length){
+        if(_msg){_msg.textContent='No rows found for that period';_msg.style.color='var(--amber)';}
+        toast(`No rows for ${_year}-${String(_month).padStart(2,'0')} — already empty?`,'w');
+        return;
+      }
+      let _count=0;
+      for(let i=0;i<ids.length;i+=500){
+        const{error,count}=await _sb.from('jps_actuals').delete({count:'exact'}).in('id',ids.slice(i,i+500));
+        if(error)throw error;
+        _count+=(count||0);
+      }
+      if(_msg){_msg.textContent=`✓ Deleted ${_count} rows for ${_year}-${String(_month).padStart(2,'0')}`;_msg.style.color='var(--green)';}
+      await writeAudit('DELETE_DATA',{table:'jps_actuals',year:_year,month:_month,rows_deleted:_count});
       toast(`Month ${_year}-${_month} deleted ✓`,'ok');
       await syncSupabase(true);
       buildCharts();
@@ -5825,12 +6051,11 @@ function doWipeAllActuals(){
     const sb=getSB();if(!sb){toast('Supabase not connected','err');return;}
     if(msg){msg.textContent='Wiping…';msg.style.display='';msg.style.color='var(--amber)';}
     try{
-      let total=0;
-      for(const yr of[2022,2023,2024,2025,2026,2027]){
-        const{error,count}=await sb.from('jps_actuals').delete({count:'exact'}).eq(YEAR_COL,yr);
-        if(error&&!error.message.toLowerCase().includes('no rows'))console.warn('Wipe yr',yr,error.message);
-        total+=(count||0);
-      }
+      // Delete ALL rows using id≥1 — bypasses year/cal_year column entirely.
+      // This works regardless of PostgREST schema cache state.
+      const{error,count}=await sb.from('jps_actuals').delete({count:'exact'}).gte('id',1);
+      if(error)throw error;
+      const total=count||0;
       await writeAudit('WIPE_ALL_ACTUALS',{rows_deleted:total});
       if(msg){msg.textContent=`✓ Wiped ${total} rows`;msg.style.color='var(--green)';}
       toast(`All actuals wiped — ${total} rows deleted`,'ok');
@@ -5855,16 +6080,17 @@ function renderAdmKam(){
   const rcF=document.getElementById('adm_kam_rc')?.value||'';
   const kamF=document.getElementById('adm_kam_filter')?.value||'';
 
-  // Build account list from actuals (unique accounts, commercial only)
+  // Build account list from actuals (unique CUSTOMER NUMBERS, commercial only)
+  // _custNum() strips the suffix so '100001-001' and '100001-002' both map to '100001'
   const seen={};
   sbActuals.filter(r=>!r.consumption_bucket).forEach(r=>{
-    const ac=String(r.jps_ac||'').trim();
+    const ac=_custNum(r.jps_ac||'');
     if(!ac||seen[ac])return;
     seen[ac]={ac,name:String(r.name||'').trim(),rc:String(r.rate_class||'').trim()};
   });
   const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
 
-  let rows=Object.values(seen).map(a=>({...a,kam:kamMap[a.ac]||''}));
+  let rows=Object.values(seen).map(a=>({...a,kam:kamMap[a.ac]||_kl(kamMap,a.ac)||''}));
   if(q)rows=rows.filter(r=>r.ac.includes(q)||r.name.toLowerCase().includes(q));
   if(rcF)rows=rows.filter(r=>r.rc===rcF);
   if(kamF==='_unassigned')rows=rows.filter(r=>!r.kam);
@@ -5938,7 +6164,7 @@ async function saveKamAssignment(ac){
     cancelKamEdit(ac);
     // Refresh CUSTOMERS kam field
     const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
-    CUSTOMERS.forEach(c=>{c.kam=kamMap[c.num]||'';});
+    CUSTOMERS.forEach(c=>{c.kam=_kl(kamMap,c.num)||'';});
     populateKamDropdowns();
     await writeAudit('KAM_ASSIGN',{jps_ac:ac,kam:newKam||'(removed)'});
     toast(`KAM saved for ${ac}`,'ok');
@@ -6104,7 +6330,7 @@ async function saveKamCsv(){
     });
     // Refresh CUSTOMERS and dropdowns
     const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
-    CUSTOMERS.forEach(c=>{c.kam=kamMap[c.num]||'';});
+    CUSTOMERS.forEach(c=>{c.kam=_kl(kamMap,c.num)||'';});
     populateKamDropdowns();
     renderAdmKam();
     await writeAudit('BULK_KAM_ASSIGN',{source:'CSV import',accounts:assignments.length,kams:Object.keys(assignments.reduce((m,a)=>{m[a.kam]=1;return m;},{})).length});
@@ -6546,40 +6772,53 @@ create policy "Managers can write account master"
 -- STEP 3: Consumption actuals and budgets
 -- ══════════════════════════════════════════════════════════
 
--- ── MIGRATION: if jps_actuals already exists with cal_year (legacy FP&A column name),
---    rename it to year so all Sales Platform queries work correctly.
+-- ── MIGRATION: Replace FP&A raw-dump jps_actuals with Sales Platform account-level schema.
+--
+-- Root cause: the FP&A platform creates jps_actuals as a raw pivot-dump with columns:
+--   "Source" (segment), "Name", "Month" (text), "Rate category", "Updated Parish",
+--   "Sum of net_kwh_billed_consump"
+-- The Sales Platform needs per-account rows with:
+--   year (smallint), month (smallint), jps_ac (text), kwh, revenue_jmd, etc.
+-- Because CREATE TABLE IF NOT EXISTS skips when the FP&A table already exists,
+-- the old table was never replaced. This migration detects and fixes that.
+--
+-- Safe: jps_actuals_fpa preserves the original FP&A table structure for reference.
 do $$ begin
+  -- Case A: FP&A raw-dump format — has "Source" column (aggregate pivot, no account numbers)
+  -- Use lower() for case-insensitive match (FP&A may have used quoted "Source" or unquoted source)
   if exists (
     select 1 from information_schema.columns
-    where table_schema='public' and table_name='jps_actuals' and column_name='cal_year'
+    where table_schema='public' and table_name='jps_actuals'
+      and lower(column_name)='source'
+  ) then
+    -- Drop any existing backup first so we can re-run safely
+    execute 'DROP TABLE IF EXISTS public.jps_actuals_fpa';
+    execute 'ALTER TABLE public.jps_actuals RENAME TO jps_actuals_fpa';
+    raise notice 'jps_actuals (FP&A raw-dump) renamed to jps_actuals_fpa — fresh Sales table will be created';
+  -- Case B: FP&A used cal_year instead of year (account-level but wrong column name)
+  elsif exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='jps_actuals'
+      and column_name='cal_year'
   ) then
     alter table public.jps_actuals rename column cal_year to year;
+    raise notice 'jps_actuals.cal_year renamed to year';
   end if;
 end $$;
 
--- Same migration for jps_commercial_budget if it has cal_year
+-- Same migration for jps_budget if it has cal_year
 do $$ begin
   if exists (
     select 1 from information_schema.columns
-    where table_schema='public' and table_name='jps_commercial_budget' and column_name='cal_year'
+    where table_schema='public' and table_name='jps_budget' and column_name='cal_year'
   ) then
-    alter table public.jps_commercial_budget rename column cal_year to year;
-  end if;
-end $$;
-
--- Same migration for jps_residential_budget if it has cal_year
-do $$ begin
-  if exists (
-    select 1 from information_schema.columns
-    where table_schema='public' and table_name='jps_residential_budget' and column_name='cal_year'
-  ) then
-    alter table public.jps_residential_budget rename column cal_year to year;
+    alter table public.jps_budget rename column cal_year to year;
   end if;
 end $$;
 
 -- Actuals: flat dump format — one row per account per month
--- Commercial rows: jps_ac + name + rate_class + kwh + revenue + demand; consumption_bucket = ''
--- Residential rows: jps_ac (can be a bucket-level ID) + rate_class + consumption_bucket + kwh + revenue; demand = 0
+-- Commercial rows: jps_ac + name + rate_class + kwh + revenue + demand; consumption_bucket = ''; customer_count = 1
+-- Residential rows: jps_ac + rate_class + consumption_bucket + kwh + revenue; demand = 0; customer_count = billed customers in bracket
 create table if not exists public.jps_actuals (
   id                 bigserial primary key,
   year               smallint not null,
@@ -6592,6 +6831,7 @@ create table if not exists public.jps_actuals (
   parish             text default '',
   rate_class         text default '',
   demand_kva         numeric(10,2) default 0,
+  customer_count     int default 0,             -- 1 for commercial rows; headcount for residential bucket rows
   created_at         timestamptz default now(),
   unique (year, month, jps_ac, consumption_bucket)
 );
@@ -6604,51 +6844,32 @@ create policy "Managers can write actuals"
     exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager'))
   );
 
--- Commercial Budget: account-level, flat format matching actuals columns
-create table if not exists public.jps_commercial_budget (
-  id             bigserial primary key,
-  year           smallint not null,
-  month          smallint not null check (month between 1 and 12),
-  jps_ac         text not null,
-  name           text default '',
-  rate_class     text default '',
-  parish         text default '',
-  kwh_budget     numeric(15,2) default 0,
-  revenue_budget numeric(15,2) default 0,
-  demand_budget  numeric(10,2) default 0,
-  created_at     timestamptz default now(),
-  unique (year, month, jps_ac)
+-- ══════════════════════════════════════════════════════════
+-- STEP 3b: Unified Budget table
+-- Commercial rows: jps_ac filled, consumption_bucket blank, customer_count=1
+-- Residential rows: jps_ac blank, consumption_bucket filled, customer_count=headcount in bracket
+-- ══════════════════════════════════════════════════════════
+create table if not exists public.jps_budget (
+  id                 bigserial primary key,
+  year               smallint not null,
+  month              smallint not null check (month between 1 and 12),
+  jps_ac             text not null default '',
+  name               text default '',
+  rate_class         text default '',
+  parish             text default '',
+  consumption_bucket text not null default '',
+  kwh_budget         numeric(15,2) default 0,
+  revenue_budget     numeric(15,2) default 0,
+  demand_budget      numeric(10,2) default 0,
+  customer_count     int default 0,
+  created_at         timestamptz default now(),
+  unique (year, month, jps_ac, rate_class, parish, consumption_bucket)
 );
-alter table public.jps_commercial_budget enable row level security;
-do $$ declare r record; begin for r in select policyname from pg_policies where schemaname='public' and tablename='jps_commercial_budget' loop execute format('drop policy if exists %I on public.jps_commercial_budget', r.policyname); end loop; end $$;
-create policy "Authenticated users can read comm budget"
-  on public.jps_commercial_budget for select using (auth.role()='authenticated');
-create policy "Managers can write comm budget"
-  on public.jps_commercial_budget for all using (
-    exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager'))
-  );
+alter table public.jps_budget enable row level security;
+do $$ declare r record; begin for r in select policyname from pg_policies where schemaname='public' and tablename='jps_budget' loop execute format('drop policy if exists %I on public.jps_budget', r.policyname); end loop; end $$;
+create policy "allow_all_jps_budget"
+  on public.jps_budget for all using (true) with check (true);
 
--- Residential Budget: aggregate (no account numbers) — rate_class + parish + month
-create table if not exists public.jps_residential_budget (
-  id                    bigserial primary key,
-  year                  smallint not null,
-  month                 smallint not null check (month between 1 and 12),
-  rate_class            text not null,                -- RT10, RT20
-  parish                text not null default 'All',
-  consumption_bucket    text not null default '',     -- '0-150','150-300','300-500','500-750','750-1000','1000+', or '' for all
-  kwh_budget            numeric(15,2) default 0,
-  customer_count_budget int default 0,
-  created_at            timestamptz default now(),
-  unique (year, month, rate_class, parish, consumption_bucket)
-);
-alter table public.jps_residential_budget enable row level security;
-do $$ declare r record; begin for r in select policyname from pg_policies where schemaname='public' and tablename='jps_residential_budget' loop execute format('drop policy if exists %I on public.jps_residential_budget', r.policyname); end loop; end $$;
-create policy "Authenticated users can read res budget"
-  on public.jps_residential_budget for select using (auth.role()='authenticated');
-create policy "Managers can write res budget"
-  on public.jps_residential_budget for all using (
-    exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager'))
-  );
 
 -- ══════════════════════════════════════════════════════════
 -- STEP 4: Period locks (Sales Platform)
@@ -6906,10 +7127,12 @@ create policy "Authenticated users can write notes"
 
 -- ══════════════════════════════════════════════════════════
 -- STEP 8: Schema normalisation function  ← RUN THIS
--- Renames cal_year → year wherever the FP&A platform left it,
--- then notifies PostgREST to reload its schema cache.
--- Safe to run repeatedly — completely idempotent.
--- The app calls this automatically via sb.rpc('jps_normalize_schema').
+-- Handles both known FP&A table format issues:
+--   1. FP&A raw-dump format (Source/Month-text/Rate category columns) → renames to jps_actuals_fpa
+--   2. FP&A cal_year column name → renames to year
+-- Then creates a fresh jps_actuals with correct Sales Platform schema if needed.
+-- Notifies PostgREST to flush its schema cache.
+-- Safe to run repeatedly — fully idempotent.
 -- ══════════════════════════════════════════════════════════
 create or replace function public.jps_normalize_schema()
 returns text
@@ -6920,29 +7143,64 @@ as $$
 declare
   actions text[] := '{}';
 begin
-  -- jps_actuals
+  -- ── jps_actuals: FP&A raw-dump format (has "Source" column) ──────────
   if exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='jps_actuals' and lower(column_name)='source') then
+    execute 'DROP TABLE IF EXISTS public.jps_actuals_fpa';
+    execute 'ALTER TABLE public.jps_actuals RENAME TO jps_actuals_fpa';
+    -- Create correct Sales Platform schema
+    execute $t$
+      CREATE TABLE public.jps_actuals (
+        id                 bigserial primary key,
+        year               smallint not null,
+        month              smallint not null check (month between 1 and 12),
+        jps_ac             text not null,
+        name               text default '',
+        consumption_bucket text not null default '',
+        kwh                numeric(15,2) default 0,
+        revenue_jmd        numeric(15,2) default 0,
+        parish             text default '',
+        rate_class         text default '',
+        demand_kva         numeric(10,2) default 0,
+        created_at         timestamptz default now(),
+        unique (year, month, jps_ac, consumption_bucket)
+      )
+    $t$;
+    execute 'ALTER TABLE public.jps_actuals ENABLE ROW LEVEL SECURITY';
+    execute $t$
+      CREATE POLICY "Authenticated users can read actuals"
+        ON public.jps_actuals FOR SELECT USING (auth.role()='authenticated')
+    $t$;
+    execute $t$
+      CREATE POLICY "Managers can write actuals"
+        ON public.jps_actuals FOR ALL USING (
+          EXISTS (SELECT 1 FROM profiles WHERE id=auth.uid() AND sales_role IN ('admin','manager'))
+        )
+    $t$;
+    actions := array_append(actions, 'jps_actuals (FP&A raw-dump) → jps_actuals_fpa; fresh Sales table created');
+  -- ── jps_actuals: FP&A cal_year column name ───────────────────────────
+  elsif exists (select 1 from information_schema.columns
     where table_schema='public' and table_name='jps_actuals' and column_name='cal_year') then
     alter table public.jps_actuals rename column cal_year to year;
     actions := array_append(actions, 'jps_actuals.cal_year → year');
   end if;
-  -- jps_commercial_budget
+  -- ── jps_budget: cal_year → year ─────────────────────────────────────
   if exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='jps_commercial_budget' and column_name='cal_year') then
-    alter table public.jps_commercial_budget rename column cal_year to year;
-    actions := array_append(actions, 'jps_commercial_budget.cal_year → year');
+    where table_schema='public' and table_name='jps_budget' and column_name='cal_year') then
+    alter table public.jps_budget rename column cal_year to year;
+    actions := array_append(actions, 'jps_budget.cal_year → year');
   end if;
-  -- jps_residential_budget
-  if exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='jps_residential_budget' and column_name='cal_year') then
-    alter table public.jps_residential_budget rename column cal_year to year;
-    actions := array_append(actions, 'jps_residential_budget.cal_year → year');
+  -- ── jps_budget: add customer_count if missing ─────────────────────────
+  if not exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='jps_budget' and column_name='customer_count') then
+    alter table public.jps_budget add column customer_count int default 0;
+    actions := array_append(actions, 'jps_budget: added customer_count');
   end if;
-  -- Reload PostgREST schema cache so renamed columns take effect immediately
+  -- Reload PostgREST schema cache
   notify pgrst, 'reload schema';
   return case when array_length(actions,1)>0
     then 'Fixed: ' || array_to_string(actions,'; ')
-    else 'ok'
+    else 'ok — schema already correct'
   end;
 end;
 $$;
@@ -6991,8 +7249,7 @@ const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 let _sbClient=null,
     sbActuals=[],       // jps_actuals          — commercial account-level monthly consumption
-    sbBudget=[],        // jps_commercial_budget — commercial account-level budget (JPS A/c keyed)
-    sbResBudget=[],     // jps_residential_budget— aggregate residential budget (rate_class+parish+month)
+    sbBudget=[],        // jps_budget — unified budget: commercial rows (jps_ac filled) + residential rows (consumption_bucket filled)
     sbAccountMaster=[], // jps_account_master    — master account list (JPS A/c PK)
     sbIndustries=[],    // jps_industries        — industry reference table
     sbKAM=[],           // jps_kam               — key account managers
@@ -7110,18 +7367,25 @@ function buildDashboardData(){
   // Helper: sum kWh for rc+year across months 1..toMonth using the index (O(toMonth) not O(n))
   const _rcSum=(rc,year,fromM,toM)=>{const m=rcIdx[rc]||{};let s=0;for(let i=fromM;i<=toM;i++)s+=(m[year*100+i]||0);return s;};
 
-  // CUSTOMERS — one row per account (y25 = prior year, y26 = current year — names kept for compat)
+  // CUSTOMERS — one row per CUSTOMER NUMBER (r.acct is already normalised to customer number by fcNormActuals)
+  // Multiple full accounts under the same customer number are aggregated here.
   const py=curYear-1, cy=curYear;
   const custMap={};
   rows.forEach(r=>{
     if(!custMap[r.acct])custMap[r.acct]={num:r.acct,name:r.name,rate:r.rc,ind:r.industry,parish:r.parish,y25:0,y26:0,bud:0,m:Array(12).fill(0),cmt:''};
     const c=custMap[r.acct],gwh=r.kwh/1e6;
+    // Keep most recent non-empty name/rate/parish (sub-accounts may vary slightly)
+    if(r.name&&!c.name)c.name=r.name;
+    if(r.rc&&!c.rate)c.rate=r.rc;
+    if(r.parish&&!c.parish)c.parish=r.parish;
     if(r.year===py)c.y25+=gwh;
     if(r.year===cy){c.y26+=gwh;if(r.month>=1&&r.month<=12)c.m[r.month-1]+=gwh;}
   });
   // Distribute RC-level budget to customers by proportional prior-year share
-  if(sbBudget.length){
-    const budRows=fcNormBudget(sbBudget);
+  // Commercial budget rows: jps_ac filled, no consumption_bucket
+  const commBudRows=sbBudget.filter(b=>!(b.consumption_bucket||'').trim());
+  if(commBudRows.length){
+    const budRows=fcNormBudget(commBudRows);
     const rcBud={},rcActPY={};
     budRows.filter(r=>r.year===cy).forEach(r=>{rcBud[r.rc]=(rcBud[r.rc]||0)+r.kwh;});
     rows.filter(r=>r.year===py).forEach(r=>{rcActPY[r.rc]=(rcActPY[r.rc]||0)+r.kwh;});
@@ -7160,9 +7424,17 @@ function buildDashboardData(){
   // FC_SEGS base values
   FC_SEGS.forEach(s=>{s.base=CUSTOMERS.filter(c=>c.rate===s.seg).reduce((sum,c)=>sum+c.y26,0)||0;});
 
-  // Enrich CUSTOMERS with KAM + industry lookups
-  if(sbKAM.length){const m={};sbKAM.forEach(k=>m[String(k.jps_ac||'').trim()]=k.kam||'');CUSTOMERS.forEach(c=>{if(m[String(c.num)])c.kam=m[String(c.num)];});}
-  if(sbIndustries.length){const m={};sbIndustries.forEach(i=>m[String(i.jps_ac||'').trim()]=i.industry||'');CUSTOMERS.forEach(c=>{if(m[String(c.num)])c.industry=m[String(c.num)];});}
+  // Enrich CUSTOMERS with KAM + industry lookups.
+  // c.num is already the customer number (e.g. '100001'), matching jps_kam.jps_ac and jps_industries.jps_ac exactly.
+  // _kl() kept as fallback in case any entries still carry full account numbers.
+  if(sbKAM.length){
+    const m={};sbKAM.forEach(k=>m[String(k.jps_ac||'').trim()]=k.kam||'');
+    CUSTOMERS.forEach(c=>{const v=m[c.num]||_kl(m,c.num);if(v)c.kam=v;});
+  }
+  if(sbIndustries.length){
+    const m={};sbIndustries.forEach(i=>m[String(i.jps_ac||'').trim()]=i.industry||'');
+    CUSTOMERS.forEach(c=>{const v=m[c.num]||_kl(m,c.num);if(v)c.ind=v;});
+  }
 
   // ── SCORECARD_DATA — now O(1) per cell via pre-built rcIdx ──
   // Previously: 28 .filter() calls over 50k rows = ~1.4M comparisons
@@ -7170,14 +7442,14 @@ function buildDashboardData(){
   const RES_RCS=['RT10','RT20'];
   const mIdx2=curMonth-1;
   // Pre-build residential budget index too
+  // Residential budget rows: consumption_bucket filled (aggregate rows, no jps_ac)
+  const resBudRows=sbBudget.filter(b=>(b.consumption_bucket||'').trim());
   const resBudIdx={};
-  if(sbResBudget.length){
-    sbResBudget.forEach(b=>{
-      const rc=b.rate_class,y=Number(b.year),m=Number(b.month),v=Number(b.kwh_budget)||0;
-      if(!resBudIdx[rc])resBudIdx[rc]={};
-      resBudIdx[rc][y*100+m]=(resBudIdx[rc][y*100+m]||0)+v;
-    });
-  }
+  resBudRows.forEach(b=>{
+    const rc=b.rate_class,y=Number(b.year),m=Number(b.month),v=Number(b.kwh_budget)||0;
+    if(!resBudIdx[rc])resBudIdx[rc]={};
+    resBudIdx[rc][y*100+m]=(resBudIdx[rc][y*100+m]||0)+v;
+  });
   const _rbSum=(rc,year,fromM,toM)=>{const m=resBudIdx[rc]||{};let s=0;for(let i=fromM;i<=toM;i++)s+=(m[year*100+i]||0);return s;};
 
   SCORECARD_DATA.forEach(r=>{
@@ -7224,16 +7496,14 @@ async function syncSupabase(silent=false){
     // ── Fire ALL queries in parallel — massive speedup vs sequential awaits ──
     const [
       indData,kamData,amData,actData,
-      jbData,cbData,resBudData,
+      budData,
       ng,nb,ev,pl
     ] = await Promise.all([
       sbTable('jps_industries',{}),
       sbTable('jps_kam',{}),
       sbTable('jps_account_master',{limit:50000}),
       sbTable('jps_actuals',{limit:50000}),
-      sbTable('jps_budget',{limit:20000}),
-      sbTable('jps_commercial_budget',{limit:20000}),
-      sbTable('jps_residential_budget',{limit:5000}),
+      sbTable('jps_budget',{limit:50000}),
       sbTable('net_gen_historical',{order:'year'}),
       sbTable('jps_net_billers',{order:'year'}),
       sbTable('jps_ev_accounts',{order:'year'}),
@@ -7256,20 +7526,26 @@ async function syncSupabase(silent=false){
       log.push(`Actuals: jps_actuals (${actData.length} rows)`);
       // Re-confirm YEAR_COL from actual returned data (rows have the real column names)
       if(actData.length>0){
-        YEAR_COL=('cal_year' in actData[0])?'cal_year':'year';
-        console.log('[JPS] year col confirmed from data:',YEAR_COL);
+        // Determine year column from returned data
+        if('year' in actData[0])          YEAR_COL='year';
+        else if('cal_year' in actData[0]) YEAR_COL='cal_year';
+        else if('Source'   in actData[0]) YEAR_COL='year'; // FP&A raw-dump — uploads will fail
+        console.log('[JPS] year col confirmed from data:',YEAR_COL,'keys:',Object.keys(actData[0]).slice(0,6));
+        // Show banner if schema is not yet correct
+        if(!_schemaFixApplied&&(YEAR_COL==='cal_year'||'Source' in actData[0])){
+          _showSchemaBanner('Source' in actData[0]?'fpa_raw':'cal_year');
+        }
       }
     }
     else log.push('Actuals: ⚠ jps_actuals not accessible — check RLS policies');
 
-    sbBudget=[];
-    if(jbData&&jbData.length){sbBudget=[...sbBudget,...jbData];log.push(`Budget: jps_budget (${jbData.length} rows)`);}
-    else log.push('Budget: jps_budget (0 rows — no data uploaded yet)');
-    if(cbData&&cbData.length){sbBudget=[...sbBudget,...cbData];log.push(`Comm Budget (acct-level): jps_commercial_budget (${cbData.length} rows)`);}
+    sbBudget=budData||[];
     const budOk=sbBudget.length>0;
-
-    if(resBudData){sbResBudget=resBudData;log.push(`Res Budget: jps_residential_budget (${resBudData.length} rows)`);}
-    else log.push('Res Budget: jps_residential_budget (0 rows — no data uploaded yet)');
+    if(budOk){
+      const commRows=sbBudget.filter(b=>!(b.consumption_bucket||'').trim()).length;
+      const resRows =sbBudget.filter(b=> (b.consumption_bucket||'').trim()).length;
+      log.push(`Budget: jps_budget (${sbBudget.length} rows — ${commRows} commercial, ${resRows} residential)`);
+    } else log.push('Budget: jps_budget (0 rows — no data uploaded yet)');
 
     if(ng){sbNetGen=ng;log.push(`Net Gen: net_gen_historical (${ng.length} rows)`);}
     else log.push('Net Gen: ⚠ net_gen_historical not accessible');
@@ -7387,23 +7663,35 @@ function fcParseMonth(str){
 }
 function fcVal(v){return parseFloat((v||'0').toString().replace(/,/g,''))||0;}
 
+/* ── Account-number normalisation ────────────────────────────────────────
+   JPS uses full account numbers in actuals:  '100001-001'
+   KAM, industry, and budget tables use the customer-number prefix: '100001'
+   _custNum() extracts the customer number so all tables cross-reference correctly.
+   If the account has no dash it is already a customer number and is returned unchanged. */
+function _custNum(ac){
+  const s=String(ac||'').trim();
+  const dash=s.indexOf('-');
+  return dash>0?s.slice(0,dash):s;
+}
+
 function fcNormActuals(rows){
   return rows.map(d=>{
-    // Support both flat format (year or cal_year + month integers) and old Month-string format
-    // d.cal_year covers FP&A-seeded DBs that have not yet run the rename migration
     let year,month;
     if((d.year||d.cal_year)&&d.month){year=Number(d.year||d.cal_year);month=Number(d.month);}
     else{const p=fcParseMonth(d['Month']||'');year=p.year;month=p.month;}
     return{
-      acct: String(d.jps_ac||d['JPS A/c']||'Unassigned').trim(),
-      name: (d.name||d['Name']||'').trim(),
-      rc:   (d.rate_class||d['Rate category']||'').trim(),
-      parish:(d.parish||d['Updated Parish']||'').trim(),
+      // acct is normalised to customer number so it aligns with jps_kam / jps_industries / jps_budget
+      acct:   _custNum(d.jps_ac||d['JPS A/c']||'Unassigned'),
+      fullAc: String(d.jps_ac||d['JPS A/c']||'').trim(), // preserved for display / account-level detail
+      name:   (d.name||d['Name']||'').trim(),
+      rc:     (d.rate_class||d['Rate category']||'').trim(),
+      parish: (d.parish||d['Updated Parish']||'').trim(),
       industry:(d.industry||d['Industry']||'').trim(),
-      bucket:(d.consumption_bucket||'').trim(),
-      kwh:  fcVal(d.kwh||d['Sum of net_kwh_billed_consump']),
-      revenue:fcVal(d.revenue_jmd||0),
-      demand: fcVal(d.demand_kva||0),
+      bucket: (d.consumption_bucket||'').trim(),
+      kwh:      fcVal(d.kwh||d['Sum of net_kwh_billed_consump']),
+      revenue:  fcVal(d.revenue_jmd||0),
+      demand:   fcVal(d.demand_kva||0),
+      custCount:Number(d.customer_count||d['Customer Count']||0),
       year,month
     };
   }).filter(d=>d.year>0&&d.month>0&&d.kwh>0);
@@ -7414,12 +7702,13 @@ function fcNormBudget(rows){
     if((d.year||d.cal_year)&&d.month){year=Number(d.year||d.cal_year);month=Number(d.month);}
     else{const p=fcParseMonth(d['Month']||'');year=p.year;month=p.month;}
     return{
-      acct: String(d.jps_ac||d['JPS A/c']||'Unassigned').trim(),
-      name: (d.name||d['Name']||'').trim(),
-      rc:   (d.rate_class||d['Rate category']||'').trim(),
-      parish:(d.parish||d['Updated Parish']||'').trim(),
+      // Budget also uses customer number — normalise for consistency
+      acct:   _custNum(d.jps_ac||d['JPS A/c']||'Unassigned'),
+      name:   (d.name||d['Name']||'').trim(),
+      rc:     (d.rate_class||d['Rate category']||'').trim(),
+      parish: (d.parish||d['Updated Parish']||'').trim(),
       industry:(d.industry||d['Industry']||'').trim(),
-      kwh:  fcVal(d.kwh_budget||d['Sum of Budget']||d.kwh||0),
+      kwh:    fcVal(d.kwh_budget||d['Sum of Budget']||d.kwh||0),
       year,month
     };
   }).filter(d=>d.year>0&&d.month>0);
@@ -8675,7 +8964,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.29';
+const APP_VERSION = '1.0.38';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
