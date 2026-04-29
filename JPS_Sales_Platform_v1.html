@@ -971,8 +971,7 @@ document.getElementById('schema_stale_banner').style.display='none';
               <thead><tr style="background:var(--navy3)"><th style="padding:5px 8px;text-align:left;color:var(--teal)">Sheet Name</th><th style="padding:5px 8px;text-align:left;color:var(--teal)">Purpose</th><th style="padding:5px 8px;text-align:left;color:var(--teal)">Key Columns</th></tr></thead>
               <tbody>
                 <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Actuals</td><td style="padding:5px 8px">Monthly billed kWh &amp; revenue. Commercial: <em>customer_count=1</em>, bucket blank. Residential: fill bucket + <em>customer_count</em> = billed customers in that bracket.</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">year, month, jps_ac, name, consumption_bucket, kwh, revenue_jmd, parish, rate_class, demand_kva, <strong>customer_count</strong></td></tr>
-                <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Budget</td><td style="padding:5px 8px">Commercial account-level budget. <em>jps_ac</em> = full account no. e.g. 100001-001</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">year, month, jps_ac, name, rate_class, parish, kwh_budget, revenue_budget, demand_budget</td></tr>
-                <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Residential_Budget</td><td style="padding:5px 8px">Residential aggregate budget</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">year, month, rate_class, parish, consumption_bucket, kwh_budget, customer_count_budget</td></tr>
+                <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Budget</td><td style="padding:5px 8px">Commercial + residential in one sheet. Commercial: fill <em>jps_ac</em>, blank bucket, <em>customer_count=1</em>. Residential: blank <em>jps_ac</em>, fill <em>consumption_bucket</em> &amp; <em>customer_count</em>.</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">year, month, jps_ac, name, rate_class, parish, consumption_bucket, kwh_budget, revenue_budget, demand_budget, <strong>customer_count</strong></td></tr>
                 <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">KAM</td><td style="padding:5px 8px">Account → KAM. <em>jps_ac</em> = customer number only e.g. 100001 (no dash)</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">jps_ac, kam</td></tr>
                 <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Industries</td><td style="padding:5px 8px">Account → Industry. <em>jps_ac</em> = customer number only e.g. 100001 (no dash)</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">jps_ac, industry</td></tr>
                 <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Net_Generation</td><td style="padding:5px 8px">DG generation by month &amp; type</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">year, month, rate_class, count, kwh</td></tr>
@@ -1342,13 +1341,8 @@ document.getElementById('schema_stale_banner').style.display='none';
             </div>
             <div class="card" style="background:var(--navy3)">
               <div style="font-weight:700;font-size:11px;margin-bottom:3px;color:var(--teal)">Budget</div>
-              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">Commercial account-level budget, one row per account per month. <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">jps_ac</code> = full account number e.g. <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">100001-001</code>.</div>
-              <div style="font-size:9px;color:var(--text2);background:var(--navy2);border-radius:4px;padding:5px 7px;font-family:monospace">year · month · jps_ac · name · rate_class · parish · kwh_budget · revenue_budget · demand_budget</div>
-            </div>
-            <div class="card" style="background:var(--navy3)">
-              <div style="font-weight:700;font-size:11px;margin-bottom:3px;color:var(--teal)">Residential_Budget</div>
-              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">Aggregate residential budget by rate class, parish and consumption bucket.</div>
-              <div style="font-size:9px;color:var(--text2);background:var(--navy2);border-radius:4px;padding:5px 7px;font-family:monospace">year · month · rate_class · parish · consumption_bucket · kwh_budget · customer_count_budget</div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">Commercial + residential budget in one sheet. <strong>Commercial rows</strong>: fill <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">jps_ac</code> (e.g. <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">100001-001</code>), leave <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">consumption_bucket</code> blank, <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">customer_count=1</code>. <strong>Residential rows</strong>: leave <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">jps_ac</code> blank, fill <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">consumption_bucket</code> &amp; <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">customer_count</code>.</div>
+              <div style="font-size:9px;color:var(--text2);background:var(--navy2);border-radius:4px;padding:5px 7px;font-family:monospace">year · month · jps_ac · name · rate_class · parish · consumption_bucket · kwh_budget · revenue_budget · demand_budget · <strong style="color:var(--teal)">customer_count</strong></div>
             </div>
             <div class="card" style="background:var(--navy3)">
               <div style="font-weight:700;font-size:11px;margin-bottom:3px;color:var(--teal)">KAM</div>
@@ -3311,13 +3305,9 @@ async function loadExcel(input){
         }
       }
 
-      // ── Residential Budget sheet ───────────────────────
-      const rbSheet=wb.Sheets['Residential_Budget'];
-      if(rbSheet){
-        const rows=XLSX.utils.sheet_to_json(rbSheet);
-        if(rows.length)await batchUpsert('jps_residential_budget',rows,`${YEAR_COL},month,rate_class,parish,consumption_bucket`);
-      }
-      // ── Commercial Budget sheet — year,month,jps_ac,name,rate_class,parish,kwh_budget,revenue_budget,demand_budget ──
+      // ── Budget sheet — unified commercial + residential rows → jps_budget ──
+      // Commercial rows: jps_ac filled, consumption_bucket blank, customer_count=1
+      // Residential rows: jps_ac blank, consumption_bucket filled, customer_count=headcount in that bracket
       const cbSheet=wb.Sheets['Budget']||wb.Sheets['Commercial_Budget'];
       if(cbSheet&&cbSheet!==actSheet){
         const rawCb=XLSX.utils.sheet_to_json(cbSheet);
@@ -3327,17 +3317,20 @@ async function loadExcel(input){
             if(r.year&&r.month){year=Number(r.year);month=Number(r.month);}
             else{const p=fcParseMonth(r['Month']||'');year=p.year;month=p.month;}
             return{
-              [YEAR_COL]:year, month,
-              jps_ac:String(r.jps_ac||r['JPS A/c']||'').trim(),
-              name:(r.name||r['Name']||'').trim(),
-              rate_class:(r.rate_class||r['Rate category']||r['Rate Class']||'').trim(),
-              parish:(r.parish||r['Updated Parish']||'').trim(),
-              kwh_budget:Number(r.kwh_budget||r['Sum of Budget']||r['KWh Budget']||0),
-              revenue_budget:Number(r.revenue_budget||r['Revenue Budget']||0),
-              demand_budget:Number(r.demand_budget||r['Demand Budget']||0)
+              [YEAR_COL]:         year,
+              month,
+              jps_ac:             String(r.jps_ac||r['JPS A/c']||'').trim(),
+              name:               (r.name||r['Name']||'').trim(),
+              rate_class:         (r.rate_class||r['Rate category']||r['Rate Class']||'').trim(),
+              parish:             (r.parish||r['Updated Parish']||r['Parish']||'').trim(),
+              consumption_bucket: (r.consumption_bucket||r['Consumption Bucket']||'').trim(),
+              kwh_budget:         Number(r.kwh_budget||r['Sum of Budget']||r['KWh Budget']||0),
+              revenue_budget:     Number(r.revenue_budget||r['Revenue Budget']||0),
+              demand_budget:      Number(r.demand_budget||r['Demand Budget']||0),
+              customer_count:     Number(r.customer_count||r['Customer Count']||r['customer_count_budget']||0),
             };
-          }).filter(r=>(r.year||r.cal_year)>0&&r.month>0&&r.jps_ac);
-          if(mappedCb.length)await batchUpsert('jps_commercial_budget',mappedCb,`${YEAR_COL},month,jps_ac`);
+          }).filter(r=>(r[YEAR_COL]||r.year||0)>0&&r.month>0);
+          if(mappedCb.length)await batchUpsert('jps_budget',mappedCb,`${YEAR_COL},month,jps_ac,rate_class,parish,consumption_bucket`);
         }
       }
       // ── KAM sheet — columns: jps_ac (customer number), kam ──────────────
@@ -3477,18 +3470,16 @@ function dlTemplate(){
       [2026,2,'200046-001','','300-500',180000,14000000,'St. Andrew','RT20',0,840],
     ]],
     ['Budget',[
-      ['year','month','jps_ac','name','rate_class','parish','kwh_budget','revenue_budget','demand_budget'],
-      // jps_ac = full account number (e.g. 100001-001)
-      [2026,2,'100001-001','Carib Cement Co','RT70','St. Elizabeth',2100000,48000000,2600],
-      [2026,2,'100001-002','Carib Cement Co - Warehouse','RT70','St. Elizabeth',900000,21000000,1000],
-    ]],
-    ['Residential_Budget',[
-      ['year','month','rate_class','parish','consumption_bucket','kwh_budget','customer_count_budget'],
-      [2026,2,'RT10','Kingston','0-150',12500000,8500],
-      [2026,2,'RT10','Kingston','150-300',9800000,3200],
-      [2026,2,'RT10','Kingston','300-500',4200000,840],
-      [2026,2,'RT10','St. Andrew','0-150',10100000,6800],
-      [2026,2,'RT20','Kingston','0-150',3200000,1200],
+      ['year','month','jps_ac','name','rate_class','parish','consumption_bucket','kwh_budget','revenue_budget','demand_budget','customer_count'],
+      // Commercial rows: jps_ac = full account no (e.g. 100001-001), consumption_bucket blank, customer_count=1
+      [2026,2,'100001-001','Carib Cement Co','RT70','St. Elizabeth','',2100000,48000000,2600,1],
+      [2026,2,'100001-002','Carib Cement Co - Warehouse','RT70','St. Elizabeth','',900000,21000000,1000,1],
+      // Residential rows: jps_ac blank, consumption_bucket filled, customer_count = budgeted headcount in that bracket
+      [2026,2,'','','RT10','Kingston','0-150',12500000,0,0,8500],
+      [2026,2,'','','RT10','Kingston','150-300',9800000,0,0,3200],
+      [2026,2,'','','RT10','Kingston','300-500',4200000,0,0,840],
+      [2026,2,'','','RT10','St. Andrew','0-150',10100000,0,0,6800],
+      [2026,2,'','','RT20','Kingston','0-150',3200000,0,0,1200],
     ]],
     ['KAM',[
       ['jps_ac','kam'],
@@ -4005,7 +3996,7 @@ function renderRsKPIs(){
   rsKv('rs_kpi_udg',    '--'); // requires unlicensed DG DB table
   // Residential customer count — sum customer_count from actuals across all buckets for RT10/RT20, curYear, curMonth
   const resActCount=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.customer_count||0),0);
-  const resBudCount=sbResBudget.length?sbResBudget.filter(b=>Number(b.year)===curYear&&Number(b.month)===curMonth).reduce((s,b)=>s+Number(b.customer_count_budget||0),0):0;
+  const resBudCount=sbBudget.filter(b=>(b.consumption_bucket||'').trim()&&Number(b.year)===curYear&&Number(b.month)===curMonth).reduce((s,b)=>s+Number(b.customer_count||0),0);
   rsKv('rs_kpi_cg', resActCount>0 ? resActCount.toLocaleString() : '--');
   const cgNote=document.getElementById('rs_kpi_cg_note');
   if(cgNote)cgNote.textContent=resBudCount>0?`vs ${resBudCount.toLocaleString()} budget`:(resActCount===0?'upload customer_count column':'residential headcount');
@@ -4553,8 +4544,10 @@ function renderOverviewKPIs(){
   const commRCs=new Set(['RT40','RT50','RT60','RT70','BU']);
   const commActCount=CUSTOMERS.filter(c=>commRCs.has(c.rate)).length;
   const resActCount=sbActuals.filter(r=>['RT10','RT20'].includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.customer_count||0),0);
-  const commBudCount=sbBudget.length?new Set(sbBudget.filter(b=>Number(b[YEAR_COL]||b.year||b.cal_year)===curYear).map(b=>_custNum(String(b.jps_ac||'')))).size:0;
-  const resBudCount=sbResBudget.length?sbResBudget.filter(b=>Number(b.year)===curYear&&Number(b.month)===curMonth).reduce((s,b)=>s+Number(b.customer_count_budget||0),0):0;
+  const commBudRows2=sbBudget.filter(b=>!(b.consumption_bucket||'').trim());
+  const resBudRows2 =sbBudget.filter(b=> (b.consumption_bucket||'').trim());
+  const commBudCount=new Set(commBudRows2.filter(b=>Number(b[YEAR_COL]||b.year||0)===curYear).map(b=>_custNum(String(b.jps_ac||'')))).size;
+  const resBudCount =resBudRows2.filter(b=>Number(b.year)===curYear&&Number(b.month)===curMonth).reduce((s,b)=>s+Number(b.customer_count||0),0);
   const totalAct=commActCount+(resActCount||0);
   const totalBud=commBudCount+(resBudCount||0);
   sv('kpi_total_custs',totalAct>0?totalAct.toLocaleString():'--');
@@ -4600,7 +4593,7 @@ function renderCommercialKPIs(){
   sv('kpi_cm_def',defs.length);
   sv('kpi_cm_custs',comCusts.length.toLocaleString());
   // Budget account count — distinct customer numbers in commercial budget for curYear
-  const commBudAccts=sbBudget.length?new Set(sbBudget.filter(b=>Number(b[YEAR_COL]||b.year||b.cal_year)===curYear).map(b=>_custNum(String(b.jps_ac||'')))).size:0;
+  const commBudAccts=new Set(sbBudget.filter(b=>!(b.consumption_bucket||'').trim()&&Number(b[YEAR_COL]||b.year||0)===curYear).map(b=>_custNum(String(b.jps_ac||'')))).size;
   const cmCustsNote=document.getElementById('kpi_cm_custs_note');
   if(cmCustsNote)cmCustsNote.textContent=commBudAccts?`vs ${commBudAccts.toLocaleString()} budget`:'commercial accounts';
 }
@@ -6826,50 +6819,29 @@ create policy "Managers can write actuals"
   );
 
 -- Commercial Budget: account-level, flat format matching actuals columns
-create table if not exists public.jps_commercial_budget (
-  id             bigserial primary key,
-  year           smallint not null,
-  month          smallint not null check (month between 1 and 12),
-  jps_ac         text not null,
-  name           text default '',
-  rate_class     text default '',
-  parish         text default '',
-  kwh_budget     numeric(15,2) default 0,
-  revenue_budget numeric(15,2) default 0,
-  demand_budget  numeric(10,2) default 0,
-  created_at     timestamptz default now(),
-  unique (year, month, jps_ac)
+-- Unified budget table: commercial rows (jps_ac filled, consumption_bucket blank)
+--                   + residential rows (jps_ac blank, consumption_bucket filled)
+create table if not exists public.jps_budget (
+  id                 bigserial primary key,
+  year               smallint not null,
+  month              smallint not null check (month between 1 and 12),
+  jps_ac             text not null default '',
+  name               text default '',
+  rate_class         text default '',
+  parish             text default '',
+  consumption_bucket text not null default '',
+  kwh_budget         numeric(15,2) default 0,
+  revenue_budget     numeric(15,2) default 0,
+  demand_budget      numeric(10,2) default 0,
+  customer_count     int default 0,
+  created_at         timestamptz default now(),
+  unique (year, month, jps_ac, rate_class, parish, consumption_bucket)
 );
-alter table public.jps_commercial_budget enable row level security;
-do $$ declare r record; begin for r in select policyname from pg_policies where schemaname='public' and tablename='jps_commercial_budget' loop execute format('drop policy if exists %I on public.jps_commercial_budget', r.policyname); end loop; end $$;
-create policy "Authenticated users can read comm budget"
-  on public.jps_commercial_budget for select using (auth.role()='authenticated');
-create policy "Managers can write comm budget"
-  on public.jps_commercial_budget for all using (
-    exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager'))
-  );
+alter table public.jps_budget enable row level security;
+do $$ declare r record; begin for r in select policyname from pg_policies where schemaname='public' and tablename='jps_budget' loop execute format('drop policy if exists %I on public.jps_budget', r.policyname); end loop; end $$;
+create policy "allow_all_jps_budget"
+  on public.jps_budget for all using (true) with check (true);
 
--- Residential Budget: aggregate (no account numbers) — rate_class + parish + month
-create table if not exists public.jps_residential_budget (
-  id                    bigserial primary key,
-  year                  smallint not null,
-  month                 smallint not null check (month between 1 and 12),
-  rate_class            text not null,                -- RT10, RT20
-  parish                text not null default 'All',
-  consumption_bucket    text not null default '',     -- '0-150','150-300','300-500','500-750','750-1000','1000+', or '' for all
-  kwh_budget            numeric(15,2) default 0,
-  customer_count_budget int default 0,
-  created_at            timestamptz default now(),
-  unique (year, month, rate_class, parish, consumption_bucket)
-);
-alter table public.jps_residential_budget enable row level security;
-do $$ declare r record; begin for r in select policyname from pg_policies where schemaname='public' and tablename='jps_residential_budget' loop execute format('drop policy if exists %I on public.jps_residential_budget', r.policyname); end loop; end $$;
-create policy "Authenticated users can read res budget"
-  on public.jps_residential_budget for select using (auth.role()='authenticated');
-create policy "Managers can write res budget"
-  on public.jps_residential_budget for all using (
-    exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager'))
-  );
 
 -- ══════════════════════════════════════════════════════════
 -- STEP 4: Period locks (Sales Platform)
@@ -7249,8 +7221,7 @@ const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 let _sbClient=null,
     sbActuals=[],       // jps_actuals          — commercial account-level monthly consumption
-    sbBudget=[],        // jps_commercial_budget — commercial account-level budget (JPS A/c keyed)
-    sbResBudget=[],     // jps_residential_budget— aggregate residential budget (rate_class+parish+month)
+    sbBudget=[],        // jps_budget — unified budget: commercial rows (jps_ac filled) + residential rows (consumption_bucket filled)
     sbAccountMaster=[], // jps_account_master    — master account list (JPS A/c PK)
     sbIndustries=[],    // jps_industries        — industry reference table
     sbKAM=[],           // jps_kam               — key account managers
@@ -7383,8 +7354,10 @@ function buildDashboardData(){
     if(r.year===cy){c.y26+=gwh;if(r.month>=1&&r.month<=12)c.m[r.month-1]+=gwh;}
   });
   // Distribute RC-level budget to customers by proportional prior-year share
-  if(sbBudget.length){
-    const budRows=fcNormBudget(sbBudget);
+  // Commercial budget rows: jps_ac filled, no consumption_bucket
+  const commBudRows=sbBudget.filter(b=>!(b.consumption_bucket||'').trim());
+  if(commBudRows.length){
+    const budRows=fcNormBudget(commBudRows);
     const rcBud={},rcActPY={};
     budRows.filter(r=>r.year===cy).forEach(r=>{rcBud[r.rc]=(rcBud[r.rc]||0)+r.kwh;});
     rows.filter(r=>r.year===py).forEach(r=>{rcActPY[r.rc]=(rcActPY[r.rc]||0)+r.kwh;});
@@ -7441,14 +7414,14 @@ function buildDashboardData(){
   const RES_RCS=['RT10','RT20'];
   const mIdx2=curMonth-1;
   // Pre-build residential budget index too
+  // Residential budget rows: consumption_bucket filled (aggregate rows, no jps_ac)
+  const resBudRows=sbBudget.filter(b=>(b.consumption_bucket||'').trim());
   const resBudIdx={};
-  if(sbResBudget.length){
-    sbResBudget.forEach(b=>{
-      const rc=b.rate_class,y=Number(b.year),m=Number(b.month),v=Number(b.kwh_budget)||0;
-      if(!resBudIdx[rc])resBudIdx[rc]={};
-      resBudIdx[rc][y*100+m]=(resBudIdx[rc][y*100+m]||0)+v;
-    });
-  }
+  resBudRows.forEach(b=>{
+    const rc=b.rate_class,y=Number(b.year),m=Number(b.month),v=Number(b.kwh_budget)||0;
+    if(!resBudIdx[rc])resBudIdx[rc]={};
+    resBudIdx[rc][y*100+m]=(resBudIdx[rc][y*100+m]||0)+v;
+  });
   const _rbSum=(rc,year,fromM,toM)=>{const m=resBudIdx[rc]||{};let s=0;for(let i=fromM;i<=toM;i++)s+=(m[year*100+i]||0);return s;};
 
   SCORECARD_DATA.forEach(r=>{
@@ -7495,16 +7468,14 @@ async function syncSupabase(silent=false){
     // ── Fire ALL queries in parallel — massive speedup vs sequential awaits ──
     const [
       indData,kamData,amData,actData,
-      jbData,cbData,resBudData,
+      budData,
       ng,nb,ev,pl
     ] = await Promise.all([
       sbTable('jps_industries',{}),
       sbTable('jps_kam',{}),
       sbTable('jps_account_master',{limit:50000}),
       sbTable('jps_actuals',{limit:50000}),
-      sbTable('jps_budget',{limit:20000}),
-      sbTable('jps_commercial_budget',{limit:20000}),
-      sbTable('jps_residential_budget',{limit:5000}),
+      sbTable('jps_budget',{limit:50000}),
       sbTable('net_gen_historical',{order:'year'}),
       sbTable('jps_net_billers',{order:'year'}),
       sbTable('jps_ev_accounts',{order:'year'}),
@@ -7540,14 +7511,13 @@ async function syncSupabase(silent=false){
     }
     else log.push('Actuals: ⚠ jps_actuals not accessible — check RLS policies');
 
-    sbBudget=[];
-    if(jbData&&jbData.length){sbBudget=[...sbBudget,...jbData];log.push(`Budget: jps_budget (${jbData.length} rows)`);}
-    else log.push('Budget: jps_budget (0 rows — no data uploaded yet)');
-    if(cbData&&cbData.length){sbBudget=[...sbBudget,...cbData];log.push(`Comm Budget (acct-level): jps_commercial_budget (${cbData.length} rows)`);}
+    sbBudget=budData||[];
     const budOk=sbBudget.length>0;
-
-    if(resBudData){sbResBudget=resBudData;log.push(`Res Budget: jps_residential_budget (${resBudData.length} rows)`);}
-    else log.push('Res Budget: jps_residential_budget (0 rows — no data uploaded yet)');
+    if(budOk){
+      const commRows=sbBudget.filter(b=>!(b.consumption_bucket||'').trim()).length;
+      const resRows =sbBudget.filter(b=> (b.consumption_bucket||'').trim()).length;
+      log.push(`Budget: jps_budget (${sbBudget.length} rows — ${commRows} commercial, ${resRows} residential)`);
+    } else log.push('Budget: jps_budget (0 rows — no data uploaded yet)');
 
     if(ng){sbNetGen=ng;log.push(`Net Gen: net_gen_historical (${ng.length} rows)`);}
     else log.push('Net Gen: ⚠ net_gen_historical not accessible');
@@ -8966,7 +8936,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.35';
+const APP_VERSION = '1.0.36';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
