@@ -548,10 +548,10 @@ document.getElementById('schema_stale_banner').style.display='none';
             <button class="btn btn-o" onclick="exportChart('c_trend')">💾 Save Image</button>
             <span class="chart-info" id="trend_drill_info">Click a bar or point to filter customer table below</span>
           </div>
-          <div class="leg">
-            <span><span class="ld" style="background:#00c2a8"></span>2026 Actual</span>
-            <span><span class="ld" style="background:#378ADD;border-style:dashed"></span>2026 Budget</span>
-            <span><span class="ld" style="background:rgba(255,255,255,.3)"></span>2025 Actual</span>
+          <div class="leg" id="trend_legend">
+            <span><span class="ld" style="background:#00c2a8"></span><span id="trend_lbl_act">-- Actual</span></span>
+            <span><span class="ld" style="background:#378ADD;border-style:dashed"></span><span id="trend_lbl_bud">-- Budget</span></span>
+            <span><span class="ld" style="background:rgba(255,255,255,.3)"></span><span id="trend_lbl_ly">-- Actual</span></span>
           </div>
           <div class="cw" style="height:230px"><canvas id="c_trend"></canvas></div>
         </div>
@@ -1573,7 +1573,7 @@ order by ordinal_position;</pre>
 
       <!-- Headline narrative -->
       <div class="card">
-        <div class="ch">Executive Narrative <span id="es_period_lbl">February 2026</span>
+        <div class="ch">Executive Narrative <span id="es_period_lbl">--</span>
           <div style="display:flex;gap:6px">
             <button class="btn btn-t" onclick="saveExecNarrative()">Save Narrative</button>
             <button class="btn btn-o" onclick="exportExecSummary()">Export PDF</button>
@@ -1754,10 +1754,10 @@ order by ordinal_position;</pre>
 
       <!-- Average tariff -->
       <div class="card">
-        <div class="ch">Average Tariff Movement <span>JMD/kWh -- YTD +7.9% driven by lower consumption base</span></div>
+        <div class="ch">Average Tariff Movement <span id="rr_tariff_hdr">JMD/kWh — upload jps_rr_data to populate</span></div>
         <div class="cw" style="height:200px"><canvas id="c_rr_tariff"></canvas></div>
         <div style="margin-top:10px;padding:10px;background:rgba(245,166,35,0.07);border-left:3px solid var(--amber);border-radius:4px;font-size:11px;color:var(--text2);line-height:1.7">
-          <strong style="color:var(--amber)">Tariff note:</strong> YTD average tariff increased 7.9% across all rate classes. RT40 saw the highest increase due to higher fixed costs spread over lower consumption. Henry Hub gas prices +31% YTD vs 2025, driving fuel charge increases.
+          <strong style="color:var(--amber)">Tariff note:</strong> <span id="rr_tariff_note">Upload revenue recovery data (jps_rr_data) to populate tariff movement commentary.</span>
         </div>
       </div>
 
@@ -1825,7 +1825,7 @@ order by ordinal_position;</pre>
             <div class="cw" style="height:220px"><canvas id="c_ri_bracket"></canvas></div>
           </div>
           <div class="card">
-            <div class="ch">Customer count by bracket <span>2025 vs 2026 YTD</span></div>
+            <div class="ch">Customer count by bracket <span id="ri_count_hdr">-- vs -- YTD</span></div>
             <div class="cw" style="height:220px"><canvas id="c_ri_count"></canvas></div>
           </div>
         </div>
@@ -1838,7 +1838,7 @@ order by ordinal_position;</pre>
       <div id="ri_dg" class="ssec">
         <div class="g2">
           <div class="card">
-            <div class="ch">Net Biller Growth vs Total Customer Growth <span>Index 2021=100</span></div>
+            <div class="ch">Net Biller Growth vs Total Customer Growth <span>Raw count by year</span></div>
             <div class="cw" style="height:220px"><canvas id="c_ri_dg_growth"></canvas></div>
           </div>
           <div class="card">
@@ -2015,7 +2015,7 @@ order by ordinal_position;</pre>
             <div class="cw" style="height:220px"><canvas id="c_le_rc_bar"></canvas></div>
           </div>
           <div class="card">
-            <div class="ch">FY 2026 — Actuals + LE Projection</div>
+            <div class="ch" id="le_fy_hdr">FY -- — Actuals + LE Projection</div>
             <div class="cw" style="height:220px"><canvas id="c_le_fy"></canvas></div>
           </div>
         </div>
@@ -2198,10 +2198,11 @@ let CU={id:'',role:'',name:'',email:'',territory:'All'};
 let PLATFORM_USERS=[]; // loaded from shared profiles table
 let PERIOD_LOCKS=[];   // loaded from jps_period_locks
 
-let curPeriod='MTD', curYear=2026, curMonth=2, curQtr=1;
+const _initDate=new Date();
+let curPeriod='MTD', curYear=_initDate.getFullYear(), curMonth=_initDate.getMonth()+1, curQtr=Math.ceil((_initDate.getMonth()+1)/3);
 let YEAR_COL='year'; // auto-detected at sync — set to 'cal_year' on FP&A-seeded databases
 let _schemaFixApplied=false; // jps_normalize_schema RPC called once per session
-let mrPeriod='2026-02', mrRepName='', mrActiveSec='mr_ov';
+let mrPeriod=`${_initDate.getFullYear()}-${String(_initDate.getMonth()+1).padStart(2,'0')}`, mrRepName='', mrActiveSec='mr_ov';
 let cmDim='industry', cmDrillRC='', _modalFn=null;
 let chartInstances={};
 
@@ -3105,6 +3106,29 @@ function filterHelp(){
   });
 }
 
+// Rebuild every year-picker dropdown from the actual years present in sbActuals
+function rebuildYearDropdowns(){
+  if(!sbActuals.length)return;
+  const years=[...new Set(sbActuals.map(r=>Number(r[YEAR_COL]||r.year||0)).filter(Boolean))].sort((a,b)=>b-a);
+  const opts=years.map(y=>`<option value="${y}">${y}</option>`).join('');
+  // Main period bar
+  const sy=document.getElementById('selYear');
+  if(sy){const cur=sy.value;sy.innerHTML=opts;if(years.includes(Number(cur)))sy.value=cur;else sy.value=String(years[0]);}
+  // Delete-month popup
+  const dy=document.getElementById('delYear');
+  if(dy){const cur=dy.value;dy.innerHTML=opts;if(years.includes(Number(cur)))dy.value=cur;}
+  // Admin delete-month panel
+  const da=document.getElementById('delYearAdm');
+  if(da){const cur=da.value;da.innerHTML=opts;if(years.includes(Number(cur)))da.value=cur;}
+  // Anomaly year filter — keep "All years" option first, then per-year options
+  const av=document.getElementById('vld_anom_yr');
+  if(av){
+    const curV=av.value;
+    av.innerHTML='<option value="">All years</option>'+years.map(y=>`<option value="${y}">${y}</option>`).join('');
+    if(curV)av.value=curV;
+  }
+}
+
 // Populate sidebar segment + year chips from actual DB data
 function renderSidebarFilters(){
   const segs = sbActuals.length
@@ -3454,53 +3478,52 @@ function dlTemplate(){
   const mkRows=rows=>rows.map(row=>'<Row>'+row.map(cell).join('')+'</Row>').join('');
   const mkSheet=(name,rows)=>`<Worksheet ss:Name="${esc(name)}"><Table>${mkRows(rows)}</Table></Worksheet>`;
 
+  const _tY=curYear, _tM=curMonth; // template rows use current period — replace with your data
   const SHEETS=[
     ['Actuals',[
       ['year','month','jps_ac','name','consumption_bucket','kwh','revenue_jmd','parish','rate_class','demand_kva','customer_count'],
       // Commercial: jps_ac=full account no, consumption_bucket=blank, demand_kva filled, customer_count=1 per account
       // Residential: jps_ac=full account no, consumption_bucket filled, demand_kva=0, customer_count=billed customers in that bucket
-      [2026,2,'100001-001','Carib Cement Co','',1900000,45000000,'St. Elizabeth','RT70',2500,1],
-      [2026,2,'100001-002','Carib Cement Co - Warehouse','',820000,19500000,'St. Elizabeth','RT70',950,1],
-      [2026,2,'200045-001','','<150',450000,28000000,'Kingston','RT10',0,8500],
-      [2026,2,'200045-001','','150>350',320000,22000000,'Kingston','RT10',0,3200],
-      [2026,2,'200046-001','','350>550',180000,14000000,'St. Andrew','RT20',0,840],
+      [_tY,_tM,'COMM-001-001','Sample Commercial Ltd','',1000000,25000000,'Kingston','RT70',1000,1],
+      [_tY,_tM,'COMM-001-002','Sample Commercial Ltd - Branch','',500000,12000000,'St. Andrew','RT40',500,1],
+      [_tY,_tM,'RES-001-001','','<150',100000,6000000,'Kingston','RT10',0,5000],
+      [_tY,_tM,'RES-001-001','','150>350',80000,5000000,'Kingston','RT10',0,2000],
+      [_tY,_tM,'RES-002-001','','350>550',50000,3500000,'St. Andrew','RT20',0,500],
     ]],
     ['Budget',[
-      ['year','month','jps_ac','name','rate_class','parish','consumption_bucket','kwh_budget','revenue_budget','demand_budget','customer_count'],
-      // Commercial rows: jps_ac = full account no (e.g. 100001-001), consumption_bucket blank, customer_count=1
-      [2026,2,'100001-001','Carib Cement Co','RT70','St. Elizabeth','',2100000,48000000,2600,1],
-      [2026,2,'100001-002','Carib Cement Co - Warehouse','RT70','St. Elizabeth','',900000,21000000,1000,1],
+      ['year','month','jps_ac','name','rate_class','parish','consumption_budget','kwh_budget','revenue_budget','demand_budget','customer_count'],
+      // Commercial rows: jps_ac = full account no, consumption_bucket blank, customer_count=1
+      [_tY,_tM,'COMM-001-001','Sample Commercial Ltd','RT70','Kingston','',1100000,27000000,1100,1],
+      [_tY,_tM,'COMM-001-002','Sample Commercial Ltd - Branch','RT40','St. Andrew','',550000,13000000,550,1],
       // Residential rows: jps_ac blank, consumption_bucket filled, customer_count = budgeted headcount in that bracket
-      [2026,2,'','','RT10','Kingston','<150',12500000,0,0,8500],
-      [2026,2,'','','RT10','Kingston','150>350',9800000,0,0,3200],
-      [2026,2,'','','RT10','Kingston','350>550',4200000,0,0,840],
-      [2026,2,'','','RT10','St. Andrew','<150',10100000,0,0,6800],
-      [2026,2,'','','RT20','Kingston','<150',3200000,0,0,1200],
+      [_tY,_tM,'','','RT10','Kingston','<150',110000,0,0,5000],
+      [_tY,_tM,'','','RT10','Kingston','150>350',90000,0,0,2000],
+      [_tY,_tM,'','','RT10','St. Andrew','<150',60000,0,0,2500],
+      [_tY,_tM,'','','RT20','Kingston','<150',30000,0,0,700],
     ]],
     ['KAM',[
       ['jps_ac','kam'],
-      ['100001','Jane Smith'],
-      ['100045','Michael Brown'],
+      ['COMM-001','Sample KAM Name'],
+      ['COMM-002','Another KAM Name'],
     ]],
     ['Industries',[
       ['jps_ac','industry'],
-      ['100001','Manufacturing'],
-      ['100045','Retail'],
+      ['COMM-001','Manufacturing'],
+      ['COMM-002','Retail'],
     ]],
     ['Net_Generation',[
       ['year','month','rate_class','count','kwh'],
-      [2026,2,'ALL',0,320000000],
-      [2026,2,'Solar',245,185000000],
-      [2026,1,'ALL',0,315000000],
+      [_tY,_tM,'ALL',0,300000000],
+      [_tY,_tM,'Solar',200,150000000],
     ]],
     ['Net_Billers',[
       ['year','month','rate_class','count','kwh'],
-      [2026,2,'RT10',1250,475000],
-      [2026,2,'RT20',380,142000],
+      [_tY,_tM,'RT10',1000,400000],
+      [_tY,_tM,'RT20',300,100000],
     ]],
     ['EV_Accounts',[
       ['year','month','accounts','mwh'],
-      [2026,2,45,380],
+      [_tY,_tM,30,250],
     ]],
   ];
 
@@ -3594,13 +3617,27 @@ function exportChart(id){
 function buildCharts(){
   if(!window.Chart)return;
 
-  // Build trend chart data from CUSTOMERS arrays
+  // Build trend chart data from live sbActuals + sbBudget (real monthly seasonality)
   const trendAct26=Array(12).fill(null),trendBud26=Array(12).fill(null),trendAct25=Array(12).fill(null);
   if(CUSTOMERS.length){
     CUSTOMERS.forEach(c=>{for(let i=0;i<12;i++){if(c.m[i]){trendAct26[i]=(trendAct26[i]||0)+c.m[i];}}});
-    CUSTOMERS.forEach(c=>{for(let i=0;i<12;i++){trendAct25[i]=(trendAct25[i]||0)+(c.y25/12);}});// y25 = prior year
-    if(sbBudget.length){CUSTOMERS.forEach(c=>{for(let i=0;i<12;i++){trendBud26[i]=(trendBud26[i]||0)+(c.bud/12);}});}
   }
+  // Prior year — real monthly actuals, not flat spread
+  if(sbActuals.length){
+    for(let i=0;i<12;i++){
+      trendAct25[i]=sbActuals.filter(r=>Number(r[YEAR_COL])===curYear-1&&Number(r.month)===i+1).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+    }
+  }
+  // Budget — real monthly budget, not flat spread
+  if(sbBudget.length){
+    for(let i=0;i<12;i++){
+      trendBud26[i]=sbBudget.filter(r=>Number(r.year)===curYear&&Number(r.month)===i+1).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
+    }
+  }
+  // Update trend chart legend labels to match current year
+  const _tla=document.getElementById('trend_lbl_act');if(_tla)_tla.textContent=`${curYear} Actual`;
+  const _tlb=document.getElementById('trend_lbl_bud');if(_tlb)_tlb.textContent=`${curYear} Budget`;
+  const _tll=document.getElementById('trend_lbl_ly'); if(_tll)_tll.textContent=`${curYear-1} Actual`;
   mkChart('c_trend',{type:'bar',data:{
     labels:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
     datasets:[
@@ -3784,11 +3821,11 @@ function renderVariance(){
   const rows=segs.map(seg=>{
     const custs=CUSTOMERS.filter(c=>c.rate===seg);
     const mtd_act=custs.reduce((s,c)=>s+(c.m[curMonth-1]||0),0);
-    const mtd_bud=custs.reduce((s,c)=>s+(c.bud/12),0);
-    const mtd_ly=custs.reduce((s,c)=>s+(c.y25/12),0);
+    const mtd_bud=sbBudget.filter(r=>String(r.rate_class||r.rc||'')===seg&&Number(r.year)===curYear&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
+    const mtd_ly=sbActuals.filter(r=>String(r.rate_class||r.rc||'')===seg&&Number(r[YEAR_COL])===curYear-1&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
     const ytd_act=custs.reduce((s,c)=>s+c.m.slice(0,curMonth).reduce((a,v)=>a+(v||0),0),0);
-    const ytd_bud=custs.reduce((s,c)=>s+(c.bud*(curMonth/12)),0);
-    const ytd_ly=custs.reduce((s,c)=>s+(c.y25*(curMonth/12)),0);
+    const ytd_bud=sbBudget.filter(r=>String(r.rate_class||r.rc||'')===seg&&Number(r.year)===curYear&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
+    const ytd_ly=sbActuals.filter(r=>String(r.rate_class||r.rc||'')===seg&&Number(r[YEAR_COL])===curYear-1&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
     return{seg,mtd_act,mtd_bud,mtd_ly,ytd_act,ytd_bud,ytd_ly};
   });
   const tot=(k)=>rows.reduce((s,r)=>s+r[k],0);
@@ -5574,6 +5611,10 @@ function renderResIntelSection(id) {
       });
     }
 
+    // Update bracket count card subtitle
+    const _ricHdr=document.getElementById('ri_count_hdr');
+    if(_ricHdr)_ricHdr.textContent=`${curYear-1} vs ${curYear} YTD`;
+
     // --- Customer count by bracket: curYear vs curYear-1, from sbActuals ---
     destroyChart('c_ri_count');
     const cc = document.getElementById('c_ri_count');
@@ -5712,6 +5753,19 @@ function renderResIntelSection(id) {
   }
 
   if (id === 'ri_weather') {
+    // Populate CDD_DATA.months and kwh_raw from sbActuals (RT10 residential GWh per month)
+    // cdd_actual, cdd_normal, kwh_adj require a separate jps_cdd table — shown as zero until uploaded
+    {
+      const _wMN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const _trail6=Array.from({length:6},(_,i)=>{let m=curMonth-5+i,y=curYear;if(m<=0){m+=12;y--;}return{y,m,lbl:_wMN[m-1]};});
+      CDD_DATA.months    =_trail6.map(t=>t.lbl);
+      CDD_DATA.kwh_raw   =_trail6.map(t=>sbActuals.filter(r=>['RT10','RT20'].includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===t.y&&Number(r.month)===t.m).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6);
+      // cdd columns stay zero until jps_cdd table is uploaded
+      CDD_DATA.cdd_actual=Array(6).fill(0);
+      CDD_DATA.cdd_normal=Array(6).fill(0);
+      CDD_DATA.kwh_adj   =Array(6).fill(0);
+    }
+
     destroyChart('c_ri_weather');
     const cw = document.getElementById('c_ri_weather');
     if (cw) chartInstances['c_ri_weather'] = new Chart(cw, {
@@ -5889,21 +5943,40 @@ function renderROAdvanced() {
     options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:true, labels:{color:TC,font:{size:10}} } }, cutout:'55%' }
   });
 
-  // 12-month history chart
+  // 12-month history chart — labels and data derived from RISK_OPP.opened_at
   destroyChart('c_roa_hist');
   const ch = document.getElementById('c_roa_hist');
-  if (ch) chartInstances['c_roa_hist'] = new Chart(ch, {
-    type: 'bar',
-    data: {
-      labels: ['Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb'],
-      datasets: [
-        { label:'Risk items added',        data:[0,0,0,0,0,0,0,0,0,0,0,0], backgroundColor:'rgba(232,64,64,0.6)', borderRadius:2 },
-        { label:'Opportunity items added',  data:[0,0,0,0,0,0,0,0,0,0,0,0], backgroundColor:'rgba(39,196,133,0.6)', borderRadius:2 },
-        { label:'Items closed',            data:[0,0,0,0,0,0,0,0,0,0,0,0], backgroundColor:'rgba(55,138,221,0.5)', borderRadius:2 },
-      ]
-    },
-    options: { ...co(), scales:{ x:{ticks:{color:TC,font:{size:10}},grid:{color:CC}}, y:{ticks:{color:TC},grid:{color:CC}} } }
-  });
+  if (ch) {
+    const _mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    // Build trailing 12 months from curYear/curMonth
+    const trail12=Array.from({length:12},(_,i)=>{
+      let m=curMonth-11+i,y=curYear;if(m<=0){m+=12;y--;}return{y,m,lbl:_mn[m-1]};
+    });
+    const countRO=(typeFilter,closedFilter)=>trail12.map(({y,m})=>{
+      return RISK_OPP.filter(r=>{
+        if(closedFilter){
+          return r.status==='Closed';  // count closed items by their opened_at month for now
+        }
+        return r.type===typeFilter;
+      }).filter(r=>{
+        if(!r.opened_at)return false;
+        const d=new Date(r.opened_at);
+        return d.getFullYear()===y&&(d.getMonth()+1)===m;
+      }).length;
+    });
+    chartInstances['c_roa_hist'] = new Chart(ch, {
+      type: 'bar',
+      data: {
+        labels: trail12.map(t=>t.lbl),
+        datasets: [
+          { label:'Risk items added',       data:countRO('Risk',false),       backgroundColor:'rgba(232,64,64,0.6)', borderRadius:2 },
+          { label:'Opportunity items added', data:countRO('Opportunity',false), backgroundColor:'rgba(39,196,133,0.6)', borderRadius:2 },
+          { label:'Items closed',           data:countRO(null,true),           backgroundColor:'rgba(55,138,221,0.5)', borderRadius:2 },
+        ]
+      },
+      options: { ...co(), scales:{ x:{ticks:{color:TC,font:{size:10}},grid:{color:CC}}, y:{ticks:{color:TC},grid:{color:CC}} } }
+    });
+  }
 }
 
 /* =====================================================
@@ -6102,8 +6175,10 @@ function renderAdmComments(){
   const el=document.getElementById('adm_comments_body');if(!el)return;
   const ms=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const rows=[];
-  // Exec narratives
-  for(let y=2024;y<=2027;y++){
+  // Exec narratives — scan full range of years present in sbActuals, plus one year ahead
+  const _admMinY=sbActuals.length?Math.min(...sbActuals.map(r=>Number(r[YEAR_COL]||r.year||9999)).filter(y=>y<9000)):2024;
+  const _admMaxY=Math.max(curYear+1,new Date().getFullYear()+1);
+  for(let y=_admMinY;y<=_admMaxY;y++){
     for(let m=1;m<=12;m++){
       const txt=S.get(`es_narrative_${y}_${m}`,'');
       if(txt) rows.push({type:'Exec Narrative',period:`${ms[m-1]} ${y}`,text:txt,author:'--'});
@@ -6818,21 +6893,27 @@ function downloadTemplate(type){
             ['ACC002001','Sample Residential','RT10','St. Andrew','N/A','4200','4100']]},
     net_gen:{file:'net_gen_historical_template.csv',
       rows:[['year','month','source','mwh','notes'],
-            ['2026','1','JPS','448200','January 2026'],['2026','2','JPS','432100','February 2026'],
-            ['2026','1','IPP','52000','Wigton + Jamaica Broilers'],['2026','2','IPP','50400','']]},
+            [curYear,curMonth,'JPS','000000','Replace with actual MWh'],
+            [curYear,curMonth,'IPP','00000','Replace with actual MWh']]},
     net_billers:{file:'jps_net_billers_template.csv',
       rows:[['year','month','rate_class','count','avg_export_kwh','total_export_kwh'],
-            ['2026','2','RT10','425','312','132600'],['2026','2','RT20','43','580','24940']]},
+            [curYear,curMonth,'RT10','000','000','000000'],
+            [curYear,curMonth,'RT20','000','000','000000']]},
     ev_accounts:{file:'jps_ev_accounts_template.csv',
       rows:[['year','month','accounts','mwh','notes'],
-            ['2026','1','312','89','January 2026'],['2026','2','319','94','February 2026']]},
+            [curYear,curMonth,'000','000','Replace with actual values']]},
     rr_data:{file:'jps_rr_data_template.csv',
       rows:[['year','month','label','val_usd_000s','is_base'],
-            ['2026','2','Budget','18200','true'],['2026','2','Qty effect','-620','false'],
-            ['2026','2','Mix effect','85','false'],['2026','2','FX effect','-310','false'],
-            ['2026','2','Fuel cost','240','false'],['2026','2','IPP cost','-180','false'],
-            ['2026','2','Expected','17415','true'],['2026','2','Billing adj.','-95','false'],
-            ['2026','2','Other var.','-45','false'],['2026','2','Actual','17275','true']]},
+            [curYear,curMonth,'Budget','00000','true'],
+            [curYear,curMonth,'Qty effect','0','false'],
+            [curYear,curMonth,'Mix effect','0','false'],
+            [curYear,curMonth,'FX effect','0','false'],
+            [curYear,curMonth,'Fuel cost','0','false'],
+            [curYear,curMonth,'IPP cost','0','false'],
+            [curYear,curMonth,'Expected','00000','true'],
+            [curYear,curMonth,'Billing adj.','0','false'],
+            [curYear,curMonth,'Other var.','0','false'],
+            [curYear,curMonth,'Actual','00000','true']]},
   };
   const t=T[type];if(!t){toast('Unknown template type','err');return;}
   const csv=t.rows.map(r=>r.join(',')).join('\n');
@@ -7787,6 +7868,7 @@ async function syncSupabase(silent=false){
     // Build dashboard data synchronously (now fast with index-based SCORECARD computation)
     try{buildDashboardData();}catch(be){console.error('buildDashboardData error:',be);}
     renderSidebarFilters();
+    rebuildYearDropdowns();
     populateKamDropdowns();
 
     // Hydrate user-generated data from DB
@@ -7828,7 +7910,7 @@ const FC_MONTH_MAP={January:1,February:2,March:3,April:4,May:5,June:6,
 const FC_MONTHS=['January','February','March','April','May','June',
   'July','August','September','October','November','December'];
 const FC_CUST_RCS=['RT10','RT20','RT60']; // residential RCs → use cust method in Base
-const FC_BUD_YEAR=2026, FC_PY=2025;
+let FC_BUD_YEAR=curYear, FC_PY=curYear-1;
 
 function fcParseMonth(str){
   if(!str)return{year:0,month:0};
@@ -8049,6 +8131,10 @@ function renderLEActive(){
 }
 
 function renderLE(){
+  // Keep LE engine year references in sync with the current period selector
+  FC_BUD_YEAR=curYear; FC_PY=curYear-1;
+  const leHdr=document.getElementById('le_fy_hdr');
+  if(leHdr)leHdr.textContent=`FY ${curYear} — Actuals + LE Projection`;
   leEngine=fcGetData();
   renderLEActive();
   const ls=S.get('sb_last_sync',null);
@@ -9146,7 +9232,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.43';
+const APP_VERSION = '1.0.44';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
