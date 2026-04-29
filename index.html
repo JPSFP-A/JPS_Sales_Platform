@@ -718,8 +718,8 @@ document.getElementById('schema_stale_banner').style.display='none';
     <!-- === RESIDENTIAL === -->
     <div id="rs" class="sec">
       <div class="krow">
-        <div class="kpi kt"><div class="kl">MTD Residential</div><div class="kv" id="rs_kpi_mtd">--</div><div class="ks nt" id="rs_kpi_vs_bud">-- vs budget</div></div>
-        <div class="kpi kr"><div class="kl">Unlicensed DG</div><div class="kv" id="rs_kpi_udg">--</div><div class="ks nt">Sync DB to populate</div></div>
+        <div class="kpi kt"><div class="kl" id="rs_kpi_mtd_lbl">MTD Residential</div><div class="kv" id="rs_kpi_mtd">--</div><div class="ks nt" id="rs_kpi_vs_bud">-- vs budget</div></div>
+        <div class="kpi kr"><div class="kl">YTD Residential</div><div class="kv" id="rs_kpi_ytd">--</div><div class="ks nt" id="rs_kpi_ytd_sub">-- YoY</div></div>
         <div class="kpi kg"><div class="kl">Residential Customers</div><div class="kv" id="rs_kpi_cg">--</div><div class="ks nt" id="rs_kpi_cg_note">vs budget</div></div>
       </div>
       <div class="g2">
@@ -1806,12 +1806,11 @@ order by ordinal_position;</pre>
     <!-- === P5: RESIDENTIAL INTELLIGENCE === -->
     <div id="rb_res" class="sec">
       <div class="krow">
-        <div class="kpi kt"><div class="kl">Total customers</div><div class="kv">707K</div><div class="ks nt">Residential base</div></div>
-        <div class="kpi ka"><div class="kl">Net billers (RT10)</div><div class="kv">496</div><div class="ks dn">+42% since 2021</div></div>
-        <div class="kpi kr"><div class="kl">DG penetration</div><div class="kv">0.07%</div><div class="ks dn">Registered only</div></div>
-        <div class="kpi kr"><div class="kl">Unlicensed DG est.</div><div class="kv">7,811</div><div class="ks dn">Smart meter detected</div></div>
-        <div class="kpi kg"><div class="kl">Avg kWh (RT10)</div><div class="kv">151 kWh</div><div class="ks nt">vs 388 (net billers)</div></div>
-        <div class="kpi kp"><div class="kl">NB avg export</div><div class="kv">265.5 kWh</div><div class="ks nt">Residential avg</div></div>
+        <div class="kpi kt"><div class="kl">Residential Customers</div><div class="kv" id="ri_kpi_custs">--</div><div class="ks nt" id="ri_kpi_custs_sub">upload customer_count</div></div>
+        <div class="kpi ka"><div class="kl">Net Billers (RT10)</div><div class="kv" id="ri_kpi_nb10">--</div><div class="ks nt" id="ri_kpi_nb10_sub">from jps_net_billers</div></div>
+        <div class="kpi kr"><div class="kl">DG Penetration</div><div class="kv" id="ri_kpi_dg_pct">--</div><div class="ks nt" id="ri_kpi_dg_sub">net billers / customers</div></div>
+        <div class="kpi kg"><div class="kl">Avg kWh (RT10)</div><div class="kv" id="ri_kpi_avg_kwh">--</div><div class="ks nt" id="ri_kpi_avg_kwh_sub">per customer MTD</div></div>
+        <div class="kpi kp"><div class="kl">NB Avg Export</div><div class="kv" id="ri_kpi_nb_export">--</div><div class="ks nt" id="ri_kpi_nb_export_sub">kWh per net biller</div></div>
       </div>
 
       <div class="stabs" id="res_intel_tabs">
@@ -3981,33 +3980,62 @@ function renderCmComment(){
    RESIDENTIAL
 ========================================== */
 function renderRsKPIs(){
-  const resRCs = ['RT10','RT20'];
-  const resCusts = CUSTOMERS.filter(c=>resRCs.includes(c.rate));
-  const mIdx = curMonth-1;
-  const resMtd  = resCusts.reduce((s,c)=>s+(c.m[mIdx]||0),0);
-  const resBud  = resCusts.reduce((s,c)=>s+(c.bud/12),0);
-  const resMtdLY= resCusts.reduce((s,c)=>s+(c.y25/12),0);
-  const resYoY  = resMtdLY>0?((resMtd-resMtdLY)/resMtdLY*100):null;
-  const rsKv = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
-  rsKv('rs_kpi_mtd',    CUSTOMERS.length ? resMtd.toFixed(1)+' GWh' : '--');
-  rsKv('rs_kpi_vs_bud', CUSTOMERS.length ? (resBud>0?(resMtd>=resBud?'+':'')+((resMtd-resBud)/resBud*100).toFixed(1)+'% vs budget':'-- vs budget') : '-- vs budget');
-  // Net billers — total count from sbNetBillers for curYear, curMonth
-  const nbRows=sbNetBillers.filter(r=>Number(r.year)===curYear&&Number(r.month)===curMonth);
+  const resRCs=['RT10','RT20'];
+  const rsKv=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+
+  // Period months
+  const qStart=Math.floor((curMonth-1)/3)*3+1;
+  const periodMonths=curPeriod==='MTD'?[curMonth]
+    :curPeriod==='QTD'?Array.from({length:curMonth-qStart+1},(_,i)=>qStart+i)
+    :curPeriod==='YTD'?Array.from({length:curMonth},(_,i)=>i+1)
+    :Array.from({length:12},(_,i)=>i+1); // Annual
+
+  // Period kWh from sbActuals
+  const resAct=r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&periodMonths.includes(Number(r.month));
+  const resPY =r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===(curYear-1)&&periodMonths.includes(Number(r.month));
+  const resPeriodKwh=sbActuals.filter(resAct).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+  const resPyKwh    =sbActuals.filter(resPY ).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+  const resBudKwh   =sbBudget.filter(b=>resRCs.includes(String(b.rate_class||''))&&Number(b.year)===curYear&&periodMonths.includes(Number(b.month))).reduce((s,b)=>s+Number(b.kwh_budget||0),0)/1e6;
+
+  // YTD kWh (always 1..curMonth regardless of period selection)
+  const resYtdKwh=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+  const resYtdLy =sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===(curYear-1)&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+
+  const has=sbActuals.length>0;
+  const fmtG=v=>v>0?v.toFixed(1)+' GWh':'--';
+  const fmtVsBud=(a,b)=>b>0?(a>=b?'+':'')+((a-b)/b*100).toFixed(1)+'% vs budget':'-- vs budget';
+  const fmtYoy =(a,b)=>b>0?(a>=b?'+':'')+((a-b)/b*100).toFixed(1)+'% YoY':'-- YoY';
+
+  // Period tile (label updates with period)
+  const lbl=document.getElementById('rs_kpi_mtd_lbl');
+  if(lbl)lbl.textContent=curPeriod+' Residential';
+  rsKv('rs_kpi_mtd',   has?fmtG(resPeriodKwh):'--');
+  rsKv('rs_kpi_vs_bud',has?fmtVsBud(resPeriodKwh,resBudKwh):'-- vs budget');
+
+  // YTD tile
+  rsKv('rs_kpi_ytd',    has?fmtG(resYtdKwh):'--');
+  rsKv('rs_kpi_ytd_sub',has?fmtYoy(resYtdKwh,resYtdLy):'-- YoY');
+
+  // Net billers — aggregate across period months
+  const nbRows=sbNetBillers.filter(r=>Number(r.year)===curYear&&periodMonths.includes(Number(r.month)));
   const nbCount=nbRows.reduce((s,r)=>s+Number(r.count||0),0);
-  rsKv('rs_kpi_nb', nbCount>0 ? nbCount.toLocaleString() : (sbNetBillers.length?'0':'--'));
-  rsKv('rs_kpi_udg', '--'); // unlicensed DG — no DB table yet
-  // Residential customer count — sum customer_count from actuals across all buckets for RT10/RT20, curYear, curMonth
-  const resActCount=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.customer_count||0),0);
-  const resBudCount=sbBudget.filter(b=>(b.consumption_bucket||'').trim()&&Number(b.year)===curYear&&Number(b.month)===curMonth).reduce((s,b)=>s+Number(b.customer_count||0),0);
-  rsKv('rs_kpi_cg', resActCount>0 ? resActCount.toLocaleString() : '--');
+  rsKv('rs_kpi_nb',nbCount>0?nbCount.toLocaleString():(sbNetBillers.length?'0':'--'));
+
+  // Customer count — use latest month in period (headcount is a point-in-time figure)
+  const custMonth=periodMonths[periodMonths.length-1];
+  const resActCount=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===custMonth&&(r.consumption_bucket||'').trim()).reduce((s,r)=>s+Number(r.customer_count||0),0);
+  const resBudCount=sbBudget.filter(b=>(b.consumption_bucket||'').trim()&&Number(b.year)===curYear&&Number(b.month)===custMonth).reduce((s,b)=>s+Number(b.customer_count||0),0);
+  rsKv('rs_kpi_cg',resActCount>0?resActCount.toLocaleString():'--');
   const cgNote=document.getElementById('rs_kpi_cg_note');
   if(cgNote)cgNote.textContent=resBudCount>0?`vs ${resBudCount.toLocaleString()} budget`:(resActCount===0?'upload customer_count column':'residential headcount');
-  // RT10 net billers count
-  const nb10=sbNetBillers.filter(r=>Number(r.year)===curYear&&Number(r.month)===curMonth&&String(r.rate_class||'').toUpperCase()==='RT10');
-  rsKv('rs_kpi_rt10nb', nb10.length ? nb10.reduce((s,r)=>s+Number(r.count||0),0).toLocaleString() : (sbNetBillers.length?'0':'--'));
-  // Export kWh — sum kwh from net billers for curYear, curMonth
+
+  // RT10 net billers
+  const nb10=sbNetBillers.filter(r=>Number(r.year)===curYear&&periodMonths.includes(Number(r.month))&&String(r.rate_class||'').toUpperCase()==='RT10');
+  rsKv('rs_kpi_rt10nb',nb10.length?nb10.reduce((s,r)=>s+Number(r.count||0),0).toLocaleString():(sbNetBillers.length?'0':'--'));
+
+  // Export kWh
   const nbExpKwh=nbRows.reduce((s,r)=>s+Number(r.kwh||0),0);
-  rsKv('rs_kpi_nbexp', nbExpKwh>0 ? fmtK(nbExpKwh)+' kWh' : (sbNetBillers.length?'0 kWh':'--'));
+  rsKv('rs_kpi_nbexp',nbExpKwh>0?fmtK(nbExpKwh)+' kWh':(sbNetBillers.length?'0 kWh':'--'));
 }
 function renderRsPar(){
   const q=(document.getElementById('rs_q')?.value||'').toLowerCase();
@@ -5467,7 +5495,44 @@ function resTab(id, btn) {
 }
 
 function renderResIntel() {
+  renderResIntelKPIs();
   renderResIntelSection('ri_bracket');
+}
+
+function renderResIntelKPIs() {
+  const kv=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  const resRCs=['RT10','RT20'];
+
+  // Customer count — latest month available
+  const custMonth=curMonth;
+  const totalCusts=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===custMonth&&(r.consumption_bucket||'').trim()).reduce((s,r)=>s+Number(r.customer_count||0),0);
+  kv('ri_kpi_custs',totalCusts>0?totalCusts.toLocaleString():'--');
+  kv('ri_kpi_custs_sub',totalCusts>0?`${curYear} · month ${custMonth}`:'upload customer_count');
+
+  // Net billers RT10 — from sbNetBillers
+  const nb10Rows=sbNetBillers.filter(r=>Number(r.year)===curYear&&Number(r.month)===custMonth&&String(r.rate_class||'').toUpperCase()==='RT10');
+  const nb10Count=nb10Rows.reduce((s,r)=>s+Number(r.count||0),0);
+  const nb10Kwh=nb10Rows.reduce((s,r)=>s+Number(r.kwh||0),0);
+  kv('ri_kpi_nb10',nb10Count>0?nb10Count.toLocaleString():(sbNetBillers.length?'0':'--'));
+  kv('ri_kpi_nb10_sub',nb10Count>0?`${curYear} · month ${custMonth}`:'sync jps_net_billers');
+
+  // DG penetration — net billers / total customers
+  const dgPct=totalCusts>0&&nb10Count>0?((nb10Count/totalCusts)*100).toFixed(2)+'%':'--';
+  kv('ri_kpi_dg_pct',dgPct);
+  kv('ri_kpi_dg_sub',totalCusts>0&&nb10Count>0?'net billers / customers':'need both tables');
+
+  // Avg kWh per RT10 customer
+  const rt10ActRows=sbActuals.filter(r=>String(r.rate_class||'')==='RT10'&&Number(r[YEAR_COL])===curYear&&Number(r.month)===custMonth);
+  const rt10TotalKwh=rt10ActRows.reduce((s,r)=>s+Number(r.kwh||0),0);
+  const rt10TotalCusts=rt10ActRows.reduce((s,r)=>s+Number(r.customer_count||0),0);
+  const avgKwh=rt10TotalCusts>0?(rt10TotalKwh/rt10TotalCusts).toFixed(0)+' kWh':'--';
+  kv('ri_kpi_avg_kwh',avgKwh);
+  kv('ri_kpi_avg_kwh_sub',rt10TotalCusts>0?`per customer · ${curYear}-${String(custMonth).padStart(2,'0')}`:'upload RT10 actuals');
+
+  // NB avg export kWh per net biller
+  const nbAvgExport=nb10Count>0?(nb10Kwh/nb10Count).toFixed(1)+' kWh':'--';
+  kv('ri_kpi_nb_export',nbAvgExport);
+  kv('ri_kpi_nb_export_sub',nb10Count>0?`avg per net biller`:'sync jps_net_billers');
 }
 
 function renderResIntelSection(id) {
@@ -9011,7 +9076,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.40';
+const APP_VERSION = '1.0.41';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
