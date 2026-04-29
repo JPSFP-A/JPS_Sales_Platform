@@ -1446,24 +1446,27 @@ document.getElementById('schema_stale_banner').style.display='none';
             <button class="btn btn-o" onclick="copySchemaSql()">📋 Copy SQL</button>
           </div>
           <div id="schema_fix_banner" style="margin-bottom:12px;padding:14px 16px;background:rgba(232,64,64,.12);border:2px solid rgba(232,64,64,.5);border-radius:8px">
-            <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:8px">🚨 Still getting "column jps_actuals.year does not exist"?</div>
+            <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:8px">🚨 Why uploads fail — and how to fix it in 30 seconds</div>
             <div style="font-size:11px;color:var(--text2);line-height:1.8;margin-bottom:10px">
-              This error means Supabase's API layer has a <strong style="color:var(--text)">stale schema cache</strong> —
-              it still expects a column that has been renamed. JavaScript alone cannot fix this.<br>
-              You must run the Schema SQL below <strong style="color:var(--text)">once</strong> in the Supabase dashboard.
-              The SQL includes a <code>NOTIFY pgrst, 'reload schema'</code> statement that flushes the cache permanently.
+              The <strong style="color:var(--text)">jps_actuals</strong> table in your Supabase database was created by the FP&amp;A platform
+              and has the <strong style="color:var(--text)">wrong column structure</strong> for the Sales Platform.
+              It has columns like <code>Source</code>, <code>Rate category</code>, <code>Month</code> (as text) —
+              but the Sales Platform needs <code>year</code>, <code>month</code>, <code>jps_ac</code>, <code>kwh</code>, etc.<br><br>
+              Running the SQL below will <strong style="color:var(--text)">safely rename</strong> the old FP&amp;A table to
+              <code>jps_actuals_fpa</code> (preserved as backup) and <strong style="color:var(--text)">create a fresh</strong>
+              <code>jps_actuals</code> table with the correct Sales Platform schema.
+              After that, uploads from the template will work correctly.
             </div>
-            <div style="font-size:11px;color:var(--text);font-weight:600;margin-bottom:6px">Do this RIGHT NOW — takes 30 seconds:</div>
+            <div style="font-size:11px;color:var(--text);font-weight:600;margin-bottom:6px">Do this once — takes 30 seconds:</div>
             <ol style="font-size:11px;color:var(--text2);line-height:2;margin:0 0 0 18px;padding:0">
               <li>Click <strong style="color:var(--teal)">📋 Copy SQL</strong> above</li>
-              <li>Open <a href="https://supabase.com/dashboard" target="_blank" style="color:var(--teal)">supabase.com/dashboard</a> → your project</li>
-              <li>Go to <strong>SQL Editor → New Query</strong></li>
+              <li>Open <a href="https://supabase.com/dashboard" target="_blank" style="color:var(--teal)">supabase.com/dashboard</a> → your project → <strong>SQL Editor → New Query</strong></li>
               <li>Paste &amp; click <strong>Run</strong></li>
-              <li>Come back here and press <strong>Ctrl+Shift+R</strong> (hard refresh)</li>
+              <li>Come back here, press <strong>Ctrl+Shift+R</strong> (hard refresh), then upload your data</li>
             </ol>
           </div>
           <div style="margin-bottom:10px;font-size:11px;color:var(--text2)">
-            Safe to run at any time — idempotent. Creates missing tables, renames legacy columns, and reloads the Supabase schema cache.
+            Safe to run at any time — idempotent. Detects and fixes FP&amp;A table format conflicts, renames legacy columns, creates missing tables, and reloads the Supabase schema cache.
           </div>
           <pre id="adm_schema_sql" style="background:var(--navy3);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:10px;color:var(--teal);overflow-x:auto;white-space:pre-wrap;line-height:1.6"></pre>
         </div>
@@ -2162,65 +2165,91 @@ function toast(msg, type){
   },type==='err'?5000:3000);
 }
 
-/* ── Year-column auto-detection ──
-   FP&A platform originally created jps_actuals with 'cal_year'.
-   Sales platform schema uses 'year'. Probe the live DB each time to
-   avoid any mismatch. Called at sync start AND at upload start. */
+/* ── Year-column and schema-format auto-detection ──
+   Probes the live jps_actuals table to determine:
+     (a) whether it has the correct Sales Platform schema (year, month, jps_ac …)
+     (b) whether it has the FP&A raw-dump format (Source, Month-text, Rate category …)
+     (c) whether it has the legacy cal_year name instead of year
+   Shows the red schema_stale_banner if the table needs the SCHEMA_SQL run.
+   Called at sync start AND at upload start. */
 async function detectYearCol(sb){
   if(!sb) return;
 
   // Priority 0: call jps_normalize_schema() via RPC — once per session.
-  // This function (created by running SCHEMA_SQL) renames cal_year→year in the DB
-  // AND sends NOTIFY pgrst,'reload schema' to flush PostgREST's schema cache.
-  // Without this, a stale PostgREST cache can pass column-name validation even when
-  // the underlying PostgreSQL column name has changed — causing the 42703 error.
+  // This function handles BOTH cal_year rename AND FP&A raw-dump rename,
+  // then sends NOTIFY pgrst,'reload schema' to flush PostgREST's schema cache.
   if(!_schemaFixApplied){
     try{
-      const{error:rpcErr}=await sb.rpc('jps_normalize_schema');
+      const{data:rpcData,error:rpcErr}=await sb.rpc('jps_normalize_schema');
       if(!rpcErr){
         _schemaFixApplied=true;
-        YEAR_COL='year'; // after normalization the column is always 'year'
-        console.log('[JPS] jps_normalize_schema OK — YEAR_COL=year');
-        // Allow PostgREST ~500ms to finish its async schema reload before any queries
+        YEAR_COL='year';
+        console.log('[JPS] jps_normalize_schema OK:',rpcData,'— YEAR_COL=year');
         await new Promise(r=>setTimeout(r,500));
         return;
       }
-      // RPC not found (SCHEMA_SQL not yet run) — fall through to probe detection
     }catch(e){}
+    // RPC not found or failed — SCHEMA_SQL not yet run; fall through to probe
   }
 
   // Priority 1: check rows already in memory from a previous sync
   if(sbActuals && sbActuals.length > 0){
     const r = sbActuals[0];
-    if('cal_year' in r){ YEAR_COL='cal_year'; return; }
     if('year'     in r){ YEAR_COL='year';     return; }
+    if('cal_year' in r){ YEAR_COL='cal_year'; return; }
+    // FP&A raw-dump format — has "Source" not "year"
+    if('Source' in r){
+      YEAR_COL='year'; // default for uploads; banner will show
+      console.warn('[JPS] jps_actuals is FP&A raw-dump format — run SCHEMA_SQL');
+      _showSchemaBanner('fpa_raw');
+      return;
+    }
   }
 
-  // Priority 2: try each candidate column name — whichever gives no error wins
-  // Try cal_year first: FP&A-seeded DBs have cal_year; avoids any console noise
-  for(const col of ['cal_year','year']){
-    try{
-      const{error}=await sb.from('jps_actuals').select(col).limit(1);
-      if(!error){ YEAR_COL=col; console.log('[JPS] year col detected:',col); return; }
-    }catch(e){}
-  }
-
-  // Priority 3: read column list from information_schema
+  // Priority 2: probe column names directly
+  // Check for FP&A raw-dump: if "Source" column exists, the table has wrong format
   try{
-    const{data:cols}=await sb
-      .from('information_schema.columns')
-      .select('column_name')
-      .eq('table_schema','public')
-      .eq('table_name','jps_actuals');
-    if(cols&&cols.length){
-      const names=cols.map(c=>c.column_name);
-      console.log('[JPS] jps_actuals columns via info_schema:',names.join(','));
-      const found=['year','cal_year'].find(c=>names.includes(c));
-      if(found){ YEAR_COL=found; return; }
+    const{error:srcErr}=await sb.from('jps_actuals').select('Source').limit(1);
+    if(!srcErr){
+      // FP&A raw-dump confirmed — neither year nor cal_year exists
+      YEAR_COL='year'; // uploads will fail until SCHEMA_SQL is run
+      console.warn('[JPS] jps_actuals.Source detected — FP&A raw-dump format; run SCHEMA_SQL');
+      _showSchemaBanner('fpa_raw');
+      return;
     }
   }catch(e){}
 
-  console.warn('[JPS] Could not detect year column — using default:',YEAR_COL);
+  // Check for correct year column
+  for(const col of ['year','cal_year']){
+    try{
+      const{error}=await sb.from('jps_actuals').select(col).limit(1);
+      if(!error){
+        YEAR_COL=col;
+        console.log('[JPS] year col detected:',col);
+        if(col==='cal_year') _showSchemaBanner('cal_year');
+        return;
+      }
+    }catch(e){}
+  }
+
+  console.warn('[JPS] Could not detect year column — schema may need updating. Using default:',YEAR_COL);
+  _showSchemaBanner('unknown');
+}
+
+function _showSchemaBanner(reason){
+  if(_schemaFixApplied) return;
+  const b=document.getElementById('schema_stale_banner');
+  if(!b) return;
+  const msgEl=b.querySelector('span');
+  if(msgEl){
+    if(reason==='fpa_raw')
+      msgEl.textContent='🚨 jps_actuals has the wrong schema (FP&A format) — uploads will fail until you run the DB Schema SQL once.';
+    else if(reason==='cal_year')
+      msgEl.textContent='🚨 Supabase schema cache out of date — uploads & deletes will fail until you run the DB Schema SQL once.';
+    else
+      msgEl.textContent='🚨 jps_actuals schema issue detected — uploads will fail until you run the DB Schema SQL once.';
+  }
+  b.style.display='flex';
 }
 
 /* ── Permission helper ── */
@@ -3269,12 +3298,17 @@ async function loadExcel(input){
       buildCharts();
       renderSection(document.querySelector('.sec.on')?.id);
     }catch(err){
-      // Detect the specific stale-schema error and give actionable guidance
-      const isYearErr=/column.*\.year|column "year"/i.test(err.message);
-      if(isYearErr){
-        toast('⚠ Schema cache error — go to Admin → DB Schema and run the SQL (see red banner)','err');
-        if(stEl)stEl.textContent='Schema error — run DB Schema SQL first';
-        // Auto-open the admin → DB Schema tab so the user can act immediately
+      // Detect schema column errors — either stale PostgREST cache OR wrong table format
+      const isSchemaErr=/column.*does not exist|column "year"|column "jps_ac"|column "kwh"|PGRST204|42703/i.test(err.message);
+      if(isSchemaErr){
+        const isFpaRaw=/column "jps_ac"|column "kwh"|column "revenue_jmd"|column "month"/i.test(err.message);
+        const msg=isFpaRaw
+          ? '⚠ jps_actuals has the wrong schema (FP&A format). Run Admin → DB Schema SQL to recreate it.'
+          : '⚠ Schema error — run Admin → DB Schema SQL to fix jps_actuals and reload the cache.';
+        toast(msg,'err');
+        if(stEl)stEl.textContent='Schema error — run DB Schema SQL first (Admin → DB Schema)';
+        _showSchemaBanner(isFpaRaw?'fpa_raw':'cal_year');
+        // Auto-open Admin → DB Schema tab
         const admTab=document.querySelector('[data-adm="adm_schema"]');
         if(admTab) admTab.click();
         const secBtn=document.querySelector('[data-sec="adm"]');
@@ -6580,14 +6614,36 @@ create policy "Managers can write account master"
 -- STEP 3: Consumption actuals and budgets
 -- ══════════════════════════════════════════════════════════
 
--- ── MIGRATION: if jps_actuals already exists with cal_year (legacy FP&A column name),
---    rename it to year so all Sales Platform queries work correctly.
+-- ── MIGRATION: Replace FP&A raw-dump jps_actuals with Sales Platform account-level schema.
+--
+-- Root cause: the FP&A platform creates jps_actuals as a raw pivot-dump with columns:
+--   "Source" (segment), "Name", "Month" (text), "Rate category", "Updated Parish",
+--   "Sum of net_kwh_billed_consump"
+-- The Sales Platform needs per-account rows with:
+--   year (smallint), month (smallint), jps_ac (text), kwh, revenue_jmd, etc.
+-- Because CREATE TABLE IF NOT EXISTS skips when the FP&A table already exists,
+-- the old table was never replaced. This migration detects and fixes that.
+--
+-- Safe: jps_actuals_fpa preserves the original FP&A table structure for reference.
 do $$ begin
+  -- Case A: FP&A raw-dump format — has "Source" column (aggregate pivot, no account numbers)
   if exists (
     select 1 from information_schema.columns
-    where table_schema='public' and table_name='jps_actuals' and column_name='cal_year'
+    where table_schema='public' and table_name='jps_actuals'
+      and column_name='Source'
+  ) then
+    -- Drop any existing backup first so we can re-run safely
+    execute 'DROP TABLE IF EXISTS public.jps_actuals_fpa';
+    execute 'ALTER TABLE public.jps_actuals RENAME TO jps_actuals_fpa';
+    raise notice 'jps_actuals (FP&A raw-dump) renamed to jps_actuals_fpa — fresh Sales table will be created';
+  -- Case B: FP&A used cal_year instead of year (account-level but wrong column name)
+  elsif exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='jps_actuals'
+      and column_name='cal_year'
   ) then
     alter table public.jps_actuals rename column cal_year to year;
+    raise notice 'jps_actuals.cal_year renamed to year';
   end if;
 end $$;
 
@@ -6940,10 +6996,12 @@ create policy "Authenticated users can write notes"
 
 -- ══════════════════════════════════════════════════════════
 -- STEP 8: Schema normalisation function  ← RUN THIS
--- Renames cal_year → year wherever the FP&A platform left it,
--- then notifies PostgREST to reload its schema cache.
--- Safe to run repeatedly — completely idempotent.
--- The app calls this automatically via sb.rpc('jps_normalize_schema').
+-- Handles both known FP&A table format issues:
+--   1. FP&A raw-dump format (Source/Month-text/Rate category columns) → renames to jps_actuals_fpa
+--   2. FP&A cal_year column name → renames to year
+-- Then creates a fresh jps_actuals with correct Sales Platform schema if needed.
+-- Notifies PostgREST to flush its schema cache.
+-- Safe to run repeatedly — fully idempotent.
 -- ══════════════════════════════════════════════════════════
 create or replace function public.jps_normalize_schema()
 returns text
@@ -6954,29 +7012,64 @@ as $$
 declare
   actions text[] := '{}';
 begin
-  -- jps_actuals
+  -- ── jps_actuals: FP&A raw-dump format (has "Source" column) ──────────
   if exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='jps_actuals' and column_name='Source') then
+    execute 'DROP TABLE IF EXISTS public.jps_actuals_fpa';
+    execute 'ALTER TABLE public.jps_actuals RENAME TO jps_actuals_fpa';
+    -- Create correct Sales Platform schema
+    execute $t$
+      CREATE TABLE public.jps_actuals (
+        id                 bigserial primary key,
+        year               smallint not null,
+        month              smallint not null check (month between 1 and 12),
+        jps_ac             text not null,
+        name               text default '',
+        consumption_bucket text not null default '',
+        kwh                numeric(15,2) default 0,
+        revenue_jmd        numeric(15,2) default 0,
+        parish             text default '',
+        rate_class         text default '',
+        demand_kva         numeric(10,2) default 0,
+        created_at         timestamptz default now(),
+        unique (year, month, jps_ac, consumption_bucket)
+      )
+    $t$;
+    execute 'ALTER TABLE public.jps_actuals ENABLE ROW LEVEL SECURITY';
+    execute $t$
+      CREATE POLICY "Authenticated users can read actuals"
+        ON public.jps_actuals FOR SELECT USING (auth.role()='authenticated')
+    $t$;
+    execute $t$
+      CREATE POLICY "Managers can write actuals"
+        ON public.jps_actuals FOR ALL USING (
+          EXISTS (SELECT 1 FROM profiles WHERE id=auth.uid() AND sales_role IN ('admin','manager'))
+        )
+    $t$;
+    actions := array_append(actions, 'jps_actuals (FP&A raw-dump) → jps_actuals_fpa; fresh Sales table created');
+  -- ── jps_actuals: FP&A cal_year column name ───────────────────────────
+  elsif exists (select 1 from information_schema.columns
     where table_schema='public' and table_name='jps_actuals' and column_name='cal_year') then
     alter table public.jps_actuals rename column cal_year to year;
     actions := array_append(actions, 'jps_actuals.cal_year → year');
   end if;
-  -- jps_commercial_budget
+  -- ── jps_commercial_budget: cal_year → year ───────────────────────────
   if exists (select 1 from information_schema.columns
     where table_schema='public' and table_name='jps_commercial_budget' and column_name='cal_year') then
     alter table public.jps_commercial_budget rename column cal_year to year;
     actions := array_append(actions, 'jps_commercial_budget.cal_year → year');
   end if;
-  -- jps_residential_budget
+  -- ── jps_residential_budget: cal_year → year ──────────────────────────
   if exists (select 1 from information_schema.columns
     where table_schema='public' and table_name='jps_residential_budget' and column_name='cal_year') then
     alter table public.jps_residential_budget rename column cal_year to year;
     actions := array_append(actions, 'jps_residential_budget.cal_year → year');
   end if;
-  -- Reload PostgREST schema cache so renamed columns take effect immediately
+  -- Reload PostgREST schema cache
   notify pgrst, 'reload schema';
   return case when array_length(actions,1)>0
     then 'Fixed: ' || array_to_string(actions,'; ')
-    else 'ok'
+    else 'ok — schema already correct'
   end;
 end;
 $$;
@@ -7290,13 +7383,14 @@ async function syncSupabase(silent=false){
       log.push(`Actuals: jps_actuals (${actData.length} rows)`);
       // Re-confirm YEAR_COL from actual returned data (rows have the real column names)
       if(actData.length>0){
-        YEAR_COL=('cal_year' in actData[0])?'cal_year':'year';
-        console.log('[JPS] year col confirmed from data:',YEAR_COL);
-        // If column is cal_year and the normalize RPC hasn't fixed it yet,
-        // show the sticky schema-stale banner at the top of the app
-        if(YEAR_COL==='cal_year'&&!_schemaFixApplied){
-          const b=document.getElementById('schema_stale_banner');
-          if(b)b.style.display='flex';
+        // Determine year column from returned data
+        if('year' in actData[0])          YEAR_COL='year';
+        else if('cal_year' in actData[0]) YEAR_COL='cal_year';
+        else if('Source'   in actData[0]) YEAR_COL='year'; // FP&A raw-dump — uploads will fail
+        console.log('[JPS] year col confirmed from data:',YEAR_COL,'keys:',Object.keys(actData[0]).slice(0,6));
+        // Show banner if schema is not yet correct
+        if(!_schemaFixApplied&&(YEAR_COL==='cal_year'||'Source' in actData[0])){
+          _showSchemaBanner('Source' in actData[0]?'fpa_raw':'cal_year');
         }
       }
     }
@@ -8715,7 +8809,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.30';
+const APP_VERSION = '1.0.31';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
