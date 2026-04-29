@@ -746,8 +746,6 @@ document.getElementById('schema_stale_banner').style.display='none';
           <input class="si" placeholder="🔍 Search parish..." id="rs_q" oninput="renderRsPar()"/>
           <select class="sel" id="rs_bracket" onchange="renderRsPar()">
             <option value="">All brackets</option>
-            <option value="0-150">0–150 kWh</option><option value="150-300">150–300 kWh</option>
-            <option value="300-500">300–500 kWh</option><option value="500+">500+ kWh</option>
           </select>
           <span class="row-count" id="rs_count"></span>
         </div>
@@ -3463,9 +3461,9 @@ function dlTemplate(){
       // Residential: jps_ac=full account no, consumption_bucket filled, demand_kva=0, customer_count=billed customers in that bucket
       [2026,2,'100001-001','Carib Cement Co','',1900000,45000000,'St. Elizabeth','RT70',2500,1],
       [2026,2,'100001-002','Carib Cement Co - Warehouse','',820000,19500000,'St. Elizabeth','RT70',950,1],
-      [2026,2,'200045-001','','0-150',450000,28000000,'Kingston','RT10',0,8500],
-      [2026,2,'200045-001','','150-300',320000,22000000,'Kingston','RT10',0,3200],
-      [2026,2,'200046-001','','300-500',180000,14000000,'St. Andrew','RT20',0,840],
+      [2026,2,'200045-001','','<150',450000,28000000,'Kingston','RT10',0,8500],
+      [2026,2,'200045-001','','150>350',320000,22000000,'Kingston','RT10',0,3200],
+      [2026,2,'200046-001','','350>550',180000,14000000,'St. Andrew','RT20',0,840],
     ]],
     ['Budget',[
       ['year','month','jps_ac','name','rate_class','parish','consumption_bucket','kwh_budget','revenue_budget','demand_budget','customer_count'],
@@ -3473,11 +3471,11 @@ function dlTemplate(){
       [2026,2,'100001-001','Carib Cement Co','RT70','St. Elizabeth','',2100000,48000000,2600,1],
       [2026,2,'100001-002','Carib Cement Co - Warehouse','RT70','St. Elizabeth','',900000,21000000,1000,1],
       // Residential rows: jps_ac blank, consumption_bucket filled, customer_count = budgeted headcount in that bracket
-      [2026,2,'','','RT10','Kingston','0-150',12500000,0,0,8500],
-      [2026,2,'','','RT10','Kingston','150-300',9800000,0,0,3200],
-      [2026,2,'','','RT10','Kingston','300-500',4200000,0,0,840],
-      [2026,2,'','','RT10','St. Andrew','0-150',10100000,0,0,6800],
-      [2026,2,'','','RT20','Kingston','0-150',3200000,0,0,1200],
+      [2026,2,'','','RT10','Kingston','<150',12500000,0,0,8500],
+      [2026,2,'','','RT10','Kingston','150>350',9800000,0,0,3200],
+      [2026,2,'','','RT10','Kingston','350>550',4200000,0,0,840],
+      [2026,2,'','','RT10','St. Andrew','<150',10100000,0,0,6800],
+      [2026,2,'','','RT20','Kingston','<150',3200000,0,0,1200],
     ]],
     ['KAM',[
       ['jps_ac','kam'],
@@ -3686,18 +3684,14 @@ function buildCharts(){
       {label:'Forecast GWh',data:accFc,borderColor:'#f5a623',borderDash:[4,2],backgroundColor:'transparent',tension:.3,pointRadius:4},
     ]},options:co()});
 
-  // Consumption bracket distribution chart (residential)
-  const BKTS=['0-150','150-300','300-500','500+'];
-  const bktAct=[],bktPY=[];
-  if(sbActuals.length){
-    const normB=fcNormActuals(sbActuals);
-    BKTS.forEach(bk=>{
-      bktAct.push(normB.filter(r=>r.bucket===bk&&r.year===curYear&&r.month<=curMonth).reduce((s,r)=>s+r.kwh,0)/1e6);
-      bktPY.push(normB.filter(r=>r.bucket===bk&&r.year===curYear-1&&r.month<=curMonth).reduce((s,r)=>s+r.kwh,0)/1e6);
-    });
-  }else{BKTS.forEach(()=>{bktAct.push(0);bktPY.push(0);});}
+  // Consumption bracket distribution chart — buckets read dynamically from sbActuals
+  const resRCsB=['RT10','RT20'];
+  const resBktRows=sbActuals.filter(r=>resRCsB.includes(String(r.rate_class||''))&&(r.consumption_bucket||'').trim());
+  const BKTS=[...new Set(resBktRows.map(r=>(r.consumption_bucket||'').trim()))].filter(Boolean).sort();
+  const bktAct=BKTS.map(bk=>resBktRows.filter(r=>Number(r[YEAR_COL])===curYear&&Number(r.month)<=curMonth&&(r.consumption_bucket||'').trim()===bk).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6);
+  const bktPY =BKTS.map(bk=>resBktRows.filter(r=>Number(r[YEAR_COL])===(curYear-1)&&Number(r.month)<=curMonth&&(r.consumption_bucket||'').trim()===bk).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6);
   mkChart('c_bracket_dist',{type:'bar',data:{
-    labels:BKTS,
+    labels:BKTS.length?BKTS:['No data'],
     datasets:[
       {label:'Prior Year',data:bktPY,backgroundColor:'rgba(55,138,221,0.5)',borderColor:'#378ADD',borderWidth:1,borderRadius:3},
       {label:'Current Year',data:bktAct,backgroundColor:'rgba(0,194,168,0.6)',borderColor:'#00c2a8',borderWidth:1,borderRadius:3},
@@ -4039,9 +4033,16 @@ function renderRsKPIs(){
 }
 function renderRsPar(){
   const q=(document.getElementById('rs_q')?.value||'').toLowerCase();
-  const bracket=document.getElementById('rs_bracket')?.value||'';
-  const BRACKETS=['0-150','150-300','300-500','500+'];
   const resRCs=['RT10','RT20'];
+
+  // Populate bracket dropdown dynamically from actual data
+  const bktSel=document.getElementById('rs_bracket');
+  if(bktSel){
+    const liveBuckets=[...new Set(sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&(r.consumption_bucket||'').trim()).map(r=>(r.consumption_bucket||'').trim()))].filter(Boolean).sort();
+    const cur=bktSel.value;
+    bktSel.innerHTML='<option value="">All brackets</option>'+liveBuckets.map(b=>`<option value="${b}"${b===cur?' selected':''}>${b}</option>`).join('');
+  }
+  const bracket=bktSel?.value||'';
 
   // Pull residential actuals rows for current month and prior year same month
   const curAct=sbActuals.filter(r=>
@@ -4069,13 +4070,15 @@ function renderRsPar(){
   const currAgg=buildAgg(curAct);
   const prevAgg=buildAgg(prevAct);
 
-  // All parishes present in current actuals
+  // Buckets and parishes — derived entirely from actual data, no hardcoded lists
+  const allBuckets=[...new Set(curAct.map(r=>(r.consumption_bucket||'').trim()))].filter(Boolean).sort();
   const parishes=[...new Set(curAct.map(r=>String(r.parish||'')))].filter(Boolean).sort();
   const filtered=parishes.filter(p=>!q||p.toLowerCase().includes(q));
+  const bucketsToShow=bracket?[bracket]:allBuckets;
 
   let rows=[];
   filtered.forEach(p=>{
-    BRACKETS.filter(b=>!bracket||b===bracket).forEach(b=>{
+    bucketsToShow.forEach(b=>{
       const k=`${p}|||${b}`;
       const curr=currAgg[k]?.kwh||0;
       const prev=prevAgg[k]?.kwh||0;
@@ -4390,7 +4393,9 @@ function addROItem(){
 function initMrMonths(){
   const sel=document.getElementById('mr_month');if(!sel||sel.options.length>1)return;
   const ms=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  let h='';for(let y=2024;y<=2026;y++)for(let m=0;m<12;m++)h+=`<option value="${y}-${String(m+1).padStart(2,'0')}">${ms[m]} ${y}</option>`;
+  const minY=sbActuals.length?Math.min(...sbActuals.map(r=>Number(r[YEAR_COL]||r.year||2024))):2024;
+  const maxY=Math.max(curYear+1,new Date().getFullYear()+1);
+  let h='';for(let y=minY;y<=maxY;y++)for(let m=0;m<12;m++)h+=`<option value="${y}-${String(m+1).padStart(2,'0')}">${ms[m]} ${y}</option>`;
   sel.innerHTML=h;sel.value=mrPeriod;
 }
 function mrSetPeriod(){mrPeriod=document.getElementById('mr_month')?.value||mrPeriod;mrRepName=document.getElementById('mr_rep')?.value.trim()||'';renderMrSection();}
@@ -5861,7 +5866,9 @@ function renderReportBuilder() {
   if (sel && sel.options.length < 2) {
     const ms = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     let h = '';
-    for (let y = 2024; y <= 2026; y++)
+    const _minY=sbActuals.length?Math.min(...sbActuals.map(r=>Number(r[YEAR_COL]||r.year||2024))):2024;
+    const _maxY=Math.max(curYear+1,new Date().getFullYear()+1);
+    for (let y = _minY; y <= _maxY; y++)
       for (let m = 0; m < 12; m++)
         h += `<option value="${y}-${String(m+1).padStart(2,'0')}">${ms[m]} ${y}</option>`;
     sel.innerHTML = h;
@@ -9076,7 +9083,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.41';
+const APP_VERSION = '1.0.42';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
