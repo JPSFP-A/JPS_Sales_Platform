@@ -1434,12 +1434,25 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
           <div class="ch">🗄 Supabase Schema SQL
             <button class="btn btn-o" onclick="copySchemaSql()">📋 Copy SQL</button>
           </div>
-          <div style="margin-bottom:10px;padding:9px 13px;background:rgba(245,158,11,.1);border-left:3px solid var(--amber);border-radius:4px;font-size:11px;color:var(--text2)">
-            <strong style="color:var(--amber)">Getting "column does not exist" errors?</strong>
-            Run the full SQL below — it includes safe <code>RENAME COLUMN</code> migrations that fix legacy column names (e.g. <code>cal_year → year</code>) from the FP&amp;A platform. Safe to re-run at any time.
+          <div id="schema_fix_banner" style="margin-bottom:12px;padding:14px 16px;background:rgba(232,64,64,.12);border:2px solid rgba(232,64,64,.5);border-radius:8px">
+            <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:8px">🚨 Still getting "column jps_actuals.year does not exist"?</div>
+            <div style="font-size:11px;color:var(--text2);line-height:1.8;margin-bottom:10px">
+              This error means Supabase's API layer has a <strong style="color:var(--text)">stale schema cache</strong> —
+              it still expects a column that has been renamed. JavaScript alone cannot fix this.<br>
+              You must run the Schema SQL below <strong style="color:var(--text)">once</strong> in the Supabase dashboard.
+              The SQL includes a <code>NOTIFY pgrst, 'reload schema'</code> statement that flushes the cache permanently.
+            </div>
+            <div style="font-size:11px;color:var(--text);font-weight:600;margin-bottom:6px">Do this RIGHT NOW — takes 30 seconds:</div>
+            <ol style="font-size:11px;color:var(--text2);line-height:2;margin:0 0 0 18px;padding:0">
+              <li>Click <strong style="color:var(--teal)">📋 Copy SQL</strong> above</li>
+              <li>Open <a href="https://supabase.com/dashboard" target="_blank" style="color:var(--teal)">supabase.com/dashboard</a> → your project</li>
+              <li>Go to <strong>SQL Editor → New Query</strong></li>
+              <li>Paste &amp; click <strong>Run</strong></li>
+              <li>Come back here and press <strong>Ctrl+Shift+R</strong> (hard refresh)</li>
+            </ol>
           </div>
           <div style="margin-bottom:10px;font-size:11px;color:var(--text2)">
-            Run the SQL below in your Supabase dashboard → <strong>SQL Editor → New Query</strong>. Creates all tables and fixes any column naming mismatches from prior deployments.
+            Safe to run at any time — idempotent. Creates missing tables, renames legacy columns, and reloads the Supabase schema cache.
           </div>
           <pre id="adm_schema_sql" style="background:var(--navy3);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:10px;color:var(--teal);overflow-x:auto;white-space:pre-wrap;line-height:1.6"></pre>
         </div>
@@ -2157,6 +2170,8 @@ async function detectYearCol(sb){
         _schemaFixApplied=true;
         YEAR_COL='year'; // after normalization the column is always 'year'
         console.log('[JPS] jps_normalize_schema OK — YEAR_COL=year');
+        // Allow PostgREST ~500ms to finish its async schema reload before any queries
+        await new Promise(r=>setTimeout(r,500));
         return;
       }
       // RPC not found (SCHEMA_SQL not yet run) — fall through to probe detection
@@ -3237,8 +3252,20 @@ async function loadExcel(input){
       buildCharts();
       renderSection(document.querySelector('.sec.on')?.id);
     }catch(err){
-      toast('Upload failed: '+err.message,'err');
-      if(stEl)stEl.textContent='Upload error — see console';
+      // Detect the specific stale-schema error and give actionable guidance
+      const isYearErr=/column.*\.year|column "year"/i.test(err.message);
+      if(isYearErr){
+        toast('⚠ Schema cache error — go to Admin → DB Schema and run the SQL (see red banner)','err');
+        if(stEl)stEl.textContent='Schema error — run DB Schema SQL first';
+        // Auto-open the admin → DB Schema tab so the user can act immediately
+        const admTab=document.querySelector('[data-adm="adm_schema"]');
+        if(admTab) admTab.click();
+        const secBtn=document.querySelector('[data-sec="adm"]');
+        if(secBtn) secBtn.click();
+      } else {
+        toast('Upload failed: '+err.message,'err');
+        if(stEl)stEl.textContent='Upload error — see console';
+      }
       console.error('loadExcel:',err);
       input.value='';
     }
@@ -6923,7 +6950,15 @@ revoke all on function public.jps_normalize_schema() from public;
 grant execute on function public.jps_normalize_schema() to authenticated;
 
 -- ══════════════════════════════════════════════════════════
--- STEP 9: Create admin user (run AFTER signing up in the app)
+-- STEP 9: Force PostgREST schema cache reload  ← CRITICAL
+-- This bare NOTIFY fires immediately when you run this SQL.
+-- Without it, Supabase's API layer may still serve a stale
+-- column list even after columns have been renamed above.
+-- ══════════════════════════════════════════════════════════
+notify pgrst, 'reload schema';
+
+-- ══════════════════════════════════════════════════════════
+-- STEP 10: Create admin user (run AFTER signing up in the app)
 -- Replace the UUID with the one from auth.users for Jwilson@jpsco.com
 -- ══════════════════════════════════════════════════════════
 -- insert into public.profiles (id, name, email, role, sales_role, territory, is_active)
@@ -8640,7 +8675,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.28';
+const APP_VERSION = '1.0.29';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
