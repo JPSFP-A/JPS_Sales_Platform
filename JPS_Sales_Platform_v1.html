@@ -3277,12 +3277,30 @@ async function loadExcel(input){
               };
             }).filter(d=>(d.year||d.cal_year)>0&&d.month>0&&d.jps_ac);
 
-            if(rows.length){
+            // Aggregate duplicate rows — source files sometimes have multiple lines
+            // for the same (year,month,jps_ac,rate_class,parish,bucket). Sum numeric
+            // fields so the upsert only ever sends one row per constraint key.
+            const aggMap={};
+            rows.forEach(r=>{
+              const k=`${r[YEAR_COL]}|${r.month}|${r.jps_ac}|${r.rate_class}|${r.parish}|${r.consumption_bucket}`;
+              if(!aggMap[k]){aggMap[k]={...r};}
+              else{
+                aggMap[k].kwh          =(aggMap[k].kwh||0)          +Number(r.kwh||0);
+                aggMap[k].revenue_jmd  =(aggMap[k].revenue_jmd||0)  +Number(r.revenue_jmd||0);
+                aggMap[k].demand_kva   =Math.max(aggMap[k].demand_kva||0, Number(r.demand_kva||0));
+                aggMap[k].customer_count=(aggMap[k].customer_count||0)+Number(r.customer_count||0);
+              }
+            });
+            const uploadRows=Object.values(aggMap);
+            if(uploadRows.length<rows.length)
+              console.log(`[upload] aggregated ${rows.length} rows → ${uploadRows.length} unique keys`);
+
+            if(uploadRows.length){
               if(mode==='overwrite'){
                 // Delete existing rows using IDs from in-memory sbActuals.
                 // This bypasses the year/cal_year column entirely — works even with
                 // a stale PostgREST schema cache that doesn't know cal_year.
-                const periods=[...new Set(rows.map(r=>`${r[YEAR_COL]}-${r.month}`))];
+                const periods=[...new Set(uploadRows.map(r=>`${r[YEAR_COL]}-${r.month}`))];
                 for(const p of periods){
                   const[y,m]=p.split('-');
                   const yrN=Number(y),mN=Number(m);
@@ -3295,9 +3313,9 @@ async function loadExcel(input){
                   }
                 }
                 // Insert fresh
-                await batchUpsert('jps_actuals',rows,`${YEAR_COL},month,jps_ac,rate_class,parish,consumption_bucket`);
+                await batchUpsert('jps_actuals',uploadRows,`${YEAR_COL},month,jps_ac,rate_class,parish,consumption_bucket`);
               } else {
-                await batchUpsert('jps_actuals',rows,`${YEAR_COL},month,jps_ac,rate_class,parish,consumption_bucket`);
+                await batchUpsert('jps_actuals',uploadRows,`${YEAR_COL},month,jps_ac,rate_class,parish,consumption_bucket`);
               }
             }
           } else if(isBudget){
@@ -9232,7 +9250,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.45';
+const APP_VERSION = '1.0.46';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
