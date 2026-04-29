@@ -1331,7 +1331,7 @@ document.getElementById('schema_stale_banner').style.display='none';
           </div>
           <div style="margin-bottom:12px;padding:9px 13px;background:rgba(0,194,168,.07);border-left:3px solid var(--teal);border-radius:4px;font-size:11px;color:var(--text2)">
             Your Excel file can include any of these sheet names. Only sheets present in the file will be processed — all others are skipped.
-            The <strong>⬇ Download Full Template</strong> button generates a ready-to-use <code>JPS_Data_Template.xls</code> file (8 sheets, sample rows) instantly — no internet connection required.
+            The <strong>⬇ Download Full Template</strong> button generates a ready-to-use <code>JPS_Data_Template.xls</code> file (7 sheets, sample rows) instantly — no internet connection required.
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">
             <div class="card" style="background:var(--navy3)">
@@ -1439,13 +1439,13 @@ document.getElementById('schema_stale_banner').style.display='none';
 
         <!-- ── QUICK FIX: Minimal standalone SQL ── -->
         <div class="card" style="margin-bottom:12px;border-color:rgba(232,64,64,.5)">
-          <div class="ch" style="color:var(--red)">⚡ Quick Fix SQL — paste this FIRST into Supabase SQL Editor
+          <div class="ch" style="color:var(--red)">⚡ Quick Fix SQL — run this if uploads fail after a schema change
             <button class="btn btn-o" style="border-color:rgba(232,64,64,.4);color:var(--red)" onclick="navigator.clipboard?.writeText(document.getElementById('quick_fix_sql').textContent).then(()=>toast('Quick Fix SQL copied ✓','ok'))">📋 Copy</button>
           </div>
           <div style="font-size:11px;color:var(--text2);margin-bottom:8px;line-height:1.7">
-            This minimal SQL fixes the <strong style="color:var(--text)">jps_actuals schema mismatch</strong> that blocks all uploads.
-            The current <code>jps_actuals</code> table was created by the FP&amp;A platform with the wrong columns (<code>Source</code>, <code>Rate category</code>, <code>Month</code> as text, etc.).
-            This renames it to <code>jps_actuals_fpa</code> (safe backup) and creates the correct Sales Platform table.
+            Use this if <code>jps_actuals</code> was created by the FP&amp;A platform with wrong columns (<code>Source</code>, <code>Rate category</code>, <code>Month</code> as text).
+            Renames the old table to <code>jps_actuals_fpa</code> (safe backup) and creates the correct Sales Platform table with all current columns including <code>customer_count</code>.
+            Also adds any missing columns to an existing correct table.
           </div>
           <pre id="quick_fix_sql" style="background:var(--navy3);border:1px solid rgba(232,64,64,.3);border-radius:7px;padding:12px;font-size:10px;color:var(--teal);white-space:pre-wrap;line-height:1.6;margin:0">-- ══ JPS Sales Platform — Quick Fix ══════════════════════════════════
 -- Renames the FP&A raw-dump jps_actuals to jps_actuals_fpa (backup),
@@ -1478,6 +1478,7 @@ create table if not exists public.jps_actuals (
   parish             text default '',
   rate_class         text default '',
   demand_kva         numeric(10,2) default 0,
+  customer_count     int default 0,
   created_at         timestamptz default now(),
   unique (year, month, jps_ac, consumption_bucket)
 );
@@ -1513,28 +1514,23 @@ order by ordinal_position;</pre>
           <div class="ch">🗄 Full Supabase Schema SQL
             <button class="btn btn-o" onclick="copySchemaSql()">📋 Copy Full SQL</button>
           </div>
-          <div id="schema_fix_banner" style="margin-bottom:12px;padding:14px 16px;background:rgba(232,64,64,.12);border:2px solid rgba(232,64,64,.5);border-radius:8px">
-            <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:8px">🚨 Why uploads fail — and how to fix it in 30 seconds</div>
+          <div id="schema_fix_banner" style="margin-bottom:12px;padding:14px 16px;background:rgba(0,194,168,.07);border:1px solid rgba(0,194,168,.3);border-radius:8px">
+            <div style="font-size:13px;font-weight:700;color:var(--teal);margin-bottom:8px">ℹ️ First-time setup or new Supabase project</div>
             <div style="font-size:11px;color:var(--text2);line-height:1.8;margin-bottom:10px">
-              The <strong style="color:var(--text)">jps_actuals</strong> table in your Supabase database was created by the FP&amp;A platform
-              and has the <strong style="color:var(--text)">wrong column structure</strong> for the Sales Platform.
-              It has columns like <code>Source</code>, <code>Rate category</code>, <code>Month</code> (as text) —
-              but the Sales Platform needs <code>year</code>, <code>month</code>, <code>jps_ac</code>, <code>kwh</code>, etc.<br><br>
-              Running the SQL below will <strong style="color:var(--text)">safely rename</strong> the old FP&amp;A table to
-              <code>jps_actuals_fpa</code> (preserved as backup) and <strong style="color:var(--text)">create a fresh</strong>
-              <code>jps_actuals</code> table with the correct Sales Platform schema.
-              After that, uploads from the template will work correctly.
+              Run this SQL once in a fresh Supabase project to create all required tables.
+              It is <strong style="color:var(--text)">safe to re-run at any time</strong> — it uses <code>CREATE TABLE IF NOT EXISTS</code> and only alters tables when a migration is needed.<br><br>
+              Tables created: <code>jps_actuals</code> · <code>jps_budget</code> · <code>jps_period_locks</code> · <code>jps_kam</code> · <code>jps_industries</code> · <code>net_gen_historical</code> · <code>jps_net_billers</code> · <code>jps_ev_accounts</code> · <code>jps_account_master</code> · <code>profiles</code>
             </div>
-            <div style="font-size:11px;color:var(--text);font-weight:600;margin-bottom:6px">Do this once — takes 30 seconds:</div>
+            <div style="font-size:11px;color:var(--text);font-weight:600;margin-bottom:6px">How to run:</div>
             <ol style="font-size:11px;color:var(--text2);line-height:2;margin:0 0 0 18px;padding:0">
               <li>Click <strong style="color:var(--teal)">📋 Copy SQL</strong> above</li>
               <li>Open <a href="https://supabase.com/dashboard" target="_blank" style="color:var(--teal)">supabase.com/dashboard</a> → your project → <strong>SQL Editor → New Query</strong></li>
               <li>Paste &amp; click <strong>Run</strong></li>
-              <li>Come back here, press <strong>Ctrl+Shift+R</strong> (hard refresh), then upload your data</li>
+              <li>Come back here and press <strong>Ctrl+Shift+R</strong> (hard refresh) to re-sync</li>
             </ol>
           </div>
           <div style="margin-bottom:10px;font-size:11px;color:var(--text2)">
-            Safe to run at any time — idempotent. Detects and fixes FP&amp;A table format conflicts, renames legacy columns, creates missing tables, and reloads the Supabase schema cache.
+            Idempotent — safe to run multiple times. Detects FP&amp;A format conflicts, renames legacy columns, adds missing columns to existing tables, and reloads the PostgREST schema cache.
           </div>
           <pre id="adm_schema_sql" style="background:var(--navy3);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:10px;color:var(--teal);overflow-x:auto;white-space:pre-wrap;line-height:1.6"></pre>
         </div>
@@ -3520,7 +3516,7 @@ function dlTemplate(){
     a.download='JPS_Data_Template.xls';
     document.body.appendChild(a);a.click();document.body.removeChild(a);
     URL.revokeObjectURL(a.href);
-    toast('Template downloaded — JPS_Data_Template.xls (8 sheets)','ok');
+    toast('Template downloaded — JPS_Data_Template.xls (7 sheets)','ok');
   }catch(e){
     console.error('dlTemplate failed:',e);
     toast('Template download failed: '+e.message,'err');
@@ -6771,29 +6767,19 @@ do $$ begin
   end if;
 end $$;
 
--- Same migration for jps_commercial_budget if it has cal_year
+-- Same migration for jps_budget if it has cal_year
 do $$ begin
   if exists (
     select 1 from information_schema.columns
-    where table_schema='public' and table_name='jps_commercial_budget' and column_name='cal_year'
+    where table_schema='public' and table_name='jps_budget' and column_name='cal_year'
   ) then
-    alter table public.jps_commercial_budget rename column cal_year to year;
-  end if;
-end $$;
-
--- Same migration for jps_residential_budget if it has cal_year
-do $$ begin
-  if exists (
-    select 1 from information_schema.columns
-    where table_schema='public' and table_name='jps_residential_budget' and column_name='cal_year'
-  ) then
-    alter table public.jps_residential_budget rename column cal_year to year;
+    alter table public.jps_budget rename column cal_year to year;
   end if;
 end $$;
 
 -- Actuals: flat dump format — one row per account per month
--- Commercial rows: jps_ac + name + rate_class + kwh + revenue + demand; consumption_bucket = ''
--- Residential rows: jps_ac (can be a bucket-level ID) + rate_class + consumption_bucket + kwh + revenue; demand = 0
+-- Commercial rows: jps_ac + name + rate_class + kwh + revenue + demand; consumption_bucket = ''; customer_count = 1
+-- Residential rows: jps_ac + rate_class + consumption_bucket + kwh + revenue; demand = 0; customer_count = billed customers in bracket
 create table if not exists public.jps_actuals (
   id                 bigserial primary key,
   year               smallint not null,
@@ -6806,6 +6792,7 @@ create table if not exists public.jps_actuals (
   parish             text default '',
   rate_class         text default '',
   demand_kva         numeric(10,2) default 0,
+  customer_count     int default 0,             -- 1 for commercial rows; headcount for residential bucket rows
   created_at         timestamptz default now(),
   unique (year, month, jps_ac, consumption_bucket)
 );
@@ -6818,9 +6805,11 @@ create policy "Managers can write actuals"
     exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager'))
   );
 
--- Commercial Budget: account-level, flat format matching actuals columns
--- Unified budget table: commercial rows (jps_ac filled, consumption_bucket blank)
---                   + residential rows (jps_ac blank, consumption_bucket filled)
+-- ══════════════════════════════════════════════════════════
+-- STEP 3b: Unified Budget table
+-- Commercial rows: jps_ac filled, consumption_bucket blank, customer_count=1
+-- Residential rows: jps_ac blank, consumption_bucket filled, customer_count=headcount in bracket
+-- ══════════════════════════════════════════════════════════
 create table if not exists public.jps_budget (
   id                 bigserial primary key,
   year               smallint not null,
@@ -8936,7 +8925,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.36';
+const APP_VERSION = '1.0.37';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
