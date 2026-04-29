@@ -3280,23 +3280,26 @@ async function loadExcel(input){
               }
             }
           } else if(isBudget){
-            // First sheet looks like a budget — map Excel column names to DB schema
+            // First sheet looks like a budget — unified jps_budget schema (commercial + residential)
             const mappedBud=raw.map(r=>{
               let yr,mo;
               if(r.year&&r.month){yr=Number(r.year);mo=Number(r.month);}
               else{const p=fcParseMonth(r['Month']||'');yr=p.year;mo=p.month;}
               return{
-                [YEAR_COL]:yr, month:mo,
-                jps_ac:String(r.jps_ac||r['JPS A/c']||'').trim(),
-                name:(r.name||r['Name']||'').trim(),
-                rate_class:(r.rate_class||r['Rate category']||r['Rate Class']||'').trim(),
-                parish:(r.parish||r['Updated Parish']||'').trim(),
-                kwh_budget:Number(r.kwh_budget||r['Sum of Budget']||r['KWh Budget']||0),
-                revenue_budget:Number(r.revenue_budget||r['Revenue Budget']||0),
-                demand_budget:Number(r.demand_budget||r['Demand Budget']||0)
+                [YEAR_COL]:         yr,
+                month:              mo,
+                jps_ac:             String(r.jps_ac||r['JPS A/c']||'').trim(),
+                name:               (r.name||r['Name']||'').trim(),
+                rate_class:         (r.rate_class||r['Rate category']||r['Rate Class']||'').trim(),
+                parish:             (r.parish||r['Updated Parish']||r['Parish']||'').trim(),
+                consumption_bucket: (r.consumption_bucket||r['Consumption Bucket']||'').trim(),
+                kwh_budget:         Number(r.kwh_budget||r['Sum of Budget']||r['KWh Budget']||0),
+                revenue_budget:     Number(r.revenue_budget||r['Revenue Budget']||0),
+                demand_budget:      Number(r.demand_budget||r['Demand Budget']||0),
+                customer_count:     Number(r.customer_count||r['Customer Count']||0),
               };
-            }).filter(r=>(r[YEAR_COL]||0)>0&&r.month>0&&r.jps_ac);
-            if(mappedBud.length)await batchUpsert('jps_commercial_budget',mappedBud,`${YEAR_COL},month,jps_ac`);
+            }).filter(r=>(r[YEAR_COL]||0)>0&&r.month>0);
+            if(mappedBud.length)await batchUpsert('jps_budget',mappedBud,`${YEAR_COL},month,jps_ac,rate_class,parish,consumption_bucket`);
           }
         }
       }
@@ -7145,17 +7148,17 @@ begin
     alter table public.jps_actuals rename column cal_year to year;
     actions := array_append(actions, 'jps_actuals.cal_year → year');
   end if;
-  -- ── jps_commercial_budget: cal_year → year ───────────────────────────
+  -- ── jps_budget: cal_year → year ─────────────────────────────────────
   if exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='jps_commercial_budget' and column_name='cal_year') then
-    alter table public.jps_commercial_budget rename column cal_year to year;
-    actions := array_append(actions, 'jps_commercial_budget.cal_year → year');
+    where table_schema='public' and table_name='jps_budget' and column_name='cal_year') then
+    alter table public.jps_budget rename column cal_year to year;
+    actions := array_append(actions, 'jps_budget.cal_year → year');
   end if;
-  -- ── jps_residential_budget: cal_year → year ──────────────────────────
-  if exists (select 1 from information_schema.columns
-    where table_schema='public' and table_name='jps_residential_budget' and column_name='cal_year') then
-    alter table public.jps_residential_budget rename column cal_year to year;
-    actions := array_append(actions, 'jps_residential_budget.cal_year → year');
+  -- ── jps_budget: add customer_count if missing ─────────────────────────
+  if not exists (select 1 from information_schema.columns
+    where table_schema='public' and table_name='jps_budget' and column_name='customer_count') then
+    alter table public.jps_budget add column customer_count int default 0;
+    actions := array_append(actions, 'jps_budget: added customer_count');
   end if;
   -- Reload PostgREST schema cache
   notify pgrst, 'reload schema';
@@ -7641,7 +7644,7 @@ function fcNormActuals(rows){
     if((d.year||d.cal_year)&&d.month){year=Number(d.year||d.cal_year);month=Number(d.month);}
     else{const p=fcParseMonth(d['Month']||'');year=p.year;month=p.month;}
     return{
-      // acct is normalised to customer number so it aligns with jps_kam / jps_industries / jps_commercial_budget
+      // acct is normalised to customer number so it aligns with jps_kam / jps_industries / jps_budget
       acct:   _custNum(d.jps_ac||d['JPS A/c']||'Unassigned'),
       fullAc: String(d.jps_ac||d['JPS A/c']||'').trim(), // preserved for display / account-level detail
       name:   (d.name||d['Name']||'').trim(),
@@ -8925,7 +8928,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.37';
+const APP_VERSION = '1.0.38';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
