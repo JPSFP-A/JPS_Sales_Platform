@@ -537,6 +537,7 @@ document.getElementById('schema_stale_banner').style.display='none';
         <div class="kpi ka"><div class="kl">vs Budget (MTD)</div><div class="kv" id="kpi_vs_bud">--</div><div class="ks nt" id="kpi_bud_note">Upload data</div></div>
         <div class="kpi kr"><div class="kl">Defectors flagged</div><div class="kv" id="kpi_defectors">--</div><div class="ks dn">↓ &lt;80% YoY avg</div></div>
         <div class="kpi ka"><div class="kl">Forecast accuracy</div><div class="kv" id="kpi_accuracy">--</div><div class="ks nt">Last month MAPE</div></div>
+        <div class="kpi kp"><div class="kl">Total Customers</div><div class="kv" id="kpi_total_custs">--</div><div class="ks nt" id="kpi_total_custs_note">vs budget</div></div>
       </div>
 
       <div class="g21">
@@ -634,7 +635,7 @@ document.getElementById('schema_stale_banner').style.display='none';
         <div class="kpi ka"><div class="kl">RT50 Gap</div><div class="kv" id="kpi_rt50_gap">--</div><div class="ks nt" id="kpi_rt50_note">vs budget</div></div>
         <div class="kpi kg"><div class="kl">Top Industry</div><div class="kv" id="kpi_top_ind">--</div><div class="ks nt" id="kpi_top_ind_note">YTD leader</div></div>
         <div class="kpi kr"><div class="kl">Commercial Defectors</div><div class="kv" id="kpi_cm_def">--</div><div class="ks nt">flagged</div></div>
-        <div class="kpi kp"><div class="kl">Customers</div><div class="kv" id="kpi_cm_custs">--</div><div class="ks nt">commercial accounts</div></div>
+        <div class="kpi kp"><div class="kl">Customers</div><div class="kv" id="kpi_cm_custs">--</div><div class="ks nt" id="kpi_cm_custs_note">commercial accounts</div></div>
       </div>
 
       <!-- Customers panel (shown when Customers tab active) -->
@@ -719,7 +720,7 @@ document.getElementById('schema_stale_banner').style.display='none';
       <div class="krow">
         <div class="kpi kt"><div class="kl">MTD Residential</div><div class="kv" id="rs_kpi_mtd">--</div><div class="ks nt" id="rs_kpi_vs_bud">-- vs budget</div></div>
         <div class="kpi kr"><div class="kl">Unlicensed DG</div><div class="kv" id="rs_kpi_udg">--</div><div class="ks nt">Sync DB to populate</div></div>
-        <div class="kpi kg"><div class="kl">Customer Growth</div><div class="kv" id="rs_kpi_cg">--</div><div class="ks nt">vs prior year</div></div>
+        <div class="kpi kg"><div class="kl">Residential Customers</div><div class="kv" id="rs_kpi_cg">--</div><div class="ks nt" id="rs_kpi_cg_note">vs budget</div></div>
       </div>
       <div class="g2">
         <div class="card">
@@ -969,7 +970,7 @@ document.getElementById('schema_stale_banner').style.display='none';
             <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:6px">
               <thead><tr style="background:var(--navy3)"><th style="padding:5px 8px;text-align:left;color:var(--teal)">Sheet Name</th><th style="padding:5px 8px;text-align:left;color:var(--teal)">Purpose</th><th style="padding:5px 8px;text-align:left;color:var(--teal)">Key Columns</th></tr></thead>
               <tbody>
-                <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Actuals</td><td style="padding:5px 8px">Monthly billed kWh &amp; revenue by account. <em>jps_ac</em> = full account no. e.g. 100001-001</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">year, month, jps_ac, name, consumption_bucket, kwh, revenue_jmd, parish, rate_class, demand_kva</td></tr>
+                <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Actuals</td><td style="padding:5px 8px">Monthly billed kWh &amp; revenue. Commercial: <em>customer_count=1</em>, bucket blank. Residential: fill bucket + <em>customer_count</em> = billed customers in that bracket.</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">year, month, jps_ac, name, consumption_bucket, kwh, revenue_jmd, parish, rate_class, demand_kva, <strong>customer_count</strong></td></tr>
                 <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Budget</td><td style="padding:5px 8px">Commercial account-level budget. <em>jps_ac</em> = full account no. e.g. 100001-001</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">year, month, jps_ac, name, rate_class, parish, kwh_budget, revenue_budget, demand_budget</td></tr>
                 <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Residential_Budget</td><td style="padding:5px 8px">Residential aggregate budget</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">year, month, rate_class, parish, consumption_bucket, kwh_budget, customer_count_budget</td></tr>
                 <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">KAM</td><td style="padding:5px 8px">Account → KAM. <em>jps_ac</em> = customer number only e.g. 100001 (no dash)</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">jps_ac, kam</td></tr>
@@ -1336,8 +1337,8 @@ document.getElementById('schema_stale_banner').style.display='none';
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">
             <div class="card" style="background:var(--navy3)">
               <div style="font-weight:700;font-size:11px;margin-bottom:3px;color:var(--teal)">Actuals</div>
-              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">One row per account per month. <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">jps_ac</code> = full account number e.g. <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">100001-001</code>. Residential rows fill consumption_bucket; commercial leave it blank.</div>
-              <div style="font-size:9px;color:var(--text2);background:var(--navy2);border-radius:4px;padding:5px 7px;font-family:monospace">year · month · jps_ac · name · consumption_bucket · kwh · revenue_jmd · parish · rate_class · demand_kva</div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">One row per account/bucket per month. <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">jps_ac</code> = full account no. e.g. <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">100001-001</code>. Commercial: <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">customer_count=1</code>, bucket blank. Residential: fill bucket &amp; <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">customer_count</code> = billed customers in that bracket.</div>
+              <div style="font-size:9px;color:var(--text2);background:var(--navy2);border-radius:4px;padding:5px 7px;font-family:monospace">year · month · jps_ac · name · consumption_bucket · kwh · revenue_jmd · parish · rate_class · demand_kva · <strong style="color:var(--teal)">customer_count</strong></div>
             </div>
             <div class="card" style="background:var(--navy3)">
               <div style="font-weight:700;font-size:11px;margin-bottom:3px;color:var(--teal)">Budget</div>
@@ -3253,14 +3254,15 @@ async function loadExcel(input){
               }
               return{
                 [YEAR_COL]:year, month,
-                jps_ac:   String(d.jps_ac||d['JPS A/c']||'').trim(),
-                name:     (d.name||d['Name']||'').trim(),
+                jps_ac:         String(d.jps_ac||d['JPS A/c']||'').trim(),
+                name:           (d.name||d['Name']||'').trim(),
                 consumption_bucket:(d.consumption_bucket||'').trim(),
-                kwh:      Number(d.kwh||d['Sum of net_kwh_billed_consump']||0),
-                revenue_jmd:Number(d.revenue_jmd||d['Revenue (JMD)']||0),
-                parish:   (d.parish||d['Updated Parish']||d['Parish']||'').trim(),
-                rate_class:(d.rate_class||d['Rate category']||d['Rate Class']||'').trim(),
-                demand_kva:Number(d.demand_kva||d['Demand (kVA)']||d.demand||0),
+                kwh:            Number(d.kwh||d['Sum of net_kwh_billed_consump']||0),
+                revenue_jmd:    Number(d.revenue_jmd||d['Revenue (JMD)']||0),
+                parish:         (d.parish||d['Updated Parish']||d['Parish']||'').trim(),
+                rate_class:     (d.rate_class||d['Rate category']||d['Rate Class']||'').trim(),
+                demand_kva:     Number(d.demand_kva||d['Demand (kVA)']||d.demand||0),
+                customer_count: Number(d.customer_count||d['Customer Count']||d['customer count']||0),
               };
             }).filter(d=>(d.year||d.cal_year)>0&&d.month>0&&d.jps_ac);
 
@@ -3465,14 +3467,14 @@ function dlTemplate(){
 
   const SHEETS=[
     ['Actuals',[
-      ['year','month','jps_ac','name','consumption_bucket','kwh','revenue_jmd','parish','rate_class','demand_kva'],
-      // jps_ac = full account number (e.g. 100001-001). Commercial: leave consumption_bucket blank, fill demand_kva.
-      // Residential: fill consumption_bucket (0-150, 150-300, 300-500, 500+), set demand_kva=0.
-      [2026,2,'100001-001','Carib Cement Co','',1900000,45000000,'St. Elizabeth','RT70',2500],
-      [2026,2,'100001-002','Carib Cement Co - Warehouse','',820000,19500000,'St. Elizabeth','RT70',950],
-      [2026,2,'200045-001','','0-150',450000,28000000,'Kingston','RT10',0],
-      [2026,2,'200045-001','','150-300',320000,22000000,'Kingston','RT10',0],
-      [2026,2,'200046-001','','300-500',180000,14000000,'St. Andrew','RT20',0],
+      ['year','month','jps_ac','name','consumption_bucket','kwh','revenue_jmd','parish','rate_class','demand_kva','customer_count'],
+      // Commercial: jps_ac=full account no, consumption_bucket=blank, demand_kva filled, customer_count=1 per account
+      // Residential: jps_ac=full account no, consumption_bucket filled, demand_kva=0, customer_count=billed customers in that bucket
+      [2026,2,'100001-001','Carib Cement Co','',1900000,45000000,'St. Elizabeth','RT70',2500,1],
+      [2026,2,'100001-002','Carib Cement Co - Warehouse','',820000,19500000,'St. Elizabeth','RT70',950,1],
+      [2026,2,'200045-001','','0-150',450000,28000000,'Kingston','RT10',0,8500],
+      [2026,2,'200045-001','','150-300',320000,22000000,'Kingston','RT10',0,3200],
+      [2026,2,'200046-001','','300-500',180000,14000000,'St. Andrew','RT20',0,840],
     ]],
     ['Budget',[
       ['year','month','jps_ac','name','rate_class','parish','kwh_budget','revenue_budget','demand_budget'],
@@ -3996,14 +3998,17 @@ function renderRsKPIs(){
   const resBud  = resCusts.reduce((s,c)=>s+(c.bud/12),0);
   const resMtdLY= resCusts.reduce((s,c)=>s+(c.y25/12),0);
   const resYoY  = resMtdLY>0?((resMtd-resMtdLY)/resMtdLY*100):null;
-  const rsCusts = resCusts.length;
-  const rsCustsLY = rsCusts; // no prior-year customer count without separate table; show current
   const rsKv = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
   rsKv('rs_kpi_mtd',    CUSTOMERS.length ? resMtd.toFixed(1)+' GWh' : '--');
   rsKv('rs_kpi_vs_bud', CUSTOMERS.length ? (resBud>0?(resMtd>=resBud?'+':'')+((resMtd-resBud)/resBud*100).toFixed(1)+'% vs budget':'-- vs budget') : '-- vs budget');
   rsKv('rs_kpi_nb',     '--'); // requires net_gen_historical or separate DG table
   rsKv('rs_kpi_udg',    '--'); // requires unlicensed DG DB table
-  rsKv('rs_kpi_cg',     CUSTOMERS.length && resYoY!==null ? (resYoY>=0?'+':'')+resYoY.toFixed(1)+'% GWh YoY' : '--');
+  // Residential customer count — sum customer_count from actuals across all buckets for RT10/RT20, curYear, curMonth
+  const resActCount=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.customer_count||0),0);
+  const resBudCount=sbResBudget.length?sbResBudget.filter(b=>Number(b.year)===curYear&&Number(b.month)===curMonth).reduce((s,b)=>s+Number(b.customer_count_budget||0),0):0;
+  rsKv('rs_kpi_cg', resActCount>0 ? resActCount.toLocaleString() : '--');
+  const cgNote=document.getElementById('rs_kpi_cg_note');
+  if(cgNote)cgNote.textContent=resBudCount>0?`vs ${resBudCount.toLocaleString()} budget`:(resActCount===0?'upload customer_count column':'residential headcount');
   rsKv('rs_kpi_rt10nb', '--'); // requires net biller table
   rsKv('rs_kpi_nbexp',  '--'); // requires export kWh table
 }
@@ -4544,6 +4549,16 @@ function renderOverviewKPIs(){
   sv('kpi_nb_note','Registered DG');
   sv('kpi_ytd_yoy',(vYoY>=0?'+':'')+vYoY.toFixed(1)+'% YoY');
   sc('kpi_ytd_yoy',vYoY>=0?'tbadge tbg':'tbadge tbr');
+  // ── Total customer count: commercial (distinct accounts) + residential (sum customer_count) ──
+  const commRCs=new Set(['RT40','RT50','RT60','RT70','BU']);
+  const commActCount=CUSTOMERS.filter(c=>commRCs.has(c.rate)).length;
+  const resActCount=sbActuals.filter(r=>['RT10','RT20'].includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.customer_count||0),0);
+  const commBudCount=sbBudget.length?new Set(sbBudget.filter(b=>Number(b[YEAR_COL]||b.year||b.cal_year)===curYear).map(b=>_custNum(String(b.jps_ac||'')))).size:0;
+  const resBudCount=sbResBudget.length?sbResBudget.filter(b=>Number(b.year)===curYear&&Number(b.month)===curMonth).reduce((s,b)=>s+Number(b.customer_count_budget||0),0):0;
+  const totalAct=commActCount+(resActCount||0);
+  const totalBud=commBudCount+(resBudCount||0);
+  sv('kpi_total_custs',totalAct>0?totalAct.toLocaleString():'--');
+  sv('kpi_total_custs_note',totalBud>0?`vs ${totalBud.toLocaleString()} budget`:(resActCount===0&&commActCount>0?'residential: upload customer_count':'vs budget'));
   // Period Mix mini stats
   const resBudPct=resBud>0?pct(resMtd,resBud):0;
   const comBudPct=comBud>0?pct(comMtd,comBud):0;
@@ -4583,7 +4598,11 @@ function renderCommercialKPIs(){
   sv('kpi_top_ind',topInd?topInd.name.substring(0,12):'--');
   sv('kpi_top_ind_note',topInd?'#1 YTD industry':'No data');
   sv('kpi_cm_def',defs.length);
-  sv('kpi_cm_custs',comCusts.length);
+  sv('kpi_cm_custs',comCusts.length.toLocaleString());
+  // Budget account count — distinct customer numbers in commercial budget for curYear
+  const commBudAccts=sbBudget.length?new Set(sbBudget.filter(b=>Number(b[YEAR_COL]||b.year||b.cal_year)===curYear).map(b=>_custNum(String(b.jps_ac||'')))).size:0;
+  const cmCustsNote=document.getElementById('kpi_cm_custs_note');
+  if(cmCustsNote)cmCustsNote.textContent=commBudAccts?`vs ${commBudAccts.toLocaleString()} budget`:'commercial accounts';
 }
 
 /* ==========================================
@@ -7671,9 +7690,10 @@ function fcNormActuals(rows){
       parish: (d.parish||d['Updated Parish']||'').trim(),
       industry:(d.industry||d['Industry']||'').trim(),
       bucket: (d.consumption_bucket||'').trim(),
-      kwh:    fcVal(d.kwh||d['Sum of net_kwh_billed_consump']),
-      revenue:fcVal(d.revenue_jmd||0),
-      demand: fcVal(d.demand_kva||0),
+      kwh:      fcVal(d.kwh||d['Sum of net_kwh_billed_consump']),
+      revenue:  fcVal(d.revenue_jmd||0),
+      demand:   fcVal(d.demand_kva||0),
+      custCount:Number(d.customer_count||d['Customer Count']||0),
       year,month
     };
   }).filter(d=>d.year>0&&d.month>0&&d.kwh>0);
@@ -8946,7 +8966,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.34';
+const APP_VERSION = '1.0.35';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
