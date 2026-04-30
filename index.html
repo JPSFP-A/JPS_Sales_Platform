@@ -3722,13 +3722,18 @@ function buildCharts(){
   mkChart('c_donut',{type:'doughnut',data:{labels:donutRCs,datasets:[{data:donutData,backgroundColor:['#00c2a8','#00957f','#378ADD','#185FA5','#f5a623','#5a7a96'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},cutout:'60%'}});
 
   const cm1RCs=['RT40','RT50','RT70','RT60-ST'];
-  const cm1_25=cm1RCs.map(rc=>CUSTOMERS.filter(c=>c.rate===rc).reduce((s,c)=>s+c.y25,0));
-  const cm1_26=cm1RCs.map(rc=>CUSTOMERS.filter(c=>c.rate===rc).reduce((s,c)=>s+c.y26,0));
+  // YTD comparison — sum months 1..curMonth for BOTH years so bars represent equal time periods
+  const _cm1Ytd=(yr)=>cm1RCs.map(rc=>sbActuals.filter(r=>String(r.rate_class||'')==rc&&Number(r[YEAR_COL])===yr&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6);
+  const cm1_25=_cm1Ytd(curYear-1);
+  const cm1_26=_cm1Ytd(curYear);
+  // Update HTML legend to show actual years
+  const _cm1Leg=document.getElementById('cm1_leg');
+  if(_cm1Leg)_cm1Leg.innerHTML=`<span><span class="ld" style="background:#378ADD"></span>${curYear-1} YTD</span><span><span class="ld" style="background:#00c2a8"></span>${curYear} YTD</span>`;
   mkChart('c_cm1',{type:'bar',data:{
     labels:cm1RCs,
     datasets:[
-      {label:String(curYear-1),data:cm1_25,backgroundColor:'rgba(55,138,221,0.5)',borderColor:'#378ADD',borderWidth:1,borderRadius:2},
-      {label:String(curYear),data:cm1_26,backgroundColor:'rgba(0,194,168,0.5)',borderColor:'#00c2a8',borderWidth:1,borderRadius:2},
+      {label:`${curYear-1} YTD`,data:cm1_25,backgroundColor:'rgba(55,138,221,0.5)',borderColor:'#378ADD',borderWidth:1,borderRadius:2},
+      {label:`${curYear} YTD`,data:cm1_26,backgroundColor:'rgba(0,194,168,0.5)',borderColor:'#00c2a8',borderWidth:1,borderRadius:2},
     ]},options:{...co(),onClick:(e,el)=>{
       if(el.length){
         const rcs=['RT40','RT50','RT70'];
@@ -3741,11 +3746,14 @@ function buildCharts(){
       }
     }}});
 
+  // Industry YTD — rebuild from sbActuals so comparison matches same months both years
+  const _indYtd=(yr)=>{const m={};sbActuals.filter(r=>Number(r[YEAR_COL])===yr&&Number(r.month)<=curMonth).forEach(r=>{const k=(r.industry||'Other');m[k]=(m[k]||0)+Number(r.kwh||0)/1e6;});return m;};
+  const _iy25=_indYtd(curYear-1),_iy26=_indYtd(curYear);
   mkChart('c_ind',{type:'bar',data:{
     labels:INDUSTRIES.map(i=>i.name.substring(0,14)),
     datasets:[
-      {label:String(curYear-1),data:INDUSTRIES.map(i=>i.y25),backgroundColor:'rgba(55,138,221,0.45)',borderRadius:2},
-      {label:String(curYear),data:INDUSTRIES.map(i=>i.y26),backgroundColor:'rgba(0,194,168,0.45)',borderRadius:2},
+      {label:`${curYear-1} YTD`,data:INDUSTRIES.map(i=>_iy25[i.name]||0),backgroundColor:'rgba(55,138,221,0.45)',borderRadius:2},
+      {label:`${curYear} YTD`,data:INDUSTRIES.map(i=>_iy26[i.name]||0),backgroundColor:'rgba(0,194,168,0.45)',borderRadius:2},
     ]},options:{...co(),indexAxis:'y',scales:{y:{ticks:{color:TC,font:{size:9}},grid:{color:CC}},x:{ticks:{color:TC},grid:{color:CC}}}}});
 
   // EV + brackets charts block
@@ -9548,7 +9556,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.74';
+const APP_VERSION = '1.0.75';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
