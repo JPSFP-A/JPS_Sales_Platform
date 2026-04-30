@@ -479,16 +479,16 @@ document.getElementById('schema_stale_banner').style.display='none';
     <button class="pbtn" onclick="setPeriod('QTD',this)">QTD</button>
     <button class="pbtn" onclick="setPeriod('YTD',this)">YTD</button>
     <button class="pbtn" onclick="setPeriod('Annual',this)">Annual</button>
-    <select class="psel" id="selYear" onchange="curYear=Number(this.value);document.getElementById('periodLabel').textContent=curPeriod+' · '+curYear;renderSection(document.querySelector('.sec.on')?.id)">
+    <select class="psel" id="selYear" onchange="curYear=Number(this.value);document.getElementById('periodLabel').textContent=curPeriod+' · '+curYear;rebuildYearDropdowns();renderSection(document.querySelector('.sec.on')?.id)">
       <option value="2026">2026</option><option value="2025">2025</option>
     </select>
     <select class="psel" id="selMonth" onchange="curMonth=Number(this.value);renderSection(document.querySelector('.sec.on')?.id)">
-      <option value="2">Feb</option><option value="1">Jan</option>
-      <option value="12">Dec</option><option value="11">Nov</option>
-      <option value="10">Oct</option><option value="9">Sep</option>
-      <option value="8">Aug</option><option value="7">Jul</option>
-      <option value="6">Jun</option><option value="5">May</option>
-      <option value="4">Apr</option><option value="3">Mar</option>
+      <option value="1">Jan</option><option value="2">Feb</option>
+      <option value="3">Mar</option><option value="4">Apr</option>
+      <option value="5">May</option><option value="6">Jun</option>
+      <option value="7">Jul</option><option value="8">Aug</option>
+      <option value="9">Sep</option><option value="10">Oct</option>
+      <option value="11">Nov</option><option value="12">Dec</option>
     </select>
     <select class="psel" id="selQtr" style="display:none" onchange="curQtr=Number(this.value);renderSection(document.querySelector('.sec.on')?.id)">
       <option value="1">Q1</option><option value="2">Q2</option>
@@ -3133,6 +3133,19 @@ function rebuildYearDropdowns(){
     const curV=av.value;
     av.innerHTML='<option value="">All years</option>'+years.map(y=>`<option value="${y}">${y}</option>`).join('');
     if(curV)av.value=curV;
+  }
+  // Month dropdown — show only months with data for curYear, in Jan-Dec order, default to last available month
+  const sm=document.getElementById('selMonth');
+  if(sm){
+    const activeYear=curYear||years[0];
+    const availMonths=[...new Set(
+      sbActuals.filter(r=>Number(r[YEAR_COL]||r.year||0)===activeYear)
+               .map(r=>Number(r.month)).filter(m=>m>=1&&m<=12)
+    )].sort((a,b)=>a-b);
+    const lastMonth=availMonths.length?availMonths[availMonths.length-1]:curMonth;
+    sm.innerHTML=availMonths.map(m=>`<option value="${m}">${MN[m-1]}</option>`).join('');
+    sm.value=String(lastMonth);
+    curMonth=lastMonth;
   }
 }
 
@@ -9287,7 +9300,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.50';
+const APP_VERSION = '1.0.51';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
