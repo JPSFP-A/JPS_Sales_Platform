@@ -724,18 +724,24 @@ document.getElementById('schema_stale_banner').style.display='none';
       </div>
       <div class="g2">
         <div class="card">
-          <div class="ch">Consumption Bracket Distribution <span>kWh by bracket vs prior year</span>
+          <div class="ch">RT10 Bracket Distribution <span id="bkt_rt10_lbl">kWh by bracket vs prior year</span>
             <div style="display:flex;gap:6px">
-              <button class="btn btn-o" onclick="printChart('c_bracket_dist')">🖨 Print</button>
-              <button class="btn btn-o" onclick="exportChart('c_bracket_dist')">💾 Save</button>
+              <button class="btn btn-o" onclick="printChart('c_bracket_rt10')">🖨 Print</button>
+              <button class="btn btn-o" onclick="exportChart('c_bracket_rt10')">💾 Save</button>
             </div>
           </div>
           <div class="leg"><span><span class="ld" style="background:#378ADD"></span>Prior Year</span><span><span class="ld" style="background:#00c2a8"></span>Current Year</span></div>
-          <div class="cw" style="height:200px"><canvas id="c_bracket_dist"></canvas></div>
+          <div class="cw" style="height:200px"><canvas id="c_bracket_rt10"></canvas></div>
         </div>
         <div class="card">
-          <div class="ch">EV Sales &amp; Accounts <span id="ev_period_lbl">sync DB to populate</span></div>
-          <div class="cw" style="height:200px"><canvas id="c_ev"></canvas></div>
+          <div class="ch">RT20 Bracket Distribution <span id="bkt_rt20_lbl">kWh by bracket vs prior year</span>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-o" onclick="printChart('c_bracket_rt20')">🖨 Print</button>
+              <button class="btn btn-o" onclick="exportChart('c_bracket_rt20')">💾 Save</button>
+            </div>
+          </div>
+          <div class="leg"><span><span class="ld" style="background:#378ADD"></span>Prior Year</span><span><span class="ld" style="background:#00c2a8"></span>Current Year</span></div>
+          <div class="cw" style="height:200px"><canvas id="c_bracket_rt20"></canvas></div>
         </div>
       </div>
       <div class="card">
@@ -2773,7 +2779,7 @@ const FC_SEGS=[
   {seg:'RT40',lbl:'RT40 Commercial',base:0},
   {seg:'RT50',lbl:'RT50 Commercial',base:0},
   {seg:'RT70',lbl:'RT70 Large Com.',base:0},
-  {seg:'ST',lbl:'Street Lights',base:0},
+  {seg:'RT60-ST',lbl:'Street Lights',base:0},
 ];
 
 /* ==========================================
@@ -3190,7 +3196,7 @@ function renderSection(id){
       renderCmCust();renderCmIndTbl();
     }
   }
-  else if(id==='rs'){renderRsKPIs();renderRsPar();}
+  else if(id==='rs'){renderRsKPIs();renderRsPar();try{mkBracketCharts();}catch(e){}}
   else if(id==='df'){renderDefectors();renderDefKPIs();}
   else if(id==='fc'){renderFcEntry();renderMacroGrid();renderFcKPIs();}
   else if(id==='ro'){filterRO();updateROAutoFlags();}
@@ -3632,6 +3638,38 @@ function exportChart(id){
   a.download=id+'_chart.png';a.click();
 }
 
+function mkBracketCharts(){
+  if(!sbActuals.length)return;
+  const qStart=Math.floor((curMonth-1)/3)*3+1;
+  const pMonths=curPeriod==='MTD'?[curMonth]
+    :curPeriod==='QTD'?Array.from({length:curMonth-qStart+1},(_,i)=>qStart+i)
+    :curPeriod==='YTD'?Array.from({length:curMonth},(_,i)=>i+1)
+    :Array.from({length:12},(_,i)=>i+1);
+  const periodLbl=curPeriod+' '+curYear;
+  const setLbl=(id,t)=>{const e=document.getElementById(id);if(e)e.textContent=t;};
+  setLbl('bkt_rt10_lbl',periodLbl+' vs '+(curYear-1));
+  setLbl('bkt_rt20_lbl',periodLbl+' vs '+(curYear-1));
+  const TC=getComputedStyle(document.documentElement).getPropertyValue('--text2').trim()||'#aaa';
+  const CC=getComputedStyle(document.documentElement).getPropertyValue('--border').trim()||'rgba(255,255,255,0.07)';
+  const co=()=>({responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:TC,font:{size:10}},grid:{color:CC}},y:{ticks:{color:TC,font:{size:10}},grid:{color:CC}}}});
+  const mkBktChart=(canvasId,rc)=>{
+    const bRows=sbActuals.filter(r=>String(r.rate_class||'')===rc&&(r.consumption_bucket||'').trim());
+    const BKTS=[...new Set(bRows.map(r=>(r.consumption_bucket||'').trim()))].filter(Boolean).sort();
+    const act=BKTS.map(bk=>bRows.filter(r=>Number(r[YEAR_COL])===curYear&&pMonths.includes(Number(r.month))&&(r.consumption_bucket||'').trim()===bk).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6);
+    const py =BKTS.map(bk=>bRows.filter(r=>Number(r[YEAR_COL])===(curYear-1)&&pMonths.includes(Number(r.month))&&(r.consumption_bucket||'').trim()===bk).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6);
+    destroyChart(canvasId);
+    const cb=document.getElementById(canvasId);if(!cb)return;
+    chartInstances[canvasId]=new Chart(cb,{type:'bar',data:{
+      labels:BKTS.length?BKTS:['No data'],
+      datasets:[
+        {label:'Prior Year', data:py, backgroundColor:'rgba(55,138,221,0.5)',borderColor:'#378ADD',borderWidth:1,borderRadius:3},
+        {label:'Current Year',data:act,backgroundColor:'rgba(0,194,168,0.6)',borderColor:'#00c2a8',borderWidth:1,borderRadius:3},
+      ]},options:co()});
+  };
+  mkBktChart('c_bracket_rt10','RT10');
+  mkBktChart('c_bracket_rt20','RT20');
+}
+
 function buildCharts(){
   if(!window.Chart)return;
 
@@ -3671,11 +3709,11 @@ function buildCharts(){
   const _dnutLbl=document.getElementById('donut_period_lbl');
   if(_dnutLbl) _dnutLbl.textContent=`${_dnutMs[curMonth-1]} ${curYear}`;
 
-  const donutRCs=['RT10','RT20','RT40','RT50','RT70','ST'];
+  const donutRCs=['RT10','RT20','RT40','RT50','RT70','RT60-ST'];
   const donutData=donutRCs.map(rc=>CUSTOMERS.filter(c=>c.rate===rc).reduce((s,c)=>s+(c.m[curMonth-1]||0),0));
   mkChart('c_donut',{type:'doughnut',data:{labels:donutRCs,datasets:[{data:donutData,backgroundColor:['#00c2a8','#00957f','#378ADD','#185FA5','#f5a623','#5a7a96'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},cutout:'60%'}});
 
-  const cm1RCs=['RT40','RT50','RT70'];
+  const cm1RCs=['RT40','RT50','RT70','RT60-ST'];
   const cm1_25=cm1RCs.map(rc=>CUSTOMERS.filter(c=>c.rate===rc).reduce((s,c)=>s+c.y25,0));
   const cm1_26=cm1RCs.map(rc=>CUSTOMERS.filter(c=>c.rate===rc).reduce((s,c)=>s+c.y26,0));
   mkChart('c_cm1',{type:'bar',data:{
@@ -3707,18 +3745,6 @@ function buildCharts(){
 
     // EV chart — sourced from sbEvData (jps_ev_accounts table); zeros until loaded
     const evYears = sbEvData.length ? [...new Set(sbEvData.map(r=>String(r.year)))].sort() : [];
-    const evMwh   = evYears.map(y=>sbEvData.filter(r=>String(r.year)===y).reduce((s,r)=>s+(r.mwh||0),0));
-    const evAcct  = evYears.map(y=>sbEvData.filter(r=>String(r.year)===y).reduce((s,r)=>s+(r.accounts||0),0));
-    const evGrowth = evMwh.length>1 ? (((evMwh[evMwh.length-1]/evMwh[0])**(1/(evMwh.length-1))-1)*100).toFixed(0)+'% CAGR' : 'sync DB to populate';
-    const evLbl = document.getElementById('ev_period_lbl');
-    if(evLbl) evLbl.textContent = evYears.length ? evGrowth : 'sync DB to populate';
-    mkChart('c_ev',{type:'bar',data:{
-      labels: evYears.length ? evYears : ['--'],
-      datasets:[
-        {label:'MWh',data:evYears.length?evMwh:[0],backgroundColor:'rgba(245,166,35,0.5)',yAxisID:'y',borderRadius:2},
-        {label:'Accounts',data:evYears.length?evAcct:[0],type:'line',borderColor:'#00c2a8',backgroundColor:'transparent',yAxisID:'y1',tension:.3,pointRadius:4},
-      ]
-    },options:{...co(),scales:{x:{ticks:{color:TC},grid:{color:CC}},y:{ticks:{color:TC},grid:{color:CC},position:'left'},y1:{ticks:{color:TC},grid:{display:false},position:'right'}}}});
   })();
 
   // Defection charts
@@ -3739,18 +3765,8 @@ function buildCharts(){
       {label:'Forecast GWh',data:accFc,borderColor:'#f5a623',borderDash:[4,2],backgroundColor:'transparent',tension:.3,pointRadius:4},
     ]},options:co()});
 
-  // Consumption bracket distribution chart — buckets read dynamically from sbActuals
-  const resRCsB=['RT10','RT20'];
-  const resBktRows=sbActuals.filter(r=>resRCsB.includes(String(r.rate_class||''))&&(r.consumption_bucket||'').trim());
-  const BKTS=[...new Set(resBktRows.map(r=>(r.consumption_bucket||'').trim()))].filter(Boolean).sort();
-  const bktAct=BKTS.map(bk=>resBktRows.filter(r=>Number(r[YEAR_COL])===curYear&&Number(r.month)<=curMonth&&(r.consumption_bucket||'').trim()===bk).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6);
-  const bktPY =BKTS.map(bk=>resBktRows.filter(r=>Number(r[YEAR_COL])===(curYear-1)&&Number(r.month)<=curMonth&&(r.consumption_bucket||'').trim()===bk).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6);
-  mkChart('c_bracket_dist',{type:'bar',data:{
-    labels:BKTS.length?BKTS:['No data'],
-    datasets:[
-      {label:'Prior Year',data:bktPY,backgroundColor:'rgba(55,138,221,0.5)',borderColor:'#378ADD',borderWidth:1,borderRadius:3},
-      {label:'Current Year',data:bktAct,backgroundColor:'rgba(0,194,168,0.6)',borderColor:'#00c2a8',borderWidth:1,borderRadius:3},
-    ]},options:{...co()}});
+  // RT10 & RT20 bracket distribution charts — period-aware
+  mkBracketCharts();
 }
 
 /* ==========================================
@@ -3799,7 +3815,7 @@ function renderPfInd(){
 }
 function renderPfRC(){
   const rcDefs={RT10:'Low-use Residential','RT20':'Gen. Service / SME',RT40:'LV Commercial',RT50:'MV Commercial',RT70:'Large Industrial',ST:'Street Lights',EV:'Electric Vehicle'};
-  const rcList=['RT10','RT20','RT40','RT50','RT70','ST','EV'];
+  const rcList=['RT10','RT20','RT40','RT50','RT70','RT60-ST'];
   const rcs=rcList.map(rc=>({rc,desc:rcDefs[rc]||rc,
     y25:CUSTOMERS.filter(c=>c.rate===rc).reduce((s,c)=>s+c.y25,0),
     y26:CUSTOMERS.filter(c=>c.rate===rc).reduce((s,c)=>s+c.y26,0),
@@ -3835,7 +3851,7 @@ function renderPfPar(){
   makeSortable('pfp_dt');
 }
 function renderVariance(){
-  const segs=['RT10','RT20','RT40','RT50','RT70','ST'];
+  const segs=['RT10','RT20','RT40','RT50','RT70','RT60-ST'];
   const rows=segs.map(seg=>{
     const custs=CUSTOMERS.filter(c=>c.rate===seg);
     const mtd_act=custs.reduce((s,c)=>s+(c.m[curMonth-1]||0),0);
@@ -4659,7 +4675,7 @@ function renderOverviewKPIs(){
   if(!CUSTOMERS.length)return;
   const mIdx=curMonth-1;
   const resRCs=['RT10','RT20'];
-  const comRCs=['RT40','RT50','RT70'];
+  const comRCs=['RT40','RT50','RT70','RT60-ST'];
   const mtd=CUSTOMERS.reduce((s,c)=>s+(c.m[mIdx]||0),0);
   const mtdBud=CUSTOMERS.reduce((s,c)=>s+(c.bud/12),0);
   const ytd=CUSTOMERS.reduce((s,c)=>s+c.m.slice(0,curMonth).reduce((a,v)=>a+(v||0),0),0);
@@ -4685,7 +4701,7 @@ function renderOverviewKPIs(){
   sv('kpi_ytd_yoy',(vYoY>=0?'+':'')+vYoY.toFixed(1)+'% YoY');
   sc('kpi_ytd_yoy',vYoY>=0?'tbadge tbg':'tbadge tbr');
   // ── Total customer count: commercial (distinct accounts) + residential (sum customer_count) ──
-  const commRCs=new Set(['RT40','RT50','RT60','RT70','BU']);
+  const commRCs=new Set(['RT40','RT50','RT60-ST','RT70','BU']);
   const commActCount=CUSTOMERS.filter(c=>commRCs.has(c.rate)).length;
   const resActCount=sbActuals.filter(r=>['RT10','RT20'].includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.customer_count||0),0);
   const commBudRows2=sbBudget.filter(b=>!(b.consumption_bucket||'').trim());
@@ -4710,7 +4726,7 @@ function renderOverviewKPIs(){
 function renderCommercialKPIs(){
   if(!CUSTOMERS.length)return;
   const mIdx=curMonth-1;
-  const comRCs=['RT40','RT50','RT70'];
+  const comRCs=['RT40','RT50','RT70','RT60-ST'];
   const comCusts=CUSTOMERS.filter(c=>comRCs.includes(c.rate));
   const cmMtd=comCusts.reduce((s,c)=>s+(c.m[mIdx]||0),0);
   const cmBud=comCusts.reduce((s,c)=>s+(c.bud/12),0);
@@ -4762,8 +4778,7 @@ const SCORECARD_SEGS = [
   {seg:'RT40',desc:'LV Commercial'},
   {seg:'RT50',desc:'MV Commercial'},
   {seg:'RT70',desc:'Large Industrial'},
-  {seg:'ST',  desc:'Street Lights'},
-  {seg:'EV',  desc:'Electric Vehicle'},
+  {seg:'RT60-ST',  desc:'Street Lights'},
 ];
 function buildScorecardData(){
   return SCORECARD_SEGS.map(({seg,desc})=>{
@@ -4796,7 +4811,7 @@ function renderExecSummary() {
   const esGap0  = esAct0 - esBud0;
   const esYoY0  = esLY0>0?((esAct0-esLY0)/esLY0*100):null;
   const esYtdYoY= esYtdLY0>0?((esYtd0-esYtdLY0)/esYtdLY0*100):null;
-  const esComRCs= ['RT40','RT50','RT70'];
+  const esComRCs= ['RT40','RT50','RT70','RT60-ST'];
   const esCmMtd = CUSTOMERS.filter(c=>esComRCs.includes(c.rate)).reduce((s,c)=>s+(c.m[curMonth-1]||0),0);
   const esCmBud = CUSTOMERS.filter(c=>esComRCs.includes(c.rate)).reduce((s,c)=>s+(c.bud/12),0);
   const esCmGap = esCmMtd - esCmBud;
@@ -7617,10 +7632,28 @@ function parseCSVText(txt){
 
 async function sbTable(tbl,opts={}){
   const sb=getSB(); if(!sb)return null;
-  let q=sb.from(tbl).select(opts.cols||'*').limit(opts.limit||10000);
-  if(opts.order)q=q.order(opts.order,{ascending:true});
-  const{data,error}=await q;
-  return(!error&&Array.isArray(data))?data:null;
+  // If caller set a small explicit limit, honour it (small lookup tables)
+  const explicitLimit=opts.limit&&opts.limit<=2000;
+  if(explicitLimit){
+    let q=sb.from(tbl).select(opts.cols||'*').limit(opts.limit);
+    if(opts.order)q=q.order(opts.order,{ascending:true});
+    const{data,error}=await q;
+    return(!error&&Array.isArray(data))?data:null;
+  }
+  // Paginated fetch — works regardless of server-side PostgREST max_rows cap
+  const PAGE=1000;
+  let all=[],from=0;
+  for(;;){
+    let q=sb.from(tbl).select(opts.cols||'*').range(from,from+PAGE-1);
+    if(opts.order)q=q.order(opts.order,{ascending:true});
+    const{data,error}=await q;
+    if(error||!Array.isArray(data)||!data.length)break;
+    all=all.concat(data);
+    if(data.length<PAGE)break;   // last page
+    from+=PAGE;
+    if(from>500000)break;        // safety cap — 500k rows max
+  }
+  return all.length?all:null;
 }
 
 async function sbStorage(bucket,file){
@@ -7678,7 +7711,7 @@ function buildDashboardData(){
   CUSTOMERS=Object.values(custMap).filter(c=>c.y25>0||c.y26>0).sort((a,b)=>b.y25-a.y25);
 
   // PARISHES — single pass
-  const COMM_RCS_SET=new Set(['RT40','RT50','RT60','RT70','BU']);
+  const COMM_RCS_SET=new Set(['RT40','RT50','RT60-ST','RT70','BU']);
   const parMap={};
   rows.forEach(r=>{
     const p=r.parish||'Unknown';
@@ -7927,7 +7960,7 @@ const FC_MONTH_MAP={January:1,February:2,March:3,April:4,May:5,June:6,
   July:7,August:8,September:9,October:10,November:11,December:12};
 const FC_MONTHS=['January','February','March','April','May','June',
   'July','August','September','October','November','December'];
-const FC_CUST_RCS=['RT10','RT20','RT60']; // residential RCs → use cust method in Base
+const FC_CUST_RCS=['RT10','RT20']; // residential RCs → use cust method in Base
 let FC_BUD_YEAR=curYear, FC_PY=curYear-1;
 
 function fcParseMonth(str){
@@ -9250,7 +9283,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.46';
+const APP_VERSION = '1.0.49';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
