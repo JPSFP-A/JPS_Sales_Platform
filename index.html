@@ -8036,6 +8036,8 @@ async function syncSupabase(silent=false){
     // ── Fire ALL queries in parallel — always fetch fresh (no cache skip) ──
     const _actYearCutoff=new Date().getFullYear()-2; // fetch last 3 years
     const _useCachedActuals=false; // always fetch fresh actuals
+    // Use the confirmed YEAR_COL for the gte filter (handles both 'year' and 'cal_year')
+    const _yearFilterCol=YEAR_COL||'year';
     const [
       indData,kamData,amData,actData,
       budData,
@@ -8045,7 +8047,7 @@ async function syncSupabase(silent=false){
       sbTable('jps_industries',{}),
       sbTable('jps_kam',{}),
       sbTable('jps_account_master',{limit:50000}),
-      sbTable('jps_actuals',{gte:['year',_actYearCutoff]}),
+      sbTable('jps_actuals',{gte:[_yearFilterCol,_actYearCutoff]}),
       sbTable('jps_budget',{limit:50000}),
       sbTable('net_gen_historical',{order:'year'}),
       sbTable('jps_ev_accounts',{order:'year'}),
@@ -9208,8 +9210,17 @@ function renderNetGen(){
 ========================================== */
 const _origInitAll=initAll;
 initAll=function(){
-  _origInitAll();
-  // syncSupabase is called by restoreSession before _applyLogin — don't call again here
+  _origInitAll(); // calls buildCharts() + renderSection('ov')
+  // Re-render the ACTUALLY ACTIVE section with updated user/role context.
+  // _origInitAll always renders 'ov'; if the user is on a different tab we need to refresh it too.
+  const _activeId=document.querySelector('.sec.on')?.id;
+  if(_activeId&&_activeId!=='ov'){
+    setTimeout(()=>{try{renderSection(_activeId);}catch(e){console.warn('initAll re-render:',e);}},50);
+  }
+  // Safety-net: if data hasn't loaded yet (e.g. auth resolved before sync), kick off a fresh sync
+  if(!sbConnected&&!_sbSyncing){
+    syncSupabase(true).catch(()=>{});
+  }
   _rtStartHeartbeat();
 };
 
@@ -9537,7 +9548,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.73';
+const APP_VERSION = '1.0.74';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
