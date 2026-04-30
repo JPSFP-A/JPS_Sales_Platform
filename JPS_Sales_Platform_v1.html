@@ -3181,7 +3181,7 @@ function setPeriod(p,btn){
 function renderSection(id){
   if(!id)return;
   // Show lock banner on sections with period-sensitive data
-  const lockableSections=['ov','cm','rs','rb_res','df','fc','ro','mr','ar','es','vb','rr'];
+  const lockableSections=['ov','cm','rs','rb_res','df','fc','ro','mr','ar','es','vb','rr','ng','le'];
   if(lockableSections.includes(id))maybeShowLockBanner(id);
 
   if(id==='ov'){renderOverviewKPIs();renderPfCust();renderPfInd();renderPfRC();renderPfPar();renderVariance();}
@@ -3218,6 +3218,8 @@ function renderSection(id){
   else if(id==='rb_res'){renderResIntel();}
   else if(id==='ro_adv'){renderROAdvanced();}
   else if(id==='rpt'){renderReportBuilder();}
+  else if(id==='ng'){renderNetGen();}
+  else if(id==='le'){renderLE();}
 }
 
 /* ==========================================
@@ -4899,31 +4901,37 @@ function renderExecSummary() {
   if(el('es_period')) el('es_period').textContent = lbl;
   if(el('es_period_lbl')) el('es_period_lbl').textContent = lbl;
 
-  // ES KPI bar — computed from CUSTOMERS
-  const esAct0  = CUSTOMERS.reduce((s,c)=>s+(c.m[curMonth-1]||0),0);
-  const esBud0  = CUSTOMERS.reduce((s,c)=>s+(c.bud/12),0);
-  const esLY0   = CUSTOMERS.reduce((s,c)=>s+(c.y25/12),0);
-  const esYtd0  = CUSTOMERS.reduce((s,c)=>s+c.m.slice(0,curMonth).reduce((a,v)=>a+(v||0),0),0);
-  const esYtdLY0= CUSTOMERS.reduce((s,c)=>s+(c.y25*(curMonth/12)),0);
+  // ES KPI bar — use sbActuals directly (covers ALL rate classes including RT10/RT20)
+  const _esAct=(yr,mo)=>sbActuals.filter(r=>Number(r[YEAR_COL])===yr&&Number(r.month)===mo).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+  const _esBud=(yr,mo)=>sbBudget.filter(r=>Number(r.year||0)===yr&&Number(r.month)===mo).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
+  const _esYtd=(yr,mo)=>sbActuals.filter(r=>Number(r[YEAR_COL])===yr&&Number(r.month)<=mo).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+  const _esYtdBud=(yr,mo)=>sbBudget.filter(r=>Number(r.year||0)===yr&&Number(r.month)<=mo).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
+  const esAct0  = _esAct(curYear,curMonth);
+  const esBud0  = _esBud(curYear,curMonth);
+  const esLY0   = _esAct(curYear-1,curMonth);
+  const esYtd0  = _esYtd(curYear,curMonth);
+  const esYtdLY0= _esYtd(curYear-1,curMonth);
+  const esYtdBud= _esYtdBud(curYear,curMonth);
   const esGap0  = esAct0 - esBud0;
   const esYoY0  = esLY0>0?((esAct0-esLY0)/esLY0*100):null;
   const esYtdYoY= esYtdLY0>0?((esYtd0-esYtdLY0)/esYtdLY0*100):null;
   const esComRCs= ['RT40','RT50','RT70','RT60-ST'];
-  const esCmMtd = CUSTOMERS.filter(c=>esComRCs.includes(c.rate)).reduce((s,c)=>s+(c.m[curMonth-1]||0),0);
-  const esCmBud = CUSTOMERS.filter(c=>esComRCs.includes(c.rate)).reduce((s,c)=>s+(c.bud/12),0);
+  const esCmMtd = sbActuals.filter(r=>esComRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+  const esCmBud = sbBudget.filter(r=>esComRCs.includes(String(r.rate_class||''))&&Number(r.year||0)===curYear&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
   const esCmGap = esCmMtd - esCmBud;
   const esDefs  = computeDefectors().filter(d=>d.sev==='Critical'||d.sev==='Severe');
+  const hasAct  = sbActuals.length > 0;
   const esKv = (id,v) => { const e=document.getElementById(id); if(e) e.textContent=v; };
-  esKv('es_kpi_mtd_bud',   CUSTOMERS.length ? (esGap0>=0?'+':'')+((esGap0/esBud0)*100).toFixed(1)+'%' : '--');
-  esKv('es_kpi_mtd_detail',CUSTOMERS.length ? `${esAct0.toFixed(1)} vs ${esBud0.toFixed(1)} GWh` : '-- vs -- GWh');
-  esKv('es_kpi_ytd_yoy',   CUSTOMERS.length ? (esYtdYoY!==null?(esYtdYoY>=0?'+':'')+esYtdYoY.toFixed(1)+'%':'--') : '--');
-  esKv('es_kpi_ytd_detail',CUSTOMERS.length ? `${esYtd0.toFixed(1)} vs ${esYtdLY0.toFixed(1)} GWh` : '-- vs -- GWh');
+  esKv('es_kpi_mtd_bud',   hasAct&&esBud0>0 ? (esGap0>=0?'+':'')+((esGap0/esBud0)*100).toFixed(1)+'%' : hasAct?'No budget':'--');
+  esKv('es_kpi_mtd_detail',hasAct ? esAct0.toFixed(1)+' vs '+(esBud0>0?esBud0.toFixed(1):'--')+' GWh' : '-- vs -- GWh');
+  esKv('es_kpi_ytd_yoy',   hasAct ? (esYtdYoY!==null?(esYtdYoY>=0?'+':'')+esYtdYoY.toFixed(1)+'%':'--') : '--');
+  esKv('es_kpi_ytd_detail',hasAct ? esYtd0.toFixed(1)+' vs '+esYtdLY0.toFixed(1)+' GWh YTD' : '-- vs -- GWh');
   // Revenue — sum revenue_jmd from sbActuals for curYear, curMonth
   const esRevJmd=sbActuals.filter(r=>Number(r[YEAR_COL])===curYear&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.revenue_jmd||0),0);
   esKv('es_kpi_rev', esRevJmd>0 ? 'J$'+(esRevJmd/1e9).toFixed(2)+'B' : '--');
-  esKv('es_kpi_cm_gap',    CUSTOMERS.length ? (esCmGap>=0?'+':'')+esCmGap.toFixed(1)+' GWh' : '--');
-  esKv('es_kpi_cm_detail', CUSTOMERS.length ? `${esCmMtd.toFixed(1)} GWh MTD` : '-- GWh MTD');
-  esKv('es_kpi_def',       CUSTOMERS.length ? esDefs.length : '--');
+  esKv('es_kpi_cm_gap',    hasAct ? (esCmGap>=0?'+':'')+esCmGap.toFixed(1)+' GWh' : '--');
+  esKv('es_kpi_cm_detail', hasAct ? esCmMtd.toFixed(1)+' GWh MTD' : '-- GWh MTD');
+  esKv('es_kpi_def',       hasAct ? esDefs.length : '--');
 
   // RR chart period label
   const rrLbl = document.getElementById('rr_chart_period_lbl');
@@ -4934,17 +4942,17 @@ function renderExecSummary() {
     el('es_narrative').value = S.get(`es_narrative_${curYear}_${curMonth}`, '');
   }
 
-  // Auto bullets — computed from loaded data
+  // Auto bullets — computed from sbActuals (all segments)
   const defs = computeDefectors();
   const critSev = defs.filter(d => d.sev === 'Critical' || d.sev === 'Severe');
-  const esAct = CUSTOMERS.reduce((s,c)=>s+(c.m[curMonth-1]||0),0);
-  const esBud = CUSTOMERS.reduce((s,c)=>s+(c.bud/12),0);
-  const esLY  = CUSTOMERS.reduce((s,c)=>s+(c.y25/12),0);
+  const esAct  = esAct0;   // reuse from KPI section above
+  const esBud  = esBud0;
+  const esLY   = esLY0;
   const totalGap = esAct - esBud;
-  const bullets = CUSTOMERS.length ? [
-    `<strong style="color:${totalGap<0?'var(--red)':'var(--green)'}">MTD Sales ${esAct.toFixed(1)} GWh vs budget ${esBud.toFixed(1)} GWh (${totalGap>=0?'+':''}${totalGap.toFixed(1)} GWh gap)</strong>`,
+  const bullets = hasAct ? [
+    `<strong style="color:${totalGap<0?'var(--red)':'var(--green)'}">MTD Sales ${esAct.toFixed(1)} GWh${esBud>0?' vs budget '+esBud.toFixed(1)+' GWh (gap: '+(totalGap>=0?'+':'')+totalGap.toFixed(1)+' GWh)':' (no budget loaded)'}</strong>`,
     `<strong style="color:var(--amber)">${critSev.length} critical/severe defector${critSev.length!==1?'s':''}</strong> identified this period.`,
-    `<strong style="color:var(--teal)">YoY:</strong> ${esLY>0?((esAct-esLY)/esLY*100).toFixed(1)+'% vs prior year':'Prior year data not loaded.'}`,
+    `<strong style="color:var(--teal)">YoY:</strong> ${esLY>0?((esAct-esLY)/esLY*100).toFixed(1)+'% vs prior year ('+esLY.toFixed(1)+' GWh)':'Prior year data not loaded.'}`,
   ] : ['<span style="color:var(--text3)">No data loaded — sync database or upload an Excel file to populate executive summary bullets.</span>'];
   if(el('es_auto_bullets')) {
     el('es_auto_bullets').innerHTML = bullets.map(b => `<div style="padding:4px 0;border-bottom:1px solid var(--border);display:flex;gap:8px"><span style="color:var(--teal);flex-shrink:0">&#8227;</span><span>${b}</span></div>`).join('');
@@ -9401,7 +9409,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.58';
+const APP_VERSION = '1.0.59';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
