@@ -775,8 +775,7 @@ document.getElementById('schema_stale_banner').style.display='none';
         <div class="kpi ka"><div class="kl">Severe (50–65%)</div><div class="kv" id="df_severe">--</div><div class="ks dn">Monitor closely</div></div>
         <div class="kpi ka"><div class="kl">Moderate (65–80%)</div><div class="kv" id="df_mod">--</div><div class="ks dn">Watch list</div></div>
         <div class="kpi kt"><div class="kl">Validated</div><div class="kv" id="df_validated">--</div><div class="ks nt">Rep confirmed cause</div></div>
-        <div class="kpi kp"><div class="kl">Structural DG</div><div class="kv" id="df_dg">--</div><div class="ks dn">Solar/CHP confirmed</div></div>
-      </div>
+        <div class="kpi kp">      </div>
       <div class="card">
         <div class="ch">Defector Register <span>3-month rolling avg &lt;80% of prior year · requires validation</span>
           <button class="btn btn-o" onclick="exportTableCSV('df_tbl','defection_register')">⬇ CSV</button>
@@ -785,7 +784,7 @@ document.getElementById('schema_stale_banner').style.display='none';
           <input class="si" placeholder="🔍 Customer name or account #" id="df_q" oninput="renderDefectors()"/>
           <select class="sel" id="df_sev" onchange="renderDefectors()"><option value="">All severity</option><option value="Critical">Critical</option><option value="Severe">Severe</option><option value="Moderate">Moderate</option></select>
           <select class="sel" id="df_rc" onchange="renderDefectors()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
-          <select class="sel" id="df_cause" onchange="renderDefectors()"><option value="">All causes</option><option value="Solar/DG">Solar/DG</option><option value="CHP">CHP/Self-gen</option><option value="Hurricane">Hurricane damage</option><option value="Closure">Business closure</option><option value="Unknown">Unknown</option></select>
+          <select class="sel" id="df_cause" onchange="renderDefectors()"><option value="">All causes</option><option value="CHP">CHP/Self-gen</option><option value="Hurricane">Hurricane damage</option><option value="Closure">Business closure</option><option value="Unknown">Unknown</option></select>
           <span class="row-count" id="df_count"></span>
         </div>
         <div class="tbl-wrap" id="df_tbl"></div>
@@ -1018,13 +1017,12 @@ document.getElementById('schema_stale_banner').style.display='none';
         </div>
 
         <!-- Residential section -->
-        <div class="card help-card" data-tags="residential rt10 rt20 net biller ev electric vehicle parish bracket">
+        <div class="card help-card" data-tags="residential rt10 rt20 parish bracket">
           <div class="ch" style="cursor:pointer" onclick="toggleHelp(this)">🏠 Residential Section <span style="font-size:10px;color:var(--text3);font-weight:400">▾</span></div>
           <div class="help-body" style="display:none;font-size:11px;color:var(--text2);line-height:1.9;padding-top:8px">
-            <p><strong style="color:var(--text)">KPIs:</strong> MTD residential GWh, net biller count (requires Net_Billers sheet upload), EV account count, customer growth YoY. Items showing "Sync DB to populate" need the relevant tables to be populated via upload.</p>
+            <p><strong style="color:var(--text)">KPIs:</strong> MTD residential GWh, customer count YoY, average kWh per customer. Items showing "--" need actuals data uploaded via the Actuals sheet.</p>
             <p><strong style="color:var(--text)">Parish × Consumption Bracket table:</strong> Shows kWh billed by parish broken down into consumption brackets (0–150, 150–300, 300–500, 500+). Use the bracket filter to focus on a specific usage band. This is key for identifying under- and over-performing parishes relative to prior year.</p>
-            <p><strong style="color:var(--text)">Net Billing chart:</strong> Tracks the number of net billing customers and their total export kWh over time. Growth in net billers directly reduces billed consumption on the residential tariff.</p>
-            <p><strong style="color:var(--text)">EV chart:</strong> Tracks EV accounts and associated MWh. Early growth signal for load addition from EV charging.</p>
+                        <p><strong style="color:var(--text)">EV chart:</strong> Tracks EV accounts and associated MWh. Early growth signal for load addition from EV charging.</p>
           </div>
         </div>
 
@@ -1523,7 +1521,7 @@ order by ordinal_position;</pre>
             <div style="font-size:11px;color:var(--text2);line-height:1.8;margin-bottom:10px">
               Run this SQL once in a fresh Supabase project to create all required tables.
               It is <strong style="color:var(--text)">safe to re-run at any time</strong> — it uses <code>CREATE TABLE IF NOT EXISTS</code> and only alters tables when a migration is needed.<br><br>
-              Tables created: <code>jps_actuals</code> · <code>jps_budget</code> · <code>jps_period_locks</code> · <code>jps_kam</code> · <code>jps_industries</code> · <code>net_gen_historical</code> · <code>jps_net_billers</code> · <code>jps_ev_accounts</code> · <code>jps_account_master</code> · <code>profiles</code>
+              Tables created: <code>jps_actuals</code> · <code>jps_budget</code> · <code>jps_period_locks</code> · <code>jps_kam</code> · <code>jps_industries</code> · <code>net_gen_historical</code> · <code>jps_ev_accounts</code> · <code>jps_account_master</code> · <code>profiles</code>
             </div>
             <div style="font-size:11px;color:var(--text);font-weight:600;margin-bottom:6px">How to run:</div>
             <ol style="font-size:11px;color:var(--text2);line-height:2;margin:0 0 0 18px;padding:0">
@@ -1811,15 +1809,11 @@ order by ordinal_position;</pre>
     <div id="rb_res" class="sec">
       <div class="krow">
         <div class="kpi kt"><div class="kl">Residential Customers</div><div class="kv" id="ri_kpi_custs">--</div><div class="ks nt" id="ri_kpi_custs_sub">upload customer_count</div></div>
-        <div class="kpi ka"><div class="kl">Net Billers (RT10)</div><div class="kv" id="ri_kpi_nb10">--</div><div class="ks nt" id="ri_kpi_nb10_sub">from jps_net_billers</div></div>
-        <div class="kpi kr"><div class="kl">DG Penetration</div><div class="kv" id="ri_kpi_dg_pct">--</div><div class="ks nt" id="ri_kpi_dg_sub">net billers / customers</div></div>
         <div class="kpi kg"><div class="kl">Avg kWh (RT10)</div><div class="kv" id="ri_kpi_avg_kwh">--</div><div class="ks nt" id="ri_kpi_avg_kwh_sub">per customer MTD</div></div>
-        <div class="kpi kp"><div class="kl">NB Avg Export</div><div class="kv" id="ri_kpi_nb_export">--</div><div class="ks nt" id="ri_kpi_nb_export_sub">kWh per net biller</div></div>
       </div>
 
       <div class="stabs" id="res_intel_tabs">
         <button class="stab on" onclick="resTab('ri_bracket',this)">Bracket Trends</button>
-        <button class="stab" onclick="resTab('ri_dg',this)">DG Penetration</button>
         <button class="stab" onclick="resTab('ri_parish',this)">Parish Defection</button>
         <button class="stab" onclick="resTab('ri_weather',this)">Weather Adjust</button>
       </div>
@@ -1841,22 +1835,6 @@ order by ordinal_position;</pre>
         </div>
       </div>
 
-      <div id="ri_dg" class="ssec">
-        <div class="g2">
-          <div class="card">
-            <div class="ch">Net Biller Growth vs Total Customer Growth <span>Raw count by year</span></div>
-            <div class="cw" style="height:220px"><canvas id="c_ri_dg_growth"></canvas></div>
-          </div>
-          <div class="card">
-            <div class="ch">DG Penetration by Parish <span>Net billers as % of customers</span></div>
-            <div class="cw" style="height:220px"><canvas id="c_ri_dg_par"></canvas></div>
-          </div>
-        </div>
-        <div class="card">
-          <div class="ch">Net Biller Average Consumption vs Standard Customer <span>kWh comparison</span></div>
-          <div id="ri_dg_comp_tbl"></div>
-        </div>
-      </div>
 
       <div id="ri_parish" class="ssec">
         <div class="card">
@@ -2150,7 +2128,7 @@ order by ordinal_position;</pre>
     <!-- === NET GENERATION === -->
     <div id="ng" class="sec">
       <div style="background:rgba(55,138,221,.07);border-left:3px solid var(--blue);border-radius:4px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:var(--text2);line-height:1.7">
-        <strong style="color:var(--blue)">Net Generation (DG):</strong> Distributed generation installed on the JPS grid. Upload via the <strong>Net_Generation</strong> sheet (columns: year, month, rate_class, count, kwh). Same format as Net Billers. Data sourced from <code style="background:var(--navy3);padding:1px 5px;border-radius:3px;font-size:10px">net_gen_historical</code>.
+        <strong style="color:var(--blue)">Net Generation:</strong> Generation data from the JPS grid. Upload via the <strong>Net_Generation</strong> sheet (columns: year, month, rate_class, count, kwh). Data sourced from <code style="background:var(--navy3);padding:1px 5px;border-radius:3px;font-size:10px">net_gen_historical</code>.
       </div>
       <div class="krow" id="ng_krow"></div>
       <div class="card">
@@ -2696,7 +2674,7 @@ function computeDefectors(){
         if(p3>0&&r3/p3<0.80)cons++;else break;
       }
     }
-    const cause=c.cmt.toLowerCase().includes('solar')||c.cmt.toLowerCase().includes('dg')?'Solar/DG':
+    const cause=c.cmt.toLowerCase().includes('solar')||c.cmt.toLowerCase().includes('self-gen')?'Self-Gen':
                 c.cmt.toLowerCase().includes('chp')||c.cmt.toLowerCase().includes('self-gen')?'CHP':
                 c.cmt.toLowerCase().includes('hurricane')||c.cmt.toLowerCase().includes('damage')?'Hurricane':
                 c.cmt.toLowerCase().includes('closed')||c.cmt.toLowerCase().includes('closure')?'Closure':'Unknown';
@@ -2719,7 +2697,6 @@ const GLOSSARY_DATA=[
   {term:'RT50',cat:'Rate Class',def:'MV Power Service -- medium-voltage commercial and light industrial with higher demand thresholds.'},
   {term:'RT70',cat:'Rate Class',def:'Large Power Service -- large industrial and commercial on high-voltage. Includes Carib Cement, bauxite, major hotels.'},
   {term:'ST / RT60',cat:'Rate Class',def:'Street Light & Traffic Signal tariff. Over 99% energy-based revenue; minimal fixed charges.'},
-  {term:'EV',cat:'Rate Class',def:'Electric Vehicle charging tariff. Growth rate is DB-driven — see Residential section EV chart.'},
   {term:'MTD',cat:'Metric',def:'Month-to-Date -- cumulative from the 1st of the current month to the reporting date.'},
   {term:'YTD',cat:'Metric',def:'Year-to-Date -- cumulative from January 1st to the reporting date.'},
   {term:'QTD',cat:'Metric',def:'Quarter-to-Date -- cumulative from the first day of the current quarter.'},
@@ -2730,8 +2707,6 @@ const GLOSSARY_DATA=[
   {term:'LE',cat:'Process',def:'Latest Estimate -- in-year revised forecast reflecting actual performance plus updated outlook.'},
   {term:'Zero Bill',cat:'Process',def:'Bill issued with zero consumption -- due to disconnection, meter fault, or outage. Widespread post-Hurricane Melissa.'},
   {term:'Defection',cat:'Market',def:'A customer whose 3-month rolling average kWh drops below 80% of the same 3-month average from the prior year. Graded: Critical <50%, Severe 50–65%, Moderate 65–80%.'},
-  {term:'Net Biller',cat:'Market',def:'Customer with registered distributed generation who exports surplus electricity to the JPS grid. Count is DB-driven — see Residential Intelligence section.'},
-  {term:'DG / Distributed Generation',cat:'Market',def:'On-site customer electricity generation (typically solar PV). Reduces grid offtake and causes load defection.'},
   {term:'CHP',cat:'Market',def:'Combined Heat & Power -- cogeneration reducing grid dependence. Used by Jamaica Broilers, industrial customers.'},
   {term:'IPP',cat:'Market',def:'Independent Power Producer -- third-party generators under contract to supply power to JPS.'},
   {term:'Hurricane Melissa',cat:'Market',def:'Category 4 hurricane, late 2025. Primary structural driver of 2026 YTD commercial sales decline — magnitude varies by period loaded.'},
@@ -3430,18 +3405,6 @@ async function loadExcel(input){
           await batchUpsert('net_gen_historical',rows,'year,month,rate_class');
         }
       }
-      // ── Net Billers — columns: year, month, rate_class, count, kwh ──
-      const nbSheet=wb.Sheets['Net_Billers'];
-      if(nbSheet){
-        const rows=XLSX.utils.sheet_to_json(nbSheet).map(r=>({
-          year:Number(r.year||r.Year),
-          month:Number(r.month||r.Month),
-          rate_class:String(r.rate_class||r['Rate Class']||r.rate||'').trim(),
-          count:Number(r.count||r.Count||0),
-          kwh:Number(r.kwh||r.KWh||r.total_export_kwh||0)
-        })).filter(r=>r.year&&r.month&&r.rate_class);
-        if(rows.length)await batchUpsert('jps_net_billers',rows,'year,month,rate_class');
-      }
       // ── EV ────────────────────────────────────────────
       const evSheet=wb.Sheets['EV_Accounts']||wb.Sheets['EV'];
       if(evSheet){const rows=XLSX.utils.sheet_to_json(evSheet);if(rows.length)await batchUpsert('jps_ev_accounts',rows,'year,month');}
@@ -4101,9 +4064,6 @@ function renderRsKPIs(){
   rsKv('rs_kpi_ytd_sub',has?fmtYoy(resYtdKwh,resYtdLy):'-- YoY');
 
   // Net billers — aggregate across period months
-  const nbRows=sbNetBillers.filter(r=>Number(r.year)===curYear&&periodMonths.includes(Number(r.month)));
-  const nbCount=nbRows.reduce((s,r)=>s+Number(r.count||0),0);
-  rsKv('rs_kpi_nb',nbCount>0?nbCount.toLocaleString():(sbNetBillers.length?'0':'--'));
 
   // Customer count — use latest month in period (headcount is a point-in-time figure)
   const custMonth=periodMonths[periodMonths.length-1];
@@ -4113,13 +4073,6 @@ function renderRsKPIs(){
   const cgNote=document.getElementById('rs_kpi_cg_note');
   if(cgNote)cgNote.textContent=resBudCount>0?`vs ${resBudCount.toLocaleString()} budget`:(resActCount===0?'upload customer_count column':'residential headcount');
 
-  // RT10 net billers
-  const nb10=sbNetBillers.filter(r=>Number(r.year)===curYear&&periodMonths.includes(Number(r.month))&&String(r.rate_class||'').toUpperCase()==='RT10');
-  rsKv('rs_kpi_rt10nb',nb10.length?nb10.reduce((s,r)=>s+Number(r.count||0),0).toLocaleString():(sbNetBillers.length?'0':'--'));
-
-  // Export kWh
-  const nbExpKwh=nbRows.reduce((s,r)=>s+Number(r.kwh||0),0);
-  rsKv('rs_kpi_nbexp',nbExpKwh>0?fmtK(nbExpKwh)+' kWh':(sbNetBillers.length?'0 kWh':'--'));
 }
 function renderRsPar(){
   const q=(document.getElementById('rs_q')?.value||'').toLowerCase();
@@ -4201,7 +4154,7 @@ function renderDefKPIs(){
   document.getElementById('df_mod').textContent=defs.filter(d=>d.sev==='Moderate').length;
   const validated=defs.filter(d=>S.get(`df_val_${d.num}`,null));
   document.getElementById('df_validated').textContent=validated.length;
-  document.getElementById('df_dg').textContent=defs.filter(d=>d.cause==='Solar/DG'||d.cause==='CHP').length;
+  document.getElementById('df_dg').textContent=defs.filter(d=>d.cause==='Self-Gen'||d.cause==='CHP').length;
   document.getElementById('kpi_defectors').textContent=defs.length;
 }
 function renderDefectors(){
@@ -4225,7 +4178,7 @@ function renderDefectors(){
       <td><span class="heat hR">${d.ratio}%</span></td>
       <td><span class="def-severity ${sevClass[d.sev]||''}">${d.sev}</span></td>
       <td>${d.consec} mo.</td>
-      <td><span class="pill ${d.cause==='Solar/DG'?'pa':d.cause==='CHP'?'pp':d.cause==='Hurricane'?'pb':d.cause==='Closure'?'pr':'pgr'}">${d.cause}</span></td>
+      <td><span class="pill ${d.cause==='Self-Gen'?'pa':d.cause==='CHP'?'pp':d.cause==='Hurricane'?'pb':d.cause==='Closure'?'pr':'pgr'}">${d.cause}</span></td>
       <td>${val?`<span class="pill pg">✓ ${val.cause}</span>`:`<button class="btn btn-a" style="padding:2px 7px;font-size:10px" onclick="validateDefector('${d.num}','${d.name.replace(/'/g,"\\'")}')">Validate</button>`}</td>
     </tr>`;
   });
@@ -4239,7 +4192,7 @@ function validateDefector(num,name){
     <div style="margin-bottom:10px;font-size:11px;color:var(--text2)">Confirm the root cause of this defection signal. This will mark it as validated and determine whether it feeds the Risk & Opportunity register.</div>
     <div class="lf" style="margin-bottom:8px"><label>Confirmed Cause</label>
     <select class="sel" style="width:100%" id="val_cause">
-      <option value="Solar/DG">Solar / Rooftop DG</option>
+      
       <option value="CHP">CHP / Self-generation</option>
       <option value="Hurricane">Hurricane damage (temporary)</option>
       <option value="Closure">Business closure</option>
@@ -4253,7 +4206,7 @@ function validateDefector(num,name){
     const note=document.getElementById('val_note').value;
     S.set(`df_val_${num}`,{cause,note,by:CU.name,ts:new Date().toLocaleString()});
     // Auto-add to R&O if structural
-    if(cause==='Solar/DG'||cause==='CHP'||cause==='Closure'){
+    if(cause==='Self-Gen'||cause==='CHP'||cause==='Closure'){
       const exists=RISK_OPP.find(r=>r.acct===num);
       if(!exists){
         const cust=CUSTOMERS.find(c=>c.num===num);
@@ -5435,7 +5388,7 @@ function getDefActions() {
     cause: d.cause, gwh_risk: parseFloat(d.prior3) - parseFloat(d.curr3),
     stage: d.sev === 'Critical' ? 'Investigation' : 'Investigation',
     owner: 'atoyloy', due: '', recovery_gwh: 0,
-    type: (d.cause === 'Solar/DG' || d.cause === 'CHP') ? 'Structural' : 'Temporary',
+    type: (d.cause === 'Self-Gen' || d.cause === 'CHP') ? 'Structural' : 'Temporary',
     opened: '2026-02-01', note: ''
   }));
   const saved = S.get('def_actions', {});
@@ -5477,7 +5430,7 @@ function renderDefFlow() {
     <td style="font-weight:500">${a.name}</td>
     <td><span class="pill pt">${a.rate}</span></td>
     <td><span class="def-severity ${a.sev==='Critical'?'def-critical':a.sev==='Severe'?'def-severe':'def-moderate'}">${a.sev}</span></td>
-    <td><span class="pill ${a.cause==='Solar/DG'?'pa':a.cause==='Hurricane'?'pb':'pgr'}">${a.cause}</span></td>
+    <td><span class="pill ${a.cause==='Self-Gen'?'pa':a.cause==='Hurricane'?'pb':'pgr'}">${a.cause}</span></td>
     <td style="color:var(--red);font-weight:600">${a.gwh_risk.toFixed(2)} GWh</td>
     <td>
       <select class="sel" style="font-size:10px;padding:2px 5px" onchange="saveDefAction('${a.num}','stage',this.value);renderDefFlow()">
@@ -5565,7 +5518,6 @@ function getResBuckets(){
   return [...new Set(sbActuals.filter(r=>['RT10','RT20'].includes(String(r.rate_class||''))&&(r.consumption_bucket||'').trim()).map(r=>(r.consumption_bucket||'').trim()))].filter(Boolean).sort();
 }
 
-const DG_BY_PARISH = [];
 
 const CDD_DATA = {
   months:['','','','','',''],
@@ -5598,18 +5550,6 @@ function renderResIntelKPIs() {
   kv('ri_kpi_custs',totalCusts>0?totalCusts.toLocaleString():'--');
   kv('ri_kpi_custs_sub',totalCusts>0?`${curYear} · month ${custMonth}`:'upload customer_count');
 
-  // Net billers RT10 — from sbNetBillers
-  const nb10Rows=sbNetBillers.filter(r=>Number(r.year)===curYear&&Number(r.month)===custMonth&&String(r.rate_class||'').toUpperCase()==='RT10');
-  const nb10Count=nb10Rows.reduce((s,r)=>s+Number(r.count||0),0);
-  const nb10Kwh=nb10Rows.reduce((s,r)=>s+Number(r.kwh||0),0);
-  kv('ri_kpi_nb10',nb10Count>0?nb10Count.toLocaleString():(sbNetBillers.length?'0':'--'));
-  kv('ri_kpi_nb10_sub',nb10Count>0?`${curYear} · month ${custMonth}`:'sync jps_net_billers');
-
-  // DG penetration — net billers / total customers
-  const dgPct=totalCusts>0&&nb10Count>0?((nb10Count/totalCusts)*100).toFixed(2)+'%':'--';
-  kv('ri_kpi_dg_pct',dgPct);
-  kv('ri_kpi_dg_sub',totalCusts>0&&nb10Count>0?'net billers / customers':'need both tables');
-
   // Avg kWh per RT10 customer
   const rt10ActRows=sbActuals.filter(r=>String(r.rate_class||'')==='RT10'&&Number(r[YEAR_COL])===curYear&&Number(r.month)===custMonth);
   const rt10TotalKwh=rt10ActRows.reduce((s,r)=>s+Number(r.kwh||0),0);
@@ -5618,10 +5558,6 @@ function renderResIntelKPIs() {
   kv('ri_kpi_avg_kwh',avgKwh);
   kv('ri_kpi_avg_kwh_sub',rt10TotalCusts>0?`per customer · ${curYear}-${String(custMonth).padStart(2,'0')}`:'upload RT10 actuals');
 
-  // NB avg export kWh per net biller
-  const nbAvgExport=nb10Count>0?(nb10Kwh/nb10Count).toFixed(1)+' kWh':'--';
-  kv('ri_kpi_nb_export',nbAvgExport);
-  kv('ri_kpi_nb_export_sub',nb10Count>0?`avg per net biller`:'sync jps_net_billers');
 }
 
 function renderResIntelSection(id) {
@@ -5687,82 +5623,6 @@ function renderResIntelSection(id) {
           ]
         },
         options: { ...co(), scales:{ x:{ticks:{color:TC,font:{size:10}},grid:{color:CC}}, y:{ticks:{color:TC,callback:v=>(v/1000).toFixed(0)+'K'},grid:{color:CC}} } }
-      });
-    }
-  }
-
-  if (id === 'ri_dg') {
-    // --- DG comparison table: from sbActuals + sbNetBillers ---
-    const dt = document.getElementById('ri_dg_comp_tbl');
-    if (dt) {
-      const dgSegs = [
-        {label:'Residential (RT10)', rc:'RT10'},
-        {label:'General Services (RT20)', rc:'RT20'},
-      ];
-      const dgRows = dgSegs.map(({label,rc}) => {
-        const stdRows = sbActuals.filter(r=>String(r.rate_class||'')===rc&&Number(r[YEAR_COL])===curYear&&Number(r.month)===curMonth);
-        const stdKwh  = stdRows.reduce((s,r)=>s+Number(r.kwh||0),0);
-        const stdCust = stdRows.reduce((s,r)=>s+Number(r.customer_count||0),0);
-        const avgStd  = stdCust>0?(stdKwh/stdCust).toFixed(1):'--';
-        const nbRows  = sbNetBillers.filter(r=>String(r.rate_class||'')===rc&&Number(r.year||r[YEAR_COL])===curYear&&Number(r.month)===curMonth);
-        const nbKwhIn = nbRows.reduce((s,r)=>s+Number(r.kwh_in||r.kwh||0),0);
-        const nbExport= nbRows.reduce((s,r)=>s+Number(r.kwh_export||r.kwh_out||0),0);
-        const nbCount = nbRows.reduce((s,r)=>s+Number(r.count||r.customer_count||0),0);
-        const avgNb   = nbCount>0?(nbKwhIn/nbCount).toFixed(1):'--';
-        const avgExp  = nbCount>0?(nbExport/nbCount).toFixed(1):'--';
-        const reliance= (nbKwhIn>0)?((nbKwhIn/(nbKwhIn+nbExport))*100).toFixed(1)+'%':'--';
-        const nbVsStd = (parseFloat(avgNb)>0&&parseFloat(avgStd)>0)?((parseFloat(avgNb)/parseFloat(avgStd)-1)*100).toFixed(1)+'%':'--';
-        return `<tr><td>${label}</td><td>${avgStd} kWh</td><td>${avgNb} kWh</td><td>${avgExp} kWh</td><td>${nbVsStd}</td><td>${reliance}</td></tr>`;
-      });
-      dt.innerHTML = `<table class="dt">
-        <thead><tr><th>Category</th><th>Avg Consumption</th><th>Avg NB Consumption</th><th>Avg NB Export</th><th>NB vs Std (%)</th><th>NB grid reliance</th></tr></thead>
-        <tbody>${dgRows.join('')}</tbody></table>`;
-    }
-
-    // --- DG growth chart: years derived from sbNetBillers ---
-    destroyChart('c_ri_dg_growth');
-    const cg = document.getElementById('c_ri_dg_growth');
-    if (cg) {
-      const nbYears = [...new Set(sbNetBillers.map(r=>Number(r.year||r[YEAR_COL])))].filter(Boolean).sort();
-      const dgLabels = nbYears.length ? nbYears.map(y=>y===curYear?String(y)+' YTD':String(y)) : [String(curYear)];
-      const nbCounts   = nbYears.map(y=>[...new Set(sbNetBillers.filter(r=>Number(r.year||r[YEAR_COL])===y).map(r=>r.jps_ac))].length);
-      const custCounts = nbYears.map(y=>{
-        const maxMo=y===curYear?curMonth:12;
-        return [...new Set(sbActuals.filter(r=>['RT10','RT20'].includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===y&&Number(r.month)<=maxMo).map(r=>r.jps_ac))].length;
-      });
-      chartInstances['c_ri_dg_growth'] = new Chart(cg, {
-        type: 'line',
-        data: {
-          labels: dgLabels,
-          datasets: [
-            { label:'Net Billers',     data: nbCounts,   borderColor:'#e84040', backgroundColor:'rgba(232,64,64,0.07)', tension:.35, fill:true, pointRadius:4 },
-            { label:'Total Customers', data: custCounts, borderColor:'#378ADD', backgroundColor:'transparent', tension:.35, borderDash:[4,2], pointRadius:4 },
-          ]
-        },
-        options: { responsive:true, maintainAspectRatio:false,
-          plugins:{ legend:{ display:true, labels:{color:TC,font:{size:10},boxWidth:10} } },
-          scales:{ x:{ticks:{color:TC},grid:{color:CC}}, y:{ticks:{color:TC},grid:{color:CC}} }
-        }
-      });
-    }
-
-    // --- DG by parish chart: from sbActuals + sbNetBillers for curYear ---
-    destroyChart('c_ri_dg_par');
-    const cp = document.getElementById('c_ri_dg_par');
-    if (cp) {
-      const parishes = [...new Set(sbActuals.filter(r=>['RT10','RT20'].includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===curMonth&&r.parish).map(r=>r.parish))].sort();
-      const dgPct = parishes.map(par=>{
-        const custSet=[...new Set(sbActuals.filter(r=>['RT10','RT20'].includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===curMonth&&r.parish===par).map(r=>r.jps_ac))].length;
-        const nbSet =[...new Set(sbNetBillers.filter(r=>Number(r.year||r[YEAR_COL])===curYear&&r.parish===par).map(r=>r.jps_ac))].length;
-        return custSet>0?nbSet/custSet:0;
-      });
-      chartInstances['c_ri_dg_par'] = new Chart(cp, {
-        type: 'bar',
-        data: {
-          labels: parishes,
-          datasets: [{ label:'DG %', data: dgPct, backgroundColor: dgPct.map(p=>p>0.1?'rgba(232,64,64,0.6)':'rgba(245,166,35,0.5)'), borderRadius:2 }]
-        },
-        options: { ...co(), scales:{ x:{ticks:{color:TC,font:{size:10},maxRotation:35},grid:{color:CC}}, y:{ticks:{color:TC,callback:v=>(v*100).toFixed(2)+'%'},grid:{color:CC}} } }
       });
     }
   }
@@ -6086,6 +5946,7 @@ function toggleAllSections() {
 }
 
 function generateReport() {
+  try {
   const sel  = document.getElementById('rpt_period_sel')?.value || `${curYear}-${String(curMonth).padStart(2,'0')}`;
   const auth = document.getElementById('rpt_author')?.value || 'JPS Sales Analytics Team';
   const dist = document.getElementById('rpt_dist')?.value   || 'Management';
@@ -6187,11 +6048,12 @@ function generateReport() {
 
   const prev = document.getElementById('rpt_preview');
   const card = document.getElementById('rpt_preview_card');
-  if (prev && card) {
-    prev.innerHTML = html;
-    card.style.display = 'block';
-    card.scrollIntoView({ behavior:'smooth', block:'start' });
-  }
+  if (!prev || !card) { toast('Report preview element not found','err'); return; }
+  prev.innerHTML = html;
+  card.style.display = 'block';
+  setTimeout(()=>card.scrollIntoView({ behavior:'smooth', block:'start' }), 50);
+  toast('Report generated — see preview below','ok');
+  } catch(err) { console.error('generateReport error:', err); toast('Report error: '+err.message,'err'); }
 }
 
 function printReport() {
@@ -6947,10 +6809,6 @@ function downloadTemplate(type){
       rows:[['year','month','source','mwh','notes'],
             [curYear,curMonth,'JPS','000000','Replace with actual MWh'],
             [curYear,curMonth,'IPP','00000','Replace with actual MWh']]},
-    net_billers:{file:'jps_net_billers_template.csv',
-      rows:[['year','month','rate_class','count','avg_export_kwh','total_export_kwh'],
-            [curYear,curMonth,'RT10','000','000','000000'],
-            [curYear,curMonth,'RT20','000','000','000000']]},
     ev_accounts:{file:'jps_ev_accounts_template.csv',
       rows:[['year','month','accounts','mwh','notes'],
             [curYear,curMonth,'000','000','Replace with actual values']]},
@@ -7207,10 +7065,9 @@ create policy "Sales admins can manage locks"
   );
 
 -- ══════════════════════════════════════════════════════════
--- STEP 5: Net Generation (DG) and Net Billers — same format
--- Both tables: year, month, rate_class, count, kwh
---   net_gen_historical: DG installations, generation kwh
---   jps_net_billers:    net billing customers, export kwh
+-- STEP 5: Net Generation
+-- Table: year, month, rate_class, count, kwh
+--   net_gen_historical: generation data
 -- ══════════════════════════════════════════════════════════
 create table if not exists public.net_gen_historical (
   id         bigserial primary key,
@@ -7228,25 +7085,6 @@ create policy "Authenticated users can read net gen"
   on public.net_gen_historical for select using (auth.role() = 'authenticated');
 create policy "Managers can write net gen"
   on public.net_gen_historical for all using (
-    exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager'))
-  );
-
-create table if not exists public.jps_net_billers (
-  id         bigserial primary key,
-  year       smallint not null,
-  month      smallint not null check (month between 1 and 12),
-  rate_class text not null,
-  count      int default 0,
-  kwh        numeric(15,2) default 0,
-  created_at timestamptz default now(),
-  unique (year, month, rate_class)
-);
-alter table public.jps_net_billers enable row level security;
-do $$ declare r record; begin for r in select policyname from pg_policies where schemaname='public' and tablename='jps_net_billers' loop execute format('drop policy if exists %I on public.jps_net_billers', r.policyname); end loop; end $$;
-create policy "Authenticated users can read net billers"
-  on public.jps_net_billers for select using (auth.role() = 'authenticated');
-create policy "Managers can write net billers"
-  on public.jps_net_billers for all using (
     exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager'))
   );
 
@@ -7568,7 +7406,7 @@ let _sbClient=null,
     sbAccountMaster=[], // jps_account_master    — master account list (JPS A/c PK)
     sbIndustries=[],    // jps_industries        — industry reference table
     sbKAM=[],           // jps_kam               — key account managers
-    sbNetGen=[], sbNetBillers=[], sbEvData=[],
+    sbNetGen=[], sbEvData=[],
     sbConnected=false, sbLastSync=null;
 
 function getSB(){
@@ -7833,7 +7671,7 @@ async function syncSupabase(silent=false){
     const [
       indData,kamData,amData,actData,
       budData,
-      ng,nb,ev,pl
+      ng,ev,pl
     ] = await Promise.all([
       sbTable('jps_industries',{}),
       sbTable('jps_kam',{}),
@@ -7841,7 +7679,6 @@ async function syncSupabase(silent=false){
       sbTable('jps_actuals',{limit:50000}),
       sbTable('jps_budget',{limit:50000}),
       sbTable('net_gen_historical',{order:'year'}),
-      sbTable('jps_net_billers',{order:'year'}),
       sbTable('jps_ev_accounts',{order:'year'}),
       sbTable('jps_period_locks',{})
     ]);
@@ -7885,9 +7722,6 @@ async function syncSupabase(silent=false){
 
     if(ng){sbNetGen=ng;log.push(`Net Gen: net_gen_historical (${ng.length} rows)`);}
     else log.push('Net Gen: ⚠ net_gen_historical not accessible');
-
-    if(nb){sbNetBillers=nb;log.push(`Net Billers: jps_net_billers (${nb.length} rows)`);}
-    else log.push('Net Billers: ⚠ jps_net_billers not found (create table to populate)');
 
     if(ev){sbEvData=ev;log.push(`EV Data: jps_ev_accounts (${ev.length} rows)`);}
     else log.push('EV Data: ⚠ jps_ev_accounts not found (create table to populate)');
@@ -9305,7 +9139,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.52';
+const APP_VERSION = '1.0.53';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
