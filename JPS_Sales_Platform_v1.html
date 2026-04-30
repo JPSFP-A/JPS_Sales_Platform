@@ -444,7 +444,7 @@ document.getElementById('schema_stale_banner').style.display='none';
       <span class="tbadge tbr" id="kpi_ytd_yoy">-- YoY</span>
       <span class="tbadge tbt" id="dataStatus">⚡ Sample Data</span>
       <a href="https://jps-fp-a.vercel.app" target="_blank" style="font-size:10px;font-weight:600;color:var(--teal);text-decoration:none;padding:3px 8px;border:1px solid rgba(0,194,168,.3);border-radius:5px;white-space:nowrap" title="Open FP&amp;A Platform">FP&amp;A ↗</a>
-      <span class="sb-badge sb-syncing" id="sbStatus" onclick="syncSupabase()" title="Click to sync from Supabase">↻ Connecting…</span>
+      <span class="sb-badge sb-syncing" id="sbStatus" onclick="syncSupabase()" title="Click to sync from database">↻ Connecting…</span>
       <!-- Theme quick-switch -->
       <div style="display:flex;gap:2px;border:1px solid var(--border);border-radius:7px;padding:2px;background:var(--navy3)" title="Switch theme">
         <button onclick="setTheme('dark')"  data-theme="dark"  class="theme-btn on"  style="width:22px;height:22px;border:none;border-radius:5px;cursor:pointer;font-size:12px;background:transparent;line-height:1" title="Dark">🌙</button>
@@ -1034,7 +1034,7 @@ document.getElementById('schema_stale_banner').style.display='none';
           <div class="help-body" style="display:none;font-size:11px;color:var(--text2);line-height:1.9;padding-top:8px">
             <p><strong style="color:var(--text)">Forecast Accuracy section:</strong> Compares entered forecasts to actuals. MAPE (Mean Absolute Percentage Error) is the primary accuracy metric — target &lt;5%. Accounts are flagged "On trend" or "Off trend" based on whether actual performance matches the forecast within tolerance.</p>
             <p><strong style="color:var(--text)">LE Forecast section:</strong> The Latest Estimate view. Sub-tabs: <em>Overview</em> (summary), <em>Monthly Trend</em>, <em>LE Base</em> (account-level base assumptions), <em>LE Cust Vol</em> / <em>LE RC Vol</em> (volume by customer and rate class), <em>LE Advanced</em>, <em>Customer Risk</em>, <em>Variance</em>, and <em>Pivot &amp; Movers</em> (LE-specific scenario pivot matrix).</p>
-            <p><strong style="color:var(--text)">Entering a forecast:</strong> Navigate to Forecast Accuracy → 6-Month Forecast Entry. Select the account, enter the forecast kWh for each future month, and click Save. Forecasts are stored in Supabase and visible to all users.</p>
+            <p><strong style="color:var(--text)">Entering a forecast:</strong> Navigate to Forecast Accuracy → 6-Month Forecast Entry. Select the account, enter the forecast kWh for each future month, and click Save. Forecasts are stored in the database and visible to all users.</p>
           </div>
         </div>
 
@@ -1053,7 +1053,7 @@ document.getElementById('schema_stale_banner').style.display='none';
         <div class="card help-card" data-tags="monthly review commentary narrative note period close lock">
           <div class="ch" style="cursor:pointer" onclick="toggleHelp(this)">📋 Monthly Review &amp; Commentary <span style="font-size:10px;color:var(--text3);font-weight:400">▾</span></div>
           <div class="help-body" style="display:none;font-size:11px;color:var(--text2);line-height:1.9;padding-top:8px">
-            <p><strong style="color:var(--text)">Purpose:</strong> The Monthly Review section provides a structured area for the Sales team to document the story behind the numbers. Notes are stored in Supabase and visible to all authorised users.</p>
+            <p><strong style="color:var(--text)">Purpose:</strong> The Monthly Review section provides a structured area for the Sales team to document the story behind the numbers. Notes are stored in the database and visible to all authorised users.</p>
             <p><strong style="color:var(--text)">Period Close:</strong> Managers and Admins can lock a period (year + month) in <strong>Admin → Period Close</strong>. A locked period prevents further edits to commentary and actuals for that month. This creates a clean audit trail for month-end sign-off.</p>
             <p><strong style="color:var(--text)">AI Commentary:</strong> Use the <em>Generate Analysis</em> button in the AI Commentary cards (available in Commercial and Overview sections) to auto-generate a narrative draft. The commentary is based on the loaded DB data and can be copied into the Monthly Review notes box, edited, and saved.</p>
           </div>
@@ -1237,7 +1237,7 @@ document.getElementById('schema_stale_banner').style.display='none';
             <span class="pill pt" style="margin:0 4px">rep</span> Add notes, validate defectors, enter forecast for own territory. &nbsp;
             <span class="pill pgr" style="margin:0 4px">view</span> Read-only — no edits.
           </div>
-          <div id="adm_users_tbl"><div style="color:var(--text3);font-size:12px;padding:20px 0;text-align:center">Loading users… click Refresh or sync Supabase.</div></div>
+          <div id="adm_users_tbl"><div style="color:var(--text3);font-size:12px;padding:20px 0;text-align:center">Loading users… click Refresh or sync database.</div></div>
         </div>
       </div>
 
@@ -3830,15 +3830,20 @@ function renderPfInd(){
 function renderPfRC(){
   const rcDefs={RT10:'Low-use Residential','RT20':'Gen. Service / SME',RT40:'LV Commercial',RT50:'MV Commercial',RT70:'Large Industrial',ST:'Street Lights',EV:'Electric Vehicle'};
   const rcList=['RT10','RT20','RT40','RT50','RT70','RT60-ST'];
+  const py=curYear-1, cy=curYear;
+  // Use sbActuals directly so residential rate classes (RT10/RT20) with no individual
+  // account numbers are included correctly — CUSTOMERS only covers account-keyed rows
+  const _rcGwh=(rc,yr)=>sbActuals.filter(r=>String(r.rate_class||'').trim()===rc&&Number(r[YEAR_COL]||r.year||0)===yr).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+  const _rcBud=(rc)=>sbBudget.filter(r=>String(r.rate_class||r.rc||'').trim()===rc&&Number(r.year||0)===cy).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
   const rcs=rcList.map(rc=>({rc,desc:rcDefs[rc]||rc,
-    y25:CUSTOMERS.filter(c=>c.rate===rc).reduce((s,c)=>s+c.y25,0),
-    y26:CUSTOMERS.filter(c=>c.rate===rc).reduce((s,c)=>s+c.y26,0),
-    bud:CUSTOMERS.filter(c=>c.rate===rc).reduce((s,c)=>s+c.bud,0),
-    note:CUSTOMERS.length?'from loaded data':'Upload data to populate'
+    y25:_rcGwh(rc,py),
+    y26:_rcGwh(rc,cy),
+    bud:_rcBud(rc),
+    note:sbActuals.length?'from database':'Upload data to populate'
   }));
-  const pfrcBanner = CUSTOMERS.length
-    ? `<div style="background:rgba(32,201,151,.1);border-left:3px solid var(--green);border-radius:4px;padding:8px 13px;margin-bottom:9px;font-size:11px;color:var(--green);font-weight:500">&#10003; Rate-class data loaded from Supabase &mdash; ${CUSTOMERS.length} customer records</div>`
-    : `<div style="background:rgba(245,166,35,.12);border-left:3px solid var(--amber);border-radius:4px;padding:8px 13px;margin-bottom:9px;font-size:11px;color:var(--amber);font-weight:500">&#9888; No data loaded &mdash; sync Supabase or upload an Excel file to populate rate-class performance</div>`;
+  const pfrcBanner = sbActuals.length
+    ? `<div style="background:rgba(32,201,151,.1);border-left:3px solid var(--green);border-radius:4px;padding:8px 13px;margin-bottom:9px;font-size:11px;color:var(--green);font-weight:500">&#10003; Rate-class data loaded from database &mdash; ${sbActuals.length.toLocaleString()} records</div>`
+    : `<div style="background:rgba(245,166,35,.12);border-left:3px solid var(--amber);border-radius:4px;padding:8px 13px;margin-bottom:9px;font-size:11px;color:var(--amber);font-weight:500">&#9888; No data loaded &mdash; sync or upload an Excel file to populate rate-class performance</div>`;
   document.getElementById('pfr_tbl').innerHTML=pfrcBanner+`<table class="dt" id="pfr_dt">
     <thead><tr><th>Rate Class</th><th>Description</th><th>${curYear-1} (GWh)</th><th>${curYear} (GWh)</th><th>Budget (Est.)</th><th>vs Budget</th><th>YoY</th><th>MTD Notes</th></tr></thead>
     <tbody>${rcs.map(r=>{const vb2=pct(r.y26,r.bud),yy=pct(r.y26,r.y25);return`<tr>
@@ -4862,7 +4867,7 @@ function renderExecSummary() {
     `<strong style="color:${totalGap<0?'var(--red)':'var(--green)'}">MTD Sales ${esAct.toFixed(1)} GWh vs budget ${esBud.toFixed(1)} GWh (${totalGap>=0?'+':''}${totalGap.toFixed(1)} GWh gap)</strong>`,
     `<strong style="color:var(--amber)">${critSev.length} critical/severe defector${critSev.length!==1?'s':''}</strong> identified this period.`,
     `<strong style="color:var(--teal)">YoY:</strong> ${esLY>0?((esAct-esLY)/esLY*100).toFixed(1)+'% vs prior year':'Prior year data not loaded.'}`,
-  ] : ['<span style="color:var(--text3)">No data loaded — sync Supabase or upload an Excel file to populate executive summary bullets.</span>'];
+  ] : ['<span style="color:var(--text3)">No data loaded — sync database or upload an Excel file to populate executive summary bullets.</span>'];
   if(el('es_auto_bullets')) {
     el('es_auto_bullets').innerHTML = bullets.map(b => `<div style="padding:4px 0;border-bottom:1px solid var(--border);display:flex;gap:8px"><span style="color:var(--teal);flex-shrink:0">&#8227;</span><span>${b}</span></div>`).join('');
   }
@@ -8177,7 +8182,7 @@ function leSyncPrompt(){
       <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 5.625c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125"/></svg>
       <div style="font-size:15px;font-weight:600;color:var(--text1)">No data loaded</div>
       <div style="font-size:12px;max-width:320px;text-align:center">Connect to Supabase to load actuals and budget data, then return here.</div>
-      <button onclick="syncSupabase()" style="margin-top:8px;padding:8px 20px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">Sync Supabase Now</button>
+      <button onclick="syncSupabase()" style="margin-top:8px;padding:8px 20px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">Sync Database Now</button>
     </div>`;
   });
 }
@@ -8836,7 +8841,7 @@ function renderNetGen(){
       <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 5.625c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125"/></svg>
       <div style="font-size:15px;font-weight:600;color:var(--text1)">No net generation data loaded</div>
       <div style="font-size:12px;max-width:320px;text-align:center">Sync Supabase to load net generation history.</div>
-      <button onclick="syncSupabase()" style="margin-top:8px;padding:8px 20px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">Sync Supabase Now</button>
+      <button onclick="syncSupabase()" style="margin-top:8px;padding:8px 20px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">Sync Database Now</button>
     </div>`;
     return;
   }
@@ -9300,7 +9305,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.51';
+const APP_VERSION = '1.0.52';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
