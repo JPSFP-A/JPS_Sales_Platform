@@ -2508,6 +2508,7 @@ function showErr(m){const e=document.getElementById('lErr');if(e){e.textContent=
 async function doLogout(){
   const sb=getSB();
   if(sb)await sb.auth.signOut().catch(()=>{});
+  try{localStorage.removeItem(_DCACHE_KEY);}catch(_){}
   CU={id:'',role:'',name:'',email:'',territory:'All'};
   document.getElementById('loginScreen').style.display='flex';
   document.getElementById('uMenu').classList.remove('sh');
@@ -7917,34 +7918,160 @@ function buildDashboardData(){
   });
 }
 
+
+/* ==========================================
+   DATA CACHE — instant load for returning users
+   Stores last 2 years of actuals (stripped) + all ref tables
+   TTL: 10 minutes. Falls back to full Supabase sync if expired/missing.
+========================================== */
+const _DCACHE_KEY='jps_sales_v1_cache';
+const _DCACHE_TTL=600000; // 10 minutes
+
+function _saveDataCache(){
+  try{
+    // Strip actuals to only the columns the app needs — cuts size ~60%
+    const _yr=YEAR_COL||'year';
+    const cutoff=curYear-1; // keep curYear + prior year only
+    const stripped=sbActuals
+      .filter(r=>Number(r[_yr]||r.year||0)>=cutoff)
+      .map(r=>({
+        [_yr]:r[_yr]||r.year,month:r.month,kwh:r.kwh,
+        rate_class:r.rate_class||r.Rate_class||'',
+        jps_ac:r.jps_ac||'',
+        consumption_bucket:r.consumption_bucket||'',
+        parish:r.parish||''
+      }));
+    // Strip account master to needed columns
+    const strippedAM=sbAccountMaster.map(r=>({
+      jps_ac:r.jps_ac,
+      customer:r.customer||r.acct_name||r.name||'',
+      kam:r.kam||'',industry:r.industry||'',
+      parish:r.parish||'',rate_class:r.rate_class||'',
+      territory:r.territory||'',cmt:r.cmt||r.notes||''
+    }));
+    const payload=JSON.stringify({
+      ts:Date.now(),yearCol:_yr,
+      act:stripped,bud:sbBudget,am:strippedAM,
+      kam:sbKAM,ind:sbIndustries,
+      ng:sbNetGen,ev:sbEvData,pl:PERIOD_LOCKS,
+      fcv:sbForecastVersions,fc:sbForecast
+    });
+    localStorage.setItem(_DCACHE_KEY,payload);
+    console.log('[JPS] Cache saved:',stripped.length,'actuals rows,',Math.round(payload.length/1024),'KB');
+  }catch(e){
+    try{localStorage.removeItem(_DCACHE_KEY);}catch(_){}
+    console.warn('[JPS] Cache save failed:',e.message);
+  }
+}
+
+function _loadDataCache(){
+  try{
+    const raw=localStorage.getItem(_DCACHE_KEY);
+    if(!raw)return null;
+    const c=JSON.parse(raw);
+    if(!c.ts||Date.now()-c.ts>_DCACHE_TTL)return null;
+    return c;
+  }catch(e){return null;}
+}
+
+function _applyDataCache(c){
+  if(!c||!c.act||!c.act.length)return false;
+  YEAR_COL=c.yearCol||YEAR_COL;
+  // Restore full column name used by render functions
+  sbActuals=c.act.map(r=>{
+    const out={...r};
+    if(YEAR_COL!=='year')out.year=r[YEAR_COL]; // keep both
+    return out;
+  });
+  sbBudget=c.bud||[];sbAccountMaster=c.am||[];sbKAM=c.kam||[];
+  sbIndustries=c.ind||[];sbNetGen=c.ng||[];sbEvData=c.ev||[];
+  PERIOD_LOCKS=c.pl||[];sbForecastVersions=c.fcv||[];sbForecast=c.fc||[];
+  // Set period globals from cached data
+  let latestY=0,latestM=0;
+  sbActuals.forEach(r=>{
+    const ry=Number(r[YEAR_COL]||r.year||0),rm=Number(r.month||0);
+    if(ry>latestY||(ry===latestY&&rm>latestM)){latestY=ry;latestM=rm;}
+  });
+  if(latestY&&latestM){curYear=latestY;curMonth=latestM;}
+  return true;
+}
+
 let _sbSyncing=false; // mutex — prevents double-sync
 
 async function syncSupabase(silent=false){
   if(_sbSyncing){return;} // already in progress — skip
   _sbSyncing=true;
-  updateSbStatus('syncing');
+
+  // ── Cache-first: render from localStorage immediately, refresh in background ──
+  const _cached=_loadDataCache();
+  if(_cached&&_applyDataCache(_cached)){
+    sbConnected=true;
+    try{buildDashboardData();}catch(_){}
+    rebuildYearDropdowns();
+    populateKamDropdowns();
+    const _sy=document.getElementById('selYear');if(_sy)_sy.value=String(curYear);
+    const _sm=document.getElementById('selMonth');if(_sm)_sm.value=String(curMonth);
+    const _pl=document.getElementById('periodLabel');if(_pl)_pl.textContent=fmtPeriodLabel();
+    updateSbStatus('live');
+    const _ds=document.getElementById('dataStatus');
+    if(_ds){_ds.textContent='📊 Cached • Refreshing…';_ds.className='tbadge tbg';}
+    setTimeout(()=>{try{renderSection(document.querySelector('.sec.on')?.id||'ov');}catch(_){}},0);
+    // Continue with background Supabase sync (don't bail out)
+  } else {
+    updateSbStatus('syncing');
+  }
+
   const sb=getSB();
   if(!sb){
     updateSbStatus('offline');
     if(!silent)toast('Supabase SDK not ready — check your connection','err');
-    return;
+    _sbSyncing=false;return;
   }
   const log=[];
   try{
-    // Detect the year column name BEFORE loading — must complete before any write ops
-    await detectYearCol(sb);
+    // Detect year column (skip if already known from cache)
+    if(!YEAR_COL||YEAR_COL==='year')await detectYearCol(sb);
 
-    // ── Fire ALL queries in parallel — massive speedup vs sequential awaits ──
+    // ── Wave 1: Critical tables (needed for dashboard render) ──
+    const [actData,amData] = await Promise.all([
+      sbTable('jps_actuals',{limit:50000}),
+      sbTable('jps_account_master',{limit:50000})
+    ]);
+
+    // Apply wave-1 data and re-render immediately
+    const actOk1=!!actData&&actData.length>0;
+    if(actOk1){
+      sbActuals=actData;
+      if(actData.length>0){
+        if('year' in actData[0])          YEAR_COL='year';
+        else if('cal_year' in actData[0]) YEAR_COL='cal_year';
+        console.log('[JPS] year col confirmed:',YEAR_COL);
+      }
+      let latestY=0,latestM=0;
+      actData.forEach(r=>{const ry=Number(r[YEAR_COL]||0),rm=Number(r.month||0);if(ry>latestY||(ry===latestY&&rm>latestM)){latestY=ry;latestM=rm;}});
+      if(latestY&&latestM){curYear=latestY;curMonth=latestM;}
+    }
+    if(amData)sbAccountMaster=amData;
+    if(actOk1){
+      try{buildDashboardData();}catch(be){console.error('buildDashboardData wave-1:',be);}
+      rebuildYearDropdowns();populateKamDropdowns();
+      const _sy=document.getElementById('selYear');if(_sy)_sy.value=String(curYear);
+      const _sm=document.getElementById('selMonth');if(_sm)_sm.value=String(curMonth);
+      const _pl=document.getElementById('periodLabel');if(_pl)_pl.textContent=fmtPeriodLabel();
+      updateSbStatus('live');
+      const _ds=document.getElementById('dataStatus');if(_ds){_ds.textContent='📊 Live Data';_ds.className='tbadge tbg';}
+      if(!_cached){setTimeout(()=>{try{renderSection(document.querySelector('.sec.on')?.id||'ov');}catch(_){}},0);}
+    }
+
+    // ── Wave 2: Secondary tables (enrichment, runs in parallel) ──
     const [
-      indData,kamData,amData,actData,
+      indData,kamData,
       budData,
       ng,ev,pl,
       fcvData,fcData
     ] = await Promise.all([
       sbTable('jps_industries',{}),
       sbTable('jps_kam',{}),
-      sbTable('jps_account_master',{limit:50000}),
-      sbTable('jps_actuals',{limit:50000}),
       sbTable('jps_budget',{limit:50000}),
       sbTable('net_gen_historical',{order:'year'}),
       sbTable('jps_ev_accounts',{order:'year'}),
@@ -7960,23 +8087,17 @@ async function syncSupabase(silent=false){
     if(kamData){sbKAM=kamData;log.push(`KAM: jps_kam (${kamData.length} rows)`);}
     else log.push('KAM: ⚠ jps_kam not found — run schema SQL');
 
-    if(amData){sbAccountMaster=amData;log.push(`Account Master: jps_account_master (${amData.length} accounts)`);}
+    if(sbAccountMaster.length)log.push(`Account Master: jps_account_master (${sbAccountMaster.length} accounts)`);
     else log.push('Account Master: ⚠ jps_account_master not found — run schema SQL');
 
-    const actOk=!!actData;
+    // sbActuals already set in wave-1; just log + handle schema checks
+    const actOk=sbActuals.length>0;
     if(actOk){
-      sbActuals=actData;
-      log.push(`Actuals: jps_actuals (${actData.length} rows)`);
-      // Re-confirm YEAR_COL from actual returned data (rows have the real column names)
-      if(actData.length>0){
-        // Determine year column from returned data
-        if('year' in actData[0])          YEAR_COL='year';
-        else if('cal_year' in actData[0]) YEAR_COL='cal_year';
-        else if('Source'   in actData[0]) YEAR_COL='year'; // FP&A raw-dump — uploads will fail
-        console.log('[JPS] year col confirmed from data:',YEAR_COL,'keys:',Object.keys(actData[0]).slice(0,6));
-        // Show banner if schema is not yet correct
-        if(!_schemaFixApplied&&(YEAR_COL==='cal_year'||'Source' in actData[0])){
-          _showSchemaBanner('Source' in actData[0]?'fpa_raw':'cal_year');
+      log.push(`Actuals: jps_actuals (${sbActuals.length} rows)`);
+      if(sbActuals.length>0){
+        if('Source' in sbActuals[0]) YEAR_COL='year';
+        if(!_schemaFixApplied&&(YEAR_COL==='cal_year'||'Source' in sbActuals[0])){
+          _showSchemaBanner('Source' in sbActuals[0]?'fpa_raw':'cal_year');
         }
       }
     }
@@ -8066,6 +8187,9 @@ async function syncSupabase(silent=false){
 
     const el=document.getElementById('adm_upload_status');
     if(el&&sbActuals.length)el.textContent=`Live · ${sbActuals.length.toLocaleString()} actuals rows`;
+
+    // ── Save to cache so next load is instant ──
+    try{_saveDataCache();}catch(ce){console.warn('[JPS] cache save error:',ce);}
 
     if(!silent){
       const warn=log.filter(l=>l.includes('⚠'));
@@ -9404,7 +9528,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.61';
+const APP_VERSION = '1.0.62';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
