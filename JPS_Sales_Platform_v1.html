@@ -5947,104 +5947,219 @@ function toggleAllSections() {
 
 function generateReport() {
   try {
-  const sel  = document.getElementById('rpt_period_sel')?.value || `${curYear}-${String(curMonth).padStart(2,'0')}`;
+  // ── Report settings ──────────────────────────────────────────────────────
   const auth = document.getElementById('rpt_author')?.value || 'JPS Sales Analytics Team';
   const dist = document.getElementById('rpt_dist')?.value   || 'Management';
   const conf = document.getElementById('rpt_conf')?.value   || 'CONFIDENTIAL';
-  const [y,m] = sel.split('-');
-  const ms = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  const period = `${ms[parseInt(m)-1]} ${y}`;
-  const narrative = S.get(`es_narrative_${y}_${m}`, '(No executive narrative saved -- please enter via Exec Summary tab.)');
+  const MNF  = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const MNS  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
+  // ── Period labels ─────────────────────────────────────────────────────────
+  const periodLbl = curPeriod === 'MTD'    ? `${MNF[curMonth-1]} ${curYear} — Month to Date`
+                  : curPeriod === 'QTD'    ? `Q${curQtr} ${curYear} — Quarter to Date`
+                  : curPeriod === 'YTD'    ? `YTD ${curYear} (Jan–${MNS[curMonth-1]})`
+                  :                         `Full Year ${curYear}`;
+  const periodShort = curPeriod === 'MTD'  ? `MTD ${MNS[curMonth-1]} ${curYear}`
+                    : curPeriod === 'QTD'  ? `QTD Q${curQtr} ${curYear}`
+                    : curPeriod === 'YTD'  ? `YTD ${curYear}`
+                    :                       `FY ${curYear}`;
+
+  // ── Rebuild scorecard fresh from live DB data ─────────────────────────────
+  const sc = buildScorecardData();
+  if (!sc.length && !sbActuals.length) {
+    toast('No data loaded — sync database first then generate report','w');
+    return;
+  }
+
+  // Pick the right columns based on selected period
+  const isYTD  = (curPeriod === 'YTD' || curPeriod === 'Annual');
+  const getAct = r => isYTD ? r.ytd_act : r.mtd_act;
+  const getBud = r => isYTD ? r.ytd_bud : r.mtd_bud;
+  const getLY  = r => isYTD ? r.ytd_ly  : r.mtd_ly;
+
+  // Totals from scorecard (consistent with overview table)
+  const totAct = sc.reduce((s,r) => s + getAct(r), 0);
+  const totBud = sc.reduce((s,r) => s + getBud(r), 0);
+  const totLY  = sc.reduce((s,r) => s + getLY(r),  0);
+  const totGap = totAct - totBud;
+  const totYoY = totLY > 0 ? ((totAct - totLY) / totLY * 100) : null;
+
+  const narrative = S.get(`es_narrative_${curYear}_${String(curMonth).padStart(2,'0')}`,
+    S.get(`es_narrative_${curYear}_${curMonth}`, '(No executive narrative saved — enter via Exec Summary tab.)'));
+
+  // ── Helper: coloured % badge ──────────────────────────────────────────────
+  const pctBadge = (a,b) => {
+    if (!b) return '<span style="color:#999">--</span>';
+    const v = ((a-b)/b*100);
+    return `<span style="color:${v>=0?'#27c485':'#e84040'}">${v>=0?'+':''}${v.toFixed(1)}%</span>`;
+  };
+  const fmtGwh = v => v.toFixed(2);
+
+  // ── HTML header ───────────────────────────────────────────────────────────
   let html = `
     <div style="border-bottom:3px solid #003366;padding-bottom:16px;margin-bottom:20px">
       <div style="font-size:10px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">${conf}</div>
       <h1 style="font-size:22px;font-weight:700;color:#003366;margin:0">Jamaica Public Service Company</h1>
-      <h2 style="font-size:16px;font-weight:400;color:#333;margin:4px 0 0">Monthly Sales Performance Report &mdash; ${period}</h2>
+      <h2 style="font-size:16px;font-weight:400;color:#333;margin:4px 0 0">Sales Performance Report &mdash; ${periodLbl}</h2>
       <div style="font-size:11px;color:#666;margin-top:8px">Prepared by: ${auth} &nbsp;|&nbsp; Distribution: ${dist} &nbsp;|&nbsp; Generated: ${new Date().toLocaleDateString()}</div>
     </div>`;
 
+  let secNum = 1;
+
+  // ── 1. Executive Summary ──────────────────────────────────────────────────
   if (S.get('rpt_sel_rpt_exec', true)) {
-    html += `<h2 style="font-size:15px;color:#003366;border-bottom:1px solid #ddd;padding-bottom:6px;margin:18px 0 10px">1. Executive Summary</h2>
-    <p style="line-height:1.8;color:#333">${narrative.replace(/\n/g,'<br/>')}</p>`;
+    const gapSign = totGap >= 0 ? '+' : '';
+    const yoyStr  = totYoY !== null ? ` YoY: ${totYoY>=0?'+':''}${totYoY.toFixed(1)}%.` : '';
+    const autoLine = sc.length
+      ? `<p style="background:#f0f7ff;border-left:3px solid #003366;padding:8px 12px;margin-bottom:12px;font-size:11px;line-height:1.7">
+          <strong>${periodShort} Sales: ${fmtGwh(totAct)} GWh</strong> vs budget ${fmtGwh(totBud)} GWh
+          &mdash; gap <strong style="color:${totGap>=0?'#27c485':'#e84040'}">${gapSign}${fmtGwh(totGap)} GWh (${gapSign}${totBud>0?((totGap/totBud)*100).toFixed(1):'--'}%)</strong>.
+          Prior year same period: ${fmtGwh(totLY)} GWh.${yoyStr}
+        </p>`
+      : '';
+    html += `<h2 style="font-size:15px;color:#003366;border-bottom:1px solid #ddd;padding-bottom:6px;margin:18px 0 10px">${secNum++}. Executive Summary</h2>
+    ${autoLine}
+    <p style="line-height:1.8;color:#333;font-size:12px">${narrative.replace(/\n/g,'<br/>')}</p>`;
   }
 
+  // ── 2. KPI Scorecard ──────────────────────────────────────────────────────
   if (S.get('rpt_sel_rpt_kpi', true)) {
-    html += `<h2 style="font-size:15px;color:#003366;border-bottom:1px solid #ddd;padding-bottom:6px;margin:18px 0 10px">2. KPI Scorecard</h2>
-    <table style="width:100%;border-collapse:collapse;font-size:11px">
-      <thead><tr style="background:#003366;color:#fff"><th style="padding:6px 8px;text-align:left">Segment</th><th style="padding:6px 8px">MTD Actual</th><th style="padding:6px 8px">MTD Budget</th><th style="padding:6px 8px">vs Budget</th><th style="padding:6px 8px">YoY</th><th style="padding:6px 8px">Status</th></tr></thead>
-      <tbody>${SCORECARD_DATA.map((r,i) => `<tr style="background:${i%2===0?'#f9f9f9':'#fff'}">
-        <td style="padding:5px 8px;font-weight:600">${r.seg} &mdash; ${r.desc}</td>
-        <td style="padding:5px 8px;text-align:center">${r.mtd_act.toFixed(1)} GWh</td>
-        <td style="padding:5px 8px;text-align:center;color:#666">${r.mtd_bud.toFixed(1)} GWh</td>
-        <td style="padding:5px 8px;text-align:center;color:${pct(r.mtd_act,r.mtd_bud)>=0?'#27c485':'#e84040'}">${pct(r.mtd_act,r.mtd_bud)>=0?'+':''}${pct(r.mtd_act,r.mtd_bud).toFixed(1)}%</td>
-        <td style="padding:5px 8px;text-align:center;color:${pct(r.mtd_act,r.mtd_ly)>=0?'#27c485':'#e84040'}">${pct(r.mtd_act,r.mtd_ly)>=0?'+':''}${pct(r.mtd_act,r.mtd_ly).toFixed(1)}%</td>
+    const rows = sc.map((r,i) => {
+      const act=getAct(r), bud=getBud(r), ly=getLY(r);
+      return `<tr style="background:${i%2===0?'#f9f9f9':'#fff'}">
+        <td style="padding:5px 8px;font-weight:600">${r.seg}</td>
+        <td style="padding:5px 8px;font-size:10px;color:#555">${r.desc}</td>
+        <td style="padding:5px 8px;text-align:right;font-weight:600">${fmtGwh(act)}</td>
+        <td style="padding:5px 8px;text-align:right;color:#666">${fmtGwh(bud)}</td>
+        <td style="padding:5px 8px;text-align:right">${pctBadge(act,bud)}</td>
+        <td style="padding:5px 8px;text-align:right;color:#666">${fmtGwh(ly)}</td>
+        <td style="padding:5px 8px;text-align:right">${pctBadge(act,ly)}</td>
         <td style="padding:5px 8px;text-align:center;font-weight:700;color:${r.status==='OK'?'#27c485':r.status==='Watch'?'#f5a623':'#e84040'}">${r.status}</td>
-      </tr>`).join('')}</tbody>
-    </table>`;
-  }
-
-  if (S.get('rpt_sel_rpt_bridge', true)) {
-    const drivers = getBridgeDrivers();
-    const explained = drivers.reduce((s,d) => s+d.gwh, 0);
-    const _rptAct = CUSTOMERS.reduce((s,c)=>s+(c.m[curMonth-1]||0),0);
-    const _rptBud = CUSTOMERS.reduce((s,c)=>s+(c.bud/12),0);
-    const _rptGap = CUSTOMERS.length ? _rptAct - _rptBud : 0;
-    const _rptGapStr = CUSTOMERS.length ? ((_rptGap>=0?'+':'')+_rptGap.toFixed(1)+' GWh') : 'N/A (no data loaded)';
-    const _exPct = (_rptGap!==0&&CUSTOMERS.length)?Math.abs(explained/_rptGap*100).toFixed(0):'--';
-    const _resid = CUSTOMERS.length ? (_rptGap - explained).toFixed(1) : 'N/A';
-    html += `<h2 style="font-size:15px;color:#003366;border-bottom:1px solid #ddd;padding-bottom:6px;margin:18px 0 10px">3. Variance Bridge</h2>
-    <p style="color:#333;font-size:11px;margin-bottom:10px">Total MTD gap vs Budget: <strong>${_rptGapStr}</strong>. Explained by known drivers: <strong>${explained.toFixed(1)} GWh</strong> (${_exPct}%). Unexplained residual: <strong>${_resid} GWh</strong>.</p>
+      </tr>`;
+    }).join('');
+    const totRow = `<tr style="background:#003366;color:#fff;font-weight:700">
+      <td style="padding:5px 8px" colspan="2">TOTAL</td>
+      <td style="padding:5px 8px;text-align:right">${fmtGwh(totAct)}</td>
+      <td style="padding:5px 8px;text-align:right">${fmtGwh(totBud)}</td>
+      <td style="padding:5px 8px;text-align:right">${totBud>0?(totGap>=0?'+':'')+((totGap/totBud)*100).toFixed(1)+'%':'--'}</td>
+      <td style="padding:5px 8px;text-align:right">${fmtGwh(totLY)}</td>
+      <td style="padding:5px 8px;text-align:right">${totYoY!==null?(totYoY>=0?'+':'')+totYoY.toFixed(1)+'%':'--'}</td>
+      <td style="padding:5px 8px;text-align:center">&mdash;</td>
+    </tr>`;
+    html += `<h2 style="font-size:15px;color:#003366;border-bottom:1px solid #ddd;padding-bottom:6px;margin:18px 0 10px">${secNum++}. KPI Scorecard &mdash; ${periodShort} (GWh)</h2>
     <table style="width:100%;border-collapse:collapse;font-size:11px">
-      <thead><tr style="background:#003366;color:#fff"><th style="padding:5px 8px;text-align:left">Driver</th><th style="padding:5px 8px">Segment</th><th style="padding:5px 8px">Type</th><th style="padding:5px 8px;text-align:right">GWh Impact</th></tr></thead>
-      <tbody>${drivers.map((d,i) => `<tr style="background:${i%2===0?'#f9f9f9':'#fff'}">
-        <td style="padding:5px 8px">${d.desc}</td>
-        <td style="padding:5px 8px">${d.seg}</td>
-        <td style="padding:5px 8px">${d.type}</td>
-        <td style="padding:5px 8px;text-align:right;color:${d.gwh>=0?'#27c485':'#e84040'};font-weight:600">${d.gwh>=0?'+':''}${d.gwh.toFixed(1)}</td>
-      </tr>`).join('')}</tbody>
+      <thead><tr style="background:#003366;color:#fff">
+        <th style="padding:6px 8px;text-align:left">Segment</th>
+        <th style="padding:6px 8px;text-align:left">Description</th>
+        <th style="padding:6px 8px;text-align:right">Actual</th>
+        <th style="padding:6px 8px;text-align:right">Budget</th>
+        <th style="padding:6px 8px;text-align:right">vs Bud</th>
+        <th style="padding:6px 8px;text-align:right">Prior Year</th>
+        <th style="padding:6px 8px;text-align:right">YoY</th>
+        <th style="padding:6px 8px;text-align:center">Status</th>
+      </tr></thead>
+      <tbody>${rows}${totRow}</tbody>
     </table>`;
   }
 
+  // ── 3. Variance Bridge ────────────────────────────────────────────────────
+  if (S.get('rpt_sel_rpt_bridge', true)) {
+    const drivers  = getBridgeDrivers();
+    const explained = drivers.reduce((s,d) => s + d.gwh, 0);
+    const residual  = sc.length ? totGap - explained : null;
+    const exPct     = (totGap !== 0 && sc.length) ? Math.abs(explained / totGap * 100).toFixed(0) : '--';
+    const driverRows = drivers.length
+      ? drivers.map((d,i) => `<tr style="background:${i%2===0?'#f9f9f9':'#fff'}">
+          <td style="padding:5px 8px">${d.desc}</td>
+          <td style="padding:5px 8px">${d.seg}</td>
+          <td style="padding:5px 8px">${d.type}</td>
+          <td style="padding:5px 8px;text-align:right;color:${d.gwh>=0?'#27c485':'#e84040'};font-weight:600">${d.gwh>=0?'+':''}${d.gwh.toFixed(2)}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="4" style="padding:8px;color:#999;font-style:italic">No variance drivers entered — add via Variance Bridge tab.</td></tr>';
+    html += `<h2 style="font-size:15px;color:#003366;border-bottom:1px solid #ddd;padding-bottom:6px;margin:18px 0 10px">${secNum++}. Variance Bridge &mdash; ${periodShort}</h2>
+    <p style="color:#333;font-size:11px;margin-bottom:10px">
+      Total ${periodShort} gap vs Budget: <strong style="color:${totGap>=0?'#27c485':'#e84040'}">${totGap>=0?'+':''}${fmtGwh(totGap)} GWh</strong>
+      &nbsp;|&nbsp; Explained by drivers: <strong>${fmtGwh(explained)} GWh</strong> (${exPct}%)
+      &nbsp;|&nbsp; Unexplained residual: <strong>${residual!==null?fmtGwh(residual):'N/A'} GWh</strong>
+    </p>
+    <table style="width:100%;border-collapse:collapse;font-size:11px">
+      <thead><tr style="background:#003366;color:#fff">
+        <th style="padding:5px 8px;text-align:left">Driver</th>
+        <th style="padding:5px 8px">Segment</th>
+        <th style="padding:5px 8px">Type</th>
+        <th style="padding:5px 8px;text-align:right">GWh Impact</th>
+      </tr></thead>
+      <tbody>${driverRows}</tbody>
+    </table>`;
+  }
+
+  // ── 4. Defection Analysis ─────────────────────────────────────────────────
   if (S.get('rpt_sel_rpt_def', true)) {
     const defs = computeDefectors();
-    html += `<h2 style="font-size:15px;color:#003366;border-bottom:1px solid #ddd;padding-bottom:6px;margin:18px 0 10px">4. Defection Analysis</h2>
-    <p style="color:#333;font-size:11px;margin-bottom:10px"><strong>${defs.length}</strong> customers flagged as defectors (3-month rolling avg below 80% of prior year same period). Critical: <strong>${defs.filter(d=>d.sev==='Critical').length}</strong> &nbsp;Severe: <strong>${defs.filter(d=>d.sev==='Severe').length}</strong> &nbsp;Moderate: <strong>${defs.filter(d=>d.sev==='Moderate').length}</strong>.</p>
+    const defRows = defs.length
+      ? defs.slice(0,15).map((d,i) => `<tr style="background:${i%2===0?'#f9f9f9':'#fff'}">
+          <td style="padding:5px 8px">${d.name||d.num}</td>
+          <td style="padding:5px 8px">${d.rate}</td>
+          <td style="padding:5px 8px">${d.parish||'--'}</td>
+          <td style="padding:5px 8px;text-align:right;color:#e84040;font-weight:600">${d.ratio}%</td>
+          <td style="padding:5px 8px;font-weight:600;color:${d.sev==='Critical'?'#e84040':'#f5a623'}">${d.sev}</td>
+          <td style="padding:5px 8px">${d.cause}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="6" style="padding:8px;color:#27c485">No defectors flagged this period.</td></tr>';
+    html += `<h2 style="font-size:15px;color:#003366;border-bottom:1px solid #ddd;padding-bottom:6px;margin:18px 0 10px">${secNum++}. Defection Analysis</h2>
+    <p style="color:#333;font-size:11px;margin-bottom:10px">
+      Flagged: <strong>${defs.length}</strong> &nbsp;|&nbsp;
+      Critical: <strong style="color:#e84040">${defs.filter(d=>d.sev==='Critical').length}</strong> &nbsp;|&nbsp;
+      Severe: <strong style="color:#f5a623">${defs.filter(d=>d.sev==='Severe').length}</strong> &nbsp;|&nbsp;
+      Moderate: <strong>${defs.filter(d=>d.sev==='Moderate').length}</strong>
+      ${defs.length>15?' (top 15 shown)':''}
+    </p>
     <table style="width:100%;border-collapse:collapse;font-size:11px">
-      <thead><tr style="background:#003366;color:#fff"><th style="padding:5px 8px;text-align:left">Customer</th><th style="padding:5px 8px">Rate</th><th style="padding:5px 8px">Ratio</th><th style="padding:5px 8px">Severity</th><th style="padding:5px 8px">Cause</th></tr></thead>
-      <tbody>${defs.slice(0,10).map((d,i)=>`<tr style="background:${i%2===0?'#f9f9f9':'#fff'}">
-        <td style="padding:5px 8px">${d.name}</td>
-        <td style="padding:5px 8px">${d.rate}</td>
-        <td style="padding:5px 8px;color:#e84040;font-weight:600">${d.ratio}%</td>
-        <td style="padding:5px 8px;font-weight:600;color:${d.sev==='Critical'?'#e84040':'#f5a623'}">${d.sev}</td>
-        <td style="padding:5px 8px">${d.cause}</td>
-      </tr>`).join('')}</tbody>
+      <thead><tr style="background:#003366;color:#fff">
+        <th style="padding:5px 8px;text-align:left">Customer</th>
+        <th style="padding:5px 8px">Rate</th>
+        <th style="padding:5px 8px">Parish</th>
+        <th style="padding:5px 8px;text-align:right">Ratio</th>
+        <th style="padding:5px 8px">Severity</th>
+        <th style="padding:5px 8px">Cause</th>
+      </tr></thead>
+      <tbody>${defRows}</tbody>
     </table>`;
   }
 
+  // ── 5. Risk & Opportunity Register ───────────────────────────────────────
   if (S.get('rpt_sel_rpt_ro', true)) {
-    html += `<h2 style="font-size:15px;color:#003366;border-bottom:1px solid #ddd;padding-bottom:6px;margin:18px 0 10px">5. Risk &amp; Opportunity Register</h2>
+    const roRows = RISK_OPP.length
+      ? RISK_OPP.map((r,i) => `<tr style="background:${i%2===0?'#f9f9f9':'#fff'}">
+          <td style="padding:5px 8px">${r.name}</td>
+          <td style="padding:5px 8px;color:${r.type==='Risk'?'#e84040':'#27c485'};font-weight:600">${r.type}</td>
+          <td style="padding:5px 8px">${r.level}</td>
+          <td style="padding:5px 8px">${r.rate}</td>
+          <td style="padding:5px 8px;text-align:right">${fmtK(r.kwh)}</td>
+          <td style="padding:5px 8px">${r.status}</td>
+          <td style="padding:5px 8px;font-size:10px;color:#666">${r.cmt||''}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="7" style="padding:8px;color:#999;font-style:italic">No items in register — add via Risk &amp; Opportunity tab.</td></tr>';
+    html += `<h2 style="font-size:15px;color:#003366;border-bottom:1px solid #ddd;padding-bottom:6px;margin:18px 0 10px">${secNum++}. Risk &amp; Opportunity Register</h2>
     <table style="width:100%;border-collapse:collapse;font-size:11px">
-      <thead><tr style="background:#003366;color:#fff"><th style="padding:5px 8px;text-align:left">Customer</th><th style="padding:5px 8px">Type</th><th style="padding:5px 8px">Level</th><th style="padding:5px 8px">Rate</th><th style="padding:5px 8px;text-align:right">kWh</th><th style="padding:5px 8px">Status</th><th style="padding:5px 8px">Note</th></tr></thead>
-      <tbody>${RISK_OPP.map((r,i)=>`<tr style="background:${i%2===0?'#f9f9f9':'#fff'}">
-        <td style="padding:5px 8px">${r.name}</td>
-        <td style="padding:5px 8px;color:${r.type==='Risk'?'#e84040':'#27c485'};font-weight:600">${r.type}</td>
-        <td style="padding:5px 8px">${r.level}</td>
-        <td style="padding:5px 8px">${r.rate}</td>
-        <td style="padding:5px 8px;text-align:right">${fmtK(r.kwh)}</td>
-        <td style="padding:5px 8px">${r.status}</td>
-        <td style="padding:5px 8px;font-size:10px;color:#666">${r.cmt||''}</td>
-      </tr>`).join('')}</tbody>
+      <thead><tr style="background:#003366;color:#fff">
+        <th style="padding:5px 8px;text-align:left">Customer</th><th style="padding:5px 8px">Type</th>
+        <th style="padding:5px 8px">Level</th><th style="padding:5px 8px">Rate</th>
+        <th style="padding:5px 8px;text-align:right">kWh</th><th style="padding:5px 8px">Status</th>
+        <th style="padding:5px 8px">Note</th>
+      </tr></thead>
+      <tbody>${roRows}</tbody>
     </table>`;
   }
 
+  // ── 6. Outlook ────────────────────────────────────────────────────────────
   if (S.get('rpt_sel_rpt_outlook', true)) {
-    const outlook = S.get(`rr_commentary_${curYear}_${curMonth}`, '(No outlook commentary saved -- please enter via Revenue Recovery tab commentary.)');
-    html += `<h2 style="font-size:15px;color:#003366;border-bottom:1px solid #ddd;padding-bottom:6px;margin:18px 0 10px">6. Outlook &amp; Next Period</h2>
-    <p style="line-height:1.8;color:#333">${outlook.replace(/\n/g,'<br/>')}</p>`;
+    const outlook = S.get(`rr_commentary_${curYear}_${curMonth}`, '(No outlook commentary saved — enter via Revenue Recovery tab.)');
+    html += `<h2 style="font-size:15px;color:#003366;border-bottom:1px solid #ddd;padding-bottom:6px;margin:18px 0 10px">${secNum++}. Outlook &amp; Next Period</h2>
+    <p style="line-height:1.8;color:#333;font-size:12px">${outlook.replace(/\n/g,'<br/>')}</p>`;
   }
 
-  html += `<div style="margin-top:30px;padding-top:12px;border-top:1px solid #ddd;font-size:10px;color:#999">Jamaica Public Service Company &mdash; ${conf} &mdash; ${period} &mdash; Generated ${new Date().toLocaleString()}</div>`;
+  html += `<div style="margin-top:30px;padding-top:12px;border-top:1px solid #ddd;font-size:10px;color:#999">Jamaica Public Service Company &mdash; ${conf} &mdash; ${periodLbl} &mdash; Generated ${new Date().toLocaleString()}</div>`;
 
   const prev = document.getElementById('rpt_preview');
   const card = document.getElementById('rpt_preview_card');
@@ -9139,7 +9254,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.53';
+const APP_VERSION = '1.0.54';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
