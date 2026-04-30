@@ -8034,19 +8034,9 @@ async function syncSupabase(silent=false){
     // Detect the year column name — skip if already confirmed from a previous sync
     if(!_yearColConfirmed)await detectYearCol(sb);
 
-    // Check cache — if fresh (<10 min), skip the heavy actuals fetch
-    const _c=_loadDataCache();
-    const _useCachedActuals=_c&&_c.act&&_c.act.length>0;
-    if(_useCachedActuals){
-      sbActuals=_c.act.map(r=>{const out={...r};if((r[YEAR_COL||'year'])&&YEAR_COL!=='year')out.year=r[YEAR_COL];return out;});
-      if(_c.curYear&&_c.curMonth){curYear=_c.curYear;curMonth=_c.curMonth;}
-      if(_c.kam&&_c.kam.length)sbKAM=_c.kam;
-      if(_c.ind&&_c.ind.length)sbIndustries=_c.ind;
-      console.log('[JPS] Cache hit: skipping actuals fetch (',sbActuals.length,'rows cached)');
-    }
-
-    // ── Fire ALL queries in parallel (skip actuals if cached) ──
-    const _actYearCutoff=new Date().getFullYear()-2; // fetch last 3 years only
+    // ── Fire ALL queries in parallel — always fetch fresh (no cache skip) ──
+    const _actYearCutoff=new Date().getFullYear()-2; // fetch last 3 years
+    const _useCachedActuals=false; // always fetch fresh actuals
     const [
       indData,kamData,amData,actData,
       budData,
@@ -8056,7 +8046,7 @@ async function syncSupabase(silent=false){
       sbTable('jps_industries',{}),
       sbTable('jps_kam',{}),
       sbTable('jps_account_master',{limit:50000}),
-      _useCachedActuals ? Promise.resolve(null) : sbTable('jps_actuals',{gte:['year',_actYearCutoff]}),
+      sbTable('jps_actuals',{gte:['year',_actYearCutoff]}),
       sbTable('jps_budget',{limit:50000}),
       sbTable('net_gen_historical',{order:'year'}),
       sbTable('jps_ev_accounts',{order:'year'}),
@@ -8183,8 +8173,8 @@ async function syncSupabase(silent=false){
     const el=document.getElementById('adm_upload_status');
     if(el&&sbActuals.length)el.textContent=`Live · ${sbActuals.length.toLocaleString()} actuals rows`;
 
-    // Save actuals+refs to cache so the next login skips the heavy actuals fetch
-    if(!_useCachedActuals){try{_saveDataCache();}catch(_){}}
+    // Clear stale cache (old stripped format causes missing columns)
+    try{localStorage.removeItem(_DCACHE_KEY);}catch(_){}
 
     if(!silent){
       const warn=log.filter(l=>l.includes('⚠'));
@@ -9548,7 +9538,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.71';
+const APP_VERSION = '1.0.72';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
