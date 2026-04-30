@@ -2706,6 +2706,7 @@ function computeDefectors(){
 
 let INDUSTRIES=[];
 let PARISHES=[];
+let SCORECARD_DATA=[];
 
 let RISK_OPP=[];
 
@@ -7667,6 +7668,9 @@ async function sbStorage(bucket,file){
 function buildDashboardData(){
   if(!sbActuals.length)return;
 
+  // Initialise SCORECARD_DATA from segments before any downstream use
+  SCORECARD_DATA=buildScorecardData();
+
   // Normalise ONCE — reused for all downstream calculations (was called twice before)
   const rows=fcNormActuals(sbActuals);
 
@@ -9283,7 +9287,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.49';
+const APP_VERSION = '1.0.50';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
