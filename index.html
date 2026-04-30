@@ -2801,7 +2801,14 @@ function sw(id,el){
     el.classList.add('on');
   }
   const _swSections=['ov','cm','df','ro','fc','rb_res'];
-  setTimeout(()=>{try{if(_swSections.includes(id))buildCharts();}catch(ce){console.warn('buildCharts error:',ce);}try{renderSection(id);}catch(re){console.error('renderSection error ['+id+']:',re);}},60);
+  setTimeout(()=>{
+    try{if(_swSections.includes(id))buildCharts();}catch(ce){console.warn('buildCharts error:',ce);}
+    try{renderSection(id);}catch(re){
+      console.error('renderSection error ['+id+']:',re);
+      const sec=document.getElementById(id);
+      if(sec)sec.innerHTML='<div style="padding:40px;color:red;font-family:monospace;font-size:13px"><b>Render error in ['+id+']:</b><br>'+re.message+'<br><pre style="white-space:pre-wrap;font-size:11px">'+re.stack+'</pre></div>';
+    }
+  },60);
   if(typeof _rtAnnouncePresence==='function')_rtAnnouncePresence(id);
 }
 
@@ -3183,6 +3190,7 @@ function setPeriod(p,btn){
 }
 function renderSection(id){
   if(!id)return;
+  console.log('[JPS] renderSection:',id,'| actuals:',sbActuals.length,'| budget:',sbBudget.length,'| customers:',typeof CUSTOMERS!=='undefined'?CUSTOMERS.length:'undef','| curYear:',curYear,'| curMonth:',curMonth);
   // Show lock banner on sections with period-sensitive data
   const lockableSections=['ov','cm','rs','rb_res','df','fc','ro','mr','ar','es','vb','rr','ng','le'];
   if(lockableSections.includes(id))maybeShowLockBanner(id);
@@ -9510,7 +9518,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.66';
+const APP_VERSION = '1.0.67';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
