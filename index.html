@@ -4175,7 +4175,7 @@ function renderDefKPIs(){
   document.getElementById('df_mod').textContent=defs.filter(d=>d.sev==='Moderate').length;
   const validated=defs.filter(d=>S.get(`df_val_${d.num}`,null));
   document.getElementById('df_validated').textContent=validated.length;
-  document.getElementById('df_dg').textContent=defs.filter(d=>d.cause==='Self-Gen'||d.cause==='CHP').length;
+  if(document.getElementById('df_dg'))document.getElementById('df_dg').textContent=defs.filter(d=>d.cause==='Self-Gen'||d.cause==='CHP').length;
   document.getElementById('kpi_defectors').textContent=defs.length;
 }
 function renderDefectors(){
@@ -8406,14 +8406,36 @@ function swLE(tab,btn){
 
 function leSyncPrompt(){
   const tabs=['ov','mt','base','cust','rc','adv','risk','var','pivot'];
+  const hasBud=sbBudget&&sbBudget.length>0;
+  const hasAct=sbActuals&&sbActuals.length>0;
+  // Build context-aware message
+  let title, msg, btnLabel, btnAct;
+  if(hasAct&&!hasBud){
+    title='Budget data required';
+    msg=`Actuals are loaded (${sbActuals.length.toLocaleString()} rows). To enable LE Forecasting, upload your FY budget via <b>Admin → Upload</b> (include a Budget sheet in your Excel file).`;
+    btnLabel='Go to Admin → Upload';
+    btnAct="sw('adm',null);setTimeout(()=>{const t=document.querySelector('[data-adm=\"adm_upload\"]');if(t)t.click();},200);";
+  } else if(!hasAct){
+    title='No data loaded';
+    msg='Connect to Supabase to load actuals and budget data, then return here.';
+    btnLabel='Sync Database Now';
+    btnAct='syncSupabase()';
+  } else {
+    title='LE data unavailable';
+    msg='Could not compute LE engine — check that actuals and budget data are loaded correctly.';
+    btnLabel='Sync Database Now';
+    btnAct='syncSupabase()';
+  }
+  const svgDB=`<svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 5.625c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125"/></svg>`;
+  const html=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:16px;color:var(--text2)">
+    ${svgDB}
+    <div style="font-size:15px;font-weight:600;color:var(--text1)">${title}</div>
+    <div style="font-size:12px;max-width:360px;text-align:center;line-height:1.6">${msg}</div>
+    <button onclick="${btnAct}" style="margin-top:8px;padding:8px 20px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">${btnLabel}</button>
+  </div>`;
   tabs.forEach(t=>{
     const el=document.getElementById('le_tab_'+t);
-    if(el)el.innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:16px;color:var(--text2)">
-      <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 5.625c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125"/></svg>
-      <div style="font-size:15px;font-weight:600;color:var(--text1)">No data loaded</div>
-      <div style="font-size:12px;max-width:320px;text-align:center">Connect to Supabase to load actuals and budget data, then return here.</div>
-      <button onclick="syncSupabase()" style="margin-top:8px;padding:8px 20px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">Sync Database Now</button>
-    </div>`;
+    if(el)el.innerHTML=html;
   });
 }
 
@@ -9068,10 +9090,13 @@ function renderNetGen(){
   if(!sbNetGen.length){
     const el=document.getElementById('ng-content')||document.getElementById('ng');
     if(el)el.innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:16px;color:var(--text2)">
-      <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 5.625c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125"/></svg>
+      <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
       <div style="font-size:15px;font-weight:600;color:var(--text1)">No net generation data loaded</div>
-      <div style="font-size:12px;max-width:320px;text-align:center">Sync Supabase to load net generation history.</div>
-      <button onclick="syncSupabase()" style="margin-top:8px;padding:8px 20px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">Sync Database Now</button>
+      <div style="font-size:12px;max-width:380px;text-align:center;line-height:1.6">Upload net generation history via <b>Admin → Upload</b>. Include a <b>Net_Generation</b> sheet with columns: year, month, rate_class, count, kwh.</div>
+      <div style="display:flex;gap:10px;margin-top:8px">
+        <button onclick="sw('adm',null);setTimeout(()=>{const t=document.querySelector('[data-adm=\\'adm_upload\\']');if(t)t.click();},200);" style="padding:8px 20px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">Go to Admin → Upload</button>
+        <button onclick="syncSupabase()" style="padding:8px 20px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:13px;cursor:pointer">Sync DB</button>
+      </div>
     </div>`;
     return;
   }
@@ -9528,7 +9553,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.62';
+const APP_VERSION = '1.0.63';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
