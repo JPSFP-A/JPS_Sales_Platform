@@ -996,7 +996,7 @@ document.getElementById('schema_stale_banner').style.display='none';
         <div class="card help-card" data-tags="overview dashboard kpi mtd ytd charts interpret read">
           <div class="ch" style="cursor:pointer" onclick="toggleHelp(this)">📊 Reading the Dashboard — Overview &amp; KPIs <span style="font-size:10px;color:var(--text3);font-weight:400">▾</span></div>
           <div class="help-body" style="display:none;font-size:11px;color:var(--text2);line-height:1.9;padding-top:8px">
-            <p><strong style="color:var(--text)">Period selector:</strong> MTD = month-to-date (1st to reporting date), QTD = quarter-to-date, YTD = year-to-date, Annual = full calendar year. The date dropdowns set which year/month is considered "current".</p>
+            <p><strong style="color:var(--text)">Period selector:</strong> MTD = month-to-date (label shows <em>Mar-2026</em>), QTD = quarter-to-date (<em>Q1-2026</em>), YTD = year-to-date (<em>YTD Mar-2026</em>), Annual = full calendar year (<em>2026</em>). Use the Year and Month dropdowns to change the reference period. All charts and KPIs update immediately.</p>
             <p><strong style="color:var(--text)">Traffic-light KPI colours:</strong><br>
             🟢 Green = ≥ +5% vs prior period / budget<br>
             🟡 Amber = between -5% and +5%<br>
@@ -2752,7 +2752,7 @@ const GLOSSARY_DATA=[
   // Platform features
   {term:'KAM Forecast Accuracy',cat:'Platform',def:'Per-KAM MAPE calculated by comparing saved forecast values (entered in Forecast Accuracy tab) vs actuals for the current month. Expressed as Accuracy % = 100 − MAPE. KAMs are ranked best to worst. Visible on Commercial → KAM & Commentary tab.'},
   {term:'AI Commentary',cat:'Platform',def:'Auto-generated narrative summary computed from loaded actuals. Available on Commercial (beside the GWh chart) and Commercial → KAM & Commentary tab. Covers YTD/MTD performance, rate-class breakdown, top accounts, and outlook. Use Generate Analysis button to refresh.'},
-  {term:'Period Filter',cat:'Platform',def:'The MTD / YTD / QTD / Annual buttons at the top of the screen. Changing the year selector rebuilds all CUSTOMERS, PARISHES, and INDUSTRIES arrays from the selected year\'s actuals — all charts and tables update automatically.'},
+  {term:'Period Filter',cat:'Platform',def:'The MTD / QTD / YTD / Annual buttons at the top of the screen. The period label shows the format: MTD → "Mar-2026", QTD → "Q1-2026", YTD → "YTD Mar-2026", Annual → "2026". Changing the year selector rebuilds all data arrays and re-renders all charts and tables automatically.'},
   {term:'Wipe All Actuals',cat:'Platform',def:'Admin function that deletes every row from jps_actuals across all years. Requires typing the confirmation code WIPE-ALL. Use before a full data reload. Writes an audit log entry.'},
   {term:'KAM Upload',cat:'Platform',def:'Two ways to import KAM assignments: (1) CSV file — go to Admin → KAM Assignment → Import KAM from CSV. CSV must have columns "Customer number" (prefix before the dash, e.g. 100590) and "KAM". One customer number maps to all matching account numbers. (2) Excel file via Admin → Upload Data with a sheet named KAM containing columns jps_ac (full account number) and kam. Can also assign one-by-one in Admin → KAM Assignment.'},
 ];
@@ -2799,7 +2799,8 @@ function sw(id,el){
   } else if(el){
     el.classList.add('on');
   }
-  setTimeout(()=>{buildCharts();renderSection(id);},60);
+  const _swSections=['ov','cm','df','ro','fc','rb_res'];
+  setTimeout(()=>{try{if(_swSections.includes(id))buildCharts();}catch(ce){console.warn('buildCharts error:',ce);}try{renderSection(id);}catch(re){console.error('renderSection error ['+id+']:',re);}},60);
   if(typeof _rtAnnouncePresence==='function')_rtAnnouncePresence(id);
 }
 
@@ -3176,8 +3177,8 @@ function setPeriod(p,btn){
   const sm=document.getElementById('selMonth'); if(sm&&(p==='MTD'||p==='YTD')) curMonth=Number(sm.value)||curMonth;
   const sq=document.getElementById('selQtr'); if(sq&&p==='QTD') curQtr=Number(sq.value)||curQtr;
   document.getElementById('periodLabel').textContent=fmtPeriodLabel();
-  buildCharts();
-  renderSection(document.querySelector('.sec.on')?.id);
+  try{buildCharts();}catch(ce){console.warn('buildCharts error:',ce);}
+  try{renderSection(document.querySelector('.sec.on')?.id);}catch(re){console.error('renderSection error:',re);}
 }
 function renderSection(id){
   if(!id)return;
@@ -8033,7 +8034,7 @@ async function syncSupabase(silent=false){
         if(latestY&&latestM){
           curYear=latestY;curMonth=latestM;
           const plEl=document.getElementById('periodLabel');
-          if(plEl)plEl.textContent=`${mNames[latestM-1]} ${latestY} · MTD`;
+          if(plEl)plEl.textContent=fmtPeriodLabel();
           // Sync year/month selectors
           const sy=document.getElementById('selYear');
           const sm=document.getElementById('selMonth');
@@ -8939,7 +8940,7 @@ async function clearNetGenData(){
 function renderNetGen(){
   // Show/hide Clear button for admin/manager only
   const cb=document.getElementById('ng_clear_btn');
-  if(cb){const r=currentUser?.sales_role||currentUser?.role||'';cb.style.display=(r==='admin'||r==='manager')&&sbNetGen.length?'':'none';}
+  if(cb){const r=CU.role||'';cb.style.display=(r==='admin'||r==='manager')&&sbNetGen.length?'':'none';}
   if(!sbNetGen.length){
     const el=document.getElementById('ng-content')||document.getElementById('ng');
     if(el)el.innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:16px;color:var(--text2)">
@@ -9070,15 +9071,8 @@ function renderNetGen(){
 }
 
 /* ==========================================
-   PATCH renderSection + initAll
+   PATCH initAll — sync + heartbeat on startup
 ========================================== */
-const _origRenderSection=renderSection;
-renderSection=function(id){
-  _origRenderSection(id);
-  if(id==='le')renderLE();
-  if(id==='ng')renderNetGen();
-};
-
 const _origInitAll=initAll;
 initAll=function(){
   _origInitAll();
@@ -9410,7 +9404,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.60';
+const APP_VERSION = '1.0.61';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
