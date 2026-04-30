@@ -7786,9 +7786,8 @@ async function sbTable(tbl,opts={}){
     const{data,error}=await q;
     if(error||!Array.isArray(data)||!data.length)break;
     all=all.concat(data);
-    if(data.length<PAGE)break;   // last page
-    from+=PAGE;
-    if(from>500000)break;        // safety cap
+    from+=data.length;           // advance by actual rows received (handles max_rows cap)
+    if(from>1000000)break;       // safety cap
   }
   return all.length?all:null;
 }
@@ -9538,7 +9537,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.72';
+const APP_VERSION = '1.0.73';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
