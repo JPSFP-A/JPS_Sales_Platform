@@ -8037,15 +8037,29 @@ async function syncSupabase(silent=false){
     // Detect year column (skip if already known from cache)
     if(!YEAR_COL||YEAR_COL==='year')await detectYearCol(sb);
 
-    // ── Wave 1: Critical tables (needed for dashboard render) ──
-    const [actData,amData] = await Promise.all([
+    // ── Single wave: fetch ALL tables in parallel ──
+    const [
+      actData,amData,
+      indData,kamData,
+      budData,
+      ng,ev,pl,
+      fcvData,fcData
+    ] = await Promise.all([
       sbTable('jps_actuals',{limit:50000}),
-      sbTable('jps_account_master',{limit:50000})
+      sbTable('jps_account_master',{limit:50000}),
+      sbTable('jps_industries',{}),
+      sbTable('jps_kam',{}),
+      sbTable('jps_budget',{limit:50000}),
+      sbTable('net_gen_historical',{order:'year'}),
+      sbTable('jps_ev_accounts',{order:'year'}),
+      sbTable('jps_period_locks',{}),
+      sbTable('jps_forecast_versions',{order:'created_at'}),
+      sbTable('jps_forecast',{limit:50000})
     ]);
 
-    // Apply wave-1 data and re-render immediately
-    const actOk1=!!actData&&actData.length>0;
-    if(actOk1){
+    // ── Apply all data ────────────────────────────────────
+    const actOk=!!actData&&actData.length>0;
+    if(actOk){
       sbActuals=actData;
       if(actData.length>0){
         if('year' in actData[0])          YEAR_COL='year';
@@ -8057,46 +8071,12 @@ async function syncSupabase(silent=false){
       if(latestY&&latestM){curYear=latestY;curMonth=latestM;}
     }
     if(amData)sbAccountMaster=amData;
-    if(actOk1){
-      try{buildDashboardData();}catch(be){console.error('buildDashboardData wave-1:',be);}
-      rebuildYearDropdowns();populateKamDropdowns();
-      const _sy=document.getElementById('selYear');if(_sy)_sy.value=String(curYear);
-      const _sm=document.getElementById('selMonth');if(_sm)_sm.value=String(curMonth);
-      const _pl=document.getElementById('periodLabel');if(_pl)_pl.textContent=fmtPeriodLabel();
-      updateSbStatus('live');
-      const _ds=document.getElementById('dataStatus');if(_ds){_ds.textContent='📊 Live Data';_ds.className='tbadge tbg';}
-      if(!_cached){setTimeout(()=>{try{renderSection(document.querySelector('.sec.on')?.id||'ov');}catch(_){}},0);}
-    }
-
-    // ── Wave 2: Secondary tables (enrichment, runs in parallel) ──
-    const [
-      indData,kamData,
-      budData,
-      ng,ev,pl,
-      fcvData,fcData
-    ] = await Promise.all([
-      sbTable('jps_industries',{}),
-      sbTable('jps_kam',{}),
-      sbTable('jps_budget',{limit:50000}),
-      sbTable('net_gen_historical',{order:'year'}),
-      sbTable('jps_ev_accounts',{order:'year'}),
-      sbTable('jps_period_locks',{}),
-      sbTable('jps_forecast_versions',{order:'created_at'}),
-      sbTable('jps_forecast',{limit:50000})
-    ]);
-
-    // ── Process results ────────────────────────────────────
     if(indData){sbIndustries=indData;log.push(`Industries: jps_industries (${indData.length} rows)`);}
     else log.push('Industries: ⚠ jps_industries not found — run schema SQL');
-
     if(kamData){sbKAM=kamData;log.push(`KAM: jps_kam (${kamData.length} rows)`);}
     else log.push('KAM: ⚠ jps_kam not found — run schema SQL');
-
     if(sbAccountMaster.length)log.push(`Account Master: jps_account_master (${sbAccountMaster.length} accounts)`);
     else log.push('Account Master: ⚠ jps_account_master not found — run schema SQL');
-
-    // sbActuals already set in wave-1; just log + handle schema checks
-    const actOk=sbActuals.length>0;
     if(actOk){
       log.push(`Actuals: jps_actuals (${sbActuals.length} rows)`);
       if(sbActuals.length>0){
@@ -9558,7 +9538,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.64';
+const APP_VERSION = '1.0.65';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
