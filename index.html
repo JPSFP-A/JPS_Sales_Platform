@@ -337,7 +337,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 <div class="suite-nav">
   <span class="sn-brand">JPS Analytics Suite</span>
   <a class="sn-link sn-active" href="#">&#x2B21; Sales Platform</a>
-  <a class="sn-link" id="sn-fpa-link" href="../JPS-FP-A/index.html" target="_self">&#x1F4CA; FP&amp;A Platform</a>
+  <a class="sn-link" id="sn-fpa-link" href="https://jps-fp-a.vercel.app" target="_blank">&#x1F4CA; FP&amp;A Platform</a>
   <a class="sn-back" href="javascript:history.back()">&#x21A9; Back</a>
 </div>
 
@@ -444,7 +444,7 @@ document.getElementById('schema_stale_banner').style.display='none';
       <span class="tbadge tbr" id="kpi_ytd_yoy">-- YoY</span>
       <span class="tbadge tbt" id="dataStatus">⚡ Sample Data</span>
       <a href="https://jps-fp-a.vercel.app" target="_blank" style="font-size:10px;font-weight:600;color:var(--teal);text-decoration:none;padding:3px 8px;border:1px solid rgba(0,194,168,.3);border-radius:5px;white-space:nowrap" title="Open FP&amp;A Platform">FP&amp;A ↗</a>
-      <span class="sb-badge sb-syncing" id="sbStatus" onclick="syncSupabase()" title="Click to sync from Supabase">↻ Connecting…</span>
+      <span class="sb-badge sb-syncing" id="sbStatus" onclick="syncSupabase()" title="Click to sync from database">↻ Connecting…</span>
       <!-- Theme quick-switch -->
       <div style="display:flex;gap:2px;border:1px solid var(--border);border-radius:7px;padding:2px;background:var(--navy3)" title="Switch theme">
         <button onclick="setTheme('dark')"  data-theme="dark"  class="theme-btn on"  style="width:22px;height:22px;border:none;border-radius:5px;cursor:pointer;font-size:12px;background:transparent;line-height:1" title="Dark">🌙</button>
@@ -479,16 +479,16 @@ document.getElementById('schema_stale_banner').style.display='none';
     <button class="pbtn" onclick="setPeriod('QTD',this)">QTD</button>
     <button class="pbtn" onclick="setPeriod('YTD',this)">YTD</button>
     <button class="pbtn" onclick="setPeriod('Annual',this)">Annual</button>
-    <select class="psel" id="selYear" onchange="curYear=Number(this.value);document.getElementById('periodLabel').textContent=curPeriod+' · '+curYear;renderSection(document.querySelector('.sec.on')?.id)">
+    <select class="psel" id="selYear" onchange="curYear=Number(this.value);document.getElementById('periodLabel').textContent=curPeriod+' · '+curYear;rebuildYearDropdowns();renderSection(document.querySelector('.sec.on')?.id)">
       <option value="2026">2026</option><option value="2025">2025</option>
     </select>
     <select class="psel" id="selMonth" onchange="curMonth=Number(this.value);renderSection(document.querySelector('.sec.on')?.id)">
-      <option value="2">Feb</option><option value="1">Jan</option>
-      <option value="12">Dec</option><option value="11">Nov</option>
-      <option value="10">Oct</option><option value="9">Sep</option>
-      <option value="8">Aug</option><option value="7">Jul</option>
-      <option value="6">Jun</option><option value="5">May</option>
-      <option value="4">Apr</option><option value="3">Mar</option>
+      <option value="1">Jan</option><option value="2">Feb</option>
+      <option value="3">Mar</option><option value="4">Apr</option>
+      <option value="5">May</option><option value="6">Jun</option>
+      <option value="7">Jul</option><option value="8">Aug</option>
+      <option value="9">Sep</option><option value="10">Oct</option>
+      <option value="11">Nov</option><option value="12">Dec</option>
     </select>
     <select class="psel" id="selQtr" style="display:none" onchange="curQtr=Number(this.value);renderSection(document.querySelector('.sec.on')?.id)">
       <option value="1">Q1</option><option value="2">Q2</option>
@@ -548,10 +548,10 @@ document.getElementById('schema_stale_banner').style.display='none';
             <button class="btn btn-o" onclick="exportChart('c_trend')">💾 Save Image</button>
             <span class="chart-info" id="trend_drill_info">Click a bar or point to filter customer table below</span>
           </div>
-          <div class="leg">
-            <span><span class="ld" style="background:#00c2a8"></span>2026 Actual</span>
-            <span><span class="ld" style="background:#378ADD;border-style:dashed"></span>2026 Budget</span>
-            <span><span class="ld" style="background:rgba(255,255,255,.3)"></span>2025 Actual</span>
+          <div class="leg" id="trend_legend">
+            <span><span class="ld" style="background:#00c2a8"></span><span id="trend_lbl_act">-- Actual</span></span>
+            <span><span class="ld" style="background:#378ADD;border-style:dashed"></span><span id="trend_lbl_bud">-- Budget</span></span>
+            <span><span class="ld" style="background:rgba(255,255,255,.3)"></span><span id="trend_lbl_ly">-- Actual</span></span>
           </div>
           <div class="cw" style="height:230px"><canvas id="c_trend"></canvas></div>
         </div>
@@ -724,18 +724,24 @@ document.getElementById('schema_stale_banner').style.display='none';
       </div>
       <div class="g2">
         <div class="card">
-          <div class="ch">Consumption Bracket Distribution <span>kWh by bracket vs prior year</span>
+          <div class="ch">RT10 Bracket Distribution <span id="bkt_rt10_lbl">kWh by bracket vs prior year</span>
             <div style="display:flex;gap:6px">
-              <button class="btn btn-o" onclick="printChart('c_bracket_dist')">🖨 Print</button>
-              <button class="btn btn-o" onclick="exportChart('c_bracket_dist')">💾 Save</button>
+              <button class="btn btn-o" onclick="printChart('c_bracket_rt10')">🖨 Print</button>
+              <button class="btn btn-o" onclick="exportChart('c_bracket_rt10')">💾 Save</button>
             </div>
           </div>
           <div class="leg"><span><span class="ld" style="background:#378ADD"></span>Prior Year</span><span><span class="ld" style="background:#00c2a8"></span>Current Year</span></div>
-          <div class="cw" style="height:200px"><canvas id="c_bracket_dist"></canvas></div>
+          <div class="cw" style="height:200px"><canvas id="c_bracket_rt10"></canvas></div>
         </div>
         <div class="card">
-          <div class="ch">EV Sales &amp; Accounts <span id="ev_period_lbl">sync DB to populate</span></div>
-          <div class="cw" style="height:200px"><canvas id="c_ev"></canvas></div>
+          <div class="ch">RT20 Bracket Distribution <span id="bkt_rt20_lbl">kWh by bracket vs prior year</span>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-o" onclick="printChart('c_bracket_rt20')">🖨 Print</button>
+              <button class="btn btn-o" onclick="exportChart('c_bracket_rt20')">💾 Save</button>
+            </div>
+          </div>
+          <div class="leg"><span><span class="ld" style="background:#378ADD"></span>Prior Year</span><span><span class="ld" style="background:#00c2a8"></span>Current Year</span></div>
+          <div class="cw" style="height:200px"><canvas id="c_bracket_rt20"></canvas></div>
         </div>
       </div>
       <div class="card">
@@ -769,8 +775,7 @@ document.getElementById('schema_stale_banner').style.display='none';
         <div class="kpi ka"><div class="kl">Severe (50–65%)</div><div class="kv" id="df_severe">--</div><div class="ks dn">Monitor closely</div></div>
         <div class="kpi ka"><div class="kl">Moderate (65–80%)</div><div class="kv" id="df_mod">--</div><div class="ks dn">Watch list</div></div>
         <div class="kpi kt"><div class="kl">Validated</div><div class="kv" id="df_validated">--</div><div class="ks nt">Rep confirmed cause</div></div>
-        <div class="kpi kp"><div class="kl">Structural DG</div><div class="kv" id="df_dg">--</div><div class="ks dn">Solar/CHP confirmed</div></div>
-      </div>
+        <div class="kpi kp">      </div>
       <div class="card">
         <div class="ch">Defector Register <span>3-month rolling avg &lt;80% of prior year · requires validation</span>
           <button class="btn btn-o" onclick="exportTableCSV('df_tbl','defection_register')">⬇ CSV</button>
@@ -779,7 +784,7 @@ document.getElementById('schema_stale_banner').style.display='none';
           <input class="si" placeholder="🔍 Customer name or account #" id="df_q" oninput="renderDefectors()"/>
           <select class="sel" id="df_sev" onchange="renderDefectors()"><option value="">All severity</option><option value="Critical">Critical</option><option value="Severe">Severe</option><option value="Moderate">Moderate</option></select>
           <select class="sel" id="df_rc" onchange="renderDefectors()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
-          <select class="sel" id="df_cause" onchange="renderDefectors()"><option value="">All causes</option><option value="Solar/DG">Solar/DG</option><option value="CHP">CHP/Self-gen</option><option value="Hurricane">Hurricane damage</option><option value="Closure">Business closure</option><option value="Unknown">Unknown</option></select>
+          <select class="sel" id="df_cause" onchange="renderDefectors()"><option value="">All causes</option><option value="CHP">CHP/Self-gen</option><option value="Hurricane">Hurricane damage</option><option value="Closure">Business closure</option><option value="Unknown">Unknown</option></select>
           <span class="row-count" id="df_count"></span>
         </div>
         <div class="tbl-wrap" id="df_tbl"></div>
@@ -1012,13 +1017,12 @@ document.getElementById('schema_stale_banner').style.display='none';
         </div>
 
         <!-- Residential section -->
-        <div class="card help-card" data-tags="residential rt10 rt20 net biller ev electric vehicle parish bracket">
+        <div class="card help-card" data-tags="residential rt10 rt20 parish bracket">
           <div class="ch" style="cursor:pointer" onclick="toggleHelp(this)">🏠 Residential Section <span style="font-size:10px;color:var(--text3);font-weight:400">▾</span></div>
           <div class="help-body" style="display:none;font-size:11px;color:var(--text2);line-height:1.9;padding-top:8px">
-            <p><strong style="color:var(--text)">KPIs:</strong> MTD residential GWh, net biller count (requires Net_Billers sheet upload), EV account count, customer growth YoY. Items showing "Sync DB to populate" need the relevant tables to be populated via upload.</p>
+            <p><strong style="color:var(--text)">KPIs:</strong> MTD residential GWh, customer count YoY, average kWh per customer. Items showing "--" need actuals data uploaded via the Actuals sheet.</p>
             <p><strong style="color:var(--text)">Parish × Consumption Bracket table:</strong> Shows kWh billed by parish broken down into consumption brackets (0–150, 150–300, 300–500, 500+). Use the bracket filter to focus on a specific usage band. This is key for identifying under- and over-performing parishes relative to prior year.</p>
-            <p><strong style="color:var(--text)">Net Billing chart:</strong> Tracks the number of net billing customers and their total export kWh over time. Growth in net billers directly reduces billed consumption on the residential tariff.</p>
-            <p><strong style="color:var(--text)">EV chart:</strong> Tracks EV accounts and associated MWh. Early growth signal for load addition from EV charging.</p>
+                        <p><strong style="color:var(--text)">EV chart:</strong> Tracks EV accounts and associated MWh. Early growth signal for load addition from EV charging.</p>
           </div>
         </div>
 
@@ -1028,7 +1032,7 @@ document.getElementById('schema_stale_banner').style.display='none';
           <div class="help-body" style="display:none;font-size:11px;color:var(--text2);line-height:1.9;padding-top:8px">
             <p><strong style="color:var(--text)">Forecast Accuracy section:</strong> Compares entered forecasts to actuals. MAPE (Mean Absolute Percentage Error) is the primary accuracy metric — target &lt;5%. Accounts are flagged "On trend" or "Off trend" based on whether actual performance matches the forecast within tolerance.</p>
             <p><strong style="color:var(--text)">LE Forecast section:</strong> The Latest Estimate view. Sub-tabs: <em>Overview</em> (summary), <em>Monthly Trend</em>, <em>LE Base</em> (account-level base assumptions), <em>LE Cust Vol</em> / <em>LE RC Vol</em> (volume by customer and rate class), <em>LE Advanced</em>, <em>Customer Risk</em>, <em>Variance</em>, and <em>Pivot &amp; Movers</em> (LE-specific scenario pivot matrix).</p>
-            <p><strong style="color:var(--text)">Entering a forecast:</strong> Navigate to Forecast Accuracy → 6-Month Forecast Entry. Select the account, enter the forecast kWh for each future month, and click Save. Forecasts are stored in Supabase and visible to all users.</p>
+            <p><strong style="color:var(--text)">Entering a forecast:</strong> Navigate to Forecast Accuracy → 6-Month Forecast Entry. Select the account, enter the forecast kWh for each future month, and click Save. Forecasts are stored in the database and visible to all users.</p>
           </div>
         </div>
 
@@ -1047,7 +1051,7 @@ document.getElementById('schema_stale_banner').style.display='none';
         <div class="card help-card" data-tags="monthly review commentary narrative note period close lock">
           <div class="ch" style="cursor:pointer" onclick="toggleHelp(this)">📋 Monthly Review &amp; Commentary <span style="font-size:10px;color:var(--text3);font-weight:400">▾</span></div>
           <div class="help-body" style="display:none;font-size:11px;color:var(--text2);line-height:1.9;padding-top:8px">
-            <p><strong style="color:var(--text)">Purpose:</strong> The Monthly Review section provides a structured area for the Sales team to document the story behind the numbers. Notes are stored in Supabase and visible to all authorised users.</p>
+            <p><strong style="color:var(--text)">Purpose:</strong> The Monthly Review section provides a structured area for the Sales team to document the story behind the numbers. Notes are stored in the database and visible to all authorised users.</p>
             <p><strong style="color:var(--text)">Period Close:</strong> Managers and Admins can lock a period (year + month) in <strong>Admin → Period Close</strong>. A locked period prevents further edits to commentary and actuals for that month. This creates a clean audit trail for month-end sign-off.</p>
             <p><strong style="color:var(--text)">AI Commentary:</strong> Use the <em>Generate Analysis</em> button in the AI Commentary cards (available in Commercial and Overview sections) to auto-generate a narrative draft. The commentary is based on the loaded DB data and can be copied into the Monthly Review notes box, edited, and saved.</p>
           </div>
@@ -1231,7 +1235,7 @@ document.getElementById('schema_stale_banner').style.display='none';
             <span class="pill pt" style="margin:0 4px">rep</span> Add notes, validate defectors, enter forecast for own territory. &nbsp;
             <span class="pill pgr" style="margin:0 4px">view</span> Read-only — no edits.
           </div>
-          <div id="adm_users_tbl"><div style="color:var(--text3);font-size:12px;padding:20px 0;text-align:center">Loading users… click Refresh or sync Supabase.</div></div>
+          <div id="adm_users_tbl"><div style="color:var(--text3);font-size:12px;padding:20px 0;text-align:center">Loading users… click Refresh or sync database.</div></div>
         </div>
       </div>
 
@@ -1478,7 +1482,7 @@ create table if not exists public.jps_actuals (
   demand_kva         numeric(10,2) default 0,
   customer_count     int default 0,
   created_at         timestamptz default now(),
-  unique (year, month, jps_ac, consumption_bucket)
+  unique (year, month, jps_ac, rate_class, parish, consumption_bucket)
 );
 
 alter table public.jps_actuals enable row level security;
@@ -1517,7 +1521,7 @@ order by ordinal_position;</pre>
             <div style="font-size:11px;color:var(--text2);line-height:1.8;margin-bottom:10px">
               Run this SQL once in a fresh Supabase project to create all required tables.
               It is <strong style="color:var(--text)">safe to re-run at any time</strong> — it uses <code>CREATE TABLE IF NOT EXISTS</code> and only alters tables when a migration is needed.<br><br>
-              Tables created: <code>jps_actuals</code> · <code>jps_budget</code> · <code>jps_period_locks</code> · <code>jps_kam</code> · <code>jps_industries</code> · <code>net_gen_historical</code> · <code>jps_net_billers</code> · <code>jps_ev_accounts</code> · <code>jps_account_master</code> · <code>profiles</code>
+              Tables created: <code>jps_actuals</code> · <code>jps_budget</code> · <code>jps_period_locks</code> · <code>jps_kam</code> · <code>jps_industries</code> · <code>net_gen_historical</code> · <code>jps_ev_accounts</code> · <code>jps_account_master</code> · <code>profiles</code>
             </div>
             <div style="font-size:11px;color:var(--text);font-weight:600;margin-bottom:6px">How to run:</div>
             <ol style="font-size:11px;color:var(--text2);line-height:2;margin:0 0 0 18px;padding:0">
@@ -1573,7 +1577,7 @@ order by ordinal_position;</pre>
 
       <!-- Headline narrative -->
       <div class="card">
-        <div class="ch">Executive Narrative <span id="es_period_lbl">February 2026</span>
+        <div class="ch">Executive Narrative <span id="es_period_lbl">--</span>
           <div style="display:flex;gap:6px">
             <button class="btn btn-t" onclick="saveExecNarrative()">Save Narrative</button>
             <button class="btn btn-o" onclick="exportExecSummary()">Export PDF</button>
@@ -1754,10 +1758,10 @@ order by ordinal_position;</pre>
 
       <!-- Average tariff -->
       <div class="card">
-        <div class="ch">Average Tariff Movement <span>JMD/kWh -- YTD +7.9% driven by lower consumption base</span></div>
+        <div class="ch">Average Tariff Movement <span id="rr_tariff_hdr">JMD/kWh — upload jps_rr_data to populate</span></div>
         <div class="cw" style="height:200px"><canvas id="c_rr_tariff"></canvas></div>
         <div style="margin-top:10px;padding:10px;background:rgba(245,166,35,0.07);border-left:3px solid var(--amber);border-radius:4px;font-size:11px;color:var(--text2);line-height:1.7">
-          <strong style="color:var(--amber)">Tariff note:</strong> YTD average tariff increased 7.9% across all rate classes. RT40 saw the highest increase due to higher fixed costs spread over lower consumption. Henry Hub gas prices +31% YTD vs 2025, driving fuel charge increases.
+          <strong style="color:var(--amber)">Tariff note:</strong> <span id="rr_tariff_note">Upload revenue recovery data (jps_rr_data) to populate tariff movement commentary.</span>
         </div>
       </div>
 
@@ -1805,15 +1809,11 @@ order by ordinal_position;</pre>
     <div id="rb_res" class="sec">
       <div class="krow">
         <div class="kpi kt"><div class="kl">Residential Customers</div><div class="kv" id="ri_kpi_custs">--</div><div class="ks nt" id="ri_kpi_custs_sub">upload customer_count</div></div>
-        <div class="kpi ka"><div class="kl">Net Billers (RT10)</div><div class="kv" id="ri_kpi_nb10">--</div><div class="ks nt" id="ri_kpi_nb10_sub">from jps_net_billers</div></div>
-        <div class="kpi kr"><div class="kl">DG Penetration</div><div class="kv" id="ri_kpi_dg_pct">--</div><div class="ks nt" id="ri_kpi_dg_sub">net billers / customers</div></div>
         <div class="kpi kg"><div class="kl">Avg kWh (RT10)</div><div class="kv" id="ri_kpi_avg_kwh">--</div><div class="ks nt" id="ri_kpi_avg_kwh_sub">per customer MTD</div></div>
-        <div class="kpi kp"><div class="kl">NB Avg Export</div><div class="kv" id="ri_kpi_nb_export">--</div><div class="ks nt" id="ri_kpi_nb_export_sub">kWh per net biller</div></div>
       </div>
 
       <div class="stabs" id="res_intel_tabs">
         <button class="stab on" onclick="resTab('ri_bracket',this)">Bracket Trends</button>
-        <button class="stab" onclick="resTab('ri_dg',this)">DG Penetration</button>
         <button class="stab" onclick="resTab('ri_parish',this)">Parish Defection</button>
         <button class="stab" onclick="resTab('ri_weather',this)">Weather Adjust</button>
       </div>
@@ -1825,7 +1825,7 @@ order by ordinal_position;</pre>
             <div class="cw" style="height:220px"><canvas id="c_ri_bracket"></canvas></div>
           </div>
           <div class="card">
-            <div class="ch">Customer count by bracket <span>2025 vs 2026 YTD</span></div>
+            <div class="ch">Customer count by bracket <span id="ri_count_hdr">-- vs -- YTD</span></div>
             <div class="cw" style="height:220px"><canvas id="c_ri_count"></canvas></div>
           </div>
         </div>
@@ -1835,22 +1835,6 @@ order by ordinal_position;</pre>
         </div>
       </div>
 
-      <div id="ri_dg" class="ssec">
-        <div class="g2">
-          <div class="card">
-            <div class="ch">Net Biller Growth vs Total Customer Growth <span>Index 2021=100</span></div>
-            <div class="cw" style="height:220px"><canvas id="c_ri_dg_growth"></canvas></div>
-          </div>
-          <div class="card">
-            <div class="ch">DG Penetration by Parish <span>Net billers as % of customers</span></div>
-            <div class="cw" style="height:220px"><canvas id="c_ri_dg_par"></canvas></div>
-          </div>
-        </div>
-        <div class="card">
-          <div class="ch">Net Biller Average Consumption vs Standard Customer <span>kWh comparison</span></div>
-          <div id="ri_dg_comp_tbl"></div>
-        </div>
-      </div>
 
       <div id="ri_parish" class="ssec">
         <div class="card">
@@ -2015,7 +1999,7 @@ order by ordinal_position;</pre>
             <div class="cw" style="height:220px"><canvas id="c_le_rc_bar"></canvas></div>
           </div>
           <div class="card">
-            <div class="ch">FY 2026 — Actuals + LE Projection</div>
+            <div class="ch" id="le_fy_hdr">FY -- — Actuals + LE Projection</div>
             <div class="cw" style="height:220px"><canvas id="c_le_fy"></canvas></div>
           </div>
         </div>
@@ -2144,7 +2128,7 @@ order by ordinal_position;</pre>
     <!-- === NET GENERATION === -->
     <div id="ng" class="sec">
       <div style="background:rgba(55,138,221,.07);border-left:3px solid var(--blue);border-radius:4px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:var(--text2);line-height:1.7">
-        <strong style="color:var(--blue)">Net Generation (DG):</strong> Distributed generation installed on the JPS grid. Upload via the <strong>Net_Generation</strong> sheet (columns: year, month, rate_class, count, kwh). Same format as Net Billers. Data sourced from <code style="background:var(--navy3);padding:1px 5px;border-radius:3px;font-size:10px">net_gen_historical</code>.
+        <strong style="color:var(--blue)">Net Generation:</strong> Generation data from the JPS grid. Upload via the <strong>Net_Generation</strong> sheet (columns: year, month, rate_class, count, kwh). Data sourced from <code style="background:var(--navy3);padding:1px 5px;border-radius:3px;font-size:10px">net_gen_historical</code>.
       </div>
       <div class="krow" id="ng_krow"></div>
       <div class="card">
@@ -2198,10 +2182,11 @@ let CU={id:'',role:'',name:'',email:'',territory:'All'};
 let PLATFORM_USERS=[]; // loaded from shared profiles table
 let PERIOD_LOCKS=[];   // loaded from jps_period_locks
 
-let curPeriod='MTD', curYear=2026, curMonth=2, curQtr=1;
+const _initDate=new Date();
+let curPeriod='MTD', curYear=_initDate.getFullYear(), curMonth=_initDate.getMonth()+1, curQtr=Math.ceil((_initDate.getMonth()+1)/3);
 let YEAR_COL='year'; // auto-detected at sync — set to 'cal_year' on FP&A-seeded databases
 let _schemaFixApplied=false; // jps_normalize_schema RPC called once per session
-let mrPeriod='2026-02', mrRepName='', mrActiveSec='mr_ov';
+let mrPeriod=`${_initDate.getFullYear()}-${String(_initDate.getMonth()+1).padStart(2,'0')}`, mrRepName='', mrActiveSec='mr_ov';
 let cmDim='industry', cmDrillRC='', _modalFn=null;
 let chartInstances={};
 
@@ -2689,7 +2674,7 @@ function computeDefectors(){
         if(p3>0&&r3/p3<0.80)cons++;else break;
       }
     }
-    const cause=c.cmt.toLowerCase().includes('solar')||c.cmt.toLowerCase().includes('dg')?'Solar/DG':
+    const cause=c.cmt.toLowerCase().includes('solar')||c.cmt.toLowerCase().includes('self-gen')?'Self-Gen':
                 c.cmt.toLowerCase().includes('chp')||c.cmt.toLowerCase().includes('self-gen')?'CHP':
                 c.cmt.toLowerCase().includes('hurricane')||c.cmt.toLowerCase().includes('damage')?'Hurricane':
                 c.cmt.toLowerCase().includes('closed')||c.cmt.toLowerCase().includes('closure')?'Closure':'Unknown';
@@ -2699,6 +2684,7 @@ function computeDefectors(){
 
 let INDUSTRIES=[];
 let PARISHES=[];
+let SCORECARD_DATA=[];
 
 let RISK_OPP=[];
 
@@ -2711,7 +2697,6 @@ const GLOSSARY_DATA=[
   {term:'RT50',cat:'Rate Class',def:'MV Power Service -- medium-voltage commercial and light industrial with higher demand thresholds.'},
   {term:'RT70',cat:'Rate Class',def:'Large Power Service -- large industrial and commercial on high-voltage. Includes Carib Cement, bauxite, major hotels.'},
   {term:'ST / RT60',cat:'Rate Class',def:'Street Light & Traffic Signal tariff. Over 99% energy-based revenue; minimal fixed charges.'},
-  {term:'EV',cat:'Rate Class',def:'Electric Vehicle charging tariff. Growth rate is DB-driven — see Residential section EV chart.'},
   {term:'MTD',cat:'Metric',def:'Month-to-Date -- cumulative from the 1st of the current month to the reporting date.'},
   {term:'YTD',cat:'Metric',def:'Year-to-Date -- cumulative from January 1st to the reporting date.'},
   {term:'QTD',cat:'Metric',def:'Quarter-to-Date -- cumulative from the first day of the current quarter.'},
@@ -2722,8 +2707,6 @@ const GLOSSARY_DATA=[
   {term:'LE',cat:'Process',def:'Latest Estimate -- in-year revised forecast reflecting actual performance plus updated outlook.'},
   {term:'Zero Bill',cat:'Process',def:'Bill issued with zero consumption -- due to disconnection, meter fault, or outage. Widespread post-Hurricane Melissa.'},
   {term:'Defection',cat:'Market',def:'A customer whose 3-month rolling average kWh drops below 80% of the same 3-month average from the prior year. Graded: Critical <50%, Severe 50–65%, Moderate 65–80%.'},
-  {term:'Net Biller',cat:'Market',def:'Customer with registered distributed generation who exports surplus electricity to the JPS grid. Count is DB-driven — see Residential Intelligence section.'},
-  {term:'DG / Distributed Generation',cat:'Market',def:'On-site customer electricity generation (typically solar PV). Reduces grid offtake and causes load defection.'},
   {term:'CHP',cat:'Market',def:'Combined Heat & Power -- cogeneration reducing grid dependence. Used by Jamaica Broilers, industrial customers.'},
   {term:'IPP',cat:'Market',def:'Independent Power Producer -- third-party generators under contract to supply power to JPS.'},
   {term:'Hurricane Melissa',cat:'Market',def:'Category 4 hurricane, late 2025. Primary structural driver of 2026 YTD commercial sales decline — magnitude varies by period loaded.'},
@@ -2772,7 +2755,7 @@ const FC_SEGS=[
   {seg:'RT40',lbl:'RT40 Commercial',base:0},
   {seg:'RT50',lbl:'RT50 Commercial',base:0},
   {seg:'RT70',lbl:'RT70 Large Com.',base:0},
-  {seg:'ST',lbl:'Street Lights',base:0},
+  {seg:'RT60-ST',lbl:'Street Lights',base:0},
 ];
 
 /* ==========================================
@@ -3105,6 +3088,42 @@ function filterHelp(){
   });
 }
 
+// Rebuild every year-picker dropdown from the actual years present in sbActuals
+function rebuildYearDropdowns(){
+  if(!sbActuals.length)return;
+  const years=[...new Set(sbActuals.map(r=>Number(r[YEAR_COL]||r.year||0)).filter(Boolean))].sort((a,b)=>b-a);
+  const opts=years.map(y=>`<option value="${y}">${y}</option>`).join('');
+  // Main period bar
+  const sy=document.getElementById('selYear');
+  if(sy){const cur=sy.value;sy.innerHTML=opts;if(years.includes(Number(cur)))sy.value=cur;else sy.value=String(years[0]);}
+  // Delete-month popup
+  const dy=document.getElementById('delYear');
+  if(dy){const cur=dy.value;dy.innerHTML=opts;if(years.includes(Number(cur)))dy.value=cur;}
+  // Admin delete-month panel
+  const da=document.getElementById('delYearAdm');
+  if(da){const cur=da.value;da.innerHTML=opts;if(years.includes(Number(cur)))da.value=cur;}
+  // Anomaly year filter — keep "All years" option first, then per-year options
+  const av=document.getElementById('vld_anom_yr');
+  if(av){
+    const curV=av.value;
+    av.innerHTML='<option value="">All years</option>'+years.map(y=>`<option value="${y}">${y}</option>`).join('');
+    if(curV)av.value=curV;
+  }
+  // Month dropdown — show only months with data for curYear, in Jan-Dec order, default to last available month
+  const sm=document.getElementById('selMonth');
+  if(sm){
+    const activeYear=curYear||years[0];
+    const availMonths=[...new Set(
+      sbActuals.filter(r=>Number(r[YEAR_COL]||r.year||0)===activeYear)
+               .map(r=>Number(r.month)).filter(m=>m>=1&&m<=12)
+    )].sort((a,b)=>a-b);
+    const lastMonth=availMonths.length?availMonths[availMonths.length-1]:curMonth;
+    sm.innerHTML=availMonths.map(m=>`<option value="${m}">${MN[m-1]}</option>`).join('');
+    sm.value=String(lastMonth);
+    curMonth=lastMonth;
+  }
+}
+
 // Populate sidebar segment + year chips from actual DB data
 function renderSidebarFilters(){
   const segs = sbActuals.length
@@ -3166,7 +3185,7 @@ function renderSection(id){
       renderCmCust();renderCmIndTbl();
     }
   }
-  else if(id==='rs'){renderRsKPIs();renderRsPar();}
+  else if(id==='rs'){renderRsKPIs();renderRsPar();try{mkBracketCharts();}catch(e){}}
   else if(id==='df'){renderDefectors();renderDefKPIs();}
   else if(id==='fc'){renderFcEntry();renderMacroGrid();renderFcKPIs();}
   else if(id==='ro'){filterRO();updateROAutoFlags();}
@@ -3253,12 +3272,30 @@ async function loadExcel(input){
               };
             }).filter(d=>(d.year||d.cal_year)>0&&d.month>0&&d.jps_ac);
 
-            if(rows.length){
+            // Aggregate duplicate rows — source files sometimes have multiple lines
+            // for the same (year,month,jps_ac,rate_class,parish,bucket). Sum numeric
+            // fields so the upsert only ever sends one row per constraint key.
+            const aggMap={};
+            rows.forEach(r=>{
+              const k=`${r[YEAR_COL]}|${r.month}|${r.jps_ac}|${r.rate_class}|${r.parish}|${r.consumption_bucket}`;
+              if(!aggMap[k]){aggMap[k]={...r};}
+              else{
+                aggMap[k].kwh          =(aggMap[k].kwh||0)          +Number(r.kwh||0);
+                aggMap[k].revenue_jmd  =(aggMap[k].revenue_jmd||0)  +Number(r.revenue_jmd||0);
+                aggMap[k].demand_kva   =Math.max(aggMap[k].demand_kva||0, Number(r.demand_kva||0));
+                aggMap[k].customer_count=(aggMap[k].customer_count||0)+Number(r.customer_count||0);
+              }
+            });
+            const uploadRows=Object.values(aggMap);
+            if(uploadRows.length<rows.length)
+              console.log(`[upload] aggregated ${rows.length} rows → ${uploadRows.length} unique keys`);
+
+            if(uploadRows.length){
               if(mode==='overwrite'){
                 // Delete existing rows using IDs from in-memory sbActuals.
                 // This bypasses the year/cal_year column entirely — works even with
                 // a stale PostgREST schema cache that doesn't know cal_year.
-                const periods=[...new Set(rows.map(r=>`${r[YEAR_COL]}-${r.month}`))];
+                const periods=[...new Set(uploadRows.map(r=>`${r[YEAR_COL]}-${r.month}`))];
                 for(const p of periods){
                   const[y,m]=p.split('-');
                   const yrN=Number(y),mN=Number(m);
@@ -3271,9 +3308,9 @@ async function loadExcel(input){
                   }
                 }
                 // Insert fresh
-                await batchUpsert('jps_actuals',rows,`${YEAR_COL},month,jps_ac,consumption_bucket`);
+                await batchUpsert('jps_actuals',uploadRows,`${YEAR_COL},month,jps_ac,rate_class,parish,consumption_bucket`);
               } else {
-                await batchUpsert('jps_actuals',rows,`${YEAR_COL},month,jps_ac,consumption_bucket`);
+                await batchUpsert('jps_actuals',uploadRows,`${YEAR_COL},month,jps_ac,rate_class,parish,consumption_bucket`);
               }
             }
           } else if(isBudget){
@@ -3368,18 +3405,6 @@ async function loadExcel(input){
           await batchUpsert('net_gen_historical',rows,'year,month,rate_class');
         }
       }
-      // ── Net Billers — columns: year, month, rate_class, count, kwh ──
-      const nbSheet=wb.Sheets['Net_Billers'];
-      if(nbSheet){
-        const rows=XLSX.utils.sheet_to_json(nbSheet).map(r=>({
-          year:Number(r.year||r.Year),
-          month:Number(r.month||r.Month),
-          rate_class:String(r.rate_class||r['Rate Class']||r.rate||'').trim(),
-          count:Number(r.count||r.Count||0),
-          kwh:Number(r.kwh||r.KWh||r.total_export_kwh||0)
-        })).filter(r=>r.year&&r.month&&r.rate_class);
-        if(rows.length)await batchUpsert('jps_net_billers',rows,'year,month,rate_class');
-      }
       // ── EV ────────────────────────────────────────────
       const evSheet=wb.Sheets['EV_Accounts']||wb.Sheets['EV'];
       if(evSheet){const rows=XLSX.utils.sheet_to_json(evSheet);if(rows.length)await batchUpsert('jps_ev_accounts',rows,'year,month');}
@@ -3454,53 +3479,52 @@ function dlTemplate(){
   const mkRows=rows=>rows.map(row=>'<Row>'+row.map(cell).join('')+'</Row>').join('');
   const mkSheet=(name,rows)=>`<Worksheet ss:Name="${esc(name)}"><Table>${mkRows(rows)}</Table></Worksheet>`;
 
+  const _tY=curYear, _tM=curMonth; // template rows use current period — replace with your data
   const SHEETS=[
     ['Actuals',[
       ['year','month','jps_ac','name','consumption_bucket','kwh','revenue_jmd','parish','rate_class','demand_kva','customer_count'],
       // Commercial: jps_ac=full account no, consumption_bucket=blank, demand_kva filled, customer_count=1 per account
       // Residential: jps_ac=full account no, consumption_bucket filled, demand_kva=0, customer_count=billed customers in that bucket
-      [2026,2,'100001-001','Carib Cement Co','',1900000,45000000,'St. Elizabeth','RT70',2500,1],
-      [2026,2,'100001-002','Carib Cement Co - Warehouse','',820000,19500000,'St. Elizabeth','RT70',950,1],
-      [2026,2,'200045-001','','<150',450000,28000000,'Kingston','RT10',0,8500],
-      [2026,2,'200045-001','','150>350',320000,22000000,'Kingston','RT10',0,3200],
-      [2026,2,'200046-001','','350>550',180000,14000000,'St. Andrew','RT20',0,840],
+      [_tY,_tM,'COMM-001-001','Sample Commercial Ltd','',1000000,25000000,'Kingston','RT70',1000,1],
+      [_tY,_tM,'COMM-001-002','Sample Commercial Ltd - Branch','',500000,12000000,'St. Andrew','RT40',500,1],
+      [_tY,_tM,'RES-001-001','','<150',100000,6000000,'Kingston','RT10',0,5000],
+      [_tY,_tM,'RES-001-001','','150>350',80000,5000000,'Kingston','RT10',0,2000],
+      [_tY,_tM,'RES-002-001','','350>550',50000,3500000,'St. Andrew','RT20',0,500],
     ]],
     ['Budget',[
-      ['year','month','jps_ac','name','rate_class','parish','consumption_bucket','kwh_budget','revenue_budget','demand_budget','customer_count'],
-      // Commercial rows: jps_ac = full account no (e.g. 100001-001), consumption_bucket blank, customer_count=1
-      [2026,2,'100001-001','Carib Cement Co','RT70','St. Elizabeth','',2100000,48000000,2600,1],
-      [2026,2,'100001-002','Carib Cement Co - Warehouse','RT70','St. Elizabeth','',900000,21000000,1000,1],
+      ['year','month','jps_ac','name','rate_class','parish','consumption_budget','kwh_budget','revenue_budget','demand_budget','customer_count'],
+      // Commercial rows: jps_ac = full account no, consumption_bucket blank, customer_count=1
+      [_tY,_tM,'COMM-001-001','Sample Commercial Ltd','RT70','Kingston','',1100000,27000000,1100,1],
+      [_tY,_tM,'COMM-001-002','Sample Commercial Ltd - Branch','RT40','St. Andrew','',550000,13000000,550,1],
       // Residential rows: jps_ac blank, consumption_bucket filled, customer_count = budgeted headcount in that bracket
-      [2026,2,'','','RT10','Kingston','<150',12500000,0,0,8500],
-      [2026,2,'','','RT10','Kingston','150>350',9800000,0,0,3200],
-      [2026,2,'','','RT10','Kingston','350>550',4200000,0,0,840],
-      [2026,2,'','','RT10','St. Andrew','<150',10100000,0,0,6800],
-      [2026,2,'','','RT20','Kingston','<150',3200000,0,0,1200],
+      [_tY,_tM,'','','RT10','Kingston','<150',110000,0,0,5000],
+      [_tY,_tM,'','','RT10','Kingston','150>350',90000,0,0,2000],
+      [_tY,_tM,'','','RT10','St. Andrew','<150',60000,0,0,2500],
+      [_tY,_tM,'','','RT20','Kingston','<150',30000,0,0,700],
     ]],
     ['KAM',[
       ['jps_ac','kam'],
-      ['100001','Jane Smith'],
-      ['100045','Michael Brown'],
+      ['COMM-001','Sample KAM Name'],
+      ['COMM-002','Another KAM Name'],
     ]],
     ['Industries',[
       ['jps_ac','industry'],
-      ['100001','Manufacturing'],
-      ['100045','Retail'],
+      ['COMM-001','Manufacturing'],
+      ['COMM-002','Retail'],
     ]],
     ['Net_Generation',[
       ['year','month','rate_class','count','kwh'],
-      [2026,2,'ALL',0,320000000],
-      [2026,2,'Solar',245,185000000],
-      [2026,1,'ALL',0,315000000],
+      [_tY,_tM,'ALL',0,300000000],
+      [_tY,_tM,'Solar',200,150000000],
     ]],
     ['Net_Billers',[
       ['year','month','rate_class','count','kwh'],
-      [2026,2,'RT10',1250,475000],
-      [2026,2,'RT20',380,142000],
+      [_tY,_tM,'RT10',1000,400000],
+      [_tY,_tM,'RT20',300,100000],
     ]],
     ['EV_Accounts',[
       ['year','month','accounts','mwh'],
-      [2026,2,45,380],
+      [_tY,_tM,30,250],
     ]],
   ];
 
@@ -3591,16 +3615,62 @@ function exportChart(id){
   a.download=id+'_chart.png';a.click();
 }
 
+function mkBracketCharts(){
+  if(!sbActuals.length)return;
+  const qStart=Math.floor((curMonth-1)/3)*3+1;
+  const pMonths=curPeriod==='MTD'?[curMonth]
+    :curPeriod==='QTD'?Array.from({length:curMonth-qStart+1},(_,i)=>qStart+i)
+    :curPeriod==='YTD'?Array.from({length:curMonth},(_,i)=>i+1)
+    :Array.from({length:12},(_,i)=>i+1);
+  const periodLbl=curPeriod+' '+curYear;
+  const setLbl=(id,t)=>{const e=document.getElementById(id);if(e)e.textContent=t;};
+  setLbl('bkt_rt10_lbl',periodLbl+' vs '+(curYear-1));
+  setLbl('bkt_rt20_lbl',periodLbl+' vs '+(curYear-1));
+  const TC=getComputedStyle(document.documentElement).getPropertyValue('--text2').trim()||'#aaa';
+  const CC=getComputedStyle(document.documentElement).getPropertyValue('--border').trim()||'rgba(255,255,255,0.07)';
+  const co=()=>({responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:TC,font:{size:10}},grid:{color:CC}},y:{ticks:{color:TC,font:{size:10}},grid:{color:CC}}}});
+  const mkBktChart=(canvasId,rc)=>{
+    const bRows=sbActuals.filter(r=>String(r.rate_class||'')===rc&&(r.consumption_bucket||'').trim());
+    const BKTS=[...new Set(bRows.map(r=>(r.consumption_bucket||'').trim()))].filter(Boolean).sort();
+    const act=BKTS.map(bk=>bRows.filter(r=>Number(r[YEAR_COL])===curYear&&pMonths.includes(Number(r.month))&&(r.consumption_bucket||'').trim()===bk).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6);
+    const py =BKTS.map(bk=>bRows.filter(r=>Number(r[YEAR_COL])===(curYear-1)&&pMonths.includes(Number(r.month))&&(r.consumption_bucket||'').trim()===bk).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6);
+    destroyChart(canvasId);
+    const cb=document.getElementById(canvasId);if(!cb)return;
+    chartInstances[canvasId]=new Chart(cb,{type:'bar',data:{
+      labels:BKTS.length?BKTS:['No data'],
+      datasets:[
+        {label:'Prior Year', data:py, backgroundColor:'rgba(55,138,221,0.5)',borderColor:'#378ADD',borderWidth:1,borderRadius:3},
+        {label:'Current Year',data:act,backgroundColor:'rgba(0,194,168,0.6)',borderColor:'#00c2a8',borderWidth:1,borderRadius:3},
+      ]},options:co()});
+  };
+  mkBktChart('c_bracket_rt10','RT10');
+  mkBktChart('c_bracket_rt20','RT20');
+}
+
 function buildCharts(){
   if(!window.Chart)return;
 
-  // Build trend chart data from CUSTOMERS arrays
+  // Build trend chart data from live sbActuals + sbBudget (real monthly seasonality)
   const trendAct26=Array(12).fill(null),trendBud26=Array(12).fill(null),trendAct25=Array(12).fill(null);
   if(CUSTOMERS.length){
     CUSTOMERS.forEach(c=>{for(let i=0;i<12;i++){if(c.m[i]){trendAct26[i]=(trendAct26[i]||0)+c.m[i];}}});
-    CUSTOMERS.forEach(c=>{for(let i=0;i<12;i++){trendAct25[i]=(trendAct25[i]||0)+(c.y25/12);}});// y25 = prior year
-    if(sbBudget.length){CUSTOMERS.forEach(c=>{for(let i=0;i<12;i++){trendBud26[i]=(trendBud26[i]||0)+(c.bud/12);}});}
   }
+  // Prior year — real monthly actuals, not flat spread
+  if(sbActuals.length){
+    for(let i=0;i<12;i++){
+      trendAct25[i]=sbActuals.filter(r=>Number(r[YEAR_COL])===curYear-1&&Number(r.month)===i+1).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+    }
+  }
+  // Budget — real monthly budget, not flat spread
+  if(sbBudget.length){
+    for(let i=0;i<12;i++){
+      trendBud26[i]=sbBudget.filter(r=>Number(r.year)===curYear&&Number(r.month)===i+1).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
+    }
+  }
+  // Update trend chart legend labels to match current year
+  const _tla=document.getElementById('trend_lbl_act');if(_tla)_tla.textContent=`${curYear} Actual`;
+  const _tlb=document.getElementById('trend_lbl_bud');if(_tlb)_tlb.textContent=`${curYear} Budget`;
+  const _tll=document.getElementById('trend_lbl_ly'); if(_tll)_tll.textContent=`${curYear-1} Actual`;
   mkChart('c_trend',{type:'bar',data:{
     labels:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
     datasets:[
@@ -3616,11 +3686,11 @@ function buildCharts(){
   const _dnutLbl=document.getElementById('donut_period_lbl');
   if(_dnutLbl) _dnutLbl.textContent=`${_dnutMs[curMonth-1]} ${curYear}`;
 
-  const donutRCs=['RT10','RT20','RT40','RT50','RT70','ST'];
+  const donutRCs=['RT10','RT20','RT40','RT50','RT70','RT60-ST'];
   const donutData=donutRCs.map(rc=>CUSTOMERS.filter(c=>c.rate===rc).reduce((s,c)=>s+(c.m[curMonth-1]||0),0));
   mkChart('c_donut',{type:'doughnut',data:{labels:donutRCs,datasets:[{data:donutData,backgroundColor:['#00c2a8','#00957f','#378ADD','#185FA5','#f5a623','#5a7a96'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},cutout:'60%'}});
 
-  const cm1RCs=['RT40','RT50','RT70'];
+  const cm1RCs=['RT40','RT50','RT70','RT60-ST'];
   const cm1_25=cm1RCs.map(rc=>CUSTOMERS.filter(c=>c.rate===rc).reduce((s,c)=>s+c.y25,0));
   const cm1_26=cm1RCs.map(rc=>CUSTOMERS.filter(c=>c.rate===rc).reduce((s,c)=>s+c.y26,0));
   mkChart('c_cm1',{type:'bar',data:{
@@ -3652,18 +3722,6 @@ function buildCharts(){
 
     // EV chart — sourced from sbEvData (jps_ev_accounts table); zeros until loaded
     const evYears = sbEvData.length ? [...new Set(sbEvData.map(r=>String(r.year)))].sort() : [];
-    const evMwh   = evYears.map(y=>sbEvData.filter(r=>String(r.year)===y).reduce((s,r)=>s+(r.mwh||0),0));
-    const evAcct  = evYears.map(y=>sbEvData.filter(r=>String(r.year)===y).reduce((s,r)=>s+(r.accounts||0),0));
-    const evGrowth = evMwh.length>1 ? (((evMwh[evMwh.length-1]/evMwh[0])**(1/(evMwh.length-1))-1)*100).toFixed(0)+'% CAGR' : 'sync DB to populate';
-    const evLbl = document.getElementById('ev_period_lbl');
-    if(evLbl) evLbl.textContent = evYears.length ? evGrowth : 'sync DB to populate';
-    mkChart('c_ev',{type:'bar',data:{
-      labels: evYears.length ? evYears : ['--'],
-      datasets:[
-        {label:'MWh',data:evYears.length?evMwh:[0],backgroundColor:'rgba(245,166,35,0.5)',yAxisID:'y',borderRadius:2},
-        {label:'Accounts',data:evYears.length?evAcct:[0],type:'line',borderColor:'#00c2a8',backgroundColor:'transparent',yAxisID:'y1',tension:.3,pointRadius:4},
-      ]
-    },options:{...co(),scales:{x:{ticks:{color:TC},grid:{color:CC}},y:{ticks:{color:TC},grid:{color:CC},position:'left'},y1:{ticks:{color:TC},grid:{display:false},position:'right'}}}});
   })();
 
   // Defection charts
@@ -3684,18 +3742,8 @@ function buildCharts(){
       {label:'Forecast GWh',data:accFc,borderColor:'#f5a623',borderDash:[4,2],backgroundColor:'transparent',tension:.3,pointRadius:4},
     ]},options:co()});
 
-  // Consumption bracket distribution chart — buckets read dynamically from sbActuals
-  const resRCsB=['RT10','RT20'];
-  const resBktRows=sbActuals.filter(r=>resRCsB.includes(String(r.rate_class||''))&&(r.consumption_bucket||'').trim());
-  const BKTS=[...new Set(resBktRows.map(r=>(r.consumption_bucket||'').trim()))].filter(Boolean).sort();
-  const bktAct=BKTS.map(bk=>resBktRows.filter(r=>Number(r[YEAR_COL])===curYear&&Number(r.month)<=curMonth&&(r.consumption_bucket||'').trim()===bk).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6);
-  const bktPY =BKTS.map(bk=>resBktRows.filter(r=>Number(r[YEAR_COL])===(curYear-1)&&Number(r.month)<=curMonth&&(r.consumption_bucket||'').trim()===bk).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6);
-  mkChart('c_bracket_dist',{type:'bar',data:{
-    labels:BKTS.length?BKTS:['No data'],
-    datasets:[
-      {label:'Prior Year',data:bktPY,backgroundColor:'rgba(55,138,221,0.5)',borderColor:'#378ADD',borderWidth:1,borderRadius:3},
-      {label:'Current Year',data:bktAct,backgroundColor:'rgba(0,194,168,0.6)',borderColor:'#00c2a8',borderWidth:1,borderRadius:3},
-    ]},options:{...co()}});
+  // RT10 & RT20 bracket distribution charts — period-aware
+  mkBracketCharts();
 }
 
 /* ==========================================
@@ -3744,16 +3792,21 @@ function renderPfInd(){
 }
 function renderPfRC(){
   const rcDefs={RT10:'Low-use Residential','RT20':'Gen. Service / SME',RT40:'LV Commercial',RT50:'MV Commercial',RT70:'Large Industrial',ST:'Street Lights',EV:'Electric Vehicle'};
-  const rcList=['RT10','RT20','RT40','RT50','RT70','ST','EV'];
+  const rcList=['RT10','RT20','RT40','RT50','RT70','RT60-ST'];
+  const py=curYear-1, cy=curYear;
+  // Use sbActuals directly so residential rate classes (RT10/RT20) with no individual
+  // account numbers are included correctly — CUSTOMERS only covers account-keyed rows
+  const _rcGwh=(rc,yr)=>sbActuals.filter(r=>String(r.rate_class||'').trim()===rc&&Number(r[YEAR_COL]||r.year||0)===yr).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+  const _rcBud=(rc)=>sbBudget.filter(r=>String(r.rate_class||r.rc||'').trim()===rc&&Number(r.year||0)===cy).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
   const rcs=rcList.map(rc=>({rc,desc:rcDefs[rc]||rc,
-    y25:CUSTOMERS.filter(c=>c.rate===rc).reduce((s,c)=>s+c.y25,0),
-    y26:CUSTOMERS.filter(c=>c.rate===rc).reduce((s,c)=>s+c.y26,0),
-    bud:CUSTOMERS.filter(c=>c.rate===rc).reduce((s,c)=>s+c.bud,0),
-    note:CUSTOMERS.length?'from loaded data':'Upload data to populate'
+    y25:_rcGwh(rc,py),
+    y26:_rcGwh(rc,cy),
+    bud:_rcBud(rc),
+    note:sbActuals.length?'from database':'Upload data to populate'
   }));
-  const pfrcBanner = CUSTOMERS.length
-    ? `<div style="background:rgba(32,201,151,.1);border-left:3px solid var(--green);border-radius:4px;padding:8px 13px;margin-bottom:9px;font-size:11px;color:var(--green);font-weight:500">&#10003; Rate-class data loaded from Supabase &mdash; ${CUSTOMERS.length} customer records</div>`
-    : `<div style="background:rgba(245,166,35,.12);border-left:3px solid var(--amber);border-radius:4px;padding:8px 13px;margin-bottom:9px;font-size:11px;color:var(--amber);font-weight:500">&#9888; No data loaded &mdash; sync Supabase or upload an Excel file to populate rate-class performance</div>`;
+  const pfrcBanner = sbActuals.length
+    ? `<div style="background:rgba(32,201,151,.1);border-left:3px solid var(--green);border-radius:4px;padding:8px 13px;margin-bottom:9px;font-size:11px;color:var(--green);font-weight:500">&#10003; Rate-class data loaded from database &mdash; ${sbActuals.length.toLocaleString()} records</div>`
+    : `<div style="background:rgba(245,166,35,.12);border-left:3px solid var(--amber);border-radius:4px;padding:8px 13px;margin-bottom:9px;font-size:11px;color:var(--amber);font-weight:500">&#9888; No data loaded &mdash; sync or upload an Excel file to populate rate-class performance</div>`;
   document.getElementById('pfr_tbl').innerHTML=pfrcBanner+`<table class="dt" id="pfr_dt">
     <thead><tr><th>Rate Class</th><th>Description</th><th>${curYear-1} (GWh)</th><th>${curYear} (GWh)</th><th>Budget (Est.)</th><th>vs Budget</th><th>YoY</th><th>MTD Notes</th></tr></thead>
     <tbody>${rcs.map(r=>{const vb2=pct(r.y26,r.bud),yy=pct(r.y26,r.y25);return`<tr>
@@ -3780,15 +3833,15 @@ function renderPfPar(){
   makeSortable('pfp_dt');
 }
 function renderVariance(){
-  const segs=['RT10','RT20','RT40','RT50','RT70','ST'];
+  const segs=['RT10','RT20','RT40','RT50','RT70','RT60-ST'];
   const rows=segs.map(seg=>{
     const custs=CUSTOMERS.filter(c=>c.rate===seg);
     const mtd_act=custs.reduce((s,c)=>s+(c.m[curMonth-1]||0),0);
-    const mtd_bud=custs.reduce((s,c)=>s+(c.bud/12),0);
-    const mtd_ly=custs.reduce((s,c)=>s+(c.y25/12),0);
+    const mtd_bud=sbBudget.filter(r=>String(r.rate_class||r.rc||'')===seg&&Number(r.year)===curYear&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
+    const mtd_ly=sbActuals.filter(r=>String(r.rate_class||r.rc||'')===seg&&Number(r[YEAR_COL])===curYear-1&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
     const ytd_act=custs.reduce((s,c)=>s+c.m.slice(0,curMonth).reduce((a,v)=>a+(v||0),0),0);
-    const ytd_bud=custs.reduce((s,c)=>s+(c.bud*(curMonth/12)),0);
-    const ytd_ly=custs.reduce((s,c)=>s+(c.y25*(curMonth/12)),0);
+    const ytd_bud=sbBudget.filter(r=>String(r.rate_class||r.rc||'')===seg&&Number(r.year)===curYear&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
+    const ytd_ly=sbActuals.filter(r=>String(r.rate_class||r.rc||'')===seg&&Number(r[YEAR_COL])===curYear-1&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
     return{seg,mtd_act,mtd_bud,mtd_ly,ytd_act,ytd_bud,ytd_ly};
   });
   const tot=(k)=>rows.reduce((s,r)=>s+r[k],0);
@@ -4011,9 +4064,6 @@ function renderRsKPIs(){
   rsKv('rs_kpi_ytd_sub',has?fmtYoy(resYtdKwh,resYtdLy):'-- YoY');
 
   // Net billers — aggregate across period months
-  const nbRows=sbNetBillers.filter(r=>Number(r.year)===curYear&&periodMonths.includes(Number(r.month)));
-  const nbCount=nbRows.reduce((s,r)=>s+Number(r.count||0),0);
-  rsKv('rs_kpi_nb',nbCount>0?nbCount.toLocaleString():(sbNetBillers.length?'0':'--'));
 
   // Customer count — use latest month in period (headcount is a point-in-time figure)
   const custMonth=periodMonths[periodMonths.length-1];
@@ -4023,13 +4073,6 @@ function renderRsKPIs(){
   const cgNote=document.getElementById('rs_kpi_cg_note');
   if(cgNote)cgNote.textContent=resBudCount>0?`vs ${resBudCount.toLocaleString()} budget`:(resActCount===0?'upload customer_count column':'residential headcount');
 
-  // RT10 net billers
-  const nb10=sbNetBillers.filter(r=>Number(r.year)===curYear&&periodMonths.includes(Number(r.month))&&String(r.rate_class||'').toUpperCase()==='RT10');
-  rsKv('rs_kpi_rt10nb',nb10.length?nb10.reduce((s,r)=>s+Number(r.count||0),0).toLocaleString():(sbNetBillers.length?'0':'--'));
-
-  // Export kWh
-  const nbExpKwh=nbRows.reduce((s,r)=>s+Number(r.kwh||0),0);
-  rsKv('rs_kpi_nbexp',nbExpKwh>0?fmtK(nbExpKwh)+' kWh':(sbNetBillers.length?'0 kWh':'--'));
 }
 function renderRsPar(){
   const q=(document.getElementById('rs_q')?.value||'').toLowerCase();
@@ -4111,7 +4154,7 @@ function renderDefKPIs(){
   document.getElementById('df_mod').textContent=defs.filter(d=>d.sev==='Moderate').length;
   const validated=defs.filter(d=>S.get(`df_val_${d.num}`,null));
   document.getElementById('df_validated').textContent=validated.length;
-  document.getElementById('df_dg').textContent=defs.filter(d=>d.cause==='Solar/DG'||d.cause==='CHP').length;
+  document.getElementById('df_dg').textContent=defs.filter(d=>d.cause==='Self-Gen'||d.cause==='CHP').length;
   document.getElementById('kpi_defectors').textContent=defs.length;
 }
 function renderDefectors(){
@@ -4135,7 +4178,7 @@ function renderDefectors(){
       <td><span class="heat hR">${d.ratio}%</span></td>
       <td><span class="def-severity ${sevClass[d.sev]||''}">${d.sev}</span></td>
       <td>${d.consec} mo.</td>
-      <td><span class="pill ${d.cause==='Solar/DG'?'pa':d.cause==='CHP'?'pp':d.cause==='Hurricane'?'pb':d.cause==='Closure'?'pr':'pgr'}">${d.cause}</span></td>
+      <td><span class="pill ${d.cause==='Self-Gen'?'pa':d.cause==='CHP'?'pp':d.cause==='Hurricane'?'pb':d.cause==='Closure'?'pr':'pgr'}">${d.cause}</span></td>
       <td>${val?`<span class="pill pg">✓ ${val.cause}</span>`:`<button class="btn btn-a" style="padding:2px 7px;font-size:10px" onclick="validateDefector('${d.num}','${d.name.replace(/'/g,"\\'")}')">Validate</button>`}</td>
     </tr>`;
   });
@@ -4149,7 +4192,7 @@ function validateDefector(num,name){
     <div style="margin-bottom:10px;font-size:11px;color:var(--text2)">Confirm the root cause of this defection signal. This will mark it as validated and determine whether it feeds the Risk & Opportunity register.</div>
     <div class="lf" style="margin-bottom:8px"><label>Confirmed Cause</label>
     <select class="sel" style="width:100%" id="val_cause">
-      <option value="Solar/DG">Solar / Rooftop DG</option>
+      
       <option value="CHP">CHP / Self-generation</option>
       <option value="Hurricane">Hurricane damage (temporary)</option>
       <option value="Closure">Business closure</option>
@@ -4163,7 +4206,7 @@ function validateDefector(num,name){
     const note=document.getElementById('val_note').value;
     S.set(`df_val_${num}`,{cause,note,by:CU.name,ts:new Date().toLocaleString()});
     // Auto-add to R&O if structural
-    if(cause==='Solar/DG'||cause==='CHP'||cause==='Closure'){
+    if(cause==='Self-Gen'||cause==='CHP'||cause==='Closure'){
       const exists=RISK_OPP.find(r=>r.acct===num);
       if(!exists){
         const cust=CUSTOMERS.find(c=>c.num===num);
@@ -4604,7 +4647,7 @@ function renderOverviewKPIs(){
   if(!CUSTOMERS.length)return;
   const mIdx=curMonth-1;
   const resRCs=['RT10','RT20'];
-  const comRCs=['RT40','RT50','RT70'];
+  const comRCs=['RT40','RT50','RT70','RT60-ST'];
   const mtd=CUSTOMERS.reduce((s,c)=>s+(c.m[mIdx]||0),0);
   const mtdBud=CUSTOMERS.reduce((s,c)=>s+(c.bud/12),0);
   const ytd=CUSTOMERS.reduce((s,c)=>s+c.m.slice(0,curMonth).reduce((a,v)=>a+(v||0),0),0);
@@ -4630,7 +4673,7 @@ function renderOverviewKPIs(){
   sv('kpi_ytd_yoy',(vYoY>=0?'+':'')+vYoY.toFixed(1)+'% YoY');
   sc('kpi_ytd_yoy',vYoY>=0?'tbadge tbg':'tbadge tbr');
   // ── Total customer count: commercial (distinct accounts) + residential (sum customer_count) ──
-  const commRCs=new Set(['RT40','RT50','RT60','RT70','BU']);
+  const commRCs=new Set(['RT40','RT50','RT60-ST','RT70','BU']);
   const commActCount=CUSTOMERS.filter(c=>commRCs.has(c.rate)).length;
   const resActCount=sbActuals.filter(r=>['RT10','RT20'].includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.customer_count||0),0);
   const commBudRows2=sbBudget.filter(b=>!(b.consumption_bucket||'').trim());
@@ -4655,7 +4698,7 @@ function renderOverviewKPIs(){
 function renderCommercialKPIs(){
   if(!CUSTOMERS.length)return;
   const mIdx=curMonth-1;
-  const comRCs=['RT40','RT50','RT70'];
+  const comRCs=['RT40','RT50','RT70','RT60-ST'];
   const comCusts=CUSTOMERS.filter(c=>comRCs.includes(c.rate));
   const cmMtd=comCusts.reduce((s,c)=>s+(c.m[mIdx]||0),0);
   const cmBud=comCusts.reduce((s,c)=>s+(c.bud/12),0);
@@ -4707,8 +4750,7 @@ const SCORECARD_SEGS = [
   {seg:'RT40',desc:'LV Commercial'},
   {seg:'RT50',desc:'MV Commercial'},
   {seg:'RT70',desc:'Large Industrial'},
-  {seg:'ST',  desc:'Street Lights'},
-  {seg:'EV',  desc:'Electric Vehicle'},
+  {seg:'RT60-ST',  desc:'Street Lights'},
 ];
 function buildScorecardData(){
   return SCORECARD_SEGS.map(({seg,desc})=>{
@@ -4741,7 +4783,7 @@ function renderExecSummary() {
   const esGap0  = esAct0 - esBud0;
   const esYoY0  = esLY0>0?((esAct0-esLY0)/esLY0*100):null;
   const esYtdYoY= esYtdLY0>0?((esYtd0-esYtdLY0)/esYtdLY0*100):null;
-  const esComRCs= ['RT40','RT50','RT70'];
+  const esComRCs= ['RT40','RT50','RT70','RT60-ST'];
   const esCmMtd = CUSTOMERS.filter(c=>esComRCs.includes(c.rate)).reduce((s,c)=>s+(c.m[curMonth-1]||0),0);
   const esCmBud = CUSTOMERS.filter(c=>esComRCs.includes(c.rate)).reduce((s,c)=>s+(c.bud/12),0);
   const esCmGap = esCmMtd - esCmBud;
@@ -4778,7 +4820,7 @@ function renderExecSummary() {
     `<strong style="color:${totalGap<0?'var(--red)':'var(--green)'}">MTD Sales ${esAct.toFixed(1)} GWh vs budget ${esBud.toFixed(1)} GWh (${totalGap>=0?'+':''}${totalGap.toFixed(1)} GWh gap)</strong>`,
     `<strong style="color:var(--amber)">${critSev.length} critical/severe defector${critSev.length!==1?'s':''}</strong> identified this period.`,
     `<strong style="color:var(--teal)">YoY:</strong> ${esLY>0?((esAct-esLY)/esLY*100).toFixed(1)+'% vs prior year':'Prior year data not loaded.'}`,
-  ] : ['<span style="color:var(--text3)">No data loaded — sync Supabase or upload an Excel file to populate executive summary bullets.</span>'];
+  ] : ['<span style="color:var(--text3)">No data loaded — sync database or upload an Excel file to populate executive summary bullets.</span>'];
   if(el('es_auto_bullets')) {
     el('es_auto_bullets').innerHTML = bullets.map(b => `<div style="padding:4px 0;border-bottom:1px solid var(--border);display:flex;gap:8px"><span style="color:var(--teal);flex-shrink:0">&#8227;</span><span>${b}</span></div>`).join('');
   }
@@ -5346,7 +5388,7 @@ function getDefActions() {
     cause: d.cause, gwh_risk: parseFloat(d.prior3) - parseFloat(d.curr3),
     stage: d.sev === 'Critical' ? 'Investigation' : 'Investigation',
     owner: 'atoyloy', due: '', recovery_gwh: 0,
-    type: (d.cause === 'Solar/DG' || d.cause === 'CHP') ? 'Structural' : 'Temporary',
+    type: (d.cause === 'Self-Gen' || d.cause === 'CHP') ? 'Structural' : 'Temporary',
     opened: '2026-02-01', note: ''
   }));
   const saved = S.get('def_actions', {});
@@ -5388,7 +5430,7 @@ function renderDefFlow() {
     <td style="font-weight:500">${a.name}</td>
     <td><span class="pill pt">${a.rate}</span></td>
     <td><span class="def-severity ${a.sev==='Critical'?'def-critical':a.sev==='Severe'?'def-severe':'def-moderate'}">${a.sev}</span></td>
-    <td><span class="pill ${a.cause==='Solar/DG'?'pa':a.cause==='Hurricane'?'pb':'pgr'}">${a.cause}</span></td>
+    <td><span class="pill ${a.cause==='Self-Gen'?'pa':a.cause==='Hurricane'?'pb':'pgr'}">${a.cause}</span></td>
     <td style="color:var(--red);font-weight:600">${a.gwh_risk.toFixed(2)} GWh</td>
     <td>
       <select class="sel" style="font-size:10px;padding:2px 5px" onchange="saveDefAction('${a.num}','stage',this.value);renderDefFlow()">
@@ -5470,18 +5512,12 @@ function editDefNote(num, name) {
    P5: RESIDENTIAL INTELLIGENCE
 ===================================================== */
 
-const BRACKETS = ['0-150','150-300','300-500','500-750','750-1000','1000+'];
-const BRACKET_TREND = {
-  '0-150':    [0,0,0,0,0,0],
-  '150-300':  [0,0,0,0,0,0],
-  '300-500':  [0,0,0,0,0,0],
-  '500-750':  [0,0,0,0,0,0],
-  '750-1000': [0,0,0,0,0,0],
-  '1000+':    [0,0,0,0,0,0]
-};
-const BRACKET_COLORS = ['#00c2a8','#00957f','#378ADD','#185FA5','#f5a623','#7F77DD'];
+// Buckets derived dynamically from sbActuals — no hardcoded list
+const BRACKET_COLORS = ['#00c2a8','#00957f','#378ADD','#185FA5','#f5a623','#7F77DD','#e84040','#f5a623'];
+function getResBuckets(){
+  return [...new Set(sbActuals.filter(r=>['RT10','RT20'].includes(String(r.rate_class||''))&&(r.consumption_bucket||'').trim()).map(r=>(r.consumption_bucket||'').trim()))].filter(Boolean).sort();
+}
 
-const DG_BY_PARISH = [];
 
 const CDD_DATA = {
   months:['','','','','',''],
@@ -5514,18 +5550,6 @@ function renderResIntelKPIs() {
   kv('ri_kpi_custs',totalCusts>0?totalCusts.toLocaleString():'--');
   kv('ri_kpi_custs_sub',totalCusts>0?`${curYear} · month ${custMonth}`:'upload customer_count');
 
-  // Net billers RT10 — from sbNetBillers
-  const nb10Rows=sbNetBillers.filter(r=>Number(r.year)===curYear&&Number(r.month)===custMonth&&String(r.rate_class||'').toUpperCase()==='RT10');
-  const nb10Count=nb10Rows.reduce((s,r)=>s+Number(r.count||0),0);
-  const nb10Kwh=nb10Rows.reduce((s,r)=>s+Number(r.kwh||0),0);
-  kv('ri_kpi_nb10',nb10Count>0?nb10Count.toLocaleString():(sbNetBillers.length?'0':'--'));
-  kv('ri_kpi_nb10_sub',nb10Count>0?`${curYear} · month ${custMonth}`:'sync jps_net_billers');
-
-  // DG penetration — net billers / total customers
-  const dgPct=totalCusts>0&&nb10Count>0?((nb10Count/totalCusts)*100).toFixed(2)+'%':'--';
-  kv('ri_kpi_dg_pct',dgPct);
-  kv('ri_kpi_dg_sub',totalCusts>0&&nb10Count>0?'net billers / customers':'need both tables');
-
   // Avg kWh per RT10 customer
   const rt10ActRows=sbActuals.filter(r=>String(r.rate_class||'')==='RT10'&&Number(r[YEAR_COL])===curYear&&Number(r.month)===custMonth);
   const rt10TotalKwh=rt10ActRows.reduce((s,r)=>s+Number(r.kwh||0),0);
@@ -5534,121 +5558,126 @@ function renderResIntelKPIs() {
   kv('ri_kpi_avg_kwh',avgKwh);
   kv('ri_kpi_avg_kwh_sub',rt10TotalCusts>0?`per customer · ${curYear}-${String(custMonth).padStart(2,'0')}`:'upload RT10 actuals');
 
-  // NB avg export kWh per net biller
-  const nbAvgExport=nb10Count>0?(nb10Kwh/nb10Count).toFixed(1)+' kWh':'--';
-  kv('ri_kpi_nb_export',nbAvgExport);
-  kv('ri_kpi_nb_export_sub',nb10Count>0?`avg per net biller`:'sync jps_net_billers');
 }
 
 function renderResIntelSection(id) {
   if (id === 'ri_bracket') {
     renderBracketTable();
+
+    // --- Bracket trend chart: last 6 months, dynamic from sbActuals ---
     destroyChart('c_ri_bracket');
     const cb = document.getElementById('c_ri_bracket');
-    if (cb) chartInstances['c_ri_bracket'] = new Chart(cb, {
-      type: 'line',
-      data: {
-        labels: ['Sep','Oct','Nov','Dec','Jan','Feb'],
-        datasets: BRACKETS.map((b,i) => ({
-          label: b + ' kWh',
-          data: BRACKET_TREND[b],
-          borderColor: BRACKET_COLORS[i],
-          backgroundColor: 'transparent',
-          tension: 0.35,
-          pointRadius: 3,
-          borderDash: i > 3 ? [4,2] : [],
-        }))
-      },
-      options: { responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{ display:true, labels:{color:TC,font:{size:9},boxWidth:10} } },
-        scales:{ x:{ticks:{color:TC,font:{size:10}},grid:{color:CC}}, y:{ticks:{color:TC,font:{size:10}},grid:{color:CC}} }
-      }
-    });
+    if (cb) {
+      const bkts = getResBuckets();
+      const resRCsT = ['RT10','RT20'];
+      const MN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const trendMonths = Array.from({length:6},(_,i)=>{
+        let m=curMonth-5+i, y=curYear; if(m<=0){m+=12;y--;}
+        return {y, m, lbl: MN[m-1]};
+      });
+      chartInstances['c_ri_bracket'] = new Chart(cb, {
+        type: 'line',
+        data: {
+          labels: trendMonths.map(t=>t.lbl),
+          datasets: bkts.map((b,i) => ({
+            label: b + ' kWh',
+            data: trendMonths.map(t =>
+              sbActuals.filter(r=>resRCsT.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===t.y&&Number(r.month)===t.m&&(r.consumption_bucket||'').trim()===b)
+                .reduce((s,r)=>s+Number(r.kwh||0),0)/1e6
+            ),
+            borderColor: BRACKET_COLORS[i % BRACKET_COLORS.length],
+            backgroundColor: 'transparent',
+            tension: 0.35,
+            pointRadius: 3,
+            borderDash: i > 3 ? [4,2] : [],
+          }))
+        },
+        options: { responsive:true, maintainAspectRatio:false,
+          plugins:{ legend:{ display:true, labels:{color:TC,font:{size:9},boxWidth:10} } },
+          scales:{ x:{ticks:{color:TC,font:{size:10}},grid:{color:CC}}, y:{ticks:{color:TC,font:{size:10}},grid:{color:CC}} }
+        }
+      });
+    }
 
+    // Update bracket count card subtitle
+    const _ricHdr=document.getElementById('ri_count_hdr');
+    if(_ricHdr)_ricHdr.textContent=`${curYear-1} vs ${curYear} YTD`;
+
+    // --- Customer count by bracket: curYear vs curYear-1, from sbActuals ---
     destroyChart('c_ri_count');
     const cc = document.getElementById('c_ri_count');
-    if (cc) chartInstances['c_ri_count'] = new Chart(cc, {
-      type: 'bar',
-      data: {
-        labels: BRACKETS,
-        datasets: [
-          { label:'2025', data:[0,0,0,0,0,0], backgroundColor:'rgba(55,138,221,0.5)', borderRadius:2 },
-          { label:'2026', data:[0,0,0,0,0,0], backgroundColor:'rgba(0,194,168,0.5)', borderRadius:2 },
-        ]
-      },
-      options: { ...co(), scales:{ x:{ticks:{color:TC,font:{size:10}},grid:{color:CC}}, y:{ticks:{color:TC,callback:v=>(v/1000).toFixed(0)+'K'},grid:{color:CC}} } }
-    });
-  }
-
-  if (id === 'ri_dg') {
-    const dt = document.getElementById('ri_dg_comp_tbl');
-    if (dt) dt.innerHTML = `<table class="dt">
-      <thead><tr><th>Category</th><th>Avg Consumption</th><th>Avg NB Consumption</th><th>Avg NB Export</th><th>NB vs Std (%)</th><th>NB grid reliance</th></tr></thead>
-      <tbody>
-        <tr><td>Residential (RT10)</td><td>--</td><td>--</td><td>--</td><td>--</td><td>--</td></tr>
-        <tr><td>General Services (RT20)</td><td>--</td><td>--</td><td>--</td><td>--</td><td>--</td></tr>
-        <tr><td>LV Power (RT40)</td><td>--</td><td>--</td><td>--</td><td>--</td><td>--</td></tr>
-      </tbody></table>`;
-
-    destroyChart('c_ri_dg_growth');
-    const cg = document.getElementById('c_ri_dg_growth');
-    if (cg) chartInstances['c_ri_dg_growth'] = new Chart(cg, {
-      type: 'line',
-      data: {
-        labels: ['2021','2022','2023','2024','2025','2026 YTD'],
-        datasets: [
-          { label:'Net Billers (index)',     data:[0,0,0,0,0,0], borderColor:'#e84040', backgroundColor:'rgba(232,64,64,0.07)', tension:.35, fill:true, pointRadius:4 },
-          { label:'Total Customers (index)', data:[0,0,0,0,0,0], borderColor:'#378ADD', backgroundColor:'transparent', tension:.35, borderDash:[4,2], pointRadius:4 },
-        ]
-      },
-      options: { responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{ display:true, labels:{color:TC,font:{size:10},boxWidth:10} } },
-        scales:{ x:{ticks:{color:TC},grid:{color:CC}}, y:{ticks:{color:TC},grid:{color:CC}} }
-      }
-    });
-
-    destroyChart('c_ri_dg_par');
-    const cp = document.getElementById('c_ri_dg_par');
-    if (cp) chartInstances['c_ri_dg_par'] = new Chart(cp, {
-      type: 'bar',
-      data: {
-        labels: DG_BY_PARISH.map(d=>d.p),
-        datasets: [{ label:'DG %', data: DG_BY_PARISH.map(d=>d.pct), backgroundColor: DG_BY_PARISH.map(d=>d.pct>0.1?'rgba(232,64,64,0.6)':'rgba(245,166,35,0.5)'), borderRadius:2 }]
-      },
-      options: { ...co(), scales:{ x:{ticks:{color:TC,font:{size:10},maxRotation:35},grid:{color:CC}}, y:{ticks:{color:TC,callback:v=>(v*100).toFixed(2)+'%'},grid:{color:CC}} } }
-    });
+    if (cc) {
+      const bkts = getResBuckets();
+      const resRCsC = ['RT10','RT20'];
+      const sumCust = yr => bkts.map(b =>
+        sbActuals.filter(r=>resRCsC.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===yr&&Number(r.month)===curMonth&&(r.consumption_bucket||'').trim()===b)
+          .reduce((s,r)=>s+Number(r.customer_count||0),0)
+      );
+      chartInstances['c_ri_count'] = new Chart(cc, {
+        type: 'bar',
+        data: {
+          labels: bkts,
+          datasets: [
+            { label: String(curYear-1), data: sumCust(curYear-1), backgroundColor:'rgba(55,138,221,0.5)', borderRadius:2 },
+            { label: String(curYear),   data: sumCust(curYear),   backgroundColor:'rgba(0,194,168,0.5)',  borderRadius:2 },
+          ]
+        },
+        options: { ...co(), scales:{ x:{ticks:{color:TC,font:{size:10}},grid:{color:CC}}, y:{ticks:{color:TC,callback:v=>(v/1000).toFixed(0)+'K'},grid:{color:CC}} } }
+      });
+    }
   }
 
   if (id === 'ri_parish') {
     const tbl = document.getElementById('ri_par_def_tbl');
     if (tbl) {
-      const parishDef = PARISHES.map(p => {
-        const curr3 = p.rc * 1000;
-        const prior3 = p.rp * 1000;
-        const ratio = prior3 > 0 ? curr3/prior3 : 1;
-        const sev = ratio < 0.5 ? 'Critical' : ratio < 0.65 ? 'Severe' : ratio < 0.80 ? 'Moderate' : 'Normal';
-        return { ...p, ratio: (ratio*100).toFixed(1), sev };
+      // Compute real residential kWh from sbActuals — 3-month rolling average
+      const resRCsP = ['RT10','RT20'];
+      const mk3 = (baseYear) => Array.from({length:3},(_,i)=>{let m=curMonth-i,y=baseYear;if(m<=0){m+=12;y--;}return{y,m};});
+      const curr3months = mk3(curYear);
+      const prior3months= mk3(curYear-1);
+      const parishes = [...new Set(sbActuals.filter(r=>resRCsP.includes(String(r.rate_class||''))&&r.parish).map(r=>r.parish))].sort();
+      if(!parishes.length){tbl.innerHTML='<div style="color:var(--text3);padding:16px;font-size:12px">No residential actuals loaded — upload data to populate this table.</div>';return;}
+      const sumResKwh = (par,mList) => mList.reduce((s,{y,m})=>s+sbActuals.filter(r=>resRCsP.includes(String(r.rate_class||''))&&r.parish===par&&Number(r[YEAR_COL])===y&&Number(r.month)===m).reduce((a,r)=>a+Number(r.kwh||0),0),0)/3;
+      const sumAllKwh = (par,mList) => mList.reduce((s,{y,m})=>s+sbActuals.filter(r=>r.parish===par&&Number(r[YEAR_COL])===y&&Number(r.month)===m).reduce((a,r)=>a+Number(r.kwh||0),0),0)/3;
+      const parishDef = parishes.map(par => {
+        const curr3v = sumResKwh(par, curr3months);
+        const prior3v= sumResKwh(par, prior3months);
+        const ratio  = prior3v > 0 ? curr3v/prior3v : 1;
+        const sev    = ratio < 0.5 ? 'Critical' : ratio < 0.65 ? 'Severe' : ratio < 0.80 ? 'Moderate' : 'Normal';
+        const currAll= sumAllKwh(par, curr3months);
+        const prevAll= sumAllKwh(par, prior3months);
+        const sc = {Critical:'def-critical',Severe:'def-severe',Moderate:'def-moderate',Normal:''}[sev];
+        return `<tr>
+          <td style="font-weight:600">${par}</td>
+          <td>${fmtK(curr3v)}</td><td style="color:var(--text3)">${fmtK(prior3v)}</td>
+          <td><span class="heat ${hc((ratio-1)*100)}">${(ratio*100).toFixed(1)}%</span></td>
+          <td><span class="def-severity ${sc}">${sev}</span></td>
+          <td>${vbar(currAll,prevAll)}</td>
+          <td>${vbar(curr3v,prior3v)}</td>
+          <td>${sev!=='Normal'?'&#9888;':'&#9679;'}</td>
+        </tr>`;
       });
       tbl.innerHTML = `<table class="dt" id="ripar_dt">
         <thead><tr><th>Parish</th><th>3m Avg Current (kWh)</th><th>3m Avg Prior Yr (kWh)</th><th>YoY Ratio</th><th>Defection Signal</th><th>Overall Var%</th><th>Res. Var%</th><th>Flag</th></tr></thead>
-        <tbody>${parishDef.map(p => {
-          const ov = pct(p.curr, p.prev), rv = pct(p.rc, p.rp);
-          const sc = {Critical:'def-critical',Severe:'def-severe',Moderate:'def-moderate',Normal:''}[p.sev];
-          return `<tr>
-            <td style="font-weight:600">${p.name}</td>
-            <td>${fmtK(p.rc)}</td><td style="color:var(--text3)">${fmtK(p.rp)}</td>
-            <td><span class="heat ${hc(parseFloat(p.ratio)-100)}">${p.ratio}%</span></td>
-            <td><span class="def-severity ${sc}">${p.sev}</span></td>
-            <td>${vbar(p.curr,p.prev)}</td>
-            <td>${vbar(p.rc,p.rp)}</td>
-            <td>${p.sev!=='Normal'?'&#9888;':'&#9679;'}</td>
-          </tr>`;
-        }).join('')}</tbody></table>`;
+        <tbody>${parishDef.join('')}</tbody></table>`;
       makeSortable('ripar_dt');
     }
   }
 
   if (id === 'ri_weather') {
+    // Populate CDD_DATA.months and kwh_raw from sbActuals (RT10 residential GWh per month)
+    // cdd_actual, cdd_normal, kwh_adj require a separate jps_cdd table — shown as zero until uploaded
+    {
+      const _wMN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const _trail6=Array.from({length:6},(_,i)=>{let m=curMonth-5+i,y=curYear;if(m<=0){m+=12;y--;}return{y,m,lbl:_wMN[m-1]};});
+      CDD_DATA.months    =_trail6.map(t=>t.lbl);
+      CDD_DATA.kwh_raw   =_trail6.map(t=>sbActuals.filter(r=>['RT10','RT20'].includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===t.y&&Number(r.month)===t.m).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6);
+      // cdd columns stay zero until jps_cdd table is uploaded
+      CDD_DATA.cdd_actual=Array(6).fill(0);
+      CDD_DATA.cdd_normal=Array(6).fill(0);
+      CDD_DATA.kwh_adj   =Array(6).fill(0);
+    }
+
     destroyChart('c_ri_weather');
     const cw = document.getElementById('c_ri_weather');
     if (cw) chartInstances['c_ri_weather'] = new Chart(cw, {
@@ -5826,21 +5855,40 @@ function renderROAdvanced() {
     options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:true, labels:{color:TC,font:{size:10}} } }, cutout:'55%' }
   });
 
-  // 12-month history chart
+  // 12-month history chart — labels and data derived from RISK_OPP.opened_at
   destroyChart('c_roa_hist');
   const ch = document.getElementById('c_roa_hist');
-  if (ch) chartInstances['c_roa_hist'] = new Chart(ch, {
-    type: 'bar',
-    data: {
-      labels: ['Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb'],
-      datasets: [
-        { label:'Risk items added',        data:[0,0,0,0,0,0,0,0,0,0,0,0], backgroundColor:'rgba(232,64,64,0.6)', borderRadius:2 },
-        { label:'Opportunity items added',  data:[0,0,0,0,0,0,0,0,0,0,0,0], backgroundColor:'rgba(39,196,133,0.6)', borderRadius:2 },
-        { label:'Items closed',            data:[0,0,0,0,0,0,0,0,0,0,0,0], backgroundColor:'rgba(55,138,221,0.5)', borderRadius:2 },
-      ]
-    },
-    options: { ...co(), scales:{ x:{ticks:{color:TC,font:{size:10}},grid:{color:CC}}, y:{ticks:{color:TC},grid:{color:CC}} } }
-  });
+  if (ch) {
+    const _mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    // Build trailing 12 months from curYear/curMonth
+    const trail12=Array.from({length:12},(_,i)=>{
+      let m=curMonth-11+i,y=curYear;if(m<=0){m+=12;y--;}return{y,m,lbl:_mn[m-1]};
+    });
+    const countRO=(typeFilter,closedFilter)=>trail12.map(({y,m})=>{
+      return RISK_OPP.filter(r=>{
+        if(closedFilter){
+          return r.status==='Closed';  // count closed items by their opened_at month for now
+        }
+        return r.type===typeFilter;
+      }).filter(r=>{
+        if(!r.opened_at)return false;
+        const d=new Date(r.opened_at);
+        return d.getFullYear()===y&&(d.getMonth()+1)===m;
+      }).length;
+    });
+    chartInstances['c_roa_hist'] = new Chart(ch, {
+      type: 'bar',
+      data: {
+        labels: trail12.map(t=>t.lbl),
+        datasets: [
+          { label:'Risk items added',       data:countRO('Risk',false),       backgroundColor:'rgba(232,64,64,0.6)', borderRadius:2 },
+          { label:'Opportunity items added', data:countRO('Opportunity',false), backgroundColor:'rgba(39,196,133,0.6)', borderRadius:2 },
+          { label:'Items closed',           data:countRO(null,true),           backgroundColor:'rgba(55,138,221,0.5)', borderRadius:2 },
+        ]
+      },
+      options: { ...co(), scales:{ x:{ticks:{color:TC,font:{size:10}},grid:{color:CC}}, y:{ticks:{color:TC},grid:{color:CC}} } }
+    });
+  }
 }
 
 /* =====================================================
@@ -5898,112 +5946,229 @@ function toggleAllSections() {
 }
 
 function generateReport() {
-  const sel  = document.getElementById('rpt_period_sel')?.value || `${curYear}-${String(curMonth).padStart(2,'0')}`;
+  try {
+  // ── Report settings ──────────────────────────────────────────────────────
   const auth = document.getElementById('rpt_author')?.value || 'JPS Sales Analytics Team';
   const dist = document.getElementById('rpt_dist')?.value   || 'Management';
   const conf = document.getElementById('rpt_conf')?.value   || 'CONFIDENTIAL';
-  const [y,m] = sel.split('-');
-  const ms = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  const period = `${ms[parseInt(m)-1]} ${y}`;
-  const narrative = S.get(`es_narrative_${y}_${m}`, '(No executive narrative saved -- please enter via Exec Summary tab.)');
+  const MNF  = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const MNS  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
+  // ── Period labels ─────────────────────────────────────────────────────────
+  const periodLbl = curPeriod === 'MTD'    ? `${MNF[curMonth-1]} ${curYear} — Month to Date`
+                  : curPeriod === 'QTD'    ? `Q${curQtr} ${curYear} — Quarter to Date`
+                  : curPeriod === 'YTD'    ? `YTD ${curYear} (Jan–${MNS[curMonth-1]})`
+                  :                         `Full Year ${curYear}`;
+  const periodShort = curPeriod === 'MTD'  ? `MTD ${MNS[curMonth-1]} ${curYear}`
+                    : curPeriod === 'QTD'  ? `QTD Q${curQtr} ${curYear}`
+                    : curPeriod === 'YTD'  ? `YTD ${curYear}`
+                    :                       `FY ${curYear}`;
+
+  // ── Rebuild scorecard fresh from live DB data ─────────────────────────────
+  const sc = buildScorecardData();
+  if (!sc.length && !sbActuals.length) {
+    toast('No data loaded — sync database first then generate report','w');
+    return;
+  }
+
+  // Pick the right columns based on selected period
+  const isYTD  = (curPeriod === 'YTD' || curPeriod === 'Annual');
+  const getAct = r => isYTD ? r.ytd_act : r.mtd_act;
+  const getBud = r => isYTD ? r.ytd_bud : r.mtd_bud;
+  const getLY  = r => isYTD ? r.ytd_ly  : r.mtd_ly;
+
+  // Totals from scorecard (consistent with overview table)
+  const totAct = sc.reduce((s,r) => s + getAct(r), 0);
+  const totBud = sc.reduce((s,r) => s + getBud(r), 0);
+  const totLY  = sc.reduce((s,r) => s + getLY(r),  0);
+  const totGap = totAct - totBud;
+  const totYoY = totLY > 0 ? ((totAct - totLY) / totLY * 100) : null;
+
+  const narrative = S.get(`es_narrative_${curYear}_${String(curMonth).padStart(2,'0')}`,
+    S.get(`es_narrative_${curYear}_${curMonth}`, '(No executive narrative saved — enter via Exec Summary tab.)'));
+
+  // ── Helper: coloured % badge ──────────────────────────────────────────────
+  const pctBadge = (a,b) => {
+    if (!b) return '<span style="color:#999">--</span>';
+    const v = ((a-b)/b*100);
+    return `<span style="color:${v>=0?'#27c485':'#e84040'}">${v>=0?'+':''}${v.toFixed(1)}%</span>`;
+  };
+  const fmtGwh = v => v.toFixed(2);
+
+  // ── HTML header ───────────────────────────────────────────────────────────
   let html = `
     <div style="border-bottom:3px solid #003366;padding-bottom:16px;margin-bottom:20px">
       <div style="font-size:10px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">${conf}</div>
       <h1 style="font-size:22px;font-weight:700;color:#003366;margin:0">Jamaica Public Service Company</h1>
-      <h2 style="font-size:16px;font-weight:400;color:#333;margin:4px 0 0">Monthly Sales Performance Report &mdash; ${period}</h2>
+      <h2 style="font-size:16px;font-weight:400;color:#333;margin:4px 0 0">Sales Performance Report &mdash; ${periodLbl}</h2>
       <div style="font-size:11px;color:#666;margin-top:8px">Prepared by: ${auth} &nbsp;|&nbsp; Distribution: ${dist} &nbsp;|&nbsp; Generated: ${new Date().toLocaleDateString()}</div>
     </div>`;
 
+  let secNum = 1;
+
+  // ── 1. Executive Summary ──────────────────────────────────────────────────
   if (S.get('rpt_sel_rpt_exec', true)) {
-    html += `<h2 style="font-size:15px;color:#003366;border-bottom:1px solid #ddd;padding-bottom:6px;margin:18px 0 10px">1. Executive Summary</h2>
-    <p style="line-height:1.8;color:#333">${narrative.replace(/\n/g,'<br/>')}</p>`;
+    const gapSign = totGap >= 0 ? '+' : '';
+    const yoyStr  = totYoY !== null ? ` YoY: ${totYoY>=0?'+':''}${totYoY.toFixed(1)}%.` : '';
+    const autoLine = sc.length
+      ? `<p style="background:#f0f7ff;border-left:3px solid #003366;padding:8px 12px;margin-bottom:12px;font-size:11px;line-height:1.7">
+          <strong>${periodShort} Sales: ${fmtGwh(totAct)} GWh</strong> vs budget ${fmtGwh(totBud)} GWh
+          &mdash; gap <strong style="color:${totGap>=0?'#27c485':'#e84040'}">${gapSign}${fmtGwh(totGap)} GWh (${gapSign}${totBud>0?((totGap/totBud)*100).toFixed(1):'--'}%)</strong>.
+          Prior year same period: ${fmtGwh(totLY)} GWh.${yoyStr}
+        </p>`
+      : '';
+    html += `<h2 style="font-size:15px;color:#003366;border-bottom:1px solid #ddd;padding-bottom:6px;margin:18px 0 10px">${secNum++}. Executive Summary</h2>
+    ${autoLine}
+    <p style="line-height:1.8;color:#333;font-size:12px">${narrative.replace(/\n/g,'<br/>')}</p>`;
   }
 
+  // ── 2. KPI Scorecard ──────────────────────────────────────────────────────
   if (S.get('rpt_sel_rpt_kpi', true)) {
-    html += `<h2 style="font-size:15px;color:#003366;border-bottom:1px solid #ddd;padding-bottom:6px;margin:18px 0 10px">2. KPI Scorecard</h2>
-    <table style="width:100%;border-collapse:collapse;font-size:11px">
-      <thead><tr style="background:#003366;color:#fff"><th style="padding:6px 8px;text-align:left">Segment</th><th style="padding:6px 8px">MTD Actual</th><th style="padding:6px 8px">MTD Budget</th><th style="padding:6px 8px">vs Budget</th><th style="padding:6px 8px">YoY</th><th style="padding:6px 8px">Status</th></tr></thead>
-      <tbody>${SCORECARD_DATA.map((r,i) => `<tr style="background:${i%2===0?'#f9f9f9':'#fff'}">
-        <td style="padding:5px 8px;font-weight:600">${r.seg} &mdash; ${r.desc}</td>
-        <td style="padding:5px 8px;text-align:center">${r.mtd_act.toFixed(1)} GWh</td>
-        <td style="padding:5px 8px;text-align:center;color:#666">${r.mtd_bud.toFixed(1)} GWh</td>
-        <td style="padding:5px 8px;text-align:center;color:${pct(r.mtd_act,r.mtd_bud)>=0?'#27c485':'#e84040'}">${pct(r.mtd_act,r.mtd_bud)>=0?'+':''}${pct(r.mtd_act,r.mtd_bud).toFixed(1)}%</td>
-        <td style="padding:5px 8px;text-align:center;color:${pct(r.mtd_act,r.mtd_ly)>=0?'#27c485':'#e84040'}">${pct(r.mtd_act,r.mtd_ly)>=0?'+':''}${pct(r.mtd_act,r.mtd_ly).toFixed(1)}%</td>
+    const rows = sc.map((r,i) => {
+      const act=getAct(r), bud=getBud(r), ly=getLY(r);
+      return `<tr style="background:${i%2===0?'#f9f9f9':'#fff'}">
+        <td style="padding:5px 8px;font-weight:600">${r.seg}</td>
+        <td style="padding:5px 8px;font-size:10px;color:#555">${r.desc}</td>
+        <td style="padding:5px 8px;text-align:right;font-weight:600">${fmtGwh(act)}</td>
+        <td style="padding:5px 8px;text-align:right;color:#666">${fmtGwh(bud)}</td>
+        <td style="padding:5px 8px;text-align:right">${pctBadge(act,bud)}</td>
+        <td style="padding:5px 8px;text-align:right;color:#666">${fmtGwh(ly)}</td>
+        <td style="padding:5px 8px;text-align:right">${pctBadge(act,ly)}</td>
         <td style="padding:5px 8px;text-align:center;font-weight:700;color:${r.status==='OK'?'#27c485':r.status==='Watch'?'#f5a623':'#e84040'}">${r.status}</td>
-      </tr>`).join('')}</tbody>
-    </table>`;
-  }
-
-  if (S.get('rpt_sel_rpt_bridge', true)) {
-    const drivers = getBridgeDrivers();
-    const explained = drivers.reduce((s,d) => s+d.gwh, 0);
-    const _rptAct = CUSTOMERS.reduce((s,c)=>s+(c.m[curMonth-1]||0),0);
-    const _rptBud = CUSTOMERS.reduce((s,c)=>s+(c.bud/12),0);
-    const _rptGap = CUSTOMERS.length ? _rptAct - _rptBud : 0;
-    const _rptGapStr = CUSTOMERS.length ? ((_rptGap>=0?'+':'')+_rptGap.toFixed(1)+' GWh') : 'N/A (no data loaded)';
-    const _exPct = (_rptGap!==0&&CUSTOMERS.length)?Math.abs(explained/_rptGap*100).toFixed(0):'--';
-    const _resid = CUSTOMERS.length ? (_rptGap - explained).toFixed(1) : 'N/A';
-    html += `<h2 style="font-size:15px;color:#003366;border-bottom:1px solid #ddd;padding-bottom:6px;margin:18px 0 10px">3. Variance Bridge</h2>
-    <p style="color:#333;font-size:11px;margin-bottom:10px">Total MTD gap vs Budget: <strong>${_rptGapStr}</strong>. Explained by known drivers: <strong>${explained.toFixed(1)} GWh</strong> (${_exPct}%). Unexplained residual: <strong>${_resid} GWh</strong>.</p>
+      </tr>`;
+    }).join('');
+    const totRow = `<tr style="background:#003366;color:#fff;font-weight:700">
+      <td style="padding:5px 8px" colspan="2">TOTAL</td>
+      <td style="padding:5px 8px;text-align:right">${fmtGwh(totAct)}</td>
+      <td style="padding:5px 8px;text-align:right">${fmtGwh(totBud)}</td>
+      <td style="padding:5px 8px;text-align:right">${totBud>0?(totGap>=0?'+':'')+((totGap/totBud)*100).toFixed(1)+'%':'--'}</td>
+      <td style="padding:5px 8px;text-align:right">${fmtGwh(totLY)}</td>
+      <td style="padding:5px 8px;text-align:right">${totYoY!==null?(totYoY>=0?'+':'')+totYoY.toFixed(1)+'%':'--'}</td>
+      <td style="padding:5px 8px;text-align:center">&mdash;</td>
+    </tr>`;
+    html += `<h2 style="font-size:15px;color:#003366;border-bottom:1px solid #ddd;padding-bottom:6px;margin:18px 0 10px">${secNum++}. KPI Scorecard &mdash; ${periodShort} (GWh)</h2>
     <table style="width:100%;border-collapse:collapse;font-size:11px">
-      <thead><tr style="background:#003366;color:#fff"><th style="padding:5px 8px;text-align:left">Driver</th><th style="padding:5px 8px">Segment</th><th style="padding:5px 8px">Type</th><th style="padding:5px 8px;text-align:right">GWh Impact</th></tr></thead>
-      <tbody>${drivers.map((d,i) => `<tr style="background:${i%2===0?'#f9f9f9':'#fff'}">
-        <td style="padding:5px 8px">${d.desc}</td>
-        <td style="padding:5px 8px">${d.seg}</td>
-        <td style="padding:5px 8px">${d.type}</td>
-        <td style="padding:5px 8px;text-align:right;color:${d.gwh>=0?'#27c485':'#e84040'};font-weight:600">${d.gwh>=0?'+':''}${d.gwh.toFixed(1)}</td>
-      </tr>`).join('')}</tbody>
+      <thead><tr style="background:#003366;color:#fff">
+        <th style="padding:6px 8px;text-align:left">Segment</th>
+        <th style="padding:6px 8px;text-align:left">Description</th>
+        <th style="padding:6px 8px;text-align:right">Actual</th>
+        <th style="padding:6px 8px;text-align:right">Budget</th>
+        <th style="padding:6px 8px;text-align:right">vs Bud</th>
+        <th style="padding:6px 8px;text-align:right">Prior Year</th>
+        <th style="padding:6px 8px;text-align:right">YoY</th>
+        <th style="padding:6px 8px;text-align:center">Status</th>
+      </tr></thead>
+      <tbody>${rows}${totRow}</tbody>
     </table>`;
   }
 
+  // ── 3. Variance Bridge ────────────────────────────────────────────────────
+  if (S.get('rpt_sel_rpt_bridge', true)) {
+    const drivers  = getBridgeDrivers();
+    const explained = drivers.reduce((s,d) => s + d.gwh, 0);
+    const residual  = sc.length ? totGap - explained : null;
+    const exPct     = (totGap !== 0 && sc.length) ? Math.abs(explained / totGap * 100).toFixed(0) : '--';
+    const driverRows = drivers.length
+      ? drivers.map((d,i) => `<tr style="background:${i%2===0?'#f9f9f9':'#fff'}">
+          <td style="padding:5px 8px">${d.desc}</td>
+          <td style="padding:5px 8px">${d.seg}</td>
+          <td style="padding:5px 8px">${d.type}</td>
+          <td style="padding:5px 8px;text-align:right;color:${d.gwh>=0?'#27c485':'#e84040'};font-weight:600">${d.gwh>=0?'+':''}${d.gwh.toFixed(2)}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="4" style="padding:8px;color:#999;font-style:italic">No variance drivers entered — add via Variance Bridge tab.</td></tr>';
+    html += `<h2 style="font-size:15px;color:#003366;border-bottom:1px solid #ddd;padding-bottom:6px;margin:18px 0 10px">${secNum++}. Variance Bridge &mdash; ${periodShort}</h2>
+    <p style="color:#333;font-size:11px;margin-bottom:10px">
+      Total ${periodShort} gap vs Budget: <strong style="color:${totGap>=0?'#27c485':'#e84040'}">${totGap>=0?'+':''}${fmtGwh(totGap)} GWh</strong>
+      &nbsp;|&nbsp; Explained by drivers: <strong>${fmtGwh(explained)} GWh</strong> (${exPct}%)
+      &nbsp;|&nbsp; Unexplained residual: <strong>${residual!==null?fmtGwh(residual):'N/A'} GWh</strong>
+    </p>
+    <table style="width:100%;border-collapse:collapse;font-size:11px">
+      <thead><tr style="background:#003366;color:#fff">
+        <th style="padding:5px 8px;text-align:left">Driver</th>
+        <th style="padding:5px 8px">Segment</th>
+        <th style="padding:5px 8px">Type</th>
+        <th style="padding:5px 8px;text-align:right">GWh Impact</th>
+      </tr></thead>
+      <tbody>${driverRows}</tbody>
+    </table>`;
+  }
+
+  // ── 4. Defection Analysis ─────────────────────────────────────────────────
   if (S.get('rpt_sel_rpt_def', true)) {
     const defs = computeDefectors();
-    html += `<h2 style="font-size:15px;color:#003366;border-bottom:1px solid #ddd;padding-bottom:6px;margin:18px 0 10px">4. Defection Analysis</h2>
-    <p style="color:#333;font-size:11px;margin-bottom:10px"><strong>${defs.length}</strong> customers flagged as defectors (3-month rolling avg below 80% of prior year same period). Critical: <strong>${defs.filter(d=>d.sev==='Critical').length}</strong> &nbsp;Severe: <strong>${defs.filter(d=>d.sev==='Severe').length}</strong> &nbsp;Moderate: <strong>${defs.filter(d=>d.sev==='Moderate').length}</strong>.</p>
+    const defRows = defs.length
+      ? defs.slice(0,15).map((d,i) => `<tr style="background:${i%2===0?'#f9f9f9':'#fff'}">
+          <td style="padding:5px 8px">${d.name||d.num}</td>
+          <td style="padding:5px 8px">${d.rate}</td>
+          <td style="padding:5px 8px">${d.parish||'--'}</td>
+          <td style="padding:5px 8px;text-align:right;color:#e84040;font-weight:600">${d.ratio}%</td>
+          <td style="padding:5px 8px;font-weight:600;color:${d.sev==='Critical'?'#e84040':'#f5a623'}">${d.sev}</td>
+          <td style="padding:5px 8px">${d.cause}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="6" style="padding:8px;color:#27c485">No defectors flagged this period.</td></tr>';
+    html += `<h2 style="font-size:15px;color:#003366;border-bottom:1px solid #ddd;padding-bottom:6px;margin:18px 0 10px">${secNum++}. Defection Analysis</h2>
+    <p style="color:#333;font-size:11px;margin-bottom:10px">
+      Flagged: <strong>${defs.length}</strong> &nbsp;|&nbsp;
+      Critical: <strong style="color:#e84040">${defs.filter(d=>d.sev==='Critical').length}</strong> &nbsp;|&nbsp;
+      Severe: <strong style="color:#f5a623">${defs.filter(d=>d.sev==='Severe').length}</strong> &nbsp;|&nbsp;
+      Moderate: <strong>${defs.filter(d=>d.sev==='Moderate').length}</strong>
+      ${defs.length>15?' (top 15 shown)':''}
+    </p>
     <table style="width:100%;border-collapse:collapse;font-size:11px">
-      <thead><tr style="background:#003366;color:#fff"><th style="padding:5px 8px;text-align:left">Customer</th><th style="padding:5px 8px">Rate</th><th style="padding:5px 8px">Ratio</th><th style="padding:5px 8px">Severity</th><th style="padding:5px 8px">Cause</th></tr></thead>
-      <tbody>${defs.slice(0,10).map((d,i)=>`<tr style="background:${i%2===0?'#f9f9f9':'#fff'}">
-        <td style="padding:5px 8px">${d.name}</td>
-        <td style="padding:5px 8px">${d.rate}</td>
-        <td style="padding:5px 8px;color:#e84040;font-weight:600">${d.ratio}%</td>
-        <td style="padding:5px 8px;font-weight:600;color:${d.sev==='Critical'?'#e84040':'#f5a623'}">${d.sev}</td>
-        <td style="padding:5px 8px">${d.cause}</td>
-      </tr>`).join('')}</tbody>
+      <thead><tr style="background:#003366;color:#fff">
+        <th style="padding:5px 8px;text-align:left">Customer</th>
+        <th style="padding:5px 8px">Rate</th>
+        <th style="padding:5px 8px">Parish</th>
+        <th style="padding:5px 8px;text-align:right">Ratio</th>
+        <th style="padding:5px 8px">Severity</th>
+        <th style="padding:5px 8px">Cause</th>
+      </tr></thead>
+      <tbody>${defRows}</tbody>
     </table>`;
   }
 
+  // ── 5. Risk & Opportunity Register ───────────────────────────────────────
   if (S.get('rpt_sel_rpt_ro', true)) {
-    html += `<h2 style="font-size:15px;color:#003366;border-bottom:1px solid #ddd;padding-bottom:6px;margin:18px 0 10px">5. Risk &amp; Opportunity Register</h2>
+    const roRows = RISK_OPP.length
+      ? RISK_OPP.map((r,i) => `<tr style="background:${i%2===0?'#f9f9f9':'#fff'}">
+          <td style="padding:5px 8px">${r.name}</td>
+          <td style="padding:5px 8px;color:${r.type==='Risk'?'#e84040':'#27c485'};font-weight:600">${r.type}</td>
+          <td style="padding:5px 8px">${r.level}</td>
+          <td style="padding:5px 8px">${r.rate}</td>
+          <td style="padding:5px 8px;text-align:right">${fmtK(r.kwh)}</td>
+          <td style="padding:5px 8px">${r.status}</td>
+          <td style="padding:5px 8px;font-size:10px;color:#666">${r.cmt||''}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="7" style="padding:8px;color:#999;font-style:italic">No items in register — add via Risk &amp; Opportunity tab.</td></tr>';
+    html += `<h2 style="font-size:15px;color:#003366;border-bottom:1px solid #ddd;padding-bottom:6px;margin:18px 0 10px">${secNum++}. Risk &amp; Opportunity Register</h2>
     <table style="width:100%;border-collapse:collapse;font-size:11px">
-      <thead><tr style="background:#003366;color:#fff"><th style="padding:5px 8px;text-align:left">Customer</th><th style="padding:5px 8px">Type</th><th style="padding:5px 8px">Level</th><th style="padding:5px 8px">Rate</th><th style="padding:5px 8px;text-align:right">kWh</th><th style="padding:5px 8px">Status</th><th style="padding:5px 8px">Note</th></tr></thead>
-      <tbody>${RISK_OPP.map((r,i)=>`<tr style="background:${i%2===0?'#f9f9f9':'#fff'}">
-        <td style="padding:5px 8px">${r.name}</td>
-        <td style="padding:5px 8px;color:${r.type==='Risk'?'#e84040':'#27c485'};font-weight:600">${r.type}</td>
-        <td style="padding:5px 8px">${r.level}</td>
-        <td style="padding:5px 8px">${r.rate}</td>
-        <td style="padding:5px 8px;text-align:right">${fmtK(r.kwh)}</td>
-        <td style="padding:5px 8px">${r.status}</td>
-        <td style="padding:5px 8px;font-size:10px;color:#666">${r.cmt||''}</td>
-      </tr>`).join('')}</tbody>
+      <thead><tr style="background:#003366;color:#fff">
+        <th style="padding:5px 8px;text-align:left">Customer</th><th style="padding:5px 8px">Type</th>
+        <th style="padding:5px 8px">Level</th><th style="padding:5px 8px">Rate</th>
+        <th style="padding:5px 8px;text-align:right">kWh</th><th style="padding:5px 8px">Status</th>
+        <th style="padding:5px 8px">Note</th>
+      </tr></thead>
+      <tbody>${roRows}</tbody>
     </table>`;
   }
 
+  // ── 6. Outlook ────────────────────────────────────────────────────────────
   if (S.get('rpt_sel_rpt_outlook', true)) {
-    const outlook = S.get(`rr_commentary_${curYear}_${curMonth}`, '(No outlook commentary saved -- please enter via Revenue Recovery tab commentary.)');
-    html += `<h2 style="font-size:15px;color:#003366;border-bottom:1px solid #ddd;padding-bottom:6px;margin:18px 0 10px">6. Outlook &amp; Next Period</h2>
-    <p style="line-height:1.8;color:#333">${outlook.replace(/\n/g,'<br/>')}</p>`;
+    const outlook = S.get(`rr_commentary_${curYear}_${curMonth}`, '(No outlook commentary saved — enter via Revenue Recovery tab.)');
+    html += `<h2 style="font-size:15px;color:#003366;border-bottom:1px solid #ddd;padding-bottom:6px;margin:18px 0 10px">${secNum++}. Outlook &amp; Next Period</h2>
+    <p style="line-height:1.8;color:#333;font-size:12px">${outlook.replace(/\n/g,'<br/>')}</p>`;
   }
 
-  html += `<div style="margin-top:30px;padding-top:12px;border-top:1px solid #ddd;font-size:10px;color:#999">Jamaica Public Service Company &mdash; ${conf} &mdash; ${period} &mdash; Generated ${new Date().toLocaleString()}</div>`;
+  html += `<div style="margin-top:30px;padding-top:12px;border-top:1px solid #ddd;font-size:10px;color:#999">Jamaica Public Service Company &mdash; ${conf} &mdash; ${periodLbl} &mdash; Generated ${new Date().toLocaleString()}</div>`;
 
   const prev = document.getElementById('rpt_preview');
   const card = document.getElementById('rpt_preview_card');
-  if (prev && card) {
-    prev.innerHTML = html;
-    card.style.display = 'block';
-    card.scrollIntoView({ behavior:'smooth', block:'start' });
-  }
+  if (!prev || !card) { toast('Report preview element not found','err'); return; }
+  prev.innerHTML = html;
+  card.style.display = 'block';
+  setTimeout(()=>card.scrollIntoView({ behavior:'smooth', block:'start' }), 50);
+  toast('Report generated — see preview below','ok');
+  } catch(err) { console.error('generateReport error:', err); toast('Report error: '+err.message,'err'); }
 }
 
 function printReport() {
@@ -6039,8 +6204,10 @@ function renderAdmComments(){
   const el=document.getElementById('adm_comments_body');if(!el)return;
   const ms=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const rows=[];
-  // Exec narratives
-  for(let y=2024;y<=2027;y++){
+  // Exec narratives — scan full range of years present in sbActuals, plus one year ahead
+  const _admMinY=sbActuals.length?Math.min(...sbActuals.map(r=>Number(r[YEAR_COL]||r.year||9999)).filter(y=>y<9000)):2024;
+  const _admMaxY=Math.max(curYear+1,new Date().getFullYear()+1);
+  for(let y=_admMinY;y<=_admMaxY;y++){
     for(let m=1;m<=12;m++){
       const txt=S.get(`es_narrative_${y}_${m}`,'');
       if(txt) rows.push({type:'Exec Narrative',period:`${ms[m-1]} ${y}`,text:txt,author:'--'});
@@ -6755,21 +6922,23 @@ function downloadTemplate(type){
             ['ACC002001','Sample Residential','RT10','St. Andrew','N/A','4200','4100']]},
     net_gen:{file:'net_gen_historical_template.csv',
       rows:[['year','month','source','mwh','notes'],
-            ['2026','1','JPS','448200','January 2026'],['2026','2','JPS','432100','February 2026'],
-            ['2026','1','IPP','52000','Wigton + Jamaica Broilers'],['2026','2','IPP','50400','']]},
-    net_billers:{file:'jps_net_billers_template.csv',
-      rows:[['year','month','rate_class','count','avg_export_kwh','total_export_kwh'],
-            ['2026','2','RT10','425','312','132600'],['2026','2','RT20','43','580','24940']]},
+            [curYear,curMonth,'JPS','000000','Replace with actual MWh'],
+            [curYear,curMonth,'IPP','00000','Replace with actual MWh']]},
     ev_accounts:{file:'jps_ev_accounts_template.csv',
       rows:[['year','month','accounts','mwh','notes'],
-            ['2026','1','312','89','January 2026'],['2026','2','319','94','February 2026']]},
+            [curYear,curMonth,'000','000','Replace with actual values']]},
     rr_data:{file:'jps_rr_data_template.csv',
       rows:[['year','month','label','val_usd_000s','is_base'],
-            ['2026','2','Budget','18200','true'],['2026','2','Qty effect','-620','false'],
-            ['2026','2','Mix effect','85','false'],['2026','2','FX effect','-310','false'],
-            ['2026','2','Fuel cost','240','false'],['2026','2','IPP cost','-180','false'],
-            ['2026','2','Expected','17415','true'],['2026','2','Billing adj.','-95','false'],
-            ['2026','2','Other var.','-45','false'],['2026','2','Actual','17275','true']]},
+            [curYear,curMonth,'Budget','00000','true'],
+            [curYear,curMonth,'Qty effect','0','false'],
+            [curYear,curMonth,'Mix effect','0','false'],
+            [curYear,curMonth,'FX effect','0','false'],
+            [curYear,curMonth,'Fuel cost','0','false'],
+            [curYear,curMonth,'IPP cost','0','false'],
+            [curYear,curMonth,'Expected','00000','true'],
+            [curYear,curMonth,'Billing adj.','0','false'],
+            [curYear,curMonth,'Other var.','0','false'],
+            [curYear,curMonth,'Actual','00000','true']]},
   };
   const t=T[type];if(!t){toast('Unknown template type','err');return;}
   const csv=t.rows.map(r=>r.join(',')).join('\n');
@@ -6952,7 +7121,7 @@ create table if not exists public.jps_actuals (
   demand_kva         numeric(10,2) default 0,
   customer_count     int default 0,             -- 1 for commercial rows; headcount for residential bucket rows
   created_at         timestamptz default now(),
-  unique (year, month, jps_ac, consumption_bucket)
+  unique (year, month, jps_ac, rate_class, parish, consumption_bucket)
 );
 alter table public.jps_actuals enable row level security;
 do $$ declare r record; begin for r in select policyname from pg_policies where schemaname='public' and tablename='jps_actuals' loop execute format('drop policy if exists %I on public.jps_actuals', r.policyname); end loop; end $$;
@@ -7011,10 +7180,9 @@ create policy "Sales admins can manage locks"
   );
 
 -- ══════════════════════════════════════════════════════════
--- STEP 5: Net Generation (DG) and Net Billers — same format
--- Both tables: year, month, rate_class, count, kwh
---   net_gen_historical: DG installations, generation kwh
---   jps_net_billers:    net billing customers, export kwh
+-- STEP 5: Net Generation
+-- Table: year, month, rate_class, count, kwh
+--   net_gen_historical: generation data
 -- ══════════════════════════════════════════════════════════
 create table if not exists public.net_gen_historical (
   id         bigserial primary key,
@@ -7032,25 +7200,6 @@ create policy "Authenticated users can read net gen"
   on public.net_gen_historical for select using (auth.role() = 'authenticated');
 create policy "Managers can write net gen"
   on public.net_gen_historical for all using (
-    exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager'))
-  );
-
-create table if not exists public.jps_net_billers (
-  id         bigserial primary key,
-  year       smallint not null,
-  month      smallint not null check (month between 1 and 12),
-  rate_class text not null,
-  count      int default 0,
-  kwh        numeric(15,2) default 0,
-  created_at timestamptz default now(),
-  unique (year, month, rate_class)
-);
-alter table public.jps_net_billers enable row level security;
-do $$ declare r record; begin for r in select policyname from pg_policies where schemaname='public' and tablename='jps_net_billers' loop execute format('drop policy if exists %I on public.jps_net_billers', r.policyname); end loop; end $$;
-create policy "Authenticated users can read net billers"
-  on public.jps_net_billers for select using (auth.role() = 'authenticated');
-create policy "Managers can write net billers"
-  on public.jps_net_billers for all using (
     exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager'))
   );
 
@@ -7282,7 +7431,7 @@ begin
         rate_class         text default '',
         demand_kva         numeric(10,2) default 0,
         created_at         timestamptz default now(),
-        unique (year, month, jps_ac, consumption_bucket)
+        unique (year, month, jps_ac, rate_class, parish, consumption_bucket)
       )
     $t$;
     execute 'ALTER TABLE public.jps_actuals ENABLE ROW LEVEL SECURITY';
@@ -7372,7 +7521,7 @@ let _sbClient=null,
     sbAccountMaster=[], // jps_account_master    — master account list (JPS A/c PK)
     sbIndustries=[],    // jps_industries        — industry reference table
     sbKAM=[],           // jps_kam               — key account managers
-    sbNetGen=[], sbNetBillers=[], sbEvData=[],
+    sbNetGen=[], sbEvData=[],
     sbConnected=false, sbLastSync=null;
 
 function getSB(){
@@ -7455,10 +7604,28 @@ function parseCSVText(txt){
 
 async function sbTable(tbl,opts={}){
   const sb=getSB(); if(!sb)return null;
-  let q=sb.from(tbl).select(opts.cols||'*').limit(opts.limit||10000);
-  if(opts.order)q=q.order(opts.order,{ascending:true});
-  const{data,error}=await q;
-  return(!error&&Array.isArray(data))?data:null;
+  // If caller set a small explicit limit, honour it (small lookup tables)
+  const explicitLimit=opts.limit&&opts.limit<=2000;
+  if(explicitLimit){
+    let q=sb.from(tbl).select(opts.cols||'*').limit(opts.limit);
+    if(opts.order)q=q.order(opts.order,{ascending:true});
+    const{data,error}=await q;
+    return(!error&&Array.isArray(data))?data:null;
+  }
+  // Paginated fetch — works regardless of server-side PostgREST max_rows cap
+  const PAGE=1000;
+  let all=[],from=0;
+  for(;;){
+    let q=sb.from(tbl).select(opts.cols||'*').range(from,from+PAGE-1);
+    if(opts.order)q=q.order(opts.order,{ascending:true});
+    const{data,error}=await q;
+    if(error||!Array.isArray(data)||!data.length)break;
+    all=all.concat(data);
+    if(data.length<PAGE)break;   // last page
+    from+=PAGE;
+    if(from>500000)break;        // safety cap — 500k rows max
+  }
+  return all.length?all:null;
 }
 
 async function sbStorage(bucket,file){
@@ -7471,6 +7638,9 @@ async function sbStorage(bucket,file){
 
 function buildDashboardData(){
   if(!sbActuals.length)return;
+
+  // Initialise SCORECARD_DATA from segments before any downstream use
+  SCORECARD_DATA=buildScorecardData();
 
   // Normalise ONCE — reused for all downstream calculations (was called twice before)
   const rows=fcNormActuals(sbActuals);
@@ -7516,7 +7686,7 @@ function buildDashboardData(){
   CUSTOMERS=Object.values(custMap).filter(c=>c.y25>0||c.y26>0).sort((a,b)=>b.y25-a.y25);
 
   // PARISHES — single pass
-  const COMM_RCS_SET=new Set(['RT40','RT50','RT60','RT70','BU']);
+  const COMM_RCS_SET=new Set(['RT40','RT50','RT60-ST','RT70','BU']);
   const parMap={};
   rows.forEach(r=>{
     const p=r.parish||'Unknown';
@@ -7616,7 +7786,7 @@ async function syncSupabase(silent=false){
     const [
       indData,kamData,amData,actData,
       budData,
-      ng,nb,ev,pl
+      ng,ev,pl
     ] = await Promise.all([
       sbTable('jps_industries',{}),
       sbTable('jps_kam',{}),
@@ -7624,7 +7794,6 @@ async function syncSupabase(silent=false){
       sbTable('jps_actuals',{limit:50000}),
       sbTable('jps_budget',{limit:50000}),
       sbTable('net_gen_historical',{order:'year'}),
-      sbTable('jps_net_billers',{order:'year'}),
       sbTable('jps_ev_accounts',{order:'year'}),
       sbTable('jps_period_locks',{})
     ]);
@@ -7668,9 +7837,6 @@ async function syncSupabase(silent=false){
 
     if(ng){sbNetGen=ng;log.push(`Net Gen: net_gen_historical (${ng.length} rows)`);}
     else log.push('Net Gen: ⚠ net_gen_historical not accessible');
-
-    if(nb){sbNetBillers=nb;log.push(`Net Billers: jps_net_billers (${nb.length} rows)`);}
-    else log.push('Net Billers: ⚠ jps_net_billers not found (create table to populate)');
 
     if(ev){sbEvData=ev;log.push(`EV Data: jps_ev_accounts (${ev.length} rows)`);}
     else log.push('EV Data: ⚠ jps_ev_accounts not found (create table to populate)');
@@ -7724,6 +7890,7 @@ async function syncSupabase(silent=false){
     // Build dashboard data synchronously (now fast with index-based SCORECARD computation)
     try{buildDashboardData();}catch(be){console.error('buildDashboardData error:',be);}
     renderSidebarFilters();
+    rebuildYearDropdowns();
     populateKamDropdowns();
 
     // Hydrate user-generated data from DB
@@ -7764,8 +7931,8 @@ const FC_MONTH_MAP={January:1,February:2,March:3,April:4,May:5,June:6,
   July:7,August:8,September:9,October:10,November:11,December:12};
 const FC_MONTHS=['January','February','March','April','May','June',
   'July','August','September','October','November','December'];
-const FC_CUST_RCS=['RT10','RT20','RT60']; // residential RCs → use cust method in Base
-const FC_BUD_YEAR=2026, FC_PY=2025;
+const FC_CUST_RCS=['RT10','RT20']; // residential RCs → use cust method in Base
+let FC_BUD_YEAR=curYear, FC_PY=curYear-1;
 
 function fcParseMonth(str){
   if(!str)return{year:0,month:0};
@@ -7964,7 +8131,7 @@ function leSyncPrompt(){
       <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 5.625c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125"/></svg>
       <div style="font-size:15px;font-weight:600;color:var(--text1)">No data loaded</div>
       <div style="font-size:12px;max-width:320px;text-align:center">Connect to Supabase to load actuals and budget data, then return here.</div>
-      <button onclick="syncSupabase()" style="margin-top:8px;padding:8px 20px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">Sync Supabase Now</button>
+      <button onclick="syncSupabase()" style="margin-top:8px;padding:8px 20px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">Sync Database Now</button>
     </div>`;
   });
 }
@@ -7986,6 +8153,10 @@ function renderLEActive(){
 }
 
 function renderLE(){
+  // Keep LE engine year references in sync with the current period selector
+  FC_BUD_YEAR=curYear; FC_PY=curYear-1;
+  const leHdr=document.getElementById('le_fy_hdr');
+  if(leHdr)leHdr.textContent=`FY ${curYear} — Actuals + LE Projection`;
   leEngine=fcGetData();
   renderLEActive();
   const ls=S.get('sb_last_sync',null);
@@ -8619,7 +8790,7 @@ function renderNetGen(){
       <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 5.625c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125"/></svg>
       <div style="font-size:15px;font-weight:600;color:var(--text1)">No net generation data loaded</div>
       <div style="font-size:12px;max-width:320px;text-align:center">Sync Supabase to load net generation history.</div>
-      <button onclick="syncSupabase()" style="margin-top:8px;padding:8px 20px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">Sync Supabase Now</button>
+      <button onclick="syncSupabase()" style="margin-top:8px;padding:8px 20px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">Sync Database Now</button>
     </div>`;
     return;
   }
@@ -9083,7 +9254,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.42';
+const APP_VERSION = '1.0.55';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
