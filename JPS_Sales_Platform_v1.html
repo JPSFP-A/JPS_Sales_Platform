@@ -1562,6 +1562,13 @@ order by ordinal_position;</pre>
         <div class="ch">Saved Comments &amp; Narratives</div>
         <div id="adm_comments_body" style="max-height:500px;overflow-y:auto"></div>
       </div>
+
+      <!-- ── Forecast Management ── -->
+      <div class="card" style="margin:16px 0">
+        <div class="ch">Forecast Management</div>
+        <div id="adm_forecast_panel"><div style="color:var(--text3);font-size:12px;padding:8px">Sync database to load forecast status.</div></div>
+      </div>
+
     </div>
 
 
@@ -3159,7 +3166,15 @@ function setPeriod(p,btn){
   const sy=document.getElementById('selYear'); if(sy) curYear=Number(sy.value)||curYear;
   const sm=document.getElementById('selMonth'); if(sm&&p==='MTD') curMonth=Number(sm.value)||curMonth;
   const sq=document.getElementById('selQtr'); if(sq&&p==='QTD') curQtr=Number(sq.value)||curQtr;
-  document.getElementById('periodLabel').textContent=`${p} · ${curYear}`;
+  // For Annual mode, show the actual data range if incomplete
+  if(p==='Annual'&&sbActuals.length){
+    const maxMo=Math.max(...sbActuals.filter(r=>Number(r[YEAR_COL])===curYear&&Number(r.kwh||0)>0).map(r=>Number(r.month)).filter(Boolean));
+    const MNS2=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const lbl=maxMo&&maxMo<12?`Annual (Jan\u2013${MNS2[maxMo-1]}) · ${curYear}`:`Annual · ${curYear}`;
+    document.getElementById('periodLabel').textContent=lbl;
+  } else {
+    document.getElementById('periodLabel').textContent=`${p} · ${curYear}`;
+  }
   buildCharts();
   renderSection(document.querySelector('.sec.on')?.id);
 }
@@ -3195,7 +3210,7 @@ function renderSection(id){
   else if(id==='gl'){renderGloss();}
   else if(id==='help'){/* static content, no render needed */}
   else if(id==='vld'){runValidation();}
-  else if(id==='adm'){renderAdm();renderAdmKam();renderAdmRoleBanner();}
+  else if(id==='adm'){renderAdm();renderAdmKam();renderAdmRoleBanner();renderAdmForecast();}
   else if(id==='es'){renderExecSummary();}
   else if(id==='vb'){renderVarianceBridge();}
   else if(id==='rr'){renderRevenueRecovery();}
@@ -4753,19 +4768,128 @@ const SCORECARD_SEGS = [
   {seg:'RT70',desc:'Large Industrial'},
   {seg:'RT60-ST',  desc:'Street Lights'},
 ];
+// ── Forecast Management ────────────────────────────────────────────────────
+
+async function generateTrendForecast(label, notes=''){
+  const sb = getSB(); if(!sb){toast('Not connected to database','err');return;}
+  if(!sbActuals.length){toast('Load actuals data first','err');return;}
+  const yr = curYear;
+  const maxMo = Math.max(...sbActuals.filter(r=>Number(r[YEAR_COL])===yr&&Number(r.kwh||0)>0).map(r=>Number(r.month)).filter(Boolean));
+  if(!maxMo){toast('No actuals found for '+yr,'err');return;}
+
+  // Compute 3-month average growth rate per rate_class
+  const rcs=[...new Set(sbActuals.filter(r=>Number(r[YEAR_COL])===yr).map(r=>r.rate_class).filter(Boolean))];
+  const rows=[];
+  for(const rc of rcs){
+    // Last 3 months of actuals
+    const last3=sbActuals.filter(r=>String(r.rate_class||'')==rc&&Number(r[YEAR_COL])===yr&&Number(r.month)>=maxMo-2&&Number(r.month)<=maxMo);
+    if(!last3.length)continue;
+    const avgKwh=last3.reduce((s,r)=>s+Number(r.kwh||0),0)/last3.length;
+    // Prior year same period for growth rate
+    const py3=sbActuals.filter(r=>String(r.rate_class||'')==rc&&Number(r[YEAR_COL])===(yr-1)&&Number(r.month)>=maxMo-2&&Number(r.month)<=maxMo);
+    const pyAvg=py3.length?py3.reduce((s,r)=>s+Number(r.kwh||0),0)/py3.length:avgKwh;
+    const growth=pyAvg>0?(avgKwh-pyAvg)/pyAvg:0;
+    // Project remaining months
+    for(let mo=maxMo+1;mo<=12;mo++){
+      const pyMo=sbActuals.filter(r=>String(r.rate_class||'')==rc&&Number(r[YEAR_COL])===(yr-1)&&Number(r.month)===mo);
+      const pyKwh=pyMo.reduce((s,r)=>s+Number(r.kwh||0),0);
+      rows.push({year:yr,month:mo,rate_class:rc,kwh_forecast:Math.round(pyKwh*(1+growth))});
+    }
+  }
+  if(!rows.length){toast('No months to forecast (data already complete for '+yr+')','w');return;}
+
+  // Save version
+  const vLabel=label||(yr+' Trend Forecast ('+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][maxMo-1]+' base)');
+  const {data:ver,error:ve}=await sb.from('jps_forecast_versions').insert({label:vLabel,version_type:'trend',year:yr,is_active:true,notes}).select().single();
+  if(ve){toast('Error saving forecast version: '+ve.message,'err');return;}
+  // Set all others inactive
+  await sb.from('jps_forecast_versions').update({is_active:false}).neq('id',ver.id).eq('year',yr);
+  // Insert rows
+  const insRows=rows.map(r=>({...r,version_id:ver.id}));
+  const chunkSize=500;
+  for(let i=0;i<insRows.length;i+=chunkSize){
+    const {error:re}=await sb.from('jps_forecast').insert(insRows.slice(i,i+chunkSize));
+    if(re){toast('Error saving forecast rows: '+re.message,'err');return;}
+  }
+  // Reload
+  const {data:newFcv}=await sb.from('jps_forecast_versions').select('*').eq('year',yr);
+  const {data:newFc}=await sb.from('jps_forecast').select('*').eq('year',yr);
+  if(newFcv)sbForecastVersions=newFcv; if(newFc)sbForecast=[...sbForecast.filter(r=>r.year!==yr),...newFc];
+  toast('Trend forecast saved: '+vLabel+' ('+rows.length+' rows)','ok');
+  renderSection(document.querySelector('.sec.on')?.id);
+}
+
+async function deleteForecastVersion(versionId){
+  const sb=getSB(); if(!sb)return;
+  const {error}=await sb.from('jps_forecast_versions').delete().eq('id',versionId);
+  if(error){toast('Delete error: '+error.message,'err');return;}
+  sbForecastVersions=sbForecastVersions.filter(v=>v.id!==versionId);
+  sbForecast=sbForecast.filter(r=>r.version_id!==versionId);
+  toast('Forecast version deleted','ok');
+  renderAdmForecast();
+}
+
+function renderAdmForecast(){
+  const el=document.getElementById('adm_forecast_panel');
+  if(!el)return;
+  const yr=curYear;
+  const versions=sbForecastVersions.filter(v=>v.year===yr);
+  const maxMo=sbActuals.length?Math.max(...sbActuals.filter(r=>Number(r[YEAR_COL])===yr&&Number(r.kwh||0)>0).map(r=>Number(r.month)).filter(m=>m>=1&&m<=12)):0;
+  const MNS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const remainMos=12-maxMo;
+  el.innerHTML=`
+  <div style="margin-bottom:12px">
+    <div style="font-size:13px;font-weight:600;color:var(--text1);margin-bottom:8px">Forecast Versions — ${yr}</div>
+    ${maxMo>0&&maxMo<12?`<div style="font-size:11px;color:var(--text3);margin-bottom:10px">Actuals through <strong>${MNS[maxMo-1]}</strong> — ${remainMos} month(s) available to forecast</div>`:''}
+    ${versions.length?versions.map(v=>`
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--navy3);border-radius:6px;margin-bottom:6px">
+        <span style="flex:1;font-size:12px;color:var(--text1)">${v.label}</span>
+        <span style="font-size:10px;padding:2px 6px;border-radius:3px;background:${v.is_active?'var(--teal)':'var(--navy4)'};color:${v.is_active?'#000':'var(--text3)'}">${v.is_active?'ACTIVE':'inactive'}</span>
+        <span style="font-size:10px;color:var(--text3)">${v.version_type}</span>
+        <button onclick="deleteForecastVersion(${v.id})" style="background:var(--red,#c0392b);color:#fff;border:none;padding:2px 8px;border-radius:3px;cursor:pointer;font-size:10px">Delete</button>
+      </div>`).join(''):'<div style="color:var(--text3);font-size:12px;padding:8px 0">No forecast versions saved yet.</div>'}
+    ${maxMo>0&&maxMo<12?`
+    <div style="margin-top:12px;display:flex;align-items:center;gap:8px">
+      <input id="fc_label_input" type="text" placeholder="Forecast label (optional)" style="flex:1;background:var(--navy3);border:1px solid var(--navy4);color:var(--text1);padding:6px 8px;border-radius:4px;font-size:12px"/>
+      <button onclick="generateTrendForecast(document.getElementById('fc_label_input')?.value)" style="background:var(--teal);color:#000;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600">Generate Trend Forecast</button>
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-top:5px">Trend forecast projects ${remainMos} remaining months using prior-year actuals adjusted for recent growth rate. You can also upload a forecast Excel file below.</div>`:'<div style="font-size:11px;color:var(--teal);margin-top:8px">&#10003; All 12 months have actuals — no forecast needed for ${yr}.</div>'}
+  </div>`;
+}
+
+
 function buildScorecardData(){
+  // For Annual mode: find max month that actually has data in curYear
+  // so we compare Jan-X 2026 vs Jan-X 2025 (not 3 months vs 12 months)
+  const _maxActMonth = yr => {
+    const months = sbActuals.filter(r=>Number(r[YEAR_COL])===yr&&Number(r.kwh||0)>0).map(r=>Number(r.month));
+    return months.length ? Math.max(...months) : curMonth;
+  };
+  const effMonth = curPeriod==='Annual' ? _maxActMonth(curYear) : curMonth;
+
   return SCORECARD_SEGS.map(({seg,desc})=>{
     const kwhAct=(rows,yr,maxMo)=>rows.filter(r=>String(r.rate_class||r.Rate_class||'')==seg&&Number(r[YEAR_COL])===yr&&Number(r.month)<=maxMo).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
     const kwhBud=(rows,yr,maxMo)=>rows.filter(r=>String(r.rate_class||'')==seg&&Number(r.year)===yr&&Number(r.month)<=maxMo).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
+    const kwhFc =(yr,maxMo)=>{
+      const av=activeForecastVersion();
+      if(!av)return 0;
+      return sbForecast.filter(r=>r.version_id===av.id&&Number(r.year)===yr&&Number(r.month)<=maxMo&&String(r.rate_class||'')==seg).reduce((s,r)=>s+Number(r.kwh_forecast||0),0)/1e6;
+    };
     const mtd_act=kwhAct(sbActuals,curYear,curMonth)-kwhAct(sbActuals,curYear,curMonth-1);
     const mtd_bud=kwhBud(sbBudget,curYear,curMonth)-kwhBud(sbBudget,curYear,curMonth-1);
     const mtd_ly =kwhAct(sbActuals,curYear-1,curMonth)-kwhAct(sbActuals,curYear-1,curMonth-1);
-    const ytd_act=kwhAct(sbActuals,curYear,curMonth);
-    const ytd_bud=kwhBud(sbBudget,curYear,curMonth);
-    const ytd_ly =kwhAct(sbActuals,curYear-1,curMonth);
+    const ytd_act=kwhAct(sbActuals,curYear,effMonth);
+    const ytd_bud=kwhBud(sbBudget,curYear,effMonth);
+    const ytd_ly =kwhAct(sbActuals,curYear-1,effMonth);
+    const ytd_fc =kwhFc(curYear,effMonth);
     const status=mtd_bud>0?(mtd_act>=mtd_bud*0.95?'OK':mtd_act>=mtd_bud*0.85?'Watch':'Risk'):'OK';
-    return{seg,desc,mtd_act,mtd_bud,mtd_ly,ytd_act,ytd_bud,ytd_ly,status};
+    return{seg,desc,mtd_act,mtd_bud,mtd_ly,ytd_act,ytd_bud,ytd_ly,ytd_fc,status};
   });
+}
+
+// Helper: get the active forecast version object
+function activeForecastVersion(){
+  return sbForecastVersions.find(v=>v.is_active) || sbForecastVersions[0] || null;
 }
 
 function renderExecSummary() {
@@ -7539,7 +7663,7 @@ let _sbClient=null,
     sbAccountMaster=[], // jps_account_master    — master account list (JPS A/c PK)
     sbIndustries=[],    // jps_industries        — industry reference table
     sbKAM=[],           // jps_kam               — key account managers
-    sbNetGen=[], sbEvData=[],
+    sbNetGen=[], sbEvData=[], sbForecastVersions=[], sbForecast=[],
     sbConnected=false, sbLastSync=null;
 
 function getSB(){
@@ -7804,7 +7928,8 @@ async function syncSupabase(silent=false){
     const [
       indData,kamData,amData,actData,
       budData,
-      ng,ev,pl
+      ng,ev,pl,
+      fcvData,fcData
     ] = await Promise.all([
       sbTable('jps_industries',{}),
       sbTable('jps_kam',{}),
@@ -7813,7 +7938,9 @@ async function syncSupabase(silent=false){
       sbTable('jps_budget',{limit:50000}),
       sbTable('net_gen_historical',{order:'year'}),
       sbTable('jps_ev_accounts',{order:'year'}),
-      sbTable('jps_period_locks',{})
+      sbTable('jps_period_locks',{}),
+      sbTable('jps_forecast_versions',{order:'created_at'}),
+      sbTable('jps_forecast',{limit:50000})
     ]);
 
     // ── Process results ────────────────────────────────────
@@ -7860,6 +7987,8 @@ async function syncSupabase(silent=false){
     else log.push('EV Data: ⚠ jps_ev_accounts not found (create table to populate)');
 
     if(pl){PERIOD_LOCKS=pl;log.push(`Period Locks: jps_period_locks (${pl.length} locked)`);}
+    if(fcvData){sbForecastVersions=fcvData;log.push(`Forecast versions: ${fcvData.length}`);}
+    if(fcData){sbForecast=fcData;log.push(`Forecast rows: ${fcData.length}`);}
     else log.push('Period Locks: ⚠ jps_period_locks not found (run schema SQL in Admin)');
 
     const anyOk=actOk||budOk||!!ng;
@@ -9272,7 +9401,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.57';
+const APP_VERSION = '1.0.58';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
