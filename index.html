@@ -3190,7 +3190,9 @@ function setPeriod(p,btn){
 }
 function renderSection(id){
   if(!id)return;
-  console.log('[JPS] renderSection:',id,'| actuals:',sbActuals.length,'| budget:',sbBudget.length,'| customers:',typeof CUSTOMERS!=='undefined'?CUSTOMERS.length:'undef','| curYear:',curYear,'| curMonth:',curMonth);
+  const _r1=sbActuals[0]||{};
+  console.log('[JPS] renderSection:',id,'| actuals:',sbActuals.length,'| budget:',sbBudget.length,'| customers:',typeof CUSTOMERS!=='undefined'?CUSTOMERS.length:'undef','| curYear:',curYear,'| curMonth:',curMonth,'| kwh0:',_r1.kwh,'| rc0:',_r1.rate_class,'| allKeys:',Object.keys(_r1).join(','));
+  setTimeout(()=>{const _el=document.getElementById(id);console.log('[JPS] section #'+id+' htmlLen after render:',_el?_el.innerHTML.length:0,'| display:',_el?window.getComputedStyle(_el).display:'no-el');},200);
   // Show lock banner on sections with period-sensitive data
   const lockableSections=['ov','cm','rs','rb_res','df','fc','ro','mr','ar','es','vb','rr','ng','le'];
   if(lockableSections.includes(id))maybeShowLockBanner(id);
@@ -9524,7 +9526,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.68';
+const APP_VERSION = '1.0.69';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
