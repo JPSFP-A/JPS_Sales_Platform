@@ -3166,7 +3166,7 @@ function setPeriod(p,btn){
 function renderSection(id){
   if(!id)return;
   // Show lock banner on sections with period-sensitive data
-  const lockableSections=['ov','cm','rs','df','fc','ro','mr','ar','es','vb','rr'];
+  const lockableSections=['ov','cm','rs','rb_res','df','fc','ro','mr','ar','es','vb','rr'];
   if(lockableSections.includes(id))maybeShowLockBanner(id);
 
   if(id==='ov'){renderOverviewKPIs();renderPfCust();renderPfInd();renderPfRC();renderPfPar();renderVariance();}
@@ -5545,20 +5545,31 @@ function renderResIntelKPIs() {
   const kv=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
   const resRCs=['RT10','RT20'];
 
-  // Customer count — latest month available
-  const custMonth=curMonth;
+  // Period months — respect curPeriod selector
+  const qStart=Math.floor((curMonth-1)/3)*3+1;
+  const periodMonths=curPeriod==='MTD'?[curMonth]
+    :curPeriod==='QTD'?Array.from({length:curMonth-qStart+1},(_,i)=>qStart+i)
+    :curPeriod==='YTD'?Array.from({length:curMonth},(_,i)=>i+1)
+    :Array.from({length:12},(_,i)=>i+1);
+  const MNS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const periodLbl=curPeriod==='MTD'?MNS[curMonth-1]+' '+curYear
+    :curPeriod==='QTD'?'Q'+curQtr+' '+curYear
+    :curPeriod==='YTD'?'YTD '+curYear
+    :'Full Year '+curYear;
+
+  // Customer count — use latest month in period (headcount doesn't stack)
+  const custMonth=periodMonths[periodMonths.length-1];
   const totalCusts=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===custMonth&&(r.consumption_bucket||'').trim()).reduce((s,r)=>s+Number(r.customer_count||0),0);
   kv('ri_kpi_custs',totalCusts>0?totalCusts.toLocaleString():'--');
-  kv('ri_kpi_custs_sub',totalCusts>0?`${curYear} · month ${custMonth}`:'upload customer_count');
+  kv('ri_kpi_custs_sub',totalCusts>0?periodLbl+' headcount':'upload customer_count');
 
-  // Avg kWh per RT10 customer
-  const rt10ActRows=sbActuals.filter(r=>String(r.rate_class||'')==='RT10'&&Number(r[YEAR_COL])===curYear&&Number(r.month)===custMonth);
+  // Avg kWh per RT10 customer — summed across period months
+  const rt10ActRows=sbActuals.filter(r=>String(r.rate_class||'')==='RT10'&&Number(r[YEAR_COL])===curYear&&periodMonths.includes(Number(r.month)));
   const rt10TotalKwh=rt10ActRows.reduce((s,r)=>s+Number(r.kwh||0),0);
   const rt10TotalCusts=rt10ActRows.reduce((s,r)=>s+Number(r.customer_count||0),0);
   const avgKwh=rt10TotalCusts>0?(rt10TotalKwh/rt10TotalCusts).toFixed(0)+' kWh':'--';
   kv('ri_kpi_avg_kwh',avgKwh);
-  kv('ri_kpi_avg_kwh_sub',rt10TotalCusts>0?`per customer · ${curYear}-${String(custMonth).padStart(2,'0')}`:'upload RT10 actuals');
-
+  kv('ri_kpi_avg_kwh_sub',rt10TotalCusts>0?'per customer · '+periodLbl:'upload RT10 actuals');
 }
 
 function renderResIntelSection(id) {
@@ -5724,8 +5735,14 @@ function renderBracketTable() {
   const tbl = document.getElementById('ri_bracket_tbl');
   if (!tbl) return;
   const resRCs=['RT10','RT20'];
-  const curAct=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===curMonth&&(r.consumption_bucket||'').trim());
-  const prevAct=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===(curYear-1)&&Number(r.month)===curMonth&&(r.consumption_bucket||'').trim());
+  // Period months — respect curPeriod
+  const qStart=Math.floor((curMonth-1)/3)*3+1;
+  const periodMonths=curPeriod==='MTD'?[curMonth]
+    :curPeriod==='QTD'?Array.from({length:curMonth-qStart+1},(_,i)=>qStart+i)
+    :curPeriod==='YTD'?Array.from({length:curMonth},(_,i)=>i+1)
+    :Array.from({length:12},(_,i)=>i+1);
+  const curAct=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&periodMonths.includes(Number(r.month))&&(r.consumption_bucket||'').trim());
+  const prevAct=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===(curYear-1)&&periodMonths.includes(Number(r.month))&&(r.consumption_bucket||'').trim());
   const buildAgg=rows=>{const m={};rows.forEach(r=>{const k=`${(r.consumption_bucket||'').trim()}|||${r.parish||''}`;if(!m[k])m[k]={kwh:0};m[k].kwh+=Number(r.kwh||0);});return m;};
   const currAgg=buildAgg(curAct);
   const prevAgg=buildAgg(prevAct);
@@ -9255,7 +9272,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.56';
+const APP_VERSION = '1.0.57';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
