@@ -7928,40 +7928,42 @@ const _DCACHE_KEY='jps_sales_v1_cache';
 const _DCACHE_TTL=600000; // 10 minutes
 
 function _saveDataCache(){
-  try{
-    // Strip actuals to only the columns the app needs — cuts size ~60%
-    const _yr=YEAR_COL||'year';
-    const cutoff=curYear-1; // keep curYear + prior year only
-    const stripped=sbActuals
-      .filter(r=>Number(r[_yr]||r.year||0)>=cutoff)
-      .map(r=>({
-        [_yr]:r[_yr]||r.year,month:r.month,kwh:r.kwh,
-        rate_class:r.rate_class||r.Rate_class||'',
-        jps_ac:r.jps_ac||'',
-        consumption_bucket:r.consumption_bucket||'',
-        parish:r.parish||''
-      }));
-    // Strip account master to needed columns
-    const strippedAM=sbAccountMaster.map(r=>({
-      jps_ac:r.jps_ac,
-      customer:r.customer||r.acct_name||r.name||'',
-      kam:r.kam||'',industry:r.industry||'',
-      parish:r.parish||'',rate_class:r.rate_class||'',
-      territory:r.territory||'',cmt:r.cmt||r.notes||''
+  // Budget, account master, net gen, EV, period locks, and forecast are intentionally
+  // excluded — they push past the 5 MB localStorage quota.  Wave 2 fetches them fresh.
+  // Only actuals (stripped, 2-year window) + KAM + industries are cached.
+  const _yr=YEAR_COL||'year';
+  const mkStripped=minY=>sbActuals
+    .filter(r=>Number(r[_yr]||r.year||0)>=minY)
+    .map(r=>({
+      [_yr]:r[_yr]||r.year, month:r.month, kwh:r.kwh,
+      rate_class:r.rate_class||r.Rate_class||'',
+      jps_ac:r.jps_ac||'',
+      consumption_bucket:r.consumption_bucket||'',
+      parish:r.parish||''
     }));
-    const payload=JSON.stringify({
-      ts:Date.now(),yearCol:_yr,
-      act:stripped,bud:sbBudget,am:strippedAM,
-      kam:sbKAM,ind:sbIndustries,
-      ng:sbNetGen,ev:sbEvData,pl:PERIOD_LOCKS,
-      fcv:sbForecastVersions,fc:sbForecast
-    });
-    localStorage.setItem(_DCACHE_KEY,payload);
-    console.log('[JPS] Cache saved:',stripped.length,'actuals rows,',Math.round(payload.length/1024),'KB');
-  }catch(e){
-    try{localStorage.removeItem(_DCACHE_KEY);}catch(_){}
-    console.warn('[JPS] Cache save failed:',e.message);
+  // Progressive fallback — try smaller payload each time quota is exceeded
+  const plans=[
+    {label:'2yr+ref', build:()=>({ts:Date.now(),yearCol:_yr,curYear,curMonth,act:mkStripped(curYear-1),kam:sbKAM,ind:sbIndustries})},
+    {label:'1yr+ref', build:()=>({ts:Date.now(),yearCol:_yr,curYear,curMonth,act:mkStripped(curYear),  kam:sbKAM,ind:sbIndustries})},
+    {label:'1yr',     build:()=>({ts:Date.now(),yearCol:_yr,curYear,curMonth,act:mkStripped(curYear),  kam:[],   ind:[]})},
+  ];
+  for(const plan of plans){
+    try{
+      const payload=JSON.stringify(plan.build());
+      localStorage.setItem(_DCACHE_KEY,payload);
+      const rows=(JSON.parse(payload).act||[]).length;
+      console.log(`[JPS] Cache saved (${plan.label}): ${rows} actuals rows, ${Math.round(payload.length/1024)} KB`);
+      return; // success — stop trying
+    }catch(e){
+      if(!(e.message||'').includes('quota')){
+        console.warn('[JPS] Cache error (non-quota):',e.message); return;
+      }
+      // quota exceeded — try next plan
+    }
   }
+  // All plans failed — clear stale cache so the app doesn't try to load a corrupt entry
+  try{localStorage.removeItem(_DCACHE_KEY);}catch(_){}
+  console.warn('[JPS] Cache disabled — localStorage full. Clear browser storage to re-enable.');
 }
 
 function _loadDataCache(){
@@ -7977,22 +7979,25 @@ function _loadDataCache(){
 function _applyDataCache(c){
   if(!c||!c.act||!c.act.length)return false;
   YEAR_COL=c.yearCol||YEAR_COL;
-  // Restore full column name used by render functions
   sbActuals=c.act.map(r=>{
     const out={...r};
-    if(YEAR_COL!=='year')out.year=r[YEAR_COL]; // keep both
+    if(YEAR_COL!=='year')out.year=r[YEAR_COL]; // keep both col names for compat
     return out;
   });
-  sbBudget=c.bud||[];sbAccountMaster=c.am||[];sbKAM=c.kam||[];
-  sbIndustries=c.ind||[];sbNetGen=c.ng||[];sbEvData=c.ev||[];
-  PERIOD_LOCKS=c.pl||[];sbForecastVersions=c.fcv||[];sbForecast=c.fc||[];
-  // Set period globals from cached data
-  let latestY=0,latestM=0;
-  sbActuals.forEach(r=>{
-    const ry=Number(r[YEAR_COL]||r.year||0),rm=Number(r.month||0);
-    if(ry>latestY||(ry===latestY&&rm>latestM)){latestY=ry;latestM=rm;}
-  });
-  if(latestY&&latestM){curYear=latestY;curMonth=latestM;}
+  // Restore secondary ref tables only if they were cached (older entries may omit them)
+  if(c.kam&&c.kam.length)sbKAM=c.kam;
+  if(c.ind&&c.ind.length)sbIndustries=c.ind;
+  // Budget / AM / NG / EV / PL / FCV / FC are NOT cached — Wave 2 populates them.
+  // Set period globals: prefer the explicitly saved values (O(1)), fallback to scan
+  if(c.curYear&&c.curMonth){curYear=c.curYear;curMonth=c.curMonth;}
+  else{
+    let latestY=0,latestM=0;
+    sbActuals.forEach(r=>{
+      const ry=Number(r[YEAR_COL]||r.year||0),rm=Number(r.month||0);
+      if(ry>latestY||(ry===latestY&&rm>latestM)){latestY=ry;latestM=rm;}
+    });
+    if(latestY&&latestM){curYear=latestY;curMonth=latestM;}
+  }
   return true;
 }
 
@@ -9553,7 +9558,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.63';
+const APP_VERSION = '1.0.64';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
