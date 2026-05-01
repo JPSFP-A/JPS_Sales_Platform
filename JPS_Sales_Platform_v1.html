@@ -1246,14 +1246,54 @@ document.getElementById('schema_stale_banner').style.display='none';
               <button class="btn btn-o" onclick="loadPlatformUsers().then(renderAdm)">🔄 Refresh</button>
             </div>
           </div>
-          <div style="margin-bottom:10px;padding:9px 13px;background:rgba(55,138,221,.07);border-left:3px solid var(--blue);border-radius:4px;font-size:11px;color:var(--text2)">
-            <strong>Roles:</strong>
-            <span class="pill pa" style="margin:0 4px">admin</span> Full access, user management, period locks, data upload. &nbsp;
-            <span class="pill pa" style="margin:0 4px">manager</span> Upload data, save narratives, approve forecasts, view all. &nbsp;
-            <span class="pill pt" style="margin:0 4px">rep</span> Add notes, validate defectors, enter forecast for own territory. &nbsp;
-            <span class="pill pgr" style="margin:0 4px">view</span> Read-only — no edits.
-          </div>
           <div id="adm_users_tbl"><div style="color:var(--text3);font-size:12px;padding:20px 0;text-align:center">Loading users… click Refresh or sync database.</div></div>
+        </div>
+
+        <!-- Role & Permission Matrix -->
+        <div class="card" style="margin-top:12px">
+          <div class="ch">🔐 Role &amp; Permission Matrix
+            <span style="font-size:10px;color:var(--text3);font-weight:400">What each role can do</span>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="dt" style="min-width:600px;font-size:11px">
+              <thead>
+                <tr>
+                  <th style="text-align:left;min-width:200px">Permission</th>
+                  <th style="text-align:center"><span class="pill pa">admin</span></th>
+                  <th style="text-align:center"><span class="pill pa">manager</span></th>
+                  <th style="text-align:center"><span class="pill pt">rep</span></th>
+                  <th style="text-align:center"><span class="pill pgr">view</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                ${[
+                  ['View dashboards &amp; reports',         true,  true,  true,  true],
+                  ['Export data to CSV',                    true,  true,  true,  false],
+                  ['Add notes &amp; narratives',            true,  true,  true,  false],
+                  ['Enter KAM forecasts (own territory)',   true,  true,  true,  false],
+                  ['Validate defectors',                    true,  true,  true,  false],
+                  ['Add / update R&amp;O pipeline items',   true,  true,  true,  false],
+                  ['Upload actuals data',                   true,  true,  false, false],
+                  ['Approve forecasts',                     true,  true,  false, false],
+                  ['View all customers &amp; territories',  true,  true,  false, false],
+                  ['Save LE versions',                      true,  true,  false, false],
+                  ['Manage users &amp; roles',              true,  false, false, false],
+                  ['Invite new users',                      true,  false, false, false],
+                  ['Delete users',                          true,  false, false, false],
+                  ['Lock / unlock periods',                 true,  false, false, false],
+                  ['Run DB schema migrations',              true,  false, false, false],
+                  ['View audit trail',                      true,  false, false, false],
+                  ['Wipe / clear actuals data',             true,  false, false, false],
+                ].map(([label,a,m,r,v])=>`<tr>
+                  <td style="color:var(--text2)">${label}</td>
+                  <td style="text-align:center">${a?'<span style="color:var(--green);font-size:13px">✓</span>':'<span style="color:var(--border);font-size:13px">—</span>'}</td>
+                  <td style="text-align:center">${m?'<span style="color:var(--green);font-size:13px">✓</span>':'<span style="color:var(--border);font-size:13px">—</span>'}</td>
+                  <td style="text-align:center">${r?'<span style="color:var(--green);font-size:13px">✓</span>':'<span style="color:var(--border);font-size:13px">—</span>'}</td>
+                  <td style="text-align:center">${v?'<span style="color:var(--green);font-size:13px">✓</span>':'<span style="color:var(--border);font-size:13px">—</span>'}</td>
+                </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -6964,19 +7004,23 @@ function renderAdm(){
       <thead><tr><th>Name</th><th>Email</th><th>Sales Role</th><th>FP&amp;A Role</th><th>Territory</th><th>Status</th><th>Actions</th></tr></thead>
       <tbody>${PLATFORM_USERS.map(u=>{
         const isPending=u._pending===true;
+        const isAdmin=can('manage_users');
+        const safeId=String(u.id||'').replace(/'/g,"\\'");
+        const safeName=String(u.name||u.email||'User').replace(/'/g,"\\'");
         return`<tr style="${isPending?'opacity:0.6':''}">
         <td style="font-weight:600">${u.name}${isPending?' <span style="font-size:9px;color:var(--amber)">(pending registration)</span>':''}</td>
         <td style="font-size:11px;color:var(--text3)">${u.email||'--'}</td>
-        <td>${(!isPending&&can('manage_users'))
-          ?`<select class="sel" style="font-size:10px;padding:3px" onchange="changeUserRole('${u.id}',this.value)">
+        <td>${(!isPending&&isAdmin)
+          ?`<select class="sel" style="font-size:10px;padding:3px" onchange="changeUserRole('${safeId}',this.value)">
               ${['admin','manager','rep','view'].map(r=>`<option${(u.sales_role||u.role||'view')===r?' selected':''}>${r}</option>`).join('')}
             </select>`
           :`<span class="pill ${(u.sales_role==='admin'||u.sales_role==='manager')?'pa':'pt'}">${u.sales_role||'view'}</span>`}</td>
         <td><span class="pill pgr" style="font-size:9px">${u.role||'viewer'}</span></td>
         <td style="font-size:11px">${u.territory||'All'}</td>
         <td><span class="pill ${isPending?'pa':u.is_active!==false?'pg':'pr'}">${isPending?'Invited':u.is_active!==false?'Active':'Inactive'}</span></td>
-        <td>${(!isPending&&can('manage_users'))
-          ?`<button class="btn btn-o" style="font-size:9px;padding:2px 8px" onclick="toggleUserActive('${u.id}',${u.is_active!==false})">${u.is_active!==false?'Deactivate':'Activate'}</button>`
+        <td style="display:flex;gap:4px;flex-wrap:wrap">${isAdmin
+          ?`<button class="btn btn-o" style="font-size:9px;padding:2px 8px" onclick="toggleUserActive('${safeId}',${u.is_active!==false})">${u.is_active!==false?'Deactivate':'Activate'}</button>
+             <button class="btn" style="font-size:9px;padding:2px 8px;background:rgba(232,64,64,.12);color:var(--red);border-color:rgba(232,64,64,.3)" onclick="deleteUser('${safeId}','${safeName}')">🗑 Delete</button>`
           :'--'}</td>
       </tr>`;}).join('')}</tbody></table>`;
     makeSortable('users_dt');
@@ -7005,6 +7049,33 @@ async function toggleUserActive(userId,currently){
     await writeAudit(currently?'USER_DEACTIVATE':'USER_ACTIVATE',{user_id:userId,user_name:u?.name||u?.email||userId});
     toast(`User ${!currently?'activated':'deactivated'}`,'ok');renderAdm();
   }catch(e){toast('Failed: '+e.message,'err');}
+}
+
+function deleteUser(userId,userName){
+  if(!can('manage_users')){toast('Admin access required','err');return;}
+  // Guard: prevent self-deletion
+  if(userId===CU.id){toast('You cannot delete your own account','err');return;}
+  openModal('🗑 Delete User',`
+    <div style="background:rgba(232,64,64,.1);border:1px solid rgba(232,64,64,.3);border-radius:7px;padding:11px 13px;margin-bottom:12px">
+      <strong style="color:var(--red)">⚠ This cannot be undone.</strong><br>
+      <span style="font-size:11px;color:var(--text2)">Deleting <strong>${userName}</strong> will remove their profile and access from this platform.<br>
+      Their Supabase Auth account will remain — to fully remove login access, go to the Supabase dashboard → Authentication → Users.</span>
+    </div>
+    <div style="font-size:11px;color:var(--text2)">Type <strong>DELETE</strong> below to confirm:</div>
+    <input class="si" id="del_confirm_inp" placeholder="Type DELETE" style="margin-top:6px;width:100%">
+  `,async()=>{
+    const confirm=document.getElementById('del_confirm_inp')?.value?.trim();
+    if(confirm!=='DELETE'){toast('Type DELETE to confirm','err');return;}
+    closeModal();
+    const sb=getSB();if(!sb){toast('Supabase required','err');return;}
+    try{
+      await sb.from('profiles').delete().eq('id',userId);
+      await writeAudit('USER_DELETE',{user_id:userId,user_name:userName,deleted_by:CU.name||CU.email});
+      PLATFORM_USERS=PLATFORM_USERS.filter(x=>x.id!==userId);
+      toast(`User "${userName}" deleted from platform`,'ok');
+      renderAdm();
+    }catch(e){toast('Delete failed: '+e.message,'err');}
+  },'🗑 Delete User','var(--red)');
 }
 
 function showInviteUser(){
@@ -9369,7 +9440,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.79';
+const APP_VERSION = '1.0.80';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
