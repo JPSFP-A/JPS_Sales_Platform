@@ -2772,7 +2772,8 @@ const FC_SEGS=[
    HELPERS
 ========================================== */
 function pct(a,b){return b&&b!==0?((a-b)/b*100):0;}
-function fmtK(n){if(n==null)return'--';n=Number(n);return n>=1e6?(n/1e6).toFixed(2)+'M':n>=1000?(n/1000).toFixed(1)+'K':n.toFixed(1);}
+function fmtE(n,dp){if(n==null||isNaN(n))return'--';n=Number(n);const a=Math.abs(n);if(a>=1e9)return(n/1e9).toFixed(dp!=null?dp:2)+' TWh';if(a>=1e6)return(n/1e6).toFixed(dp!=null?dp:2)+' GWh';if(a>=1e3)return(n/1e3).toFixed(dp!=null?dp:1)+' MWh';return n.toFixed(dp!=null?dp:1)+' kWh';}
+function fmtK(n){return fmtE(n);}  // legacy alias — always uses energy units now
 function hc(p){if(p>5)return'hG';if(p>0)return'hg';if(p>-5)return'hr';return'hR';}
 function vbar(a,b){const p=pct(a,b),pos=p>=0;const w=Math.min(Math.abs(p)*2,55);return`<div class="vbar"><div class="vb" style="width:${w}px;background:${pos?'var(--green)':'var(--red)'}"></div><span class="${pos?'up':'dn'}">${pos?'+':''}${p.toFixed(1)}%</span></div>`;}
 function getFcMonths(){
@@ -8477,8 +8478,8 @@ function renderLEOverview(){
 
   const _krow=document.getElementById('le_krow');if(!_krow)return;
   _krow.innerHTML=`
-    <div class="kpi kt"><div class="kl">FY${curYear} Projection</div><div class="kv">${(totProj/1e9).toFixed(2)}B kWh</div><div class="ks nt">through ${mo} + LE</div></div>
-    <div class="kpi ${vb>=0?'kg':'kr'}"><div class="kl">vs ${curYear} Budget</div><div class="kv">${vb>=0?'+':''}${vb.toFixed(1)}%</div><div class="ks ${vb>=0?'up':'dn'}">${((totProj-totBud)/1e6).toFixed(0)}M kWh</div></div>
+    <div class="kpi kt"><div class="kl">FY${curYear} Projection</div><div class="kv">${fmtE(totProj)}</div><div class="ks nt">through ${mo} + LE</div></div>
+    <div class="kpi ${vb>=0?'kg':'kr'}"><div class="kl">vs ${curYear} Budget</div><div class="kv">${vb>=0?'+':''}${vb.toFixed(1)}%</div><div class="ks ${vb>=0?'up':'dn'}">${fmtE(totProj-totBud,0)}</div></div>
     <div class="kpi ${vy>=0?'kg':'kr'}"><div class="kl">vs ${curYear-1} Actual</div><div class="kv">${vy>=0?'+':''}${vy.toFixed(1)}%</div><div class="ks ${vy>=0?'up':'dn'}">YoY</div></div>
     <div class="kpi ka"><div class="kl">Latest Actual Month</div><div class="kv">${mo} ${curYear}</div><div class="ks nt">Actuals through here</div></div>
     <div class="kpi kg"><div class="kl">RC Segments Above Bud</div><div class="kv">${rcSummary.filter(r=>r[scen]>=r.bud26).length}</div><div class="ks up">of ${rcSummary.length} total</div></div>
@@ -8496,7 +8497,7 @@ function renderLEOverview(){
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:true,labels:{color:TC,font:{size:10},boxWidth:10}}},
       scales:{x:{ticks:{color:TC},grid:{color:CC}},
-        y:{ticks:{color:TC,callback:v=>v.toFixed(1)+'M'},grid:{color:CC}}}}
+        y:{ticks:{color:TC,callback:v=>v.toFixed(1)+' GWh'},grid:{color:CC}}}}
   });
 
   destroyChart('c_le_fy');
@@ -8510,11 +8511,11 @@ function renderLEOverview(){
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false}},
       scales:{x:{ticks:{color:TC},grid:{color:CC}},
-        y:{ticks:{color:TC,callback:v=>v.toFixed(2)+'B'},grid:{color:CC}}}}
+        y:{ticks:{color:TC,callback:v=>v.toFixed(2)+' TWh'},grid:{color:CC}}}}
   });
 
   const _rctbl=document.getElementById('le_rc_tbl');if(_rctbl)_rctbl.innerHTML=`<table class="dt" id="le_rc_dt">
-    <thead><tr><th>RC</th><th>${curYear-1} FY Act (M)</th><th>${curYear} Budget (M)</th><th>${curYear} Act YTD (M)</th><th>${curYear} Projection (M)</th><th>vs Budget</th><th>vs PY</th></tr></thead>
+    <thead><tr><th>RC</th><th>${curYear-1} FY Act (GWh)</th><th>${curYear} Budget (GWh)</th><th>${curYear} Act YTD (GWh)</th><th>${curYear} Projection (GWh)</th><th>vs Budget</th><th>vs PY</th></tr></thead>
     <tbody>${rcSummary.map(r=>{
       const p=r[scen]||0,vb2=r.bud26?(p-r.bud26)/r.bud26*100:0;
       return`<tr>
@@ -8560,19 +8561,19 @@ function renderLEMonthly(){
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:true,labels:{color:TC,font:{size:10},boxWidth:10}}},
       scales:{x:{ticks:{color:TC},grid:{color:CC}},
-        y:{ticks:{color:TC,callback:v=>v.toFixed(0)+'M'},grid:{color:CC}}}}
+        y:{ticks:{color:TC,callback:v=>v.toFixed(0)+' GWh'},grid:{color:CC}}}}
   });
 
   const _mtbl=document.getElementById('le_monthly_tbl');if(!_mtbl)return;_mtbl.innerHTML=`<table class="dt" style="font-size:10px;white-space:nowrap">
     <thead><tr>
       <th>Month</th>
-      <th style="color:#94a3b8">${curYear-1} Act (M)</th>
-      <th style="color:#378ADD">Budget (M)</th>
+      <th style="color:#94a3b8">${curYear-1} Act (GWh)</th>
+      <th style="color:#378ADD">Budget (GWh)</th>
       <th style="color:#8b5cf6">${curYear} Actual</th>
-      <th style="color:#f5a623">LE Base (M)</th>
-      <th style="color:#d946ef">LE Cust (M)</th>
-      <th style="color:#0ea5e9">LE RC (M)</th>
-      <th style="color:#6366f1">LE Adv (M)</th>
+      <th style="color:#f5a623">LE Base (GWh)</th>
+      <th style="color:#d946ef">LE Cust (GWh)</th>
+      <th style="color:#0ea5e9">LE RC (GWh)</th>
+      <th style="color:#6366f1">LE Adv (GWh)</th>
       <th>Base vs Bud</th><th>Base vs PY</th>
     </tr></thead>
     <tbody>${matrix.map(m=>{
@@ -8592,13 +8593,13 @@ function renderLEMonthly(){
       </tr>`;
     }).join('')}
     <tr class="ft"><td>Total</td>
-      <td>${(matrix.reduce((s,m)=>s+m.act25,0)/1e9).toFixed(3)}B</td>
-      <td>${(matrix.reduce((s,m)=>s+m.bud26,0)/1e9).toFixed(3)}B</td>
-      <td>${(matrix.filter(m=>m.act26).reduce((s,m)=>s+(m.act26||0),0)/1e6).toFixed(0)}M</td>
-      <td style="color:var(--amber)">${(matrix.reduce((s,m)=>s+m.base26,0)/1e9).toFixed(3)}B</td>
-      <td>${(matrix.reduce((s,m)=>s+m.cust26,0)/1e9).toFixed(3)}B</td>
-      <td>${(matrix.reduce((s,m)=>s+m.rc26,0)/1e9).toFixed(3)}B</td>
-      <td>${(matrix.reduce((s,m)=>s+m.adv26,0)/1e9).toFixed(3)}B</td>
+      <td>${fmtE(matrix.reduce((s,m)=>s+m.act25,0))}</td>
+      <td>${fmtE(matrix.reduce((s,m)=>s+m.bud26,0))}</td>
+      <td>${fmtE(matrix.filter(m=>m.act26).reduce((s,m)=>s+(m.act26||0),0),0)}</td>
+      <td style="color:var(--amber)">${fmtE(matrix.reduce((s,m)=>s+m.base26,0))}</td>
+      <td>${fmtE(matrix.reduce((s,m)=>s+m.cust26,0))}</td>
+      <td>${fmtE(matrix.reduce((s,m)=>s+m.rc26,0))}</td>
+      <td>${fmtE(matrix.reduce((s,m)=>s+m.adv26,0))}</td>
       <td></td><td></td>
     </tr></tbody></table>`;
 }
@@ -8633,11 +8634,11 @@ function renderLEScenario(scen){
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:true,labels:{color:TC,font:{size:10},boxWidth:10}}},
       scales:{x:{ticks:{color:TC},grid:{color:CC}},
-        y:{ticks:{color:TC,callback:v=>v.toFixed(0)+'M'},grid:{color:CC}}}}
+        y:{ticks:{color:TC,callback:v=>v.toFixed(0)+' GWh'},grid:{color:CC}}}}
   });
 
   const _scenEl=document.getElementById(tblMap[scen]);if(_scenEl)_scenEl.innerHTML=`<table class="dt">
-    <thead><tr><th>RC</th><th>${curYear-1} FY Act (M)</th><th>${curYear} Budget (M)</th><th>${curYear} Act YTD (M)</th><th>${curYear} LE ${scen.toUpperCase()} (M)</th><th>vs Budget</th><th>vs PY</th></tr></thead>
+    <thead><tr><th>RC</th><th>${curYear-1} FY Act (GWh)</th><th>${curYear} Budget (GWh)</th><th>${curYear} Act YTD (GWh)</th><th>${curYear} LE ${scen.toUpperCase()} (GWh)</th><th>vs Budget</th><th>vs PY</th></tr></thead>
     <tbody>${rcSummary.map(r=>{
       const p=r[sk]||0,vb=r.bud26?(p-r.bud26)/r.bud26*100:0;
       return`<tr>
@@ -8723,8 +8724,8 @@ function renderLERisk(){
   const kEl=document.getElementById('le_risk_krow');
   if(kEl)kEl.innerHTML=`
     <div class="kpi kr"><div class="kl">At-Risk Customers</div><div class="kv">${risks.length}</div><div class="ks dn">${thresh}%+ below bud 2+ mos</div></div>
-    <div class="kpi ka"><div class="kl">Budget at Risk</div><div class="kv">${(risks.reduce((s,r)=>s+r.totB,0)/1e6).toFixed(1)}M kWh</div><div class="ks dn">these accounts</div></div>
-    <div class="kpi kt"><div class="kl">Actual vs At-Risk Bud</div><div class="kv">${(risks.reduce((s,r)=>s+r.totA,0)/1e6).toFixed(1)}M kWh</div><div class="ks nt">YTD</div></div>
+    <div class="kpi ka"><div class="kl">Budget at Risk</div><div class="kv">${fmtE(risks.reduce((s,r)=>s+r.totB,0),1)}</div><div class="ks dn">these accounts</div></div>
+    <div class="kpi kt"><div class="kl">Actual vs At-Risk Bud</div><div class="kv">${fmtE(risks.reduce((s,r)=>s+r.totA,0),1)}</div><div class="ks nt">YTD</div></div>
     <div class="kpi kp"><div class="kl">Accounts Monitored</div><div class="kv">${Object.keys(custBud).length}</div><div class="ks nt">through ${FC_MONTHS[(maxAct||1)-1]?.substring(0,3)}</div></div>`;
   const el=document.getElementById('le_risk_tbl');
   if(!el)return;
@@ -8735,8 +8736,8 @@ function renderLERisk(){
       <td style="font-weight:500">${r.name}</td>
       <td><span class="pill pt">${r.rc}</span></td>
       <td>${r.ind}</td>
-      <td>${(r.totB/1e6).toFixed(3)}M</td>
-      <td>${(r.totA/1e6).toFixed(3)}M</td>
+      <td>${fmtE(r.totB,2)}</td>
+      <td>${fmtE(r.totA,2)}</td>
       <td><span class="heat ${hc(r.vp)}">${r.vp.toFixed(1)}%</span></td>
       <td><span class="pill ${r.below>=3?'pr':'pa'}">${r.below} of ${maxAct}</span></td>
     </tr>`).join('')}</tbody></table>`;
@@ -9036,25 +9037,25 @@ function renderLEVariance(){
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:true,labels:{color:TC,font:{size:10},boxWidth:10}}},
       scales:{x:{ticks:{color:TC,font:{size:9}},grid:{color:CC}},
-        y:{ticks:{color:TC,callback:v=>v.toFixed(0)+'M'},grid:{color:CC}}}}
+        y:{ticks:{color:TC,callback:v=>v.toFixed(0)+' GWh'},grid:{color:CC}}}}
   });
 
   const _vtbl=document.getElementById('le_var_tbl');if(!_vtbl)return;_vtbl.innerHTML=`<table class="dt" id="le_var_dt">
-    <thead><tr><th>${dim==='rc'?'Rate Class':dim==='industry'?'Industry':'Customer'}</th><th>Budget YTD (Est.)</th><th>Actual YTD</th><th>Variance (kWh)</th><th>Variance %</th></tr></thead>
+    <thead><tr><th>${dim==='rc'?'Rate Class':dim==='industry'?'Industry':'Customer'}</th><th>Budget YTD (Est.)</th><th>Actual YTD</th><th>Variance</th><th>Variance %</th></tr></thead>
     <tbody>${rows.map(r=>{
       const v=r.act-r.bud,vp=r.bud?v/r.bud*100:0;
       return`<tr>
         <td style="font-weight:500">${r.key}</td>
-        <td>${(r.bud/1e6).toFixed(3)}M</td>
-        <td>${(r.act/1e6).toFixed(3)}M</td>
-        <td style="${v>=0?'color:var(--green)':'color:var(--red)'}">${v>=0?'+':''}${(v/1e6).toFixed(3)}M</td>
+        <td>${fmtE(r.bud,2)}</td>
+        <td>${fmtE(r.act,2)}</td>
+        <td style="${v>=0?'color:var(--green)':'color:var(--red)'}">${v>=0?'+':''}${fmtE(v,2)}</td>
         <td><span class="heat ${hc(vp)}">${vp>=0?'+':''}${vp.toFixed(1)}%</span></td>
       </tr>`;
     }).join('')}
     <tr class="ft"><td>Total</td>
-      <td>${(rows.reduce((s,r)=>s+r.bud,0)/1e6).toFixed(0)}M</td>
-      <td>${(rows.reduce((s,r)=>s+r.act,0)/1e6).toFixed(0)}M</td>
-      <td>${((rows.reduce((s,r)=>s+r.act,0)-rows.reduce((s,r)=>s+r.bud,0))/1e6).toFixed(0)}M</td>
+      <td>${fmtE(rows.reduce((s,r)=>s+r.bud,0),0)}</td>
+      <td>${fmtE(rows.reduce((s,r)=>s+r.act,0),0)}</td>
+      <td>${fmtE(rows.reduce((s,r)=>s+r.act,0)-rows.reduce((s,r)=>s+r.bud,0),0)}</td>
       <td></td>
     </tr></tbody></table>`;
   makeSortable('le_var_dt');
@@ -9557,7 +9558,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.76';
+const APP_VERSION = '1.0.77';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
