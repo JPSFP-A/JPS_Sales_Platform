@@ -629,6 +629,7 @@ document.getElementById('schema_stale_banner').style.display='none';
         <button class="stab" id="cm_tab_kam" onclick="swCm('kam',this)">👤 KAM &amp; Commentary</button>
         <button class="stab" id="cm_tab_defection" onclick="swCm('defection',this)">📉 Defection</button>
         <button class="stab" id="cm_tab_ro"        onclick="swCm('ro',this)">⚠ Risk &amp; Opportunity</button>
+        <button class="stab" id="cm_tab_pivot" onclick="swCm('pivot',this)">📊 Pivot &amp; Movers</button>
       </div>
       <div class="krow">
         <div class="kpi kt"><div class="kl">MTD Commercial</div><div class="kv" id="kpi_cm_mtd">--</div><div class="ks nt" id="kpi_cm_vs_bud">-- vs budget</div></div>
@@ -714,6 +715,34 @@ document.getElementById('schema_stale_banner').style.display='none';
         </div>
       </div>
 
+      <div id="cm_pivot_wrap" style="display:none">
+        <div class="card">
+          <div class="ch">Account Movers &amp; Pivot
+            <div style="display:flex;gap:6px;align-items:center">
+              <select class="sel" id="pv_period_cm" onchange="renderCmPivot()">
+                <option value="ytd">YTD</option><option value="mtd">MTD</option><option value="r12">Rolling 12M</option>
+              </select>
+              <select class="sel" id="pv_rc_cm" onchange="renderCmPivot()"><option value="">All RC</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT60-ST">RT60-ST</option><option value="RT70">RT70</option></select>
+              <input class="si" id="pv_q_cm" placeholder="Search customer..." style="max-width:180px" oninput="renderCmPivot()">
+              <select class="sel" id="pv_dir_cm" onchange="renderCmPivot()"><option value="">All movement</option><option value="up">Gaining ↑</option><option value="dn">Declining ↓</option></select>
+              <span class="row-count" id="pv_count_cm"></span>
+            </div>
+          </div>
+          <div class="g2">
+            <div>
+              <div class="ch" style="font-size:11px" id="pv_gainers_lbl">Top Gainers</div>
+              <div class="tbl-wrap" id="pv_gainers_tbl"></div>
+            </div>
+            <div>
+              <div class="ch" style="font-size:11px" id="pv_decliners_lbl">Top Decliners</div>
+              <div class="tbl-wrap" id="pv_decliners_tbl"></div>
+            </div>
+          </div>
+          <div class="ch" style="margin-top:12px;font-size:11px">All Accounts</div>
+          <div class="tbl-wrap" id="pv_all_tbl"></div>
+        </div>
+      </div>
+
     </div>
 
     <!-- === RESIDENTIAL === -->
@@ -776,7 +805,7 @@ document.getElementById('schema_stale_banner').style.display='none';
         <div class="kpi ka"><div class="kl">Severe (50–65%)</div><div class="kv" id="df_severe">--</div><div class="ks dn">Monitor closely</div></div>
         <div class="kpi ka"><div class="kl">Moderate (65–80%)</div><div class="kv" id="df_mod">--</div><div class="ks dn">Watch list</div></div>
         <div class="kpi kt"><div class="kl">Validated</div><div class="kv" id="df_validated">--</div><div class="ks nt">Rep confirmed cause</div></div>
-        <div class="kpi kp">      </div>
+      </div><!-- /krow -->
       <div class="card">
         <div class="ch">Defector Register <span>3-month rolling avg &lt;80% of prior year · requires validation</span>
           <button class="btn btn-o" onclick="exportTableCSV('df_tbl','defection_register')">⬇ CSV</button>
@@ -890,7 +919,6 @@ document.getElementById('schema_stale_banner').style.display='none';
         <button class="stab" onclick="mrTab('mr_cust',this)">Top/Bottom 20</button>
         <button class="stab" onclick="mrTab('mr_ind',this)">Industry</button>
         <button class="stab" onclick="mrTab('mr_par',this)">Parish</button>
-        <button class="stab" onclick="mrTab('mr_fc_adj',this)">Forecast Adj.</button>
       </div>
       <div id="mr_ov" class="ssec on"><div id="mr_ov_w"></div></div>
       <div id="mr_cust" class="ssec">
@@ -902,18 +930,6 @@ document.getElementById('schema_stale_banner').style.display='none';
       </div>
       <div id="mr_ind" class="ssec"><div id="mr_ind_w"></div></div>
       <div id="mr_par" class="ssec"><div id="mr_par_w"></div></div>
-      <div id="mr_fc_adj" class="ssec">
-        <div id="mr_fc_cmt_w"></div>
-        <div style="background:var(--navy2);border:1px solid var(--border);border-radius:9px;padding:13px;margin-top:11px">
-          <div style="font-size:10px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">📈 Next-Quarter Forecast Adjustments</div>
-          <div id="fcAdjRows"></div>
-          <div style="background:var(--navy3);border-radius:7px;padding:9px;margin-top:9px;display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:9px" id="fcAdjSummary"></div>
-          <div style="display:flex;gap:6px;margin-top:9px">
-            <button class="btn btn-t" onclick="renderFcAdj()">↺ Refresh</button>
-            <button class="btn btn-r" onclick="clearFcAdj()">✕ Clear All</button>
-          </div>
-        </div>
-      </div>
     </div>
 
     <!-- === ACCOUNT RECONCILIATION === -->
@@ -1033,7 +1049,7 @@ document.getElementById('schema_stale_banner').style.display='none';
           <div class="ch" style="cursor:pointer" onclick="toggleHelp(this)">📈 LE Forecast &amp; Forecast Accuracy <span style="font-size:10px;color:var(--text3);font-weight:400">▾</span></div>
           <div class="help-body" style="display:none;font-size:11px;color:var(--text2);line-height:1.9;padding-top:8px">
             <p><strong style="color:var(--text)">Forecast Accuracy section:</strong> Compares entered forecasts to actuals. MAPE (Mean Absolute Percentage Error) is the primary accuracy metric — target &lt;5%. Accounts are flagged "On trend" or "Off trend" based on whether actual performance matches the forecast within tolerance.</p>
-            <p><strong style="color:var(--text)">LE Forecast section:</strong> The Latest Estimate view. Sub-tabs: <em>Overview</em> (summary), <em>Monthly Trend</em>, <em>LE Base</em> (account-level base assumptions), <em>LE Cust Vol</em> / <em>LE RC Vol</em> (volume by customer and rate class), <em>LE Advanced</em>, <em>Customer Risk</em>, <em>Variance</em>, and <em>Pivot &amp; Movers</em> (LE-specific scenario pivot matrix).</p>
+            <p><strong style="color:var(--text)">LE Forecast section:</strong> The Latest Estimate view. The LE is a single unified in-year forecast built on top of actuals with adjustments. Sub-tabs include <em>Overview</em> (summary KPIs), <em>Monthly Trend</em>, <em>Customer Risk</em>, <em>Variance</em> (LE vs Budget vs Prior Year), and <em>Pivot &amp; Movers</em>. Versions (snapshots) can be saved at any point for comparison. There are no separate Base/Customer/RC/Advanced scenarios — all adjustments are applied through the unified LE adjustment layer.</p>
             <p><strong style="color:var(--text)">Entering a forecast:</strong> Navigate to Forecast Accuracy → 6-Month Forecast Entry. Select the account, enter the forecast kWh for each future month, and click Save. Forecasts are stored in the database and visible to all users.</p>
           </div>
         </div>
@@ -2750,7 +2766,7 @@ const GLOSSARY_DATA=[
   {term:'MAPE',cat:'Metric',def:'Mean Absolute Percentage Error -- forecast accuracy metric. Lower is better. Target <5%.'},
   {term:'YoY',cat:'Metric',def:'Year-on-Year -- comparison to the same period in the prior year.'},
   {term:'AOP',cat:'Process',def:'Annual Operating Plan — the approved annual budget and forecast set each year. Drives the Budget columns in all scorecards and KPIs.'},
-  {term:'LE',cat:'Process',def:'Latest Estimate -- in-year revised forecast reflecting actual performance plus updated outlook.'},
+  {term:'LE',cat:'Process',def:'Latest Estimate — in-year revised forecast reflecting actual performance plus updated outlook. The LE is a single unified estimate with adjustments applied on top of actuals. Supports versioning (snapshots) and direct comparison against Budget (AOP) and prior-year actuals. Replaces the older Base/Customer/RC/Advanced scenario model.'},
   {term:'Zero Bill',cat:'Process',def:'Bill issued with zero consumption -- due to disconnection, meter fault, or outage. Widespread post-Hurricane Melissa.'},
   {term:'Defection',cat:'Market',def:'A customer whose 3-month rolling average kWh drops below 80% of the same 3-month average from the prior year. Graded: Critical <50%, Severe 50–65%, Moderate 65–80%.'},
   {term:'CHP',cat:'Market',def:'Combined Heat & Power -- cogeneration reducing grid dependence. Used by Jamaica Broilers, industrial customers.'},
@@ -2856,8 +2872,10 @@ function swCm(panel,btn){
   if(btn)btn.classList.add('on');
   const cw=document.getElementById('cm_customers_wrap');
   const kw=document.getElementById('cm_kam_wrap');
+  const pw=document.getElementById('cm_pivot_wrap');
   if(cw)cw.style.display='none';
   if(kw)kw.style.display='none';
+  if(pw)pw.style.display='none';
   if(panel==='defection'){
     sw('df', document.querySelector('.ni[onclick*="\'cm\'"]')||document.createElement('div'));
     document.querySelector('.ni[onclick*="\'cm\'"]')?.classList.add('on');
@@ -2867,6 +2885,9 @@ function swCm(panel,btn){
   } else if(panel==='kam'){
     if(kw)kw.style.display='';
     renderKamPerformance();
+  } else if(panel==='pivot'){
+    if(pw)pw.style.display='';
+    renderCmPivot();
   } else {
     // customers (default)
     if(cw)cw.style.display='';
@@ -3092,6 +3113,23 @@ function generateCommentary(section){
       } else {
         lines.push('No actuals loaded. Sync the database to generate overview commentary.');
       }
+      // Industry callouts
+      if(INDUSTRIES&&INDUSTRIES.length){
+        const topInds=INDUSTRIES.filter(i=>i.y26>0).sort((a,b)=>b.y26-a.y26).slice(0,3);
+        lines.push(`TOP INDUSTRIES (YTD ${cy})`);
+        topInds.forEach((ind,i)=>{const chg=ind.y25?((ind.y26-ind.y25)/ind.y25*100):null;lines.push(`  ${i+1}. ${ind.name}: ${fmtE(ind.y26*1e6,1)} ${chg!=null?`(${chg>=0?'+':''}${chg.toFixed(1)}% YoY)`:''}`);});
+        lines.push('');
+      }
+      // Top commercial customers
+      const topCusts=CUSTOMERS.filter(c=>!['RT10','RT20'].includes(c.rate)).sort((a,b)=>b.y26-a.y26).slice(0,3);
+      if(topCusts.length){
+        lines.push(`TOP COMMERCIAL ACCOUNTS (${cy} to date)`);
+        topCusts.forEach((c,i)=>lines.push(`  ${i+1}. ${c.name}: ${fmtE(c.y26*1e6,1)}`));
+        lines.push('');
+      }
+      // Biggest mover
+      const movers=CUSTOMERS.filter(c=>c.y25>0&&c.y26>0).map(c=>({...c,delta:c.y26-c.y25})).sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta));
+      if(movers.length){const top=movers[0];lines.push(`KEY MOVER: ${top.name} ${top.delta>=0?'gained':'lost'} ${fmtE(Math.abs(top.delta)*1e6,1)} vs prior year.`);}
     }
 
     out.textContent=lines.join('\n');
@@ -3195,15 +3233,17 @@ function renderSidebarFilters(){
     segEl.innerHTML = segs.length
       ? segs.map(s=>`<span class="chip on" data-seg="${s}">${s}</span>`).join('')
       : '<span style="font-size:9px;color:var(--text3)">No data</span>';
-    segEl.querySelectorAll('.chip').forEach(c=>c.onclick=()=>c.classList.toggle('on'));
+    segEl.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{c.classList.toggle('on');try{renderSection(document.querySelector('.sec.on')?.id);}catch(e){}});
   }
   if(yrEl){
     yrEl.innerHTML = years.length
       ? years.map(y=>`<span class="chip on" data-year="${y}">${y}</span>`).join('')
       : '<span style="font-size:9px;color:var(--text3)">No data</span>';
-    yrEl.querySelectorAll('.chip').forEach(c=>c.onclick=()=>c.classList.toggle('on'));
+    yrEl.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{c.classList.toggle('on');try{renderSection(document.querySelector('.sec.on')?.id);}catch(e){}});
   }
 }
+function getActiveSegs(){return [...(document.querySelectorAll('#segChips .chip.on')||[])].map(c=>c.dataset.seg).filter(Boolean);}
+function getActiveYears(){return [...(document.querySelectorAll('#yearChips .chip.on')||[])].map(c=>Number(c.dataset.year)).filter(Boolean);}
 function fmtPeriodLabel(){
   const _MNL=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   if(curPeriod==='MTD')    return _MNL[curMonth-1]+'-'+curYear;
@@ -3855,8 +3895,13 @@ function renderPfCust(){
   makeSortable('pfc_dt');
 }
 function renderPfInd(){
-  document.getElementById('pfi_tbl').innerHTML=`<table class="dt" id="pfi_dt">
-    <thead><tr><th>Industry</th><th>Rate Classes</th><th>${curYear-1} (JMD B)</th><th>${curYear} (JMD B)</th><th>Var #</th><th>YoY</th><th>MTD Signal</th><th>Notes</th></tr></thead>
+  const el=document.getElementById('pfi_tbl');if(!el)return;
+  if(!INDUSTRIES||!INDUSTRIES.length){
+    el.innerHTML='<div style="padding:20px;text-align:center;font-size:11px;color:var(--text3)">No industry data — upload an Industries sheet or ensure actuals rows carry an industry field.</div>';
+    return;
+  }
+  el.innerHTML=`<table class="dt" id="pfi_dt">
+    <thead><tr><th>Industry</th><th>Rate Classes</th><th>${curYear-1} (GWh)</th><th>${curYear} (GWh)</th><th>Var #</th><th>YoY</th><th>MTD Signal</th><th>Notes</th></tr></thead>
     <tbody>${INDUSTRIES.map(i=>{const v=i.y26-i.y25,p=pct(i.y26,i.y25);return`<tr>
       <td style="font-weight:600">${i.name}</td><td style="font-size:10px;color:var(--text3)">${i.rc}</td>
       <td>${i.y25.toFixed(2)}</td><td style="font-weight:600">${i.y26.toFixed(2)}</td>
@@ -4077,7 +4122,12 @@ function renderKamPerformance(){
   makeSortable('kamp_dt');
 }
 function renderCmIndTbl(){
-  document.getElementById('cm_ind_tbl') && (document.getElementById('cm_ind_tbl').innerHTML=`<table class="dt" id="cmind_dt">
+  const el=document.getElementById('cm_ind_tbl');if(!el)return;
+  if(!INDUSTRIES||!INDUSTRIES.length){
+    el.innerHTML='<div style="padding:16px;text-align:center;font-size:11px;color:var(--text3)">No industry data — upload an Industries sheet or ensure actuals rows carry an industry field.</div>';
+    return;
+  }
+  el.innerHTML=`<table class="dt" id="cmind_dt">
     <thead><tr><th>Industry</th><th>Rate Classes</th><th>${curYear-1} (GWh)</th><th>${curYear} (GWh)</th><th>YoY</th><th>Signal</th><th>Key Note</th></tr></thead>
     <tbody>${INDUSTRIES.map(i=>{const p=pct(i.y26,i.y25);return`<tr>
       <td style="font-weight:600">${i.name}</td><td style="font-size:10px;color:var(--text3)">${i.rc}</td>
@@ -4085,7 +4135,7 @@ function renderCmIndTbl(){
       <td>${vbar(i.y26,i.y25)}</td>
       <td><span class="heat ${hc(p)}">${p>=0?'+':''}${p.toFixed(1)}%</span></td>
       <td style="font-size:10px;color:var(--text3)">${i.note}</td>
-    </tr>`;}).join('')}</tbody></table>`);
+    </tr>`;}).join('')}</tbody></table>`;
   makeSortable('cmind_dt');
 }
 let cmDimActive='industry';
@@ -4530,11 +4580,11 @@ function renderMrSection(){
   else if(mrActiveSec==='mr_cust')mrRenderCust();
   else if(mrActiveSec==='mr_ind')renderMrInd();
   else if(mrActiveSec==='mr_par')renderMrPar();
-  else if(mrActiveSec==='mr_fc_adj'){renderFcCmt();renderFcAdj();}
 }
 function renderMrOv(){
   const w=document.getElementById('mr_ov_w');if(!w)return;
-  w.innerHTML=`<div class="krow" style="grid-template-columns:repeat(4,1fr)">
+  w.innerHTML=`<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">Overview — Monthly Performance</div>
+  <div class="krow" style="grid-template-columns:repeat(4,1fr)">
     <div class="kpi kt"><div class="kl">Period</div><div class="kv" style="font-size:15px">${mrPeriod}</div></div>
     <div class="kpi ka"><div class="kl">Reviewer</div><div class="kv" style="font-size:14px">${mrRepName||CU.name||'Not set'}</div></div>
     <div class="kpi kg"><div class="kl">Comments</div><div class="kv">${countMrCmts()}</div><div class="ks up">This period</div></div>
@@ -4731,10 +4781,10 @@ function renderOverviewKPIs(){
   const ytdLY=CUSTOMERS.reduce((s,c)=>s+(c.y25*(curMonth/12)),0);
   const vBud=mtdBud>0?pct(mtd,mtdBud):0;
   const vYoY=ytdLY>0?pct(ytd,ytdLY):0;
-  const resMtd=CUSTOMERS.filter(c=>resRCs.includes(c.rate)).reduce((s,c)=>s+(c.m[mIdx]||0),0);
-  const resBud=CUSTOMERS.filter(c=>resRCs.includes(c.rate)).reduce((s,c)=>s+(c.bud/12),0);
-  const comMtd=CUSTOMERS.filter(c=>comRCs.includes(c.rate)).reduce((s,c)=>s+(c.m[mIdx]||0),0);
-  const comBud=CUSTOMERS.filter(c=>comRCs.includes(c.rate)).reduce((s,c)=>s+(c.bud/12),0);
+  const resMtd=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||r.rc||'').trim())&&Number(r.year||r.cal_year||0)===curYear&&Number(r.month||0)===curMonth).reduce((s,r)=>s+Number(r.kwh||0)/1e6,0);
+  const resBud =sbBudget.filter(b=>resRCs.includes(String(b.rate_class||'').trim())&&Number(b.year||0)===curYear&&Number(b.month||0)===curMonth).reduce((s,b)=>s+Number(b.kwh_budget||b.kwh||0)/1e6,0);
+  const comMtd=sbActuals.filter(r=>comRCs.includes(String(r.rate_class||r.rc||'').trim())&&Number(r.year||r.cal_year||0)===curYear&&Number(r.month||0)===curMonth).reduce((s,r)=>s+Number(r.kwh||0)/1e6,0);
+  const comBud =sbBudget.filter(b=>comRCs.includes(String(b.rate_class||'').trim())&&Number(b.year||0)===curYear&&Number(b.month||0)===curMonth).reduce((s,b)=>s+Number(b.kwh_budget||b.kwh||0)/1e6,0);
   const ms=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const lbl=ms[mIdx]+' '+curYear;
   const sv=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
@@ -7878,6 +7928,7 @@ function buildDashboardData(){
     const c=custMap[r.acct],gwh=r.kwh/1e6;
     // Keep most recent non-empty name/rate/parish (sub-accounts may vary slightly)
     if(r.name&&!c.name)c.name=r.name;
+    if(!c.name||c.name==='Unassigned'){if(r.rc==='RT10')c.name='Residential (Low-use)';else if(r.rc==='RT20')c.name='SME / Gen. Service';}
     if(r.rc&&!c.rate)c.rate=r.rc;
     if(r.parish&&!c.parish)c.parish=r.parish;
     if(r.year===py)c.y25+=gwh;
@@ -7910,10 +7961,12 @@ function buildDashboardData(){
   });
   PARISHES=Object.values(parMap).sort((a,b)=>b.curr-a.curr);
 
-  // INDUSTRIES — single pass
+  // INDUSTRIES — single pass, with fallback to sbIndustries lookup if r.industry is blank
+  const _indLookup={};if(sbIndustries&&sbIndustries.length)sbIndustries.forEach(i=>{_indLookup[String(i.jps_ac||'').trim()]=i.industry||'';});
   const indRcMap={},indMap={};
   rows.forEach(r=>{
-    const i=r.industry||'Other';
+    const indFromLookup=r.industry||_indLookup[String(r.acct||'').trim()]||'Other';
+    const i=indFromLookup||'Other';
     if(!indMap[i]){indMap[i]={name:i,y25:0,y26:0,note:''};indRcMap[i]=new Set();}
     const gwh=r.kwh/1e6;
     if(r.year===py)indMap[i].y25+=gwh;
@@ -9316,7 +9369,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.78';
+const APP_VERSION = '1.0.79';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
