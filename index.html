@@ -390,7 +390,7 @@ document.getElementById('schema_stale_banner').style.display='none';
 <div class="sidebar" id="sidebar">
   <div class="sb-logo">
     <h2>⚡ JPS Analytics</h2>
-    <p>Sales Platform v1.0.84</p>
+    <p>Sales Platform v1.0.85</p>
   </div>
   <div class="nav-sec">
     <div class="nav-lbl">Analysis</div>
@@ -1265,32 +1265,24 @@ document.getElementById('schema_stale_banner').style.display='none';
                   <th style="text-align:center"><span class="pill pgr">view</span></th>
                 </tr>
               </thead>
-              <tbody>
-                ${[
-                  ['View dashboards &amp; reports',         true,  true,  true,  true],
-                  ['Export data to CSV',                    true,  true,  true,  false],
-                  ['Add notes &amp; narratives',            true,  true,  true,  false],
-                  ['Enter KAM forecasts (own territory)',   true,  true,  true,  false],
-                  ['Validate defectors',                    true,  true,  true,  false],
-                  ['Add / update R&amp;O pipeline items',   true,  true,  true,  false],
-                  ['Upload actuals data',                   true,  true,  false, false],
-                  ['Approve forecasts',                     true,  true,  false, false],
-                  ['View all customers &amp; territories',  true,  true,  false, false],
-                  ['Save LE versions',                      true,  true,  false, false],
-                  ['Manage users &amp; roles',              true,  false, false, false],
-                  ['Invite new users',                      true,  false, false, false],
-                  ['Delete users',                          true,  false, false, false],
-                  ['Lock / unlock periods',                 true,  false, false, false],
-                  ['Run DB schema migrations',              true,  false, false, false],
-                  ['View audit trail',                      true,  false, false, false],
-                  ['Wipe / clear actuals data',             true,  false, false, false],
-                ].map(([label,a,m,r,v])=>`<tr>
-                  <td style="color:var(--text2)">${label}</td>
-                  <td style="text-align:center">${a?'<span style="color:var(--green);font-size:13px">✓</span>':'<span style="color:var(--border);font-size:13px">—</span>'}</td>
-                  <td style="text-align:center">${m?'<span style="color:var(--green);font-size:13px">✓</span>':'<span style="color:var(--border);font-size:13px">—</span>'}</td>
-                  <td style="text-align:center">${r?'<span style="color:var(--green);font-size:13px">✓</span>':'<span style="color:var(--border);font-size:13px">—</span>'}</td>
-                  <td style="text-align:center">${v?'<span style="color:var(--green);font-size:13px">✓</span>':'<span style="color:var(--border);font-size:13px">—</span>'}</td>
-                </tr>`).join('')}
+              <tbody id="perm_matrix_body">
+                <tr><td style="color:var(--text2)">View dashboards &amp; reports</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td></tr>
+                <tr><td style="color:var(--text2)">Export data to CSV</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
+                <tr><td style="color:var(--text2)">Add notes &amp; narratives</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
+                <tr><td style="color:var(--text2)">Enter KAM forecasts (own territory)</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
+                <tr><td style="color:var(--text2)">Validate defectors</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
+                <tr><td style="color:var(--text2)">Add / update R&amp;O pipeline items</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
+                <tr style="border-top:1px solid var(--border)"><td style="color:var(--text2)">Upload actuals data</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
+                <tr><td style="color:var(--text2)">Approve forecasts</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
+                <tr><td style="color:var(--text2)">View all customers &amp; territories</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
+                <tr><td style="color:var(--text2)">Save LE versions</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
+                <tr style="border-top:1px solid var(--border)"><td style="color:var(--text2)">Manage users &amp; roles</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
+                <tr><td style="color:var(--text2)">Invite new users</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
+                <tr><td style="color:var(--text2)">Delete users</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
+                <tr><td style="color:var(--text2)">Lock / unlock periods</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
+                <tr><td style="color:var(--text2)">Run DB schema migrations</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
+                <tr><td style="color:var(--text2)">View audit trail</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
+                <tr><td style="color:var(--text2)">Wipe / clear actuals data</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
               </tbody>
             </table>
           </div>
