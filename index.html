@@ -3155,20 +3155,20 @@ function generateCommentary(section){
       }
       // Industry callouts
       if(INDUSTRIES&&INDUSTRIES.length){
-        const topInds=INDUSTRIES.filter(i=>i.y26>0).sort((a,b)=>b.y26-a.y26).slice(0,3);
+        const topInds=INDUSTRIES.filter(i=>i.yCY>0).sort((a,b)=>b.yCY-a.yCY).slice(0,3);
         lines.push(`TOP INDUSTRIES (YTD ${cy})`);
-        topInds.forEach((ind,i)=>{const chg=ind.y25?((ind.y26-ind.y25)/ind.y25*100):null;lines.push(`  ${i+1}. ${ind.name}: ${fmtE(ind.y26*1e6,1)} ${chg!=null?`(${chg>=0?'+':''}${chg.toFixed(1)}% YoY)`:''}`);});
+        topInds.forEach((ind,i)=>{const chg=ind.yPY?((ind.yCY-ind.yPY)/ind.yPY*100):null;lines.push(`  ${i+1}. ${ind.name}: ${fmtE(ind.yCY*1e6,1)} ${chg!=null?`(${chg>=0?'+':''}${chg.toFixed(1)}% YoY)`:''}`);});
         lines.push('');
       }
       // Top commercial customers
-      const topCusts=CUSTOMERS.filter(c=>!['RT10','RT20'].includes(c.rate)).sort((a,b)=>b.y26-a.y26).slice(0,3);
+      const topCusts=CUSTOMERS.filter(c=>!['RT10','RT20'].includes(c.rate)).sort((a,b)=>b.yCY-a.yCY).slice(0,3);
       if(topCusts.length){
         lines.push(`TOP COMMERCIAL ACCOUNTS (${cy} to date)`);
-        topCusts.forEach((c,i)=>lines.push(`  ${i+1}. ${c.name}: ${fmtE(c.y26*1e6,1)}`));
+        topCusts.forEach((c,i)=>lines.push(`  ${i+1}. ${c.name}: ${fmtE(c.yCY*1e6,1)}`));
         lines.push('');
       }
       // Biggest mover
-      const movers=CUSTOMERS.filter(c=>c.y25>0&&c.y26>0).map(c=>({...c,delta:c.y26-c.y25})).sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta));
+      const movers=CUSTOMERS.filter(c=>c.yPY>0&&c.yCY>0).map(c=>({...c,delta:c.yCY-c.yPY})).sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta));
       if(movers.length){const top=movers[0];lines.push(`KEY MOVER: ${top.name} ${top.delta>=0?'gained':'lost'} ${fmtE(Math.abs(top.delta)*1e6,1)} vs prior year.`);}
     }
 
@@ -3224,6 +3224,7 @@ function filterHelp(){
 // Rebuild every year-picker dropdown from the actual years present in sbActuals
 function rebuildYearDropdowns(){
   if(!sbActuals.length)return;
+  const _prevYear=curYear;
   const years=[...new Set(sbActuals.map(r=>Number(r[YEAR_COL]||r.year||0)).filter(Boolean))].sort((a,b)=>b-a);
   const opts=years.map(y=>`<option value="${y}">${y}</option>`).join('');
   // Main period bar
@@ -3255,6 +3256,10 @@ function rebuildYearDropdowns(){
     sm.innerHTML=availMonths.map(m=>`<option value="${m}">${_MN[m-1]}</option>`).join('');
     sm.value=String(lastMonth);
     curMonth=lastMonth;
+  }
+  // If curYear changed, rebuild CUSTOMERS/INDUSTRIES/PARISHES for new year context
+  if(curYear!==_prevYear){
+    try{buildDashboardData();}catch(e){console.warn('rebuildYearDropdowns: buildDashboardData',e);}
   }
 }
 
@@ -4013,24 +4018,24 @@ function renderPfInd(){
     const acct=String(r.jps_ac||r.account||'').trim();
     const ind=(r.industry||_indLkp[acct]||'Other').trim()||'Other';
     const rc=String(r.rate_class||'').trim();
-    if(!indMap[ind]){indMap[ind]={name:ind,y25:0,y26:0};indRcMap[ind]=new Set();}
+    if(!indMap[ind]){indMap[ind]={name:ind,yPY:0,yCY:0};indRcMap[ind]=new Set();}
     const gwh=Number(r.kwh||0)/1e6;
-    if(yr===py)indMap[ind].y25+=gwh;
-    if(yr===cy){indMap[ind].y26+=gwh;indRcMap[ind].add(rc);}
+    if(yr===py)indMap[ind].yPY+=gwh;
+    if(yr===cy){indMap[ind].yCY+=gwh;indRcMap[ind].add(rc);}
   });
   Object.values(indMap).forEach(i=>{i.rc=[...indRcMap[i.name]].join('/');});
-  const inds=Object.values(indMap).filter(i=>i.y25>0||i.y26>0).sort((a,b)=>b.y26-a.y26);
+  const inds=Object.values(indMap).filter(i=>i.yPY>0||i.yCY>0).sort((a,b)=>b.yCY-a.yCY);
   if(!inds.length){
     el.innerHTML='<div style="padding:20px;text-align:center;font-size:11px;color:var(--text3)">No industry data — ensure actuals rows carry an industry field or upload an Industries sheet.</div>';
     return;
   }
   el.innerHTML=`<table class="dt" id="pfi_dt">
     <thead><tr><th>Industry</th><th>Rate Classes</th><th>${py} (${ph}, GWh)</th><th>${cy} (${ph}, GWh)</th><th>Var #</th><th>YoY</th><th>Signal</th><th>Notes</th></tr></thead>
-    <tbody>${inds.map(i=>{const v=i.y26-i.y25,p=pct(i.y26,i.y25);return`<tr>
+    <tbody>${inds.map(i=>{const v=i.yCY-i.yPY,p=pct(i.yCY,i.yPY);return`<tr>
       <td style="font-weight:600">${i.name}</td><td style="font-size:10px;color:var(--text3)">${i.rc}</td>
-      <td>${i.y25.toFixed(2)}</td><td style="font-weight:600">${i.y26.toFixed(2)}</td>
+      <td>${i.yPY.toFixed(2)}</td><td style="font-weight:600">${i.yCY.toFixed(2)}</td>
       <td class="${v>=0?'up':'dn'}">${v>=0?'+':''}${v.toFixed(2)}</td>
-      <td>${vbar(i.y26,i.y25)}</td>
+      <td>${vbar(i.yCY,i.yPY)}</td>
       <td><span class="heat ${hc(p)}">${p>=0?'+':''}${p.toFixed(1)}%</span></td>
       <td style="font-size:10px;color:var(--text3)">--</td>
     </tr>`;}).join('')}</tbody></table>`;
@@ -4045,8 +4050,8 @@ function renderPfRC(){
   const _rcGwh=(rc,yr)=>sbActuals.filter(r=>String(r.rate_class||'').trim()===rc&&Number(r[YEAR_COL]||r.year||0)===yr&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
   const _rcBud=(rc)=>sbBudget.filter(r=>String(r.rate_class||r.rc||'').trim()===rc&&Number(r.year||0)===cy&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
   const rcs=rcList.map(rc=>({rc,desc:rcDefs[rc]||rc,
-    y25:_rcGwh(rc,py),
-    y26:_rcGwh(rc,cy),
+    yPY:_rcGwh(rc,py),
+    yCY:_rcGwh(rc,cy),
     bud:_rcBud(rc),
     note:sbActuals.length?'from database':'Upload data to populate'
   }));
@@ -4055,12 +4060,12 @@ function renderPfRC(){
     : `<div style="background:rgba(245,166,35,.12);border-left:3px solid var(--amber);border-radius:4px;padding:8px 13px;margin-bottom:9px;font-size:11px;color:var(--amber);font-weight:500">&#9888; No data loaded &mdash; sync or upload an Excel file to populate rate-class performance</div>`;
   document.getElementById('pfr_tbl').innerHTML=pfrcBanner+`<table class="dt" id="pfr_dt">
     <thead><tr><th>Rate Class</th><th>Description</th><th>${curYear-1} (${ph}, GWh)</th><th>${curYear} (${ph}, GWh)</th><th>Budget</th><th>vs Budget</th><th>YoY</th><th>Notes</th></tr></thead>
-    <tbody>${rcs.map(r=>{const vb2=pct(r.y26,r.bud),yy=pct(r.y26,r.y25);return`<tr>
+    <tbody>${rcs.map(r=>{const vb2=pct(r.yCY,r.bud),yy=pct(r.yCY,r.yPY);return`<tr>
       <td><span class="pill pt">${r.rc}</span></td><td>${r.desc}</td>
-      <td>${r.y25.toFixed(1)}</td><td style="font-weight:600">${r.y26.toFixed(1)}</td>
+      <td>${r.yPY.toFixed(1)}</td><td style="font-weight:600">${r.yCY.toFixed(1)}</td>
       <td style="color:var(--text3)">${r.bud.toFixed(1)}</td>
       <td><span class="heat ${hc(vb2)}">${vb2>=0?'+':''}${vb2.toFixed(1)}%</span></td>
-      <td>${vbar(r.y26,r.y25)}</td>
+      <td>${vbar(r.yCY,r.yPY)}</td>
       <td style="font-size:10px;color:var(--text3)">${r.note}</td>
     </tr>`;}).join('')}</tbody></table>`;
   makeSortable('pfr_dt');
@@ -4147,8 +4152,8 @@ function renderCmCust(){
     if(q&&!c.name.toLowerCase().includes(q)&&!c.num.includes(q))return false;
     if(rc&&c.rate!==rc)return false;
     if(kamF&&(c.kam||'')!==kamF)return false;
-    if(tr==='up'&&c.y26<c.y25)return false;
-    if(tr==='dn'&&c.y26>=c.y25)return false;
+    if(tr==='up'&&c.yCY<c.yPY)return false;
+    if(tr==='dn'&&c.yCY>=c.yPY)return false;
     return true;
   });
   document.getElementById('cm_count').textContent=d.length+' customers';
@@ -4160,10 +4165,10 @@ function renderCmCust(){
       <td><span class="pill pt">${c.rate}</span></td>
       <td style="font-size:10px;color:var(--teal);cursor:pointer" onclick="filterByKam('${(c.kam||'').replace(/'/g,"\\'")}',event)" title="Click to filter by this KAM">${kamName}</td>
       <td>${c.ind}</td><td>${c.parish}</td>
-      <td>${c.y25.toFixed(1)}</td><td style="font-weight:600">${c.y26.toFixed(1)}</td>
+      <td>${c.yPY.toFixed(1)}</td><td style="font-weight:600">${c.yCY.toFixed(1)}</td>
       <td style="color:var(--text3)">${c.bud.toFixed(1)}</td>
-      <td><span class="heat ${hc(pct(c.y26,c.bud))}">${pct(c.y26,c.bud)>=0?'+':''}${pct(c.y26,c.bud).toFixed(1)}%</span></td>
-      <td>${vbar(c.y26,c.y25)}</td>
+      <td><span class="heat ${hc(pct(c.yCY,c.bud))}">${pct(c.yCY,c.bud)>=0?'+':''}${pct(c.yCY,c.bud).toFixed(1)}%</span></td>
+      <td>${vbar(c.yCY,c.yPY)}</td>
       <td><span style="font-size:10px;color:var(--teal);cursor:pointer" onclick="editNote('${c.num}','${c.name.replace(/'/g,"\\'")}','cm_cust_tbl')">${saved?saved.substring(0,30)+'…':'✏ Add note'}</span></td>
     </tr>`;}).join('')}
     </tbody></table>`;
@@ -4276,10 +4281,10 @@ function renderCmIndTbl(){
   }
   el.innerHTML=`<table class="dt" id="cmind_dt">
     <thead><tr><th>Industry</th><th>Rate Classes</th><th>${curYear-1} (GWh)</th><th>${curYear} (GWh)</th><th>YoY</th><th>Signal</th><th>Key Note</th></tr></thead>
-    <tbody>${INDUSTRIES.map(i=>{const p=pct(i.y26,i.y25);return`<tr>
+    <tbody>${INDUSTRIES.map(i=>{const p=pct(i.yCY,i.yPY);return`<tr>
       <td style="font-weight:600">${i.name}</td><td style="font-size:10px;color:var(--text3)">${i.rc}</td>
-      <td>${i.y25.toFixed(2)}</td><td style="font-weight:600">${i.y26.toFixed(2)}</td>
-      <td>${vbar(i.y26,i.y25)}</td>
+      <td>${i.yPY.toFixed(2)}</td><td style="font-weight:600">${i.yCY.toFixed(2)}</td>
+      <td>${vbar(i.yCY,i.yPY)}</td>
       <td><span class="heat ${hc(p)}">${p>=0?'+':''}${p.toFixed(1)}%</span></td>
       <td style="font-size:10px;color:var(--text3)">${i.note}</td>
     </tr>`;}).join('')}</tbody></table>`;
@@ -4484,7 +4489,7 @@ function validateDefector(num,name){
       const exists=RISK_OPP.find(r=>r.acct===num);
       if(!exists){
         const cust=CUSTOMERS.find(c=>c.num===num);
-        RISK_OPP.push({num:'AUTO_'+num,name:cust?.name||name,acct:num,type:'Risk',level:'High',rate:cust?.rate||'',parish:cust?.parish||'',sector:cust?.ind||'',kwh:Math.round((cust?.y25||0)*1e9/12),owner:CU.id,status:'New',source:'Defection',cmt:`Auto-flagged: ${cause}. ${note}`,opened_at:new Date().toISOString()});
+        RISK_OPP.push({num:'AUTO_'+num,name:cust?.name||name,acct:num,type:'Risk',level:'High',rate:cust?.rate||'',parish:cust?.parish||'',sector:cust?.ind||'',kwh:Math.round((cust?.yPY||0)*1e9/12),owner:CU.id,status:'New',source:'Defection',cmt:`Auto-flagged: ${cause}. ${note}`,opened_at:new Date().toISOString()});
       }
     }
     closeModal();
@@ -4744,23 +4749,23 @@ function mrRenderCust(){
   const q=(document.getElementById('mr_cq')?.value||'').toLowerCase();
   const rc=document.getElementById('mr_crc')?.value||'';
   let d=CUSTOMERS.filter(c=>(!q||(c.name.toLowerCase().includes(q)||c.num.includes(q)))&&(!rc||c.rate===rc));
-  const top=[...d].sort((a,b)=>b.y26-a.y26).slice(0,20);
-  const bot=[...d].sort((a,b)=>a.y26-b.y26).slice(0,20);
+  const top=[...d].sort((a,b)=>b.yCY-a.yCY).slice(0,20);
+  const bot=[...d].sort((a,b)=>a.yCY-b.yCY).slice(0,20);
   const mkTbl=(rows,mode)=>`<table class="dt" style="font-size:10px">
     <thead><tr><th>#</th><th>Acct #</th><th>Customer</th><th>Rate</th><th>Industry</th><th>${curYear-1} YTD</th><th>${curYear} YTD</th><th>YoY</th><th>Note</th></tr></thead>
     <tbody>${rows.map((c,i)=>{const saved=S.get(`mr_note_${mrPeriod}_${c.num}`,'');return`<tr>
       <td style="color:${mode==='top'?'var(--teal)':'var(--red)'};font-weight:700">${i+1}</td>
       <td style="color:var(--text3)">${c.num}</td><td style="font-weight:500">${c.name}</td>
       <td><span class="pill pt">${c.rate}</span></td><td>${c.ind}</td>
-      <td>${c.y25.toFixed(1)}</td><td style="font-weight:600">${c.y26.toFixed(1)}</td>
-      <td>${vbar(c.y26,c.y25)}</td>
+      <td>${c.yPY.toFixed(1)}</td><td style="font-weight:600">${c.yCY.toFixed(1)}</td>
+      <td>${vbar(c.yCY,c.yPY)}</td>
       <td><span style="color:var(--teal);cursor:pointer;font-size:10px" onclick="editMrNote('${c.num}','${c.name.replace(/'/g,"\\'")}','mr_cust_w')">${saved?saved.substring(0,28)+'…':'✏ note'}</span></td>
     </tr>`;}).join('')}</tbody></table>`;
   w.innerHTML=buildCmt('mr_cust_top','Top customer commentary...','mr_cust_w')+`<div class="card" style="margin-bottom:11px"><div class="ch">Top 20 -- ${mrPeriod}</div>${mkTbl(top,'top')}</div>`+buildCmt('mr_cust_bot','Bottom customer commentary...','mr_cust_w')+`<div class="card"><div class="ch">Bottom 20 -- ${mrPeriod}</div>${mkTbl(bot,'bot')}</div>`;
 }
 function renderMrInd(){
   const w=document.getElementById('mr_ind_w');if(!w)return;
-  const tbl=`<table class="dt">${INDUSTRIES.map(i=>{const p=pct(i.y26,i.y25);return`<tr><td style="font-weight:600">${i.name}</td><td style="font-size:10px;color:var(--text3)">${i.rc}</td><td>${i.y25.toFixed(2)}</td><td style="font-weight:600">${i.y26.toFixed(2)}</td><td>${vbar(i.y26,i.y25)}</td><td><span class="heat ${hc(p)}">${p>=0?'+':''}${p.toFixed(1)}%</span></td><td style="font-size:10px;color:var(--text3)">${i.note}</td></tr>`;}).join('')}</table>`;
+  const tbl=`<table class="dt">${INDUSTRIES.map(i=>{const p=pct(i.yCY,i.yPY);return`<tr><td style="font-weight:600">${i.name}</td><td style="font-size:10px;color:var(--text3)">${i.rc}</td><td>${i.yPY.toFixed(2)}</td><td style="font-weight:600">${i.yCY.toFixed(2)}</td><td>${vbar(i.yCY,i.yPY)}</td><td><span class="heat ${hc(p)}">${p>=0?'+':''}${p.toFixed(1)}%</span></td><td style="font-size:10px;color:var(--text3)">${i.note}</td></tr>`;}).join('')}</table>`;
   w.innerHTML=buildCmt('mr_ind','Industry commentary...','mr_ind_w')+`<div class="card"><div class="ch">Industry Performance</div>${tbl}</div>`;
 }
 function renderMrPar(){
@@ -4930,7 +4935,7 @@ function renderOverviewKPIs(){
     CUSTOMERS.reduce((s,c)=>s+(c.bud*(pm.length/12)),0); // fallback to proportional
   // PY comparison: same months last year from sbActuals
   const ytdLY=sbActuals.filter(r=>Number(r[YEAR_COL]||r.year||0)===curYear-1&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0)/1e6,0)||
-    CUSTOMERS.reduce((s,c)=>s+(c.y25*(pm.length/12)),0); // fallback
+    CUSTOMERS.reduce((s,c)=>s+(c.yPY*(pm.length/12)),0); // fallback
   const vBud=mtdBud>0?pct(mtd,mtdBud):0;
   const vYoY=ytdLY>0?pct(ytd,ytdLY):0;
   // Period-filtered residential/commercial split
@@ -4994,7 +4999,7 @@ function renderCommercialKPIs(){
   const rt50Mtd=rt50Custs.reduce((s,c)=>s+(c.m[mIdx]||0),0);
   const rt40v=rt40Bud>0?pct(rt40Mtd,rt40Bud):0;
   const rt50v=rt50Bud>0?pct(rt50Mtd,rt50Bud):0;
-  const topInd=INDUSTRIES.length?INDUSTRIES.reduce((a,b)=>b.y26>a.y26?b:a,INDUSTRIES[0]):null;
+  const topInd=INDUSTRIES.length?INDUSTRIES.reduce((a,b)=>b.yCY>a.yCY?b:a,INDUSTRIES[0]):null;
   const defs=computeDefectors().filter(d=>comRCs.includes(d.rate));
   const sv=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
   sv('kpi_cm_mtd',cmMtd.toFixed(1)+' GWh');
@@ -5224,10 +5229,10 @@ function renderExecSummary() {
   }
 
   // Top movers
-  const sorted = [...CUSTOMERS].sort((a,b) => Math.abs(b.y26-b.y25) - Math.abs(a.y26-a.y25)).slice(0,5);
+  const sorted = [...CUSTOMERS].sort((a,b) => Math.abs(b.yCY-b.yPY) - Math.abs(a.yCY-a.yPY)).slice(0,5);
   if(el('es_top_movers')) {
     el('es_top_movers').innerHTML = sorted.map(c => {
-      const v = c.y26 - c.y25, pos = v >= 0;
+      const v = c.yCY - c.yPY, pos = v >= 0;
       return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
         <div>
           <div style="font-size:12px;font-weight:600;color:var(--text)">${c.name}</div>
@@ -5235,7 +5240,7 @@ function renderExecSummary() {
         </div>
         <div style="text-align:right">
           <div style="font-size:13px;font-weight:700;color:${pos?'var(--green)':'var(--red)'}">${pos?'+':''}${v.toFixed(1)} GWh</div>
-          <div style="font-size:10px;color:var(--text3)">${c.y26.toFixed(1)} vs ${c.y25.toFixed(1)}</div>
+          <div style="font-size:10px;color:var(--text3)">${c.yCY.toFixed(1)} vs ${c.yPY.toFixed(1)}</div>
         </div>
       </div>`;
     }).join('');
@@ -5428,7 +5433,7 @@ function renderBridgeChart() {
   const drivers = getBridgeDrivers().filter(d => seg === 'total' || d.seg === seg);
   const _bAct2=CUSTOMERS.reduce((s,c)=>s+(c.m[curMonth-1]||0),0);
   const _bBud2=CUSTOMERS.reduce((s,c)=>s+(c.bud/12),0);
-  const _bLY2=CUSTOMERS.reduce((s,c)=>s+(c.y25/12),0);
+  const _bLY2=CUSTOMERS.reduce((s,c)=>s+(c.yPY/12),0);
   const totalGap = CUSTOMERS.length ? (vs==='budget'?_bAct2-_bBud2:_bAct2-_bLY2) : 0;
   const explained = drivers.reduce((s,d)=>s+d.gwh,0);
   const residual  = totalGap - explained;
@@ -5559,20 +5564,20 @@ const RR_DATA = {
     {label:'Actual',       val:null, base:0, color:'#00c2a8', isBase:true},
   ],
   by_rc_jmd: [
-    {rc:'RT10', y25:0, y26:0, comps:{cust:0,energy:0,ipp:0,fuel:0,other:0}},
-    {rc:'RT20', y25:0, y26:0, comps:{cust:0,energy:0,ipp:0,fuel:0,other:0}},
-    {rc:'RT40', y25:0, y26:0, comps:{cust:0,demand:0,energy:0,ipp:0,fuel:0,other:0}},
-    {rc:'RT50', y25:0, y26:0, comps:{cust:0,demand:0,energy:0,ipp:0,fuel:0,other:0}},
-    {rc:'ST',   y25:0, y26:0, comps:{energy:0,ipp:0,fuel:0,other:0}},
-    {rc:'RT70', y25:0, y26:0, comps:{cust:0,demand:0,energy:0,ipp:0,fuel:0,other:0}},
+    {rc:'RT10', yPY:0, yCY:0, comps:{cust:0,energy:0,ipp:0,fuel:0,other:0}},
+    {rc:'RT20', yPY:0, yCY:0, comps:{cust:0,energy:0,ipp:0,fuel:0,other:0}},
+    {rc:'RT40', yPY:0, yCY:0, comps:{cust:0,demand:0,energy:0,ipp:0,fuel:0,other:0}},
+    {rc:'RT50', yPY:0, yCY:0, comps:{cust:0,demand:0,energy:0,ipp:0,fuel:0,other:0}},
+    {rc:'ST',   yPY:0, yCY:0, comps:{energy:0,ipp:0,fuel:0,other:0}},
+    {rc:'RT70', yPY:0, yCY:0, comps:{cust:0,demand:0,energy:0,ipp:0,fuel:0,other:0}},
   ],
   tariff: [
-    {rc:'RT10', y25:0, y26:0, note:'Upload revenue data to populate'},
-    {rc:'RT20', y25:0, y26:0, note:'Upload revenue data to populate'},
-    {rc:'RT40', y25:0, y26:0, note:'Upload revenue data to populate'},
-    {rc:'RT50', y25:0, y26:0, note:'Upload revenue data to populate'},
-    {rc:'ST',   y25:0, y26:0, note:'Upload revenue data to populate'},
-    {rc:'RT70', y25:0, y26:0, note:'Upload revenue data to populate'},
+    {rc:'RT10', yPY:0, yCY:0, note:'Upload revenue data to populate'},
+    {rc:'RT20', yPY:0, yCY:0, note:'Upload revenue data to populate'},
+    {rc:'RT40', yPY:0, yCY:0, note:'Upload revenue data to populate'},
+    {rc:'RT50', yPY:0, yCY:0, note:'Upload revenue data to populate'},
+    {rc:'ST',   yPY:0, yCY:0, note:'Upload revenue data to populate'},
+    {rc:'RT70', yPY:0, yCY:0, note:'Upload revenue data to populate'},
   ],
   driver_notes: []
 };
@@ -5715,8 +5720,8 @@ function renderRRCharts() {
       data: {
         labels: RR_DATA.by_rc_jmd.map(r => r.rc),
         datasets: [
-          {label:String(curYear-1), data:RR_DATA.by_rc_jmd.map(r=>r.y25), backgroundColor:'rgba(55,138,221,0.5)', borderRadius:2},
-          {label:String(curYear), data:RR_DATA.by_rc_jmd.map(r=>r.y26), backgroundColor:'rgba(0,194,168,0.5)', borderRadius:2},
+          {label:String(curYear-1), data:RR_DATA.by_rc_jmd.map(r=>r.yPY), backgroundColor:'rgba(55,138,221,0.5)', borderRadius:2},
+          {label:String(curYear), data:RR_DATA.by_rc_jmd.map(r=>r.yCY), backgroundColor:'rgba(0,194,168,0.5)', borderRadius:2},
         ]
       },
       options:{...co(), scales:{x:{ticks:{color:TC},grid:{color:CC}},y:{ticks:{color:TC,callback:v=>v.toFixed(1)+'B'},grid:{color:CC}}}}
@@ -5732,8 +5737,8 @@ function renderRRCharts() {
       data: {
         labels: RR_DATA.tariff.map(r => r.rc),
         datasets: [
-          {label:`${curYear-1} JMD/kWh`, data:RR_DATA.tariff.map(r=>r.y25), backgroundColor:'rgba(55,138,221,0.5)', borderRadius:2},
-          {label:`${curYear} JMD/kWh`, data:RR_DATA.tariff.map(r=>r.y26), backgroundColor:'rgba(0,194,168,0.5)', borderRadius:2},
+          {label:`${curYear-1} JMD/kWh`, data:RR_DATA.tariff.map(r=>r.yPY), backgroundColor:'rgba(55,138,221,0.5)', borderRadius:2},
+          {label:`${curYear} JMD/kWh`, data:RR_DATA.tariff.map(r=>r.yCY), backgroundColor:'rgba(0,194,168,0.5)', borderRadius:2},
         ]
       },
       options:{...co(), scales:{x:{ticks:{color:TC},grid:{color:CC}},y:{ticks:{color:TC,callback:v=>v+'JMD'},grid:{color:CC}}}}
@@ -5750,24 +5755,24 @@ function renderRRDetailTable() {
       const comp = r.comps;
       return `<tr>
         <td><span class="pill pt">${r.rc}</span></td>
-        <td>${r.y25.toFixed(2)}</td>
-        <td style="font-weight:600">${r.y26.toFixed(2)}</td>
+        <td>${r.yPY.toFixed(2)}</td>
+        <td style="font-weight:600">${r.yCY.toFixed(2)}</td>
         <td style="font-size:10px;color:var(--text3)">${(comp.cust||0).toFixed(2)}</td>
         <td style="font-size:10px;color:var(--text3)">${(comp.demand||0).toFixed(2)}</td>
         <td style="font-size:10px;color:var(--text3)">${(comp.energy||0).toFixed(2)}</td>
         <td style="font-size:10px;color:var(--text3)">${(comp.ipp||0).toFixed(2)}</td>
         <td style="font-size:10px;color:var(--text3)">${(comp.fuel||0).toFixed(2)}</td>
         <td style="font-size:10px;color:var(--text3)">${(comp.other||0).toFixed(3)}</td>
-        <td class="${r.y26>=r.y25?'up':'dn'}">${(r.y26>=r.y25?'+':'')+(r.y26-r.y25).toFixed(2)}</td>
-        <td>${vbar(r.y26, r.y25)}</td>
+        <td class="${r.yCY>=r.yPY?'up':'dn'}">${(r.yCY>=r.yPY?'+':'')+(r.yCY-r.yPY).toFixed(2)}</td>
+        <td>${vbar(r.yCY, r.yPY)}</td>
       </tr>`;
     }).join('')}
     <tr class="ft">
       <td>Total</td>
-      <td>${RR_DATA.by_rc_jmd.reduce((s,r)=>s+r.y25,0).toFixed(2)}</td>
-      <td>${RR_DATA.by_rc_jmd.reduce((s,r)=>s+r.y26,0).toFixed(2)}</td>
+      <td>${RR_DATA.by_rc_jmd.reduce((s,r)=>s+r.yPY,0).toFixed(2)}</td>
+      <td>${RR_DATA.by_rc_jmd.reduce((s,r)=>s+r.yCY,0).toFixed(2)}</td>
       <td colspan="7"></td>
-      <td>${vbar(RR_DATA.by_rc_jmd.reduce((s,r)=>s+r.y26,0), RR_DATA.by_rc_jmd.reduce((s,r)=>s+r.y25,0))}</td>
+      <td>${vbar(RR_DATA.by_rc_jmd.reduce((s,r)=>s+r.yCY,0), RR_DATA.by_rc_jmd.reduce((s,r)=>s+r.yPY,0))}</td>
     </tr>
     </tbody></table>`;
   makeSortable('rrd_dt');
@@ -8140,18 +8145,19 @@ function buildDashboardData(){
 
   // CUSTOMERS — one row per CUSTOMER NUMBER (r.acct is already normalised to customer number by fcNormActuals)
   // Multiple full accounts under the same customer number are aggregated here.
+  // NOTE: cy/py are dynamic — property names yPY/yCY reflect whichever year curYear is set to
   const py=curYear-1, cy=curYear;
   const custMap={};
   rows.forEach(r=>{
-    if(!custMap[r.acct])custMap[r.acct]={num:r.acct,name:r.name,rate:r.rc,ind:r.industry,parish:r.parish,y25:0,y26:0,bud:0,m:Array(12).fill(0),cmt:''};
+    if(!custMap[r.acct])custMap[r.acct]={num:r.acct,name:r.name,rate:r.rc,ind:r.industry,parish:r.parish,yPY:0,yCY:0,bud:0,m:Array(12).fill(0),cmt:''};
     const c=custMap[r.acct],gwh=r.kwh/1e6;
     // Keep most recent non-empty name/rate/parish (sub-accounts may vary slightly)
     if(r.name&&!c.name)c.name=r.name;
     if(!c.name||c.name==='Unassigned'){if(r.rc==='RT10')c.name='Residential (Low-use)';else if(r.rc==='RT20')c.name='SME / Gen. Service';}
     if(r.rc&&!c.rate)c.rate=r.rc;
     if(r.parish&&!c.parish)c.parish=r.parish;
-    if(r.year===py)c.y25+=gwh;
-    if(r.year===cy){c.y26+=gwh;if(r.month>=1&&r.month<=12)c.m[r.month-1]+=gwh;}
+    if(r.year===py)c.yPY+=gwh;
+    if(r.year===cy){c.yCY+=gwh;if(r.month>=1&&r.month<=12)c.m[r.month-1]+=gwh;}
   });
   // Distribute RC-level budget to customers by proportional prior-year share
   // Commercial budget rows: jps_ac filled, no consumption_bucket
@@ -8162,11 +8168,11 @@ function buildDashboardData(){
     budRows.filter(r=>r.year===cy).forEach(r=>{rcBud[r.rc]=(rcBud[r.rc]||0)+r.kwh;});
     rows.filter(r=>r.year===py).forEach(r=>{rcActPY[r.rc]=(rcActPY[r.rc]||0)+r.kwh;});
     Object.values(custMap).forEach(c=>{
-      const share=rcActPY[c.rate]>0?(c.y25*1e6)/rcActPY[c.rate]:0;
+      const share=rcActPY[c.rate]>0?(c.yPY*1e6)/rcActPY[c.rate]:0;
       c.bud=((rcBud[c.rate]||0)*share)/1e6;
     });
   }
-  CUSTOMERS=Object.values(custMap).filter(c=>c.y25>0||c.y26>0).sort((a,b)=>b.y25-a.y25);
+  CUSTOMERS=Object.values(custMap).filter(c=>c.yPY>0||c.yCY>0).sort((a,b)=>b.yPY-a.yPY);
 
   // PARISHES — single pass
   const COMM_RCS_SET=new Set(['RT40','RT50','RT60-ST','RT70','BU']);
@@ -8186,17 +8192,17 @@ function buildDashboardData(){
   rows.forEach(r=>{
     const indFromLookup=r.industry||_indLookup[String(r.acct||'').trim()]||'Other';
     const i=indFromLookup||'Other';
-    if(!indMap[i]){indMap[i]={name:i,y25:0,y26:0,note:''};indRcMap[i]=new Set();}
+    if(!indMap[i]){indMap[i]={name:i,yPY:0,yCY:0,note:''};indRcMap[i]=new Set();}
     const gwh=r.kwh/1e6;
-    if(r.year===py)indMap[i].y25+=gwh;
-    if(r.year===cy)indMap[i].y26+=gwh;
+    if(r.year===py)indMap[i].yPY+=gwh;
+    if(r.year===cy)indMap[i].yCY+=gwh;
     indRcMap[i].add(r.rc);
   });
   Object.values(indMap).forEach(i=>{i.rc=[...indRcMap[i.name]].join('/');});
-  INDUSTRIES=Object.values(indMap).filter(i=>i.y25>0||i.y26>0).sort((a,b)=>b.y25-a.y25);
+  INDUSTRIES=Object.values(indMap).filter(i=>i.yPY>0||i.yCY>0).sort((a,b)=>b.yPY-a.yPY);
 
   // FC_SEGS base values
-  FC_SEGS.forEach(s=>{s.base=CUSTOMERS.filter(c=>c.rate===s.seg).reduce((sum,c)=>sum+c.y26,0)||0;});
+  FC_SEGS.forEach(s=>{s.base=CUSTOMERS.filter(c=>c.rate===s.seg).reduce((sum,c)=>sum+c.yCY,0)||0;});
 
   // Enrich CUSTOMERS with KAM + industry lookups.
   // c.num is already the customer number (e.g. '100001'), matching jps_kam.jps_ac and jps_industries.jps_ac exactly.
@@ -9126,18 +9132,45 @@ function renderNetGen(){
     </div>`;
     return;
   }
+  // Merge net_gen_historical with LE/actuals data from jps_system_stats
+  // so the current year always appears even if not yet in the historical upload table
   const src=sbNetGen;
-  const years=[...new Set(src.map(r=>Number(r.year)))].sort();
-  // Aggregate by year+month across all rate_class rows (sum kwh per period)
-  const annual=years.map(y=>({
-    year:y,
-    total:src.filter(r=>Number(r.year)===y).reduce((s,r)=>s+Number(r.kwh||r.net_gen_mwh||0),0),
-    months:Array.from({length:12},(_,m)=>{
-      const recs=src.filter(r=>Number(r.year)===y&&Number(r.month)===m+1);
-      const tot=recs.reduce((s,r)=>s+Number(r.kwh||r.net_gen_mwh||0),0);
-      return tot||null;
-    })
-  }));
+  const histYears=new Set(src.map(r=>Number(r.year)));
+
+  // Build annual array from historical data
+  const annualMap={};
+  [...histYears].sort().forEach(y=>{
+    annualMap[y]={year:y,label:'',
+      total:src.filter(r=>Number(r.year)===y).reduce((s,r)=>s+Number(r.kwh||r.net_gen_mwh||0),0),
+      months:Array.from({length:12},(_,m)=>{
+        const recs=src.filter(r=>Number(r.year)===y&&Number(r.month)===m+1);
+        return recs.reduce((s,r)=>s+Number(r.kwh||r.net_gen_mwh||0),0)||null;
+      })
+    };
+  });
+
+  // Inject curYear from jps_system_stats (LE or budget) if not already present
+  if(!histYears.has(curYear)&&sbSystemStats.length){
+    const statsForYear=sbSystemStats.filter(r=>Number(r.year)===curYear);
+    // Prefer 'actual' > 'le' > 'budget' entry per month
+    const priority={actual:3,le:2,budget:1};
+    const monthKwh=Array(12).fill(null);
+    const monthSeen=Array(12).fill(0);
+    statsForYear.forEach(r=>{
+      const m=Number(r.month||0)-1;
+      if(m<0||m>11)return;
+      const p=priority[r.entry_type]||0;
+      if(p>monthSeen[m]){monthKwh[m]=Number(r.net_gen_kwh||0)||null;monthSeen[m]=p;}
+    });
+    const entryTypes=[...new Set(statsForYear.map(r=>r.entry_type))];
+    const lbl=entryTypes.includes('actual')?'Actuals':entryTypes.includes('le')?'LE':'Budget';
+    const total=monthKwh.reduce((s,v)=>s+(v||0),0);
+    if(total>0){
+      annualMap[curYear]={year:curYear,label:` (${lbl})`,total,months:monthKwh};
+    }
+  }
+
+  const annual=Object.values(annualMap).sort((a,b)=>a.year-b.year);
 
   const latest=annual[annual.length-1], prior=annual[annual.length-2];
   const allVals=src.map(r=>Number(r.kwh||r.net_gen_mwh||0)).filter(Boolean);
@@ -9149,8 +9182,8 @@ function renderNetGen(){
   // KPIs
   const kEl=document.getElementById('ng_krow');
   if(kEl)kEl.innerHTML=`
-    <div class="kpi kt"><div class="kl">Latest Year</div><div class="kv">${latest?.year||'--'}</div><div class="ks nt">${sbNetGen.length?'Live · Supabase':'No data loaded'}</div></div>
-    <div class="kpi kg"><div class="kl">Annual Net Gen</div><div class="kv">${latest?((latest.total)/1000).toFixed(1)+' GWh':'--'}</div><div class="ks nt">YTD total</div></div>
+    <div class="kpi kt"><div class="kl">Latest Year</div><div class="kv">${latest?.year||'--'}</div><div class="ks nt">${latest?.label?latest.label.replace(/[()]/g,'').trim()+' data':sbNetGen.length?'Live · Supabase':'No data loaded'}</div></div>
+    <div class="kpi kg"><div class="kl">Annual Net Gen</div><div class="kv">${latest?((latest.total)/1e6).toFixed(1)+' TWh':'--'}</div><div class="ks nt">${latest?.label?latest.label.replace(/[()]/g,'').trim()+' estimate':'YTD total'}</div></div>
     <div class="kpi ${prior&&pct(latest.total,prior.total)>=0?'kg':'kr'}"><div class="kl">YoY Change</div><div class="kv">${prior?(pct(latest.total,prior.total)>=0?'+':'')+pct(latest.total,prior.total).toFixed(1)+'%':'--'}</div><div class="ks nt">vs ${prior?.year||'--'}</div></div>
     <div class="kpi ka"><div class="kl">Peak Month</div><div class="kv">${peakRec?mNames[Number(peakRec.month)-1]+' '+peakRec.year:'--'}</div><div class="ks nt">${(peak/1e6).toFixed(1)} GWh</div></div>
     <div class="kpi kp"><div class="kl">Records</div><div class="kv">${src.length}</div><div class="ks nt">${sbNetGen.length?'Supabase':'No data'}</div></div>
@@ -9224,7 +9257,7 @@ function renderNetGen(){
         const pr=i>0?annual[i-1]:null;
         const yy=pr?pct(a.total,pr.total):null;
         return`<tr>
-          <td style="font-weight:700;color:var(--teal)">${a.year}</td>
+          <td style="font-weight:700;color:var(--teal)">${a.year}<span style="font-size:9px;color:var(--amber);margin-left:4px">${a.label||''}</span></td>
           ${a.months.map(v=>{
             if(v===null)return`<td class="ng-cell ng-na">—</td>`;
             const ratio=(v-mn)/(mx-mn||1);
@@ -9588,7 +9621,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.82';
+const APP_VERSION = '1.0.83';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
