@@ -390,7 +390,7 @@ document.getElementById('schema_stale_banner').style.display='none';
 <div class="sidebar" id="sidebar">
   <div class="sb-logo">
     <h2>⚡ JPS Analytics</h2>
-    <p>Sales Platform v1.0.85</p>
+    <p>Sales Platform v1.0.86</p>
   </div>
   <div class="nav-sec">
     <div class="nav-lbl">Analysis</div>
@@ -1253,6 +1253,10 @@ document.getElementById('schema_stale_banner').style.display='none';
         <div class="card" style="margin-top:12px">
           <div class="ch">🔐 Role &amp; Permission Matrix
             <span style="font-size:10px;color:var(--text3);font-weight:400">What each role can do</span>
+            <span style="margin-left:auto;display:flex;gap:6px">
+              <button class="btn btn-t" style="font-size:10px;padding:3px 10px" onclick="addPermRow()">+ Add Permission</button>
+              <button class="btn btn-o" style="font-size:10px;padding:3px 10px" onclick="resetPermMatrix()">↺ Reset Defaults</button>
+            </span>
           </div>
           <div style="overflow-x:auto">
             <table class="dt" style="min-width:600px;font-size:11px">
@@ -1266,23 +1270,7 @@ document.getElementById('schema_stale_banner').style.display='none';
                 </tr>
               </thead>
               <tbody id="perm_matrix_body">
-                <tr><td style="color:var(--text2)">View dashboards &amp; reports</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td></tr>
-                <tr><td style="color:var(--text2)">Export data to CSV</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
-                <tr><td style="color:var(--text2)">Add notes &amp; narratives</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
-                <tr><td style="color:var(--text2)">Enter KAM forecasts (own territory)</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
-                <tr><td style="color:var(--text2)">Validate defectors</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
-                <tr><td style="color:var(--text2)">Add / update R&amp;O pipeline items</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
-                <tr style="border-top:1px solid var(--border)"><td style="color:var(--text2)">Upload actuals data</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
-                <tr><td style="color:var(--text2)">Approve forecasts</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
-                <tr><td style="color:var(--text2)">View all customers &amp; territories</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
-                <tr><td style="color:var(--text2)">Save LE versions</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
-                <tr style="border-top:1px solid var(--border)"><td style="color:var(--text2)">Manage users &amp; roles</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
-                <tr><td style="color:var(--text2)">Invite new users</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
-                <tr><td style="color:var(--text2)">Delete users</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
-                <tr><td style="color:var(--text2)">Lock / unlock periods</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
-                <tr><td style="color:var(--text2)">Run DB schema migrations</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
-                <tr><td style="color:var(--text2)">View audit trail</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
-                <tr><td style="color:var(--text2)">Wipe / clear actuals data</td><td style="text-align:center"><span style="color:var(--green);font-size:13px">✓</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td><td style="text-align:center"><span style="color:var(--text3);font-size:13px">—</span></td></tr>
+                <!-- populated by renderPermMatrix() -->
               </tbody>
             </table>
           </div>
@@ -3354,7 +3342,7 @@ function renderSection(id){
   else if(id==='gl'){renderGloss();}
   else if(id==='help'){/* static content, no render needed */}
   else if(id==='vld'){runValidation();}
-  else if(id==='adm'){renderAdm();renderAdmKam();renderAdmRoleBanner();renderAdmForecast();}
+  else if(id==='adm'){renderAdm();renderAdmKam();renderAdmRoleBanner();renderAdmForecast();renderPermMatrix();}
   else if(id==='es'){renderExecSummary();}
   else if(id==='vb'){renderVarianceBridge();}
   else if(id==='rr'){renderRevenueRecovery();}
@@ -7200,6 +7188,118 @@ async function claimAdminRole(){
         renderAdm();
       },'🔑 Grant Admin','var(--amber)');
   }catch(e){toast('Could not claim admin: '+e.message,'err');}
+}
+
+/* ==========================================
+   ROLE & PERMISSION MATRIX (editable)
+========================================== */
+const DEFAULT_PERM_MATRIX=[
+  {label:'View dashboards & reports',           a:true, m:true,  r:true,  v:true},
+  {label:'Export data to CSV',                  a:true, m:true,  r:true,  v:false},
+  {label:'Add notes & narratives',              a:true, m:true,  r:true,  v:false},
+  {label:'Enter KAM forecasts (own territory)', a:true, m:true,  r:true,  v:false},
+  {label:'Validate defectors',                  a:true, m:true,  r:true,  v:false},
+  {label:'Add / update R&O pipeline items',     a:true, m:true,  r:true,  v:false},
+  {label:'Upload actuals data',                 a:true, m:true,  r:false, v:false},
+  {label:'Approve forecasts',                   a:true, m:true,  r:false, v:false},
+  {label:'View all customers & territories',    a:true, m:true,  r:false, v:false},
+  {label:'Save LE versions',                    a:true, m:true,  r:false, v:false},
+  {label:'Manage users & roles',                a:true, m:false, r:false, v:false},
+  {label:'Invite new users',                    a:true, m:false, r:false, v:false},
+  {label:'Delete users',                        a:true, m:false, r:false, v:false},
+  {label:'Lock / unlock periods',               a:true, m:false, r:false, v:false},
+  {label:'Run DB schema migrations',            a:true, m:false, r:false, v:false},
+  {label:'View audit trail',                    a:true, m:false, r:false, v:false},
+  {label:'Wipe / clear actuals data',           a:true, m:false, r:false, v:false},
+];
+function getPermMatrix(){return S.get('perm_matrix',DEFAULT_PERM_MATRIX);}
+function savePermMatrix(data){S.set('perm_matrix',data);}
+
+function renderPermMatrix(){
+  const tbody=document.getElementById('perm_matrix_body');if(!tbody)return;
+  const data=getPermMatrix();
+  const isAdm=can('manage_users');
+  const ck=v=>v
+    ?'<span style="color:var(--green);font-size:14px;font-weight:700">✓</span>'
+    :'<span style="color:var(--text3);font-size:13px">—</span>';
+  tbody.innerHTML=data.map((row,idx)=>`<tr>
+    <td style="color:var(--text2)">
+      <div style="display:flex;align-items:center;gap:6px">
+        <span>${row.label}</span>
+        ${isAdm?`<span style="cursor:pointer;color:var(--teal);font-size:10px;opacity:0.55;line-height:1" onclick="editPermRow(${idx})" title="Edit label & roles">✏</span>
+                 <span style="cursor:pointer;color:var(--red);font-size:11px;opacity:0.55;line-height:1" onclick="delPermRow(${idx})" title="Remove row">✕</span>`:''}
+      </div>
+    </td>
+    ${['a','m','r','v'].map(role=>`<td style="text-align:center;cursor:${isAdm?'pointer':'default'}" ${isAdm?`onclick="togglePerm(${idx},'${role}')" title="Click to toggle"`:''}>${ck(row[role])}</td>`).join('')}
+  </tr>`).join('');
+}
+
+function _permModalBody(row){
+  const esc=s=>(s||'').replace(/"/g,'&quot;');
+  return`<div class="lf"><label>Permission Label</label>
+    <input id="pm_label" value="${esc(row?row.label:'')}" placeholder="e.g. Export to PDF" style="width:100%;background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px 12px;font-size:13px"></div>
+    <div style="margin-top:12px">
+      <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Role Access</div>
+      ${[['Admin','a'],['Manager','m'],['Rep','r'],['View','v']].map(([lbl,role])=>`
+        <label style="display:flex;align-items:center;gap:10px;margin-bottom:10px;cursor:pointer;font-size:12px;color:var(--text)">
+          <input type="checkbox" id="pm_${role}" ${row&&row[role]?'checked':''} style="cursor:pointer;width:14px;height:14px">
+          <span>${lbl}</span>
+        </label>`).join('')}
+    </div>`;
+}
+function _permModalRead(){
+  const label=(document.getElementById('pm_label')?.value||'').trim();
+  if(!label){toast('Permission label required','err');return null;}
+  return{label,a:!!document.getElementById('pm_a')?.checked,m:!!document.getElementById('pm_m')?.checked,r:!!document.getElementById('pm_r')?.checked,v:!!document.getElementById('pm_v')?.checked};
+}
+
+function addPermRow(){
+  openModal('➕ Add Permission',_permModalBody(null),()=>{
+    const row=_permModalRead();if(!row)return;
+    const data=getPermMatrix();
+    data.push(row);
+    savePermMatrix(data);
+    closeModal();
+    renderPermMatrix();
+    toast('Permission added ✓','ok');
+  },'➕ Add');
+}
+function editPermRow(idx){
+  const data=getPermMatrix();
+  const row=data[idx];
+  openModal(`✏ Edit Permission`,_permModalBody(row),()=>{
+    const updated=_permModalRead();if(!updated)return;
+    data[idx]=updated;
+    savePermMatrix(data);
+    closeModal();
+    renderPermMatrix();
+    toast('Permission updated ✓','ok');
+  },'💾 Save');
+}
+function delPermRow(idx){
+  const data=getPermMatrix();
+  openModal('🗑 Remove Permission',`<div style="font-size:13px;color:var(--text2)">Remove <strong style="color:var(--text)">"${data[idx].label}"</strong> from the matrix?<br><span style="font-size:11px;color:var(--text3)">This only affects the documentation table, not system access enforcement.</span></div>`,()=>{
+    data.splice(idx,1);
+    savePermMatrix(data);
+    closeModal();
+    renderPermMatrix();
+    toast('Row removed','ok');
+  },'🗑 Remove','var(--red)');
+}
+function togglePerm(idx,role){
+  if(!can('manage_users')){toast('Admin access required','err');return;}
+  const data=getPermMatrix();
+  data[idx][role]=!data[idx][role];
+  savePermMatrix(data);
+  renderPermMatrix();
+}
+function resetPermMatrix(){
+  openModal('↺ Reset Permission Matrix','<div style="font-size:13px;color:var(--text2)">Reset the matrix to system defaults?<br><span style="font-size:11px;color:var(--text3)">All custom rows and changes will be removed.</span></div>',()=>{
+    savePermMatrix(DEFAULT_PERM_MATRIX);
+    closeModal();
+    renderPermMatrix();
+    toast('Matrix reset to defaults ✓','ok');
+  },'↺ Reset','var(--amber)');
 }
 
 function renderAdm(){
