@@ -390,7 +390,7 @@ document.getElementById('schema_stale_banner').style.display='none';
 <div class="sidebar" id="sidebar">
   <div class="sb-logo">
     <h2>⚡ JPS Analytics</h2>
-    <p>Sales Platform v1.0.86</p>
+    <p>Sales Platform v1.0.87</p>
   </div>
   <div class="nav-sec">
     <div class="nav-lbl">Analysis</div>
@@ -2770,7 +2770,7 @@ let SCORECARD_DATA=[];
 
 let RISK_OPP=[];
 
-const RECON_DATA=[];
+let RECON_DATA=[];
 
 const GLOSSARY_DATA=[
   {term:'RT10',cat:'Rate Class',def:'Residential Tariff 10 -- low-use residential customers, typically below 150 kWh/month.'},
@@ -3338,7 +3338,7 @@ function renderSection(id){
   else if(id==='fc'){renderFcEntry();renderMacroGrid();renderFcKPIs();}
   else if(id==='ro'){filterRO();updateROAutoFlags();}
   else if(id==='mr'){initMrMonths();renderMrSection();}
-  else if(id==='ar'){renderRecon();renderArKPIs();}
+  else if(id==='ar'){buildReconData();renderRecon();renderArKPIs();}
   else if(id==='gl'){renderGloss();}
   else if(id==='help'){/* static content, no render needed */}
   else if(id==='vld'){runValidation();}
@@ -4857,6 +4857,43 @@ function clearFcAdj(){FC_SEGS.forEach(s=>S.del(`${mrPeriod}_fc_${s.seg}`));rende
 /* ==========================================
    ACCOUNT RECONCILIATION
 ========================================== */
+/* ── Build RECON_DATA from sbActuals: name mismatches + possible duplicates ── */
+function buildReconData(){
+  RECON_DATA=[];
+  if(!sbActuals.length)return;
+  const saved=S.get('recon_resolved',{});
+  const acctNames={},nameAccts={},acctRCs={};
+  sbActuals.forEach(r=>{
+    const ac=String(r.jps_ac||'').trim();
+    const nm=String(r.name||'').trim();
+    const rc=String(r.rate_class||'').trim();
+    if(!ac)return;
+    if(nm){
+      if(!acctNames[ac])acctNames[ac]=new Set();
+      acctNames[ac].add(nm);
+      const nk=nm.toLowerCase().replace(/\s+/g,' ');
+      if(!nameAccts[nk])nameAccts[nk]={name:nm,accts:new Set()};
+      nameAccts[nk].accts.add(ac);
+    }
+    if(rc){if(!acctRCs[ac])acctRCs[ac]=new Set();acctRCs[ac].add(rc);}
+  });
+  // 1. Name mismatches — same jps_ac, different name strings
+  Object.entries(acctNames).forEach(([acct,names])=>{
+    if(names.size<2)return;
+    const rid='nm_'+acct;
+    const sv=saved[rid]||{};
+    RECON_DATA.push({id:rid,type:'Name mismatch',acct,names:[...names],rcs:[...(acctRCs[acct]||new Set())],status:sv.status||'Pending',resolution:sv.resolution||'',note:sv.note||''});
+  });
+  // 2. Possible duplicates — different jps_ac but same name (case-insensitive)
+  Object.values(nameAccts).forEach(({name,accts})=>{
+    if(accts.size<2)return;
+    const allRCs=new Set();
+    accts.forEach(ac=>(acctRCs[ac]||new Set()).forEach(rc=>allRCs.add(rc)));
+    const rid='dup_'+name.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
+    const sv=saved[rid]||{};
+    RECON_DATA.push({id:rid,type:'Possible duplicate',acct:[...accts].join(', '),names:[name,...accts.values()],rcs:[...allRCs],status:sv.status||'Pending',resolution:sv.resolution||'',note:sv.note||''});
+  });
+}
 function renderArKPIs(){
   const d=RECON_DATA;
   document.getElementById('ar_name').textContent=d.filter(r=>r.type==='Name mismatch').length;
@@ -4869,6 +4906,8 @@ function renderRecon(){
   const tf=document.getElementById('ar_type_f')?.value||'';
   const sf=document.getElementById('ar_status_f')?.value||'';
   const d=RECON_DATA.filter(r=>(!q||(r.acct.includes(q)||r.names.some(n=>n.toLowerCase().includes(q))))&&(!tf||r.type===tf)&&(!sf||r.status===sf));
+  if(!sbActuals.length){document.getElementById('ar_list').innerHTML='<div style="padding:32px;text-align:center;font-size:12px;color:var(--text3)">No actuals loaded — sync the database to run reconciliation checks.</div>';return;}
+  if(!d.length){document.getElementById('ar_list').innerHTML='<div style="padding:32px;text-align:center;font-size:12px;color:var(--green)">✓ No discrepancies found — all account names are consistent.</div>';return;}
   document.getElementById('ar_list').innerHTML=d.map(r=>`
     <div class="recon-card" style="${r.status==='Resolved'?'border-color:var(--teal)':''}">
       <h4><span><span class="pill ${r.type==='Name mismatch'?'pa':'pr'}">${r.type}</span> · Acct: ${r.acct}</span><span class="pill ${r.status==='Resolved'?'pg':'pa'}">${r.status}</span></h4>
@@ -4884,10 +4923,18 @@ function renderRecon(){
     </div>`).join('');
 }
 function resolveRecon(id,resolution,note){
-  const r=RECON_DATA.find(x=>x.id===id);if(!r)return;r.status='Resolved';r.resolution=resolution;r.note=note;renderRecon();renderArKPIs();}
+  const r=RECON_DATA.find(x=>x.id===id);if(!r)return;
+  r.status='Resolved';r.resolution=resolution;r.note=note;
+  const saved=S.get('recon_resolved',{});saved[id]={status:'Resolved',resolution,note};S.set('recon_resolved',saved);
+  renderRecon();renderArKPIs();
+}
 function editReconNote(id){
   const r=RECON_DATA.find(x=>x.id===id);if(!r)return;
-  openModal('Add Reconciliation Note',`<textarea id="rn_ta">${r.note||''}</textarea>`,()=>{r.note=document.getElementById('rn_ta').value;closeModal();renderRecon();});
+  openModal('Add Reconciliation Note',`<textarea id="rn_ta" style="width:100%;min-height:80px;background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:8px;font-size:11px;font-family:inherit">${r.note||''}</textarea>`,()=>{
+    r.note=document.getElementById('rn_ta').value;
+    const saved=S.get('recon_resolved',{});if(saved[id])saved[id].note=r.note;else saved[id]={status:r.status,resolution:r.resolution,note:r.note};S.set('recon_resolved',saved);
+    closeModal();renderRecon();
+  });
 }
 
 /* ==========================================
@@ -9345,7 +9392,7 @@ function renderNetGen(){
     <div class="kpi ${prior&&pct(latest.total,prior.total)>=0?'kg':'kr'}"><div class="kl">YoY Change</div><div class="kv">${prior?(pct(latest.total,prior.total)>=0?'+':'')+pct(latest.total,prior.total).toFixed(1)+'%':'--'}</div><div class="ks nt">vs ${prior?.year||'--'}</div></div>
     <div class="kpi ka"><div class="kl">Peak Month</div><div class="kv">${peakRec?mNames[Number(peakRec.month)-1]+' '+peakRec.year:'--'}</div><div class="ks nt">${(peak/1e6).toFixed(1)} GWh</div></div>
     <div class="kpi kp"><div class="kl">Records</div><div class="kv">${src.length}</div><div class="ks nt">${sbNetGen.length?'Supabase':'No data'}</div></div>
-    <div class="kpi kt"><div class="kl">Years tracked</div><div class="kv">${years.length}</div><div class="ks nt">${years[0]}–${years[years.length-1]}</div></div>`;
+    <div class="kpi kt"><div class="kl">Years tracked</div><div class="kv">${annual.length}</div><div class="ks nt">${annual[0]?.year||'--'}–${annual[annual.length-1]?.year||'--'}</div></div>`;
 
   // Annual bar chart
   destroyChart('c_ng_annual');
