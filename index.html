@@ -390,7 +390,7 @@ document.getElementById('schema_stale_banner').style.display='none';
 <div class="sidebar" id="sidebar">
   <div class="sb-logo">
     <h2>⚡ JPS Analytics</h2>
-    <p>Sales Platform v1.0.87</p>
+    <p>Sales Platform v1.0.88</p>
   </div>
   <div class="nav-sec">
     <div class="nav-lbl">Analysis</div>
@@ -4377,8 +4377,8 @@ function renderRsKPIs(){
 
   // Customer count — use latest month in period (headcount is a point-in-time figure)
   const custMonth=periodMonths[periodMonths.length-1];
-  const resActCount=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===custMonth&&(r.consumption_bucket||'').trim()).reduce((s,r)=>s+Number(r.customer_count||0),0);
-  const resBudCount=sbBudget.filter(b=>(b.consumption_bucket||'').trim()&&Number(b.year)===curYear&&Number(b.month)===custMonth).reduce((s,b)=>s+Number(b.customer_count||0),0);
+  const resActCount=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===custMonth&&(r.consumption_bucket||'').trim()&&(r.consumption_bucket||'').trim()!=='< Zero').reduce((s,r)=>s+Number(r.customer_count||0),0);
+  const resBudCount=sbBudget.filter(b=>(b.consumption_bucket||'').trim()&&(b.consumption_bucket||'').trim()!=='< Zero'&&Number(b.year)===curYear&&Number(b.month)===custMonth).reduce((s,b)=>s+Number(b.customer_count||0),0);
   rsKv('rs_kpi_cg',resActCount>0?resActCount.toLocaleString():'--');
   const cgNote=document.getElementById('rs_kpi_cg_note');
   if(cgNote)cgNote.textContent=resBudCount>0?`vs ${resBudCount.toLocaleString()} budget`:(resActCount===0?'upload customer_count column':'residential headcount');
@@ -4412,7 +4412,7 @@ function renderRsPar(){
   );
   // Customer count from last month in period only (headcount is point-in-time, not cumulative)
   const countAgg={};
-  sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month||0)===lastMoPeriod&&(r.consumption_bucket||'').trim()).forEach(r=>{
+  sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month||0)===lastMoPeriod&&(r.consumption_bucket||'').trim()&&(r.consumption_bucket||'').trim()!=='< Zero').forEach(r=>{
     const k=`${r.parish||''}|||${(r.consumption_bucket||'').trim()}`;
     countAgg[k]=(countAgg[k]||0)+Number(r.customer_count||0);
   });
@@ -4424,7 +4424,7 @@ function renderRsPar(){
       const k=`${r.parish||''}|||${(r.consumption_bucket||'').trim()}`;
       if(!m[k])m[k]={kwh:0,customers:0};
       m[k].kwh+=Number(r.kwh||0);
-      m[k].customers+=Number(r.customer_count||0);
+      if((r.consumption_bucket||'').trim()!=='< Zero') m[k].customers+=Number(r.customer_count||0);
     });
     return m;
   };
@@ -5049,11 +5049,11 @@ function renderOverviewKPIs(){
   // ── Total customer count: commercial (distinct accounts) + residential (sum customer_count) ──
   const commRCs=new Set(['RT40','RT50','RT60-ST','RT70','BU']);
   const commActCount=CUSTOMERS.filter(c=>commRCs.has(c.rate)).length;
-  const resActCount=sbActuals.filter(r=>['RT10','RT20'].includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.customer_count||0),0);
+  const resActCount=sbActuals.filter(r=>['RT10','RT20'].includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===curMonth&&(r.consumption_bucket||'').trim()&&(r.consumption_bucket||'').trim()!=='< Zero').reduce((s,r)=>s+Number(r.customer_count||0),0);
   const commBudRows2=sbBudget.filter(b=>!(b.consumption_bucket||'').trim());
   const resBudRows2 =sbBudget.filter(b=> (b.consumption_bucket||'').trim());
   const commBudCount=new Set(commBudRows2.filter(b=>Number(b[YEAR_COL]||b.year||0)===curYear).map(b=>_custNum(String(b.jps_ac||'')))).size;
-  const resBudCount =resBudRows2.filter(b=>Number(b.year)===curYear&&Number(b.month)===curMonth).reduce((s,b)=>s+Number(b.customer_count||0),0);
+  const resBudCount =resBudRows2.filter(b=>Number(b.year)===curYear&&Number(b.month)===curMonth&&(b.consumption_bucket||'').trim()!=='< Zero').reduce((s,b)=>s+Number(b.customer_count||0),0);
   const totalAct=commActCount+(resActCount||0);
   const totalBud=commBudCount+(resBudCount||0);
   sv('kpi_total_custs',totalAct>0?totalAct.toLocaleString():'--');
@@ -6011,7 +6011,7 @@ function editDefNote(num, name) {
 // Buckets derived dynamically from sbActuals — no hardcoded list
 const BRACKET_COLORS = ['#00c2a8','#00957f','#378ADD','#185FA5','#f5a623','#7F77DD','#e84040','#f5a623'];
 function getResBuckets(){
-  return [...new Set(sbActuals.filter(r=>['RT10','RT20'].includes(String(r.rate_class||''))&&(r.consumption_bucket||'').trim()).map(r=>(r.consumption_bucket||'').trim()))].filter(Boolean).sort();
+  return [...new Set(sbActuals.filter(r=>['RT10','RT20'].includes(String(r.rate_class||''))&&(r.consumption_bucket||'').trim()&&(r.consumption_bucket||'').trim()!=='< Zero').map(r=>(r.consumption_bucket||'').trim()))].filter(Boolean).sort();
 }
 
 
@@ -6054,14 +6054,14 @@ function renderResIntelKPIs() {
 
   // Customer count — use latest month in period (headcount doesn't stack)
   const custMonth=periodMonths[periodMonths.length-1];
-  const totalCusts=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===custMonth&&(r.consumption_bucket||'').trim()).reduce((s,r)=>s+Number(r.customer_count||0),0);
+  const totalCusts=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===custMonth&&(r.consumption_bucket||'').trim()&&(r.consumption_bucket||'').trim()!=='< Zero').reduce((s,r)=>s+Number(r.customer_count||0),0);
   kv('ri_kpi_custs',totalCusts>0?totalCusts.toLocaleString():'--');
   kv('ri_kpi_custs_sub',totalCusts>0?periodLbl+' headcount':'upload customer_count');
 
   // Avg kWh per RT10 customer — summed across period months
   const rt10ActRows=sbActuals.filter(r=>String(r.rate_class||'')==='RT10'&&Number(r[YEAR_COL])===curYear&&periodMonths.includes(Number(r.month)));
   const rt10TotalKwh=rt10ActRows.reduce((s,r)=>s+Number(r.kwh||0),0);
-  const rt10TotalCusts=rt10ActRows.reduce((s,r)=>s+Number(r.customer_count||0),0);
+  const rt10TotalCusts=rt10ActRows.filter(r=>(r.consumption_bucket||'').trim()&&(r.consumption_bucket||'').trim()!=='< Zero').reduce((s,r)=>s+Number(r.customer_count||0),0);
   const avgKwh=rt10TotalCusts>0?(rt10TotalKwh/rt10TotalCusts).toFixed(0)+' kWh':'--';
   kv('ri_kpi_avg_kwh',avgKwh);
   kv('ri_kpi_avg_kwh_sub',rt10TotalCusts>0?'per customer · '+periodLbl:'upload RT10 actuals');
