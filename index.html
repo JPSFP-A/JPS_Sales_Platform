@@ -390,7 +390,7 @@ document.getElementById('schema_stale_banner').style.display='none';
 <div class="sidebar" id="sidebar">
   <div class="sb-logo">
     <h2>⚡ JPS Analytics</h2>
-    <p>Sales Platform v1.0.89</p>
+    <p>Sales Platform v1.0.90</p>
   </div>
   <div class="nav-sec">
     <div class="nav-lbl">Analysis</div>
@@ -481,7 +481,6 @@ document.getElementById('schema_stale_banner').style.display='none';
     <button class="pbtn" onclick="setPeriod('YTD',this)">YTD</button>
     <button class="pbtn" onclick="setPeriod('Annual',this)">Annual</button>
     <select class="psel" id="selYear" onchange="curYear=Number(this.value);rebuildYearDropdowns();document.getElementById('periodLabel').textContent=fmtPeriodLabel();renderSection(document.querySelector('.sec.on')?.id)">
-      <option value="2026">2026</option><option value="2025">2025</option>
     </select>
     <select class="psel" id="selMonth" onchange="curMonth=Number(this.value);renderSection(document.querySelector('.sec.on')?.id)">
       <option value="1">Jan</option><option value="2">Feb</option>
@@ -510,7 +509,6 @@ document.getElementById('schema_stale_banner').style.display='none';
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
         <div><label style="font-size:10px;color:var(--text3)">Year</label>
           <select id="delYear" class="sel" style="width:100%;margin-top:3px">
-            <option>2026</option><option>2025</option><option>2024</option>
           </select></div>
         <div><label style="font-size:10px;color:var(--text3)">Month</label>
           <select id="delMonth" class="sel" style="width:100%;margin-top:3px">
@@ -1341,7 +1339,6 @@ document.getElementById('schema_stale_banner').style.display='none';
             <div>
               <div style="font-size:10px;color:var(--text3);margin-bottom:4px">Year</div>
               <select id="delYearAdm" class="psel" style="font-size:11px;padding:5px 8px">
-                <option>2026</option><option>2025</option><option>2024</option><option>2023</option>
               </select>
             </div>
             <div>
@@ -2452,7 +2449,7 @@ async function doLogin(){
   if(btn){btn.textContent='Signing in…';btn.disabled=true;}
   try{
     const sb=getSB();
-    if(!sb){showErr('Supabase not configured — use Demo mode.');if(btn){btn.textContent='Sign In →';btn.disabled=false;}return;}
+    if(!sb){showErr('Supabase not configured — contact your administrator.');if(btn){btn.textContent='Sign In →';btn.disabled=false;}return;}
     const{data,error}=await sb.auth.signInWithPassword({email,password:pwd});
     if(error){showErr(error.message);if(btn){btn.textContent='Sign In →';btn.disabled=false;}return;}
     // Fetch profile for role
@@ -2488,28 +2485,11 @@ async function doLogin(){
   }catch(e){showErr('Sign in failed: '+e.message);if(btn){btn.textContent='Sign In →';btn.disabled=false;}}
 }
 
-/* ── Demo / offline login ── */
-function showDemoLogin(){
-  const p=document.getElementById('demoPanel');
-  if(p)p.style.display=p.style.display==='none'?'':'none';
-}
-const _DEMO_USERS={
-  admin:  {id:'demo_admin',  name:'Demo Admin',   role:'admin',   territory:'All'},
-  manager:{id:'demo_manager',name:'Demo Manager', role:'manager', territory:'All'},
-  rep:    {id:'demo_rep',    name:'Demo Rep',     role:'rep',     territory:'Commercial'},
-  view:   {id:'demo_view',   name:'View Only',    role:'view',    territory:'All'},
-};
-function demoLogin(){
-  const sel=document.getElementById('lDemoUser')?.value||'view';
-  const u=_DEMO_USERS[sel];
-  _applyLogin({...u,email:sel+'@demo.jps'});
-}
+/* ── Demo / offline login ── REMOVED (production build) ── */
 
 /* ── Register (first-time / self-signup) ── */
 function showRegister(){
   const p=document.getElementById('registerPanel');
-  const d=document.getElementById('demoPanel');
-  if(d)d.style.display='none';
   if(p)p.style.display=p.style.display==='none'?'':'none';
 }
 
@@ -2613,12 +2593,24 @@ const S={
   get(k,d){try{const v=localStorage.getItem('jps5_'+k);return v?JSON.parse(v):d;}catch(e){return d;}},
   del(k){try{localStorage.removeItem('jps5_'+k);}catch(e){}}
 };
+function esc(s){const d=document.createElement('div');d.textContent=String(s??'');return d.innerHTML;}
 
 /* ── DB helpers ── */
 async function dbUpsert(table,row){
   const sb=getSB();if(!sb)return;
-  try{await sb.from(table).upsert(row,{onConflict:Object.keys(row).filter(k=>k!=='id'&&k!=='created_at'&&k!=='updated_at').slice(0,2).join(',')});}
-  catch(e){console.warn('dbUpsert',table,e.message);}
+  const CONFLICT={
+    jps_user_notes:'acct_num',
+    jps_exec_narratives:'year,month',
+    jps_pivot_commentary:'period,acct_num',
+    jps_def_actions:'acct_num',
+    jps_ro_register:'num',
+    jps_forecast_entries:'year,month,acct_num',
+    jps_period_locks:'year,month',
+  };
+  const key=CONFLICT[table];
+  try{
+    await sb.from(table).upsert(row,key?{onConflict:key}:{});
+  }catch(e){console.warn('dbUpsert failed:',table,e.message);}
 }
 async function dbDelete(table,match){
   const sb=getSB();if(!sb)return;
@@ -3200,6 +3192,18 @@ function filterHelp(){
     const tags=(card.dataset.tags||'').toLowerCase();
     const text=(card.textContent||'').toLowerCase();
     card.style.display=(!q||tags.includes(q)||text.includes(q))?'':'none';
+  });
+}
+
+// Populate simple year dropdowns (selYear, delYear, delYearAdm) from live data
+function populateYearDropdowns(){
+  const years=sbActuals.length
+    ? [...new Set(sbActuals.map(r=>Number(r.year||r.cal_year||0)).filter(Boolean))].sort((a,b)=>b-a)
+    : [new Date().getFullYear(),new Date().getFullYear()-1];
+  ['selYear','delYear','delYearAdm'].forEach(id=>{
+    const el=document.getElementById(id);if(!el)return;
+    const cur=el.value||String(years[0]);
+    el.innerHTML=years.map(y=>`<option value="${y}"${String(y)===cur?' selected':''}>${y}</option>`).join('');
   });
 }
 
@@ -4169,11 +4173,11 @@ function renderCmCust(){
       const kamName=c.kam||'--';
       const pCY=periCY(c),pPY=pyMap[c.num]||0,pB=budMap[c.num]||0;
       return`<tr>
-        <td style="font-size:10px;color:var(--text3)">${c.num}</td>
-        <td style="font-weight:500">${c.name}</td>
+        <td style="font-size:10px;color:var(--text3)">${esc(c.num)}</td>
+        <td style="font-weight:500">${esc(c.name)}</td>
         <td><span class="pill pt">${c.rate}</span></td>
-        <td style="font-size:10px;color:var(--teal);cursor:pointer" onclick="filterByKam('${(c.kam||'').replace(/'/g,"\\'")}',event)" title="Click to filter by this KAM">${kamName}</td>
-        <td>${c.ind}</td><td>${c.parish}</td>
+        <td style="font-size:10px;color:var(--teal);cursor:pointer" onclick="filterByKam('${(c.kam||'').replace(/'/g,"\\'")}',event)" title="Click to filter by this KAM">${esc(kamName)}</td>
+        <td>${esc(c.ind)}</td><td>${esc(c.parish)}</td>
         <td>${pPY.toFixed(1)}</td><td style="font-weight:600">${pCY.toFixed(1)}</td>
         <td style="color:var(--text3)">${pB>0?pB.toFixed(1):'--'}</td>
         <td>${pB>0?`<span class="heat ${hc(pct(pCY,pB))}">${pct(pCY,pB)>=0?'+':''}${pct(pCY,pB).toFixed(1)}%</span>`:'--'}</td>
@@ -4270,7 +4274,7 @@ function renderKamPerformance(){
       const rk=rankMap[k.kam];
       return`<tr style="cursor:pointer" onclick="filterByKam('${k.kam.replace(/'/g,"\\'")}',event)" title="Click to filter customers to this KAM">
         <td style="font-weight:700;color:var(--text3)">${rk!=null?`#${rk}`:'--'}</td>
-        <td style="font-weight:600;color:var(--teal)">${k.kam}</td>
+        <td style="font-weight:600;color:var(--teal)">${esc(k.kam)}</td>
         <td>${k.accounts.size}</td>
         <td>${(k.py/1e6).toFixed(2)}</td>
         <td style="font-weight:600">${(k.cy/1e6).toFixed(2)}</td>
@@ -4318,7 +4322,7 @@ function renderCmIndTbl(){
   el.innerHTML=`<table class="dt" id="cmind_dt">
     <thead><tr><th>Industry</th><th>Rate Classes</th><th>${py} (${ph}, GWh)</th><th>${cy} (${ph}, GWh)</th><th>YoY</th><th>Signal</th><th>Key Note</th></tr></thead>
     <tbody>${inds.map(i=>{const p=pct(i.yCY,i.yPY);return`<tr>
-      <td style="font-weight:600">${i.name}</td><td style="font-size:10px;color:var(--text3)">${i.rc}</td>
+      <td style="font-weight:600">${esc(i.name)}</td><td style="font-size:10px;color:var(--text3)">${i.rc}</td>
       <td>${i.yPY.toFixed(2)}</td><td style="font-weight:600">${i.yCY.toFixed(2)}</td>
       <td>${vbar(i.yCY,i.yPY)}</td>
       <td><span class="heat ${hc(p)}">${p>=0?'+':''}${p.toFixed(1)}%</span></td>
@@ -4457,7 +4461,7 @@ function renderRsPar(){
   document.getElementById('rs_par_tbl').innerHTML=`<table class="dt" id="rspar_dt">
     <thead><tr><th>Parish</th><th>Bracket (kWh)</th><th>Customers</th><th>${ph} kWh (${curYear})</th><th>${ph} kWh (${curYear-1})</th><th>Var%</th><th>Signal</th></tr></thead>
     <tbody>${rows.map(r=>{const p=pct(r.curr,r.prev);const cnt=countAgg[`${r.parish}|||${r.bracket}`]||r.count;return`<tr>
-      <td style="font-weight:500">${r.parish}</td><td>${r.bracket}</td>
+      <td style="font-weight:500">${esc(r.parish)}</td><td>${esc(r.bracket)}</td>
       <td>${cnt>0?cnt.toLocaleString():'--'}</td>
       <td>${fmtK(r.curr)}</td><td style="color:var(--text3)">${fmtK(r.prev)}</td>
       <td>${vbar(r.curr,r.prev)}</td>
@@ -5890,7 +5894,7 @@ function getDefActions() {
     stage: d.sev === 'Critical' ? 'Investigation' : 'Investigation',
     owner: 'atoyloy', due: '', recovery_gwh: 0,
     type: (d.cause === 'Self-Gen' || d.cause === 'CHP') ? 'Structural' : 'Temporary',
-    opened: '2026-02-01', note: ''
+    opened: new Date().toISOString().slice(0,10), note: ''
   }));
   const saved = S.get('def_actions', {});
   return defaults.map(d => ({ ...d, ...(saved[d.num] || {}) }));
@@ -6851,6 +6855,11 @@ function doWipeAllActuals(){
     const entered=(document.getElementById('wipe_code_inp')?.value||'').trim().toUpperCase();
     if(entered!==CODE){toast('Incorrect code — wipe cancelled','err');closeModal();return;}
     closeModal();
+    const confirmEmail=prompt('Second confirmation — enter your login email:');
+    if(!confirmEmail||confirmEmail.trim().toLowerCase()!==(CU?.email||'').toLowerCase()){
+      toast('Email mismatch. Wipe cancelled.','err');return;
+    }
+    await writeAudit('WIPE_ALL_ACTUALS',{confirmed_by:CU?.email});
     const msg=document.getElementById('wipeAllMsg');
     const sb=getSB();if(!sb){toast('Supabase not connected','err');return;}
     if(msg){msg.textContent='Wiping…';msg.style.display='';msg.style.color='var(--amber)';}
@@ -7189,57 +7198,7 @@ function renderAdmRoleBanner(){
 }
 
 async function claimAdminRole(){
-  const sb=getSB();if(!sb){toast('Not connected to database','err');return;}
-  try{
-    // Check how many admins exist and whether current user is already one
-    const{data:admins}=await sb.from('profiles').select('id,email,name').eq('sales_role','admin');
-    const adminCount=(admins||[]).length;
-    const iAmAdmin=(admins||[]).some(a=>a.id===CU.id);
-    if(iAmAdmin){
-      // Profile already admin but CU wasn't refreshed — fix in memory
-      CU.role='admin';
-      renderAdmRoleBanner();
-      toast('Admin role confirmed ✓ — refreshing view','ok');
-      renderAdm();
-      return;
-    }
-    if(adminCount===0){
-      // No admin exists — claim freely
-      await sb.from('profiles').upsert({
-        id:CU.id,name:CU.name,email:CU.email,
-        sales_role:'admin',role:'admin',territory:'All',is_active:true
-      },{onConflict:'id'});
-      CU.role='admin';
-      renderAdmRoleBanner();
-      toast('Admin role claimed ✓ — you now have full access','ok');
-      renderAdm();
-      return;
-    }
-    // Admin(s) exist and I'm not one — show override modal
-    const adminList=(admins||[]).map(a=>`<li style="color:var(--text2)">${a.name||a.email}</li>`).join('');
-    openModal('🔑 Claim Admin Override',
-      `<p style="margin-bottom:10px;font-size:12px;color:var(--text2)">An admin already exists for this platform:</p>
-       <ul style="margin:0 0 14px 18px;font-size:11px">${adminList}</ul>
-       <p style="font-size:12px;color:var(--text2);margin-bottom:10px">If you are the designated platform admin, type your email below to self-elevate:</p>
-       <input id="claim_email_inp" class="inp" placeholder="Your registered email" style="width:100%;margin-bottom:4px"/>
-       <p style="font-size:10px;color:var(--text3)">This action is logged in the audit trail.</p>`,
-      async()=>{
-        const entered=(document.getElementById('claim_email_inp')?.value||'').trim().toLowerCase();
-        if(!entered||entered!==CU.email.toLowerCase()){
-          toast('Email does not match your account','err');return;
-        }
-        closeModal();
-        await sb.from('profiles').upsert({
-          id:CU.id,name:CU.name,email:CU.email,
-          sales_role:'admin',role:'admin',territory:'All',is_active:true
-        },{onConflict:'id'});
-        CU.role='admin';
-        await writeAudit('ADMIN_SELF_CLAIM',{user_id:CU.id,email:CU.email,note:'Self-elevated to admin via override modal'});
-        renderAdmRoleBanner();
-        toast('Admin role granted ✓ — you now have full access','ok');
-        renderAdm();
-      },'🔑 Grant Admin','var(--amber)');
-  }catch(e){toast('Could not claim admin: '+e.message,'err');}
+  toast('Admin access must be granted by an existing administrator.','err');
 }
 
 /* ==========================================
@@ -8192,6 +8151,45 @@ notify pgrst, 'reload schema';
 -- )
 -- on conflict (id) do update
 --   set role='admin', sales_role='admin', is_active=true;
+
+-- ── Audit log (append-only) ──────────────────────────────────────────────────
+create table if not exists public.audit_log (
+  id          bigserial primary key,
+  user_id     uuid references auth.users(id) on delete set null,
+  user_name   text,
+  user_role   text,
+  action      text not null,
+  details     jsonb,
+  created_at  timestamptz default now()
+);
+alter table public.audit_log enable row level security;
+create policy "audit_insert" on public.audit_log for insert
+  with check (auth.uid() = user_id or user_id is null);
+create policy "audit_admin_read" on public.audit_log for select
+  using (exists (select 1 from profiles where id=auth.uid() and sales_role='admin'));
+
+-- ── Fix jps_budget RLS ───────────────────────────────────────────────────────
+drop policy if exists "allow_all_jps_budget" on public.jps_budget;
+create policy "budget_write" on public.jps_budget for all
+  using  (exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager')))
+  with check (exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager')));
+create policy "budget_read" on public.jps_budget for select
+  using (auth.role() = 'authenticated');
+
+-- ── Period lock DB trigger ───────────────────────────────────────────────────
+create or replace function public.enforce_period_lock()
+returns trigger language plpgsql security definer as $$
+begin
+  if exists (select 1 from public.jps_period_locks where year=NEW.year and month=NEW.month) then
+    raise exception 'Period %/% is locked', NEW.year, NEW.month;
+  end if;
+  return NEW;
+end;
+$$;
+drop trigger if exists trg_period_lock on public.jps_actuals;
+create trigger trg_period_lock
+  before insert or update or delete on public.jps_actuals
+  for each row execute function public.enforce_period_lock();
 `;
 
 function renderSchemaSQL(){
@@ -8239,7 +8237,9 @@ async function writeAudit(action, details={}){
     const sb=getSB(); if(!sb) return;
     const userName = CU?.name || CU?.email || 'Unknown';
     await sb.from('audit_log').insert({
+      user_id: CU?.id || null,
       user_name: userName,
+      user_role: CU?.role || 'unknown',
       action,
       details,
       created_at: new Date().toISOString()
@@ -8464,6 +8464,7 @@ function buildDashboardData(){
     const vb=r.mtd_bud>0?pct(r.mtd_act,r.mtd_bud):0;
     r.status=vb>=-3?'OK':vb>=-8?'Watch':'Risk';
   });
+  populateYearDropdowns();
 }
 
 
@@ -8707,6 +8708,7 @@ async function syncSupabase(silent=false){
     try{buildDashboardData();}catch(be){console.error('buildDashboardData error:',be);}
     renderSidebarFilters();
     rebuildYearDropdowns();
+    populateYearDropdowns();
     populateKamDropdowns();
 
     // Hydrate user-generated data from DB
