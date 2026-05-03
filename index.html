@@ -390,7 +390,7 @@ document.getElementById('schema_stale_banner').style.display='none';
 <div class="sidebar" id="sidebar">
   <div class="sb-logo">
     <h2>⚡ JPS Analytics</h2>
-    <p>Sales Platform v1.0.88</p>
+    <p>Sales Platform v1.0.89</p>
   </div>
   <div class="nav-sec">
     <div class="nav-lbl">Analysis</div>
@@ -3001,7 +3001,8 @@ function generateCommentary(section){
 
     if(section==='cm'){
       const cy=curYear,py=cy-1;
-      const comm=sbActuals.filter(r=>!r.consumption_bucket);
+      const _cmRCsCmt=new Set(['RT40','RT50','RT60-ST','RT70']);
+      const comm=sbActuals.filter(r=>!r.consumption_bucket&&_cmRCsCmt.has(String(r.rate_class||'').trim()));
       const sum=(yr,mos)=>comm.filter(r=>Number(r.year)===yr&&mos.includes(Number(r.month))).reduce((s,r)=>s+Number(r.kwh||0),0);
       const ytdMos=Array.from({length:curMonth},(_,i)=>i+1);
       const cyYtd=sum(cy,ytdMos), pyYtd=sum(py,ytdMos);
@@ -3067,7 +3068,8 @@ function generateCommentary(section){
     } else if(section==='cmk'){
       // KAM-focused commentary
       const cy=curYear,py=cy-1;
-      const comm=sbActuals.filter(r=>!r.consumption_bucket);
+      const _cmkRCs=new Set(['RT40','RT50','RT60-ST','RT70']);
+      const comm=sbActuals.filter(r=>!r.consumption_bucket&&_cmkRCs.has(String(r.rate_class||'').trim()));
       const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
       const ytdMos=Array.from({length:curMonth},(_,i)=>i+1);
       const kams={};
@@ -4200,7 +4202,8 @@ function renderKamPerformance(){
   }
   const cy=curYear,py=cy-1;
   const pm=getPM(),pmSet=new Set(pm),ph=getPH();
-  const comm=sbActuals.filter(r=>!r.consumption_bucket);
+  const _kamRCs=new Set(['RT40','RT50','RT60-ST','RT70']);
+  const comm=sbActuals.filter(r=>!r.consumption_bucket&&_kamRCs.has(String(r.rate_class||'').trim()));
   const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
   // Build per-KAM totals for the selected period
   const kams={};
@@ -4291,14 +4294,16 @@ function renderCmIndTbl(){
   // Build period-filtered industry map from sbActuals (same approach as renderPfInd)
   const _indLkp={};
   if(sbIndustries&&sbIndustries.length)sbIndustries.forEach(x=>{_indLkp[String(x.jps_ac||'').trim()]=x.industry||'';});
+  const CM_RCS=new Set(['RT40','RT50','RT60-ST','RT70']);
   const indMap={},indRcMap={};
   sbActuals.forEach(r=>{
     const yr=Number(r[YEAR_COL]||r.year||0),mo=Number(r.month||0);
     if(!pmSet.has(mo))return;
     if(yr!==cy&&yr!==py)return;
+    const rc=String(r.rate_class||'').trim();
+    if(!CM_RCS.has(rc))return;   // commercial only — exclude RT10/RT20
     const acct=String(r.jps_ac||r.account||'').trim();
     const ind=(r.industry||_indLkp[acct]||'Other').trim()||'Other';
-    const rc=String(r.rate_class||'').trim();
     if(!indMap[ind]){indMap[ind]={name:ind,yPY:0,yCY:0};indRcMap[ind]=new Set();}
     const gwh=Number(r.kwh||0)/1e6;
     if(yr===py)indMap[ind].yPY+=gwh;
