@@ -131,7 +131,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 .ld{width:8px;height:8px;border-radius:2px;flex-shrink:0}
 
 /* SORTABLE TABLES */
-.tbl-wrap{overflow-x:auto;margin-top:4px}
+.tbl-wrap{overflow-x:auto;overflow-y:auto;max-height:520px;margin-top:4px}
 .dt{width:100%;border-collapse:collapse;font-size:11px}
 .dt th{text-align:left;padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.3px;color:var(--text3);border-bottom:1px solid var(--border);font-weight:600;cursor:pointer;user-select:none;white-space:nowrap;position:relative}
 .dt th:hover{color:var(--teal)}
@@ -390,7 +390,7 @@ document.getElementById('schema_stale_banner').style.display='none';
 <div class="sidebar" id="sidebar">
   <div class="sb-logo">
     <h2>⚡ JPS Analytics</h2>
-    <p>Sales Platform v1.0.90</p>
+    <p>Sales Platform v1.0.91</p>
   </div>
   <div class="nav-sec">
     <div class="nav-lbl">Analysis</div>
@@ -480,7 +480,7 @@ document.getElementById('schema_stale_banner').style.display='none';
     <button class="pbtn" onclick="setPeriod('QTD',this)">QTD</button>
     <button class="pbtn" onclick="setPeriod('YTD',this)">YTD</button>
     <button class="pbtn" onclick="setPeriod('Annual',this)">Annual</button>
-    <select class="psel" id="selYear" onchange="curYear=Number(this.value);rebuildYearDropdowns();document.getElementById('periodLabel').textContent=fmtPeriodLabel();renderSection(document.querySelector('.sec.on')?.id)">
+    <select class="psel" id="selYear" onchange="curYear=Number(this.value);buildDashboardData();rebuildYearDropdowns();document.getElementById('periodLabel').textContent=fmtPeriodLabel();renderSection(document.querySelector('.sec.on')?.id)">
     </select>
     <select class="psel" id="selMonth" onchange="curMonth=Number(this.value);renderSection(document.querySelector('.sec.on')?.id)">
       <option value="1">Jan</option><option value="2">Feb</option>
@@ -738,6 +738,32 @@ document.getElementById('schema_stale_banner').style.display='none';
           </div>
           <div class="ch" style="margin-top:12px;font-size:11px">All Accounts</div>
           <div class="tbl-wrap" id="pv_all_tbl"></div>
+        </div>
+      </div>
+
+      <!-- Defection inline panel (within Commercial section) -->
+      <div id="cm_defection_wrap" style="display:none">
+        <div class="card">
+          <div class="ch">📉 Defection Register
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+              <input class="si" placeholder="🔍 Customer name or account #" id="cm_df_q" oninput="renderCmDefection()"/>
+              <select class="sel" id="cm_df_sev" onchange="renderCmDefection()"><option value="">All severity</option><option value="Critical">Critical</option><option value="Severe">Severe</option><option value="Moderate">Moderate</option></select>
+              <select class="sel" id="cm_df_rc" onchange="renderCmDefection()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
+              <select class="sel" id="cm_df_cause" onchange="renderCmDefection()"><option value="">All causes</option><option value="CHP">CHP/Self-gen</option><option value="Hurricane">Hurricane damage</option><option value="Closure">Business closure</option><option value="Unknown">Unknown</option></select>
+              <span class="row-count" id="cm_df_count"></span>
+            </div>
+          </div>
+          <div class="tbl-wrap" id="cm_df_tbl"></div>
+        </div>
+      </div>
+
+      <!-- Risk & Opportunity inline panel (within Commercial section) -->
+      <div id="cm_ro_wrap" style="display:none">
+        <div class="card">
+          <div class="ch">⚠ Risk &amp; Opportunity Register
+            <button class="btn btn-t" style="margin-left:auto" onclick="sw('ro',document.querySelector('.ni[onclick*=\'\'ro\'\']'))">Open Full Register ↗</button>
+          </div>
+          <div class="tbl-wrap" id="cm_ro_inline_tbl"></div>
         </div>
       </div>
 
@@ -2576,6 +2602,8 @@ function setTheme(t){
   document.querySelectorAll('.theme-btn').forEach(b=>b.classList.toggle('on',b.dataset.theme===t));
   // Rebuild charts with new colors
   try{buildCharts();}catch(e){}
+  const labels={dark:'🌙 Dark theme',light:'☀️ Light theme',jps:'⚡ JPS theme'};
+  toast(labels[t]||'Theme applied','ok');
 }
 function applyStoredTheme(){
   const t=S.get('theme','dark');
@@ -2628,8 +2656,10 @@ async function saveNote(acctNum,customer,text){
   S.set(`note_${acctNum}`,text);
   if(text){
     await dbUpsert('jps_user_notes',{acct_num:acctNum,customer,note_text:text,author:CU.name,updated_at:new Date().toISOString()});
+    toast('📝 Note saved','ok');
   } else {
     await dbDelete('jps_user_notes',{acct_num:acctNum});
+    toast('Note cleared','ok');
   }
 }
 async function loadNotes(){
@@ -2885,15 +2915,15 @@ function swCm(panel,btn){
   const cw=document.getElementById('cm_customers_wrap');
   const kw=document.getElementById('cm_kam_wrap');
   const pw=document.getElementById('cm_pivot_wrap');
-  if(cw)cw.style.display='none';
-  if(kw)kw.style.display='none';
-  if(pw)pw.style.display='none';
+  const dfw=document.getElementById('cm_defection_wrap');
+  const row=document.getElementById('cm_ro_wrap');
+  [cw,kw,pw,dfw,row].forEach(el=>{if(el)el.style.display='none';});
   if(panel==='defection'){
-    sw('df', document.querySelector('.ni[onclick*="\'cm\'"]')||document.createElement('div'));
-    document.querySelector('.ni[onclick*="\'cm\'"]')?.classList.add('on');
+    if(dfw)dfw.style.display='';
+    renderCmDefection();
   } else if(panel==='ro'){
-    sw('ro', document.querySelector('.ni[onclick*="\'cm\'"]')||document.createElement('div'));
-    document.querySelector('.ni[onclick*="\'cm\'"]')?.classList.add('on');
+    if(row)row.style.display='';
+    renderCmROInline();
   } else if(panel==='kam'){
     if(kw)kw.style.display='';
     renderKamPerformance();
@@ -2905,6 +2935,51 @@ function swCm(panel,btn){
     if(cw)cw.style.display='';
     renderCommercialKPIs();renderCmCust();renderCmIndTbl();
   }
+}
+
+function renderCmDefection(){
+  const q=(document.getElementById('cm_df_q')?.value||'').toLowerCase();
+  const sev=document.getElementById('cm_df_sev')?.value||'';
+  const rc=document.getElementById('cm_df_rc')?.value||'';
+  const cause=document.getElementById('cm_df_cause')?.value||'';
+  const CM_RCS=new Set(['RT40','RT50','RT60-ST','RT70']);
+  const defs=computeDefectors().filter(d=>
+    CM_RCS.has(d.rate)&&
+    (!q||(d.name.toLowerCase().includes(q)||d.num.includes(q)))&&
+    (!sev||d.sev===sev)&&(!rc||d.rate===rc)&&(!cause||d.cause===cause));
+  const el=document.getElementById('cm_df_count');if(el)el.textContent=defs.length+' flagged';
+  const sevClass={Critical:'def-critical',Severe:'def-severe',Moderate:'def-moderate'};
+  document.getElementById('cm_df_tbl').innerHTML=defs.length?`<table class="dt">
+    <thead><tr><th>Acct #</th><th>Customer</th><th>Rate</th><th>Parish</th><th>Industry</th><th>3m Avg Prior</th><th>3m Avg Current</th><th>Ratio</th><th>Severity</th><th>Consec.</th><th>Cause</th></tr></thead>
+    <tbody>${defs.map(d=>`<tr>
+      <td style="font-size:10px;color:var(--text3)">${d.num}</td>
+      <td style="font-weight:500">${d.name}</td>
+      <td><span class="pill pt">${d.rate}</span></td>
+      <td>${d.parish}</td><td>${d.ind}</td>
+      <td>${d.prior3}</td><td style="font-weight:600">${d.curr3}</td>
+      <td><span class="heat hR">${d.ratio}%</span></td>
+      <td><span class="def-severity ${sevClass[d.sev]||''}">${d.sev}</span></td>
+      <td>${d.consec} mo.</td>
+      <td><span class="pill ${d.cause==='Self-Gen'?'pa':d.cause==='CHP'?'pp':d.cause==='Hurricane'?'pb':d.cause==='Closure'?'pr':'pgr'}">${d.cause}</span></td>
+    </tr>`).join('')}</tbody></table>`
+    :'<div style="padding:24px;text-align:center;font-size:12px;color:var(--green)">✓ No commercial defectors match current filters.</div>';
+}
+function renderCmROInline(){
+  const rows=RISK_OPP.filter(r=>['RT40','RT50','RT60-ST','RT70'].includes(r.rate));
+  const el=document.getElementById('cm_ro_inline_tbl');if(!el)return;
+  el.innerHTML=rows.length?`<table class="dt">
+    <thead><tr><th>Type</th><th>Customer</th><th>Rate</th><th>Parish</th><th>Level</th><th>Source</th><th>Status</th><th>Comment</th></tr></thead>
+    <tbody>${rows.map(r=>`<tr>
+      <td><span class="pill ${r.type==='Risk'?'pr':'pg'}">${r.type}</span></td>
+      <td style="font-weight:500">${esc(r.name)}</td>
+      <td><span class="pill pt">${r.rate}</span></td>
+      <td>${esc(r.parish)}</td>
+      <td><span class="heat ${r.level==='High'?'hR':r.level==='Medium'?'hY':'hG'}">${r.level}</span></td>
+      <td>${esc(r.source||'Manual')}</td>
+      <td>${esc(r.status)}</td>
+      <td style="font-size:10px;color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.cmt||'')}">${esc((r.cmt||'').substring(0,60))}</td>
+    </tr>`).join('')}</tbody></table>`
+    :'<div style="padding:24px;text-align:center;font-size:12px;color:var(--text3)">No commercial risk/opportunity items.</div>';
 }
 
 function renderCmPivot(){
@@ -3961,12 +4036,13 @@ function renderPfCust(){
     });
   }
 
+  const CM_RCS_PF=new Set(['RT40','RT50','RT60-ST','RT70']);
   let d=CUSTOMERS.map(c=>({
     ...c,
     cur:getPeriodY26(c),
     prev:pyMap[c.num]||0,
     budP:budMap[c.num]||0
-  })).filter(c=>(!q||(c.name.toLowerCase().includes(q)||c.num.includes(q)))&&(!rc||c.rate===rc));
+  })).filter(c=>CM_RCS_PF.has(c.rate)&&(!q||(c.name.toLowerCase().includes(q)||c.num.includes(q)))&&(!rc||c.rate===rc));
 
   d.sort((a,b)=>mode==='top'?b.cur-a.cur:a.cur-b.cur);
   const rows=d.slice(0,10);
@@ -4182,7 +4258,7 @@ function renderCmCust(){
         <td style="color:var(--text3)">${pB>0?pB.toFixed(1):'--'}</td>
         <td>${pB>0?`<span class="heat ${hc(pct(pCY,pB))}">${pct(pCY,pB)>=0?'+':''}${pct(pCY,pB).toFixed(1)}%</span>`:'--'}</td>
         <td>${vbar(pCY,pPY)}</td>
-        <td><span style="font-size:10px;color:var(--teal);cursor:pointer" onclick="editNote('${c.num}','${c.name.replace(/'/g,"\\'")}','cm_cust_tbl')">${saved?saved.substring(0,30)+'…':'✏ Add note'}</span></td>
+        <td><span style="font-size:10px;color:${saved?'var(--teal)':'var(--text3)'};cursor:pointer" title="${saved?saved:''}" onclick="editNote('${c.num}','${c.name.replace(/'/g,"\\'")}','cm_cust_tbl')">${saved?'📝 '+saved.substring(0,28)+(saved.length>28?'…':''):'✏ Add note'}</span></td>
       </tr>`;}).join('')}
     </tbody></table>`;
   makeSortable('cm_dt');
@@ -4456,6 +4532,8 @@ function renderRsPar(){
       rows.push({parish:p,bracket:b,curr,prev,count});
     });
   });
+  // Sort by absolute YoY variance (largest impact first)
+  rows.sort((a,b)=>Math.abs(b.curr-b.prev)-Math.abs(a.curr-a.prev));
 
   document.getElementById('rs_count').textContent=rows.length+' rows';
   document.getElementById('rs_par_tbl').innerHTML=`<table class="dt" id="rspar_dt">
@@ -4931,10 +5009,13 @@ function renderRecon(){
       </div>
     </div>`).join('');
 }
-function resolveRecon(id,resolution,note){
+function resolveRecon(id,resolution,defaultNote){
   const r=RECON_DATA.find(x=>x.id===id);if(!r)return;
-  r.status='Resolved';r.resolution=resolution;r.note=note;
-  const saved=S.get('recon_resolved',{});saved[id]={status:'Resolved',resolution,note};S.set('recon_resolved',saved);
+  // Preserve any existing user-added note; only use defaultNote if no custom note exists
+  const existingNote=r.note||'';
+  r.status='Resolved';r.resolution=resolution;
+  if(!existingNote)r.note=defaultNote;
+  const saved=S.get('recon_resolved',{});saved[id]={status:'Resolved',resolution,note:r.note};S.set('recon_resolved',saved);
   renderRecon();renderArKPIs();
 }
 function editReconNote(id){
@@ -9833,7 +9914,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.83';
+const APP_VERSION = '1.0.91';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
