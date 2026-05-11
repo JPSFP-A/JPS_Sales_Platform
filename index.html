@@ -390,7 +390,7 @@ document.getElementById('schema_stale_banner').style.display='none';
 <div class="sidebar" id="sidebar">
   <div class="sb-logo">
     <h2>⚡ JPS Analytics</h2>
-    <p>Sales Platform v1.0.92</p>
+    <p>Sales Platform v1.0.93</p>
   </div>
   <div class="nav-sec">
     <div class="nav-lbl">Analysis</div>
@@ -4196,14 +4196,16 @@ function renderPfPar(){
 }
 function renderVariance(){
   const segs=['RT10','RT20','RT40','RT50','RT70','RT60-ST'];
+  // Always read actuals directly from sbActuals (not CUSTOMERS) so residential
+  // RT10/RT20 — which have blank jps_ac and don't map cleanly to CUSTOMERS — are
+  // counted correctly by rate class.
   const rows=segs.map(seg=>{
-    const custs=CUSTOMERS.filter(c=>c.rate===seg);
-    const mtd_act=custs.reduce((s,c)=>s+(c.m[curMonth-1]||0),0);
-    const mtd_bud=sbBudget.filter(r=>String(r.rate_class||r.rc||'')===seg&&Number(r.year)===curYear&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
-    const mtd_ly=sbActuals.filter(r=>String(r.rate_class||r.rc||'')===seg&&Number(r[YEAR_COL])===curYear-1&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
-    const ytd_act=custs.reduce((s,c)=>s+c.m.slice(0,curMonth).reduce((a,v)=>a+(v||0),0),0);
-    const ytd_bud=sbBudget.filter(r=>String(r.rate_class||r.rc||'')===seg&&Number(r.year)===curYear&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
-    const ytd_ly=sbActuals.filter(r=>String(r.rate_class||r.rc||'')===seg&&Number(r[YEAR_COL])===curYear-1&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+    const mtd_act=sbActuals.filter(r=>String(r.rate_class||r.rc||'').trim()===seg&&Number(r[YEAR_COL])===curYear&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+    const mtd_bud=sbBudget.filter(r=>String(r.rate_class||r.rc||'').trim()===seg&&Number(r.year||r[YEAR_COL])===curYear&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
+    const mtd_ly=sbActuals.filter(r=>String(r.rate_class||r.rc||'').trim()===seg&&Number(r[YEAR_COL])===curYear-1&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+    const ytd_act=sbActuals.filter(r=>String(r.rate_class||r.rc||'').trim()===seg&&Number(r[YEAR_COL])===curYear&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+    const ytd_bud=sbBudget.filter(r=>String(r.rate_class||r.rc||'').trim()===seg&&Number(r.year||r[YEAR_COL])===curYear&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
+    const ytd_ly=sbActuals.filter(r=>String(r.rate_class||r.rc||'').trim()===seg&&Number(r[YEAR_COL])===curYear-1&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
     return{seg,mtd_act,mtd_bud,mtd_ly,ytd_act,ytd_bud,ytd_ly};
   });
   const tot=(k)=>rows.reduce((s,r)=>s+r[k],0);
@@ -5129,15 +5131,14 @@ function renderOverviewKPIs(){
   const pm=getPM(),pmSet=new Set(pm),ph=getPH();
   const resRCs=['RT10','RT20'];
   const comRCs=['RT40','RT50','RT70','RT60-ST'];
-  // Period-filtered sums from CUSTOMERS .m[] array
-  const mtd=CUSTOMERS.reduce((s,c)=>s+pm.reduce((a,m)=>a+(c.m[m-1]||0),0),0);
-  const ytd=mtd; // mtd IS the period total — same variable, different label
+  // Period-filtered sums — use sbActuals directly so all rate classes (incl. RT20) are counted
+  const mtd=sbActuals.filter(r=>Number(r[YEAR_COL]||r.year||0)===curYear&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0)/1e6,0);
+  const ytd=mtd;
   // Budget: sum period months from sbBudget
   const mtdBud=sbBudget.filter(b=>Number(b.year||0)===curYear&&pmSet.has(Number(b.month||0))).reduce((s,b)=>s+Number(b.kwh_budget||0)/1e6,0)||
     CUSTOMERS.reduce((s,c)=>s+(c.bud*(pm.length/12)),0); // fallback to proportional
   // PY comparison: same months last year from sbActuals
-  const ytdLY=sbActuals.filter(r=>Number(r[YEAR_COL]||r.year||0)===curYear-1&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0)/1e6,0)||
-    CUSTOMERS.reduce((s,c)=>s+(c.yPY*(pm.length/12)),0); // fallback
+  const ytdLY=sbActuals.filter(r=>Number(r[YEAR_COL]||r.year||0)===curYear-1&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0)/1e6,0);
   const vBud=mtdBud>0?pct(mtd,mtdBud):0;
   const vYoY=ytdLY>0?pct(ytd,ytdLY):0;
   // Period-filtered residential/commercial split
@@ -9940,7 +9941,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.92';
+const APP_VERSION = '1.0.93';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
