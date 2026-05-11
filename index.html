@@ -390,7 +390,7 @@ document.getElementById('schema_stale_banner').style.display='none';
 <div class="sidebar" id="sidebar">
   <div class="sb-logo">
     <h2>⚡ JPS Analytics</h2>
-    <p>Sales Platform v1.0.91</p>
+    <p>Sales Platform v1.0.92</p>
   </div>
   <div class="nav-sec">
     <div class="nav-lbl">Analysis</div>
@@ -3458,15 +3458,41 @@ async function loadExcel(input){
       const wb=XLSX.read(e.target.result,{type:'binary'});
       let totalRows=0;
 
+      // Sanitize a row before DB insert: convert empty strings to null for
+      // numeric fields (prevents 22P02 "invalid input syntax for type smallint: """)
+      const INT_FIELDS=new Set(['year','cal_year','month','customer_count']);
+      const FLOAT_FIELDS=new Set(['kwh','revenue_jmd','demand_kva','kwh_budget','revenue_budget','demand_budget','kwh_le','revenue_le','demand_le']);
+      function sanitizeRow(r){
+        const out={};
+        for(const[k,v]of Object.entries(r)){
+          if(v===''||v===null||v===undefined){
+            out[k]=INT_FIELDS.has(k)||FLOAT_FIELDS.has(k)?null:v===''?null:v;
+          } else if(INT_FIELDS.has(k)){
+            const n=parseInt(v,10);out[k]=isNaN(n)?null:n;
+          } else if(FLOAT_FIELDS.has(k)){
+            const n=parseFloat(v);out[k]=isNaN(n)?0:n;
+          } else {
+            out[k]=v;
+          }
+        }
+        return out;
+      }
       async function batchUpsert(table,rows,conflictCols){
         const CHUNK=500;
-        for(let i=0;i<rows.length;i+=CHUNK){
-          const chunk=rows.slice(i,i+CHUNK);
-          if(stEl)stEl.textContent=`Uploading ${table}: ${Math.min(i+CHUNK,rows.length)}/${rows.length}…`;
+        // Filter out rows with null year/month (would fail NOT NULL constraint)
+        const clean=rows.map(sanitizeRow).filter(r=>{
+          const yr=r.year??r.cal_year;
+          return(yr==null||yr>0)&&(r.month==null||r.month>0);
+        });
+        if(clean.length<rows.length)
+          console.warn(`[upload] ${table}: dropped ${rows.length-clean.length} rows with null year/month`);
+        for(let i=0;i<clean.length;i+=CHUNK){
+          const chunk=clean.slice(i,i+CHUNK);
+          if(stEl)stEl.textContent=`Uploading ${table}: ${Math.min(i+CHUNK,clean.length)}/${clean.length}…`;
           const{error}=await sb.from(table).upsert(chunk,{onConflict:conflictCols});
           if(error)throw new Error(`${table}: ${error.message}`);
         }
-        totalRows+=rows.length;
+        totalRows+=clean.length;
       }
 
       // ── Detect primary data sheet ───────────────────────
@@ -9914,7 +9940,7 @@ function renderVldAnomalies(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.91';
+const APP_VERSION = '1.0.92';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
