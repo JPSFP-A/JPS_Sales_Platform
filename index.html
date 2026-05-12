@@ -390,7 +390,7 @@ document.getElementById('schema_stale_banner').style.display='none';
 <div class="sidebar" id="sidebar">
   <div class="sb-logo">
     <h2>⚡ JPS Analytics</h2>
-    <p>Sales Platform v1.0.95</p>
+    <p>Sales Platform v1.0.96</p>
   </div>
   <div class="nav-sec">
     <div class="nav-lbl">Analysis</div>
@@ -3867,9 +3867,12 @@ function dlTemplate(){
 let sortState={};
 function makeSortable(tableId){
   const tbl=document.getElementById(tableId);
-  if(!tbl)return;
+  if(!tbl||tbl.dataset.sortable)return;
+  tbl.dataset.sortable='1';
   const ths=tbl.querySelectorAll('thead th');
   ths.forEach((th,i)=>{
+    th.style.cursor='pointer';
+    th.title='Click to sort';
     th.onclick=()=>{
       const cur=sortState[tableId];
       const asc=(cur&&cur.col===i)?!cur.asc:true;
@@ -3877,7 +3880,7 @@ function makeSortable(tableId){
       ths.forEach(h=>{h.classList.remove('sort-asc','sort-desc');});
       th.classList.add(asc?'sort-asc':'sort-desc');
       const tbody=tbl.querySelector('tbody');
-      const rows=[...tbody.querySelectorAll('tr:not(.ft-row)')];
+      const rows=[...tbody.querySelectorAll('tr:not(.ft-row):not(.ft)')];
       rows.sort((a,b)=>{
         const av=a.cells[i]?.textContent.trim()||'';
         const bv=b.cells[i]?.textContent.trim()||'';
@@ -3890,6 +3893,28 @@ function makeSortable(tableId){
     };
   });
 }
+
+// Auto-apply makeSortable to every table.dt rendered anywhere in the app
+(function(){
+  const _applySortable=tbl=>{
+    if(!tbl.id){tbl.id='_adt_'+(Math.random().toString(36).slice(2));}
+    makeSortable(tbl.id);
+  };
+  const obs=new MutationObserver(muts=>{
+    muts.forEach(m=>{
+      m.addedNodes.forEach(n=>{
+        if(n.nodeType!==1)return;
+        if(n.matches&&n.matches('table.dt'))_applySortable(n);
+        n.querySelectorAll&&n.querySelectorAll('table.dt').forEach(_applySortable);
+      });
+    });
+  });
+  document.addEventListener('DOMContentLoaded',()=>{
+    obs.observe(document.body,{childList:true,subtree:true});
+    // Apply to any tables already in DOM
+    document.querySelectorAll('table.dt').forEach(_applySortable);
+  });
+})();
 
 function exportTableCSV(tableId,filename){
   const tbl=document.getElementById(tableId);
@@ -3945,13 +3970,14 @@ function mkBracketCharts(){
   const co=()=>({responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:TC,font:{size:10}},grid:{color:CC}},y:{ticks:{color:TC,font:{size:10}},grid:{color:CC}}}});
   const mkBktChart=(canvasId,rc)=>{
     const bRows=sbActuals.filter(r=>String(r.rate_class||'')===rc&&(r.consumption_bucket||'').trim());
-    const BKTS=[...new Set(bRows.map(r=>(r.consumption_bucket||'').trim()))].filter(Boolean).sort((a,b)=>{
-      const na=parseInt(a.replace(/[^0-9]/g,''))||0, nb=parseInt(b.replace(/[^0-9]/g,''))||0;
-      // "< Zero" and "< zero" sort first (value 0), then by number
-      if(a.toLowerCase().includes('zero'))return -1;
-      if(b.toLowerCase().includes('zero'))return 1;
-      return na-nb;
-    });
+    const _bktOrder=s=>{
+      const sl=s.toLowerCase().trim();
+      if(sl.includes('zero'))return -1;                       // "< Zero" always first
+      if(sl.includes('over'))return 999999;                   // "over 950" always last
+      if(sl.startsWith('<')){const m=sl.match(/\d+/);return m?parseInt(m[0])-0.5:0;} // "<150" → 149.5
+      const m=sl.match(/\d+/);return m?parseInt(m[0]):0;     // "150>350" → 150
+    };
+    const BKTS=[...new Set(bRows.map(r=>(r.consumption_bucket||'').trim()))].filter(Boolean).sort((a,b)=>_bktOrder(a)-_bktOrder(b));
     const act=BKTS.map(bk=>bRows.filter(r=>Number(r[YEAR_COL])===curYear&&pMonths.includes(Number(r.month))&&(r.consumption_bucket||'').trim()===bk).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6);
     const py =BKTS.map(bk=>bRows.filter(r=>Number(r[YEAR_COL])===(curYear-1)&&pMonths.includes(Number(r.month))&&(r.consumption_bucket||'').trim()===bk).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6);
     destroyChart(canvasId);
@@ -4296,7 +4322,7 @@ function renderVariance(){
   if(noActSegs.length){
     console.warn('[RT20/Variance] Segments with 0 current-year actuals but non-zero LY:',noActSegs,'— check that current-year data for these rate classes has been uploaded.');
     const noteEl=document.getElementById('variance_tbl');
-    if(noteEl){const note=document.createElement('div');note.style.cssText='font-size:10px;color:var(--amber);padding:6px 8px;margin-top:4px;background:rgba(245,166,35,0.07);border-radius:4px;border-left:2px solid var(--amber)';note.textContent='⚠ Segment(s) with no current-year actuals: '+noActSegs.join(', ')+' — verify that '+curYear+' data for these rate classes has been uploaded to the database.';noteEl.appendChild(note);}
+    if(noteEl){const note=document.createElement('div');note.style.cssText='font-size:10px;color:var(--amber);padding:6px 8px;margin-top:4px;background:rgba(245,166,35,0.07);border-radius:4px;border-left:2px solid var(--amber)';note.textContent='⚠ '+noActSegs.join(', ')+' has no '+curYear+' actuals for this period in jps_actuals. All tabs (Overview, Residential, Variance) read from the same table — if the Residential tab shows prior-year bars only, the '+curYear+' upload is missing these rate classes. Upload the current-year Actuals sheet to resolve.';noteEl.appendChild(note);}
   }
 }
 
@@ -4733,7 +4759,8 @@ function renderFcKPIs(){
     months.forEach(m=>{
       const v=S.get(`${m.key}_${c.num}`,null);
       if(v){entered++;
-        const hist3=c.m.slice(-3);const avg3=hist3.reduce((s,x)=>s+x,0)/hist3.length;
+        const hist3=c.m.slice(0,curMonth).filter(x=>x>0).slice(-3);
+        const avg3=hist3.length?hist3.reduce((s,x)=>s+x,0)/hist3.length:0;
         const ratio=avg3>0?v/avg3:1;
         if(ratio>=0.85&&ratio<=1.15)onTrend++;else offTrend++;
       }
@@ -4775,8 +4802,12 @@ function renderFcEntry(){
     return true;
   });
   const rows=custData.map(c=>{
-    const hist3=c.m.slice(-3);const avg3=hist3.reduce((s,x)=>s+x,0)/hist3.length;
-    const py3=c.m.slice(0,3);const pyAvg=py3.reduce((s,x)=>s+x,0)/py3.length;
+    // Use last 3 months up to curMonth (not slice(-3) which grabs Oct-Dec when most are 0)
+    const hist3=c.m.slice(0,curMonth).filter(v=>v>0).slice(-3);
+    const avg3=hist3.length?hist3.reduce((s,x)=>s+x,0)/hist3.length:0;
+    // Prior-year same-period avg from sbActuals
+    const pyVals=sbActuals.filter(r=>_custNum(String(r.jps_ac||''))===c.num&&Number(r[YEAR_COL])===curYear-1&&Number(r.month)<=curMonth).map(r=>Number(r.kwh||0)/1e6);
+    const pyAvg=pyVals.length?pyVals.reduce((s,x)=>s+x,0)/pyVals.length:0;
     const fcCells=months.map(m=>{
       const saved=S.get(`${m.key}_${c.num}`,null);
       const val=saved||'';
@@ -10114,7 +10145,7 @@ function renderVldDefReg(){
 }
 
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.95';
+const APP_VERSION = '1.0.96';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
