@@ -390,7 +390,7 @@ document.getElementById('schema_stale_banner').style.display='none';
 <div class="sidebar" id="sidebar">
   <div class="sb-logo">
     <h2>⚡ JPS Analytics</h2>
-    <p>Sales Platform v1.0.93</p>
+    <p>Sales Platform v1.0.94</p>
   </div>
   <div class="nav-sec">
     <div class="nav-lbl">Analysis</div>
@@ -3217,7 +3217,7 @@ function generateCommentary(section){
         lines.push('');
       }
       // Biggest mover
-      const movers=CUSTOMERS.filter(c=>c.yPY>0&&c.yCY>0).map(c=>({...c,delta:c.yCY-c.yPY})).sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta));
+      const movers=CUSTOMERS.filter(c=>!['RT10','RT20'].includes(c.rate)&&c.yPY>0&&c.yCY>0).map(c=>({...c,delta:c.yCY-c.yPY})).sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta));
       if(movers.length){const top=movers[0];lines.push(`KEY MOVER: ${top.name} ${top.delta>=0?'gained':'lost'} ${fmtE(Math.abs(top.delta)*1e6,1)} vs prior year.`);}
     }
 
@@ -3909,8 +3909,10 @@ function buildCharts(){
 
   // Build trend chart data from live sbActuals + sbBudget (real monthly seasonality)
   const trendAct26=Array(12).fill(null),trendBud26=Array(12).fill(null),trendAct25=Array(12).fill(null);
-  if(CUSTOMERS.length){
-    CUSTOMERS.forEach(c=>{for(let i=0;i<12;i++){if(c.m[i]){trendAct26[i]=(trendAct26[i]||0)+c.m[i];}}});
+  if(sbActuals.length){
+    for(let i=0;i<12;i++){
+      trendAct26[i]=sbActuals.filter(r=>Number(r[YEAR_COL])===curYear&&Number(r.month)===i+1).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6||null;
+    }
   }
   // Prior year — real monthly actuals, not flat spread
   if(sbActuals.length){
@@ -5135,8 +5137,7 @@ function renderOverviewKPIs(){
   const mtd=sbActuals.filter(r=>Number(r[YEAR_COL]||r.year||0)===curYear&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0)/1e6,0);
   const ytd=mtd;
   // Budget: sum period months from sbBudget
-  const mtdBud=sbBudget.filter(b=>Number(b.year||0)===curYear&&pmSet.has(Number(b.month||0))).reduce((s,b)=>s+Number(b.kwh_budget||0)/1e6,0)||
-    CUSTOMERS.reduce((s,c)=>s+(c.bud*(pm.length/12)),0); // fallback to proportional
+  const mtdBud=sbBudget.filter(b=>Number(b.year||0)===curYear&&pmSet.has(Number(b.month||0))).reduce((s,b)=>s+Number(b.kwh_budget||0)/1e6,0);
   // PY comparison: same months last year from sbActuals
   const ytdLY=sbActuals.filter(r=>Number(r[YEAR_COL]||r.year||0)===curYear-1&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0)/1e6,0);
   const vBud=mtdBud>0?pct(mtd,mtdBud):0;
@@ -5437,7 +5438,7 @@ function renderExecSummary() {
   }
 
   // Top movers
-  const sorted = [...CUSTOMERS].sort((a,b) => Math.abs(b.yCY-b.yPY) - Math.abs(a.yCY-a.yPY)).slice(0,5);
+  const sorted = CUSTOMERS.filter(c=>!['RT10','RT20'].includes(c.rate)).sort((a,b) => Math.abs(b.yCY-b.yPY) - Math.abs(a.yCY-a.yPY)).slice(0,5);
   if(el('es_top_movers')) {
     el('es_top_movers').innerHTML = sorted.map(c => {
       const v = c.yCY - c.yPY, pos = v >= 0;
@@ -5583,10 +5584,10 @@ function getBridgeDrivers() {
 function renderVarianceBridge() {
   const drivers = getBridgeDrivers();
   const pm=getPM(),pmSet=new Set(pm),ph=getPH();
-  // Period actuals from CUSTOMERS.m[], period budget from sbBudget
-  const _bAct=CUSTOMERS.reduce((s,c)=>s+pm.reduce((a,m)=>a+(c.m[m-1]||0),0),0);
-  const _bBud=sbBudget.filter(b=>Number(b.year||0)===curYear&&pmSet.has(Number(b.month||0))).reduce((s,b)=>s+Number(b.kwh_budget||0)/1e6,0)||CUSTOMERS.reduce((s,c)=>s+(c.bud*(pm.length/12)),0);
-  const totalGap = CUSTOMERS.length ? _bAct - _bBud : 0;
+  // Period actuals from sbActuals (all rate classes), budget from sbBudget
+  const _bAct=sbActuals.filter(r=>Number(r[YEAR_COL])===curYear&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0)/1e6,0);
+  const _bBud=sbBudget.filter(b=>Number(b.year||0)===curYear&&pmSet.has(Number(b.month||0))).reduce((s,b)=>s+Number(b.kwh_budget||0)/1e6,0);
+  const totalGap = sbActuals.length ? _bAct - _bBud : 0;
   const explained = drivers.reduce((s,d) => s + d.gwh, 0);
   const residual = totalGap - explained;
   const pos = drivers.filter(d => d.gwh > 0).reduce((s,d)=>s+d.gwh,0);
