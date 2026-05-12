@@ -100,7 +100,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 
 /* CONTENT */
 .content{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:14px 16px}
-.sec{display:none}.sec.on{display:block}
+.sec{display:none}.sec.on{display:block;min-height:0}
 
 /* KPI ROW */
 .krow{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:12px}
@@ -390,7 +390,7 @@ document.getElementById('schema_stale_banner').style.display='none';
 <div class="sidebar" id="sidebar">
   <div class="sb-logo">
     <h2>⚡ JPS Analytics</h2>
-    <p>Sales Platform v1.0.94</p>
+    <p>Sales Platform v1.0.95</p>
   </div>
   <div class="nav-sec">
     <div class="nav-lbl">Analysis</div>
@@ -399,7 +399,6 @@ document.getElementById('schema_stale_banner').style.display='none';
     <div class="ni" onclick="sw('rs',this)"><span class="ni-icon">🏠</span>Residential</div>
     <div class="ni" onclick="sw('fc',this)"><span class="ni-icon">🎯</span>Forecast Accuracy</div>
     <div class="ni" onclick="sw('le',this)"><span class="ni-icon">📈</span>LE Forecast</div>
-    <div class="ni" onclick="sw('mr',this)"><span class="ni-icon">📋</span>Monthly Review</div>
     <div class="nav-lbl" style="margin-top:8px">Intelligence</div>
     <div class="ni" onclick="sw('es',this)"><span class="ni-icon">📰</span>Exec Summary</div>
     <div class="ni" onclick="sw('vb',this)"><span class="ni-icon">🌊</span>Variance Bridge</div>
@@ -407,6 +406,7 @@ document.getElementById('schema_stale_banner').style.display='none';
     <div class="ni" onclick="sw('ng',this)"><span class="ni-icon">⚡</span>Net Generation</div>
     <div class="nav-lbl" style="margin-top:8px">Actions</div>
     <div class="ni" onclick="sw('dr_flow',this)"><span class="ni-icon">📓</span>Defection Actions</div>
+    <div class="ni" onclick="sw('vld',this)"><span class="ni-icon">🔍</span>Defection &amp; Validation</div>
     <div class="ni" onclick="sw('rb_res',this)"><span class="ni-icon">🏘</span>Residential Intel</div>
     <div class="ni" onclick="sw('ro_adv',this)"><span class="ni-icon">📊</span>R&amp;O Pipeline</div>
     <div class="ni" onclick="sw('rpt',this)"><span class="ni-icon">📄</span>Report Builder</div>
@@ -414,7 +414,6 @@ document.getElementById('schema_stale_banner').style.display='none';
     <div class="ni" onclick="sw('ar',this)"><span class="ni-icon">🔗</span>Account Recon</div>
     <div class="ni" onclick="sw('gl',this)"><span class="ni-icon">📖</span>Glossary</div>
     <div class="ni" onclick="sw('help',this)"><span class="ni-icon">📚</span>User Guide</div>
-    <div class="ni" onclick="sw('vld',this)"><span class="ni-icon">🔍</span>Data Validation</div>
     <div class="ni" onclick="sw('adm',this)"><span class="ni-icon">🔐</span>Admin</div>
   </div>
   <div class="sb-bottom">
@@ -929,33 +928,6 @@ document.getElementById('schema_stale_banner').style.display='none';
       </div>
     </div>
 
-    <!-- === MONTHLY REVIEW === -->
-    <div id="mr" class="sec">
-      <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px;flex-wrap:wrap">
-        <h2 style="font-size:14px;font-weight:700;color:var(--text)">📋 Monthly Review</h2>
-        <select class="sel" id="mr_month"></select>
-        <input class="si" style="max-width:150px" id="mr_rep" placeholder="Your name" oninput="mrSetPeriod()"/>
-        <button class="btn btn-o" onclick="exportReview()">⬇ Export</button>
-        <span style="font-size:10px;color:var(--text3);margin-left:auto">Saved locally in browser</span>
-      </div>
-      <div class="stabs">
-        <button class="stab on" onclick="mrTab('mr_ov',this)">Overview</button>
-        <button class="stab" onclick="mrTab('mr_cust',this)">Top/Bottom 20</button>
-        <button class="stab" onclick="mrTab('mr_ind',this)">Industry</button>
-        <button class="stab" onclick="mrTab('mr_par',this)">Parish</button>
-      </div>
-      <div id="mr_ov" class="ssec on"><div id="mr_ov_w"></div></div>
-      <div id="mr_cust" class="ssec">
-        <div class="tbl-controls" style="margin-bottom:9px">
-          <input class="si" placeholder="🔍 Customer name or account #" id="mr_cq" oninput="mrRenderCust()"/>
-          <select class="sel" id="mr_crc" onchange="mrRenderCust()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
-        </div>
-        <div id="mr_cust_w"></div>
-      </div>
-      <div id="mr_ind" class="ssec"><div id="mr_ind_w"></div></div>
-      <div id="mr_par" class="ssec"><div id="mr_par_w"></div></div>
-    </div>
-
     <!-- === ACCOUNT RECONCILIATION === -->
     <div id="ar" class="sec">
       <div style="background:rgba(245,166,35,.07);border-left:3px solid var(--amber);border-radius:4px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:var(--text2);line-height:1.7">
@@ -1176,8 +1148,44 @@ document.getElementById('schema_stale_banner').style.display='none';
       </div>
     </div>
 
-    <!-- === DATA VALIDATION === -->
+    <!-- === DATA VALIDATION / DEFECTION === -->
     <div id="vld" class="sec">
+      <div class="stabs" style="margin-bottom:12px">
+        <button class="stab on" onclick="vldTab('vld_tab_def',this)">📉 Defection Register</button>
+        <button class="stab" onclick="vldTab('vld_tab_dropped',this)">🚫 Dropped Accounts</button>
+        <button class="stab" onclick="vldTab('vld_tab_deflect',this)">📊 GWh Deflections</button>
+        <button class="stab" onclick="vldTab('vld_tab_anom',this)">⚡ Anomalies</button>
+      </div>
+
+      <!-- Sub-tab: Defection Register -->
+      <div id="vld_tab_def" class="ssec on">
+        <div style="background:rgba(232,64,64,.06);border-left:3px solid var(--red);border-radius:4px;padding:8px 13px;margin-bottom:10px;font-size:11px;color:var(--text2)">
+          <strong style="color:var(--red)">Defection Register</strong> — accounts whose 3-month rolling average kWh fell below 80% of same period prior year. Type and cause are editable and saved to local storage (DB sync optional). Click ✉ to email the KAM.
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+          <input class="si" placeholder="🔍 Customer name or account #" id="vld_def_reg_q" oninput="renderVldDefReg()"/>
+          <select class="sel" id="vld_def_reg_sev" onchange="renderVldDefReg()"><option value="">All severity</option><option value="Critical">Critical</option><option value="Severe">Severe</option><option value="Moderate">Moderate</option></select>
+          <select class="sel" id="vld_def_reg_rc" onchange="renderVldDefReg()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
+          <span class="row-count" id="vld_def_reg_count"></span>
+        </div>
+        <div class="tbl-wrap" id="vld_def_reg_tbl"><div style="padding:20px;font-size:11px;color:var(--text3);text-align:center">Load actuals data to see defection register.</div></div>
+      </div>
+
+      <!-- Sub-tab: Dropped Accounts (existing content moved here) -->
+      <div id="vld_tab_dropped" class="ssec">
+      <div class="krow">
+        <div class="kpi kr"><div class="kl">Dropped Accounts</div><div class="kv" id="vld_dropped_count">--</div><div class="ks dn" id="vld_dropped_gwh">-- GWh lost</div></div>
+        <div class="kpi ka"><div class="kl">GWh Deflections</div><div class="kv" id="vld_deflect_count">--</div><div class="ks dn" id="vld_deflect_gwh">-- GWh at risk</div></div>
+        <div class="kpi kt"><div class="kl">No History Groups</div><div class="kv" id="vld_nohistory_count">--</div><div class="ks nt">accounts with no prior year</div></div>
+        <div class="kpi ka"><div class="kl">MoM Anomalies</div><div class="kv" id="vld_anom_count">--</div><div class="ks dn">events &gt;25% swing</div></div>
+        <div class="kpi kt"><div class="kl">Last Validated</div><div class="kv" id="vld_ts" style="font-size:11px">--</div><div class="ks nt">Sync DB to refresh</div></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <button class="btn btn-t" onclick="runValidation()">🔍 Run Validation</button>
+        <button class="btn btn-o" onclick="exportTableCSV('vld_dropped_tbl','validation_dropped_accounts')">⬇ Export Dropped</button>
+        <button class="btn btn-o" onclick="exportTableCSV('vld_deflect_tbl','validation_deflections')">⬇ Export Deflections</button>
+        <button class="btn btn-o" onclick="exportTableCSV('vld_anom_tbl','validation_anomalies')">⬇ Export Anomalies</button>
+      </div>
       <div class="krow">
         <div class="kpi kr"><div class="kl">Dropped Accounts</div><div class="kv" id="vld_dropped_count">--</div><div class="ks dn" id="vld_dropped_gwh">-- GWh lost</div></div>
         <div class="kpi ka"><div class="kl">GWh Deflections</div><div class="kv" id="vld_deflect_count">--</div><div class="ks dn" id="vld_deflect_gwh">-- GWh at risk</div></div>
@@ -1207,8 +1215,10 @@ document.getElementById('schema_stale_banner').style.display='none';
         </div>
         <div class="tbl-wrap" id="vld_dropped_tbl"><div style="padding:20px;text-align:center;font-size:11px;color:var(--text3)">Click <strong>Run Validation</strong> to analyse the data.</div></div>
       </div>
+      </div><!-- /vld_tab_dropped -->
 
-      <!-- GWh Deflections -->
+      <!-- Sub-tab: GWh Deflections -->
+      <div id="vld_tab_deflect" class="ssec">
       <div class="card" style="margin-bottom:10px;border-color:rgba(245,166,35,.25)">
         <div class="ch" style="color:var(--amber)">📉 GWh Deflections (YTD &lt;80% of Prior Year)
           <span style="font-size:10px;color:var(--text3);font-weight:400">Accounts where current YTD kWh is less than 80% of same-period prior year</span>
@@ -1225,8 +1235,10 @@ document.getElementById('schema_stale_banner').style.display='none';
         </div>
         <div class="tbl-wrap" id="vld_deflect_tbl"><div style="padding:20px;text-align:center;font-size:11px;color:var(--text3)">Click <strong>Run Validation</strong> to analyse the data.</div></div>
       </div>
+      </div><!-- /vld_tab_deflect -->
 
-      <!-- Month-on-Month Anomalies -->
+      <!-- Sub-tab: Anomalies -->
+      <div id="vld_tab_anom" class="ssec">
       <div class="card" style="border-color:rgba(127,119,221,.3)">
         <div class="ch" style="color:var(--purple)">⚡ Month-on-Month Anomalies (&gt;25% Swing)
           <span style="font-size:10px;color:var(--text3);font-weight:400">Accounts with consecutive-month kWh changes exceeding 25%</span>
@@ -1241,6 +1253,7 @@ document.getElementById('schema_stale_banner').style.display='none';
         </div>
         <div class="tbl-wrap" id="vld_anom_tbl"><div style="padding:20px;text-align:center;font-size:11px;color:var(--text3)">Click <strong>Run Validation</strong> to analyse the data.</div></div>
       </div>
+      </div><!-- /vld_tab_anom -->
     </div>
 
     <!-- === ADMIN === -->
@@ -1692,6 +1705,9 @@ order by ordinal_position;</pre>
 
     <!-- === VARIANCE BRIDGE === -->
     <div id="vb" class="sec">
+      <div style="background:rgba(55,138,221,.07);border-left:3px solid var(--blue);border-radius:4px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:var(--text2);line-height:1.7">
+        <strong style="color:var(--blue)">Data Sources:</strong> <strong>Actuals</strong> — summed from <code style="background:var(--navy3);padding:1px 5px;border-radius:3px">jps_actuals</code> for selected period. <strong>Budget</strong> — summed from <code style="background:var(--navy3);padding:1px 5px;border-radius:3px">jps_budget</code> for same period. <strong>Gap = Actual − Budget.</strong> Bridge drivers are manually entered below and stored in your browser (local storage) with optional DB sync.
+      </div>
       <div class="krow">
         <div class="kpi kr"><div class="kl">Total MTD gap vs Budget</div><div class="kv" id="vb_gap_kpi">--</div><div class="ks nt" id="vb_gap_detail">-- vs -- GWh</div></div>
         <div class="kpi kr"><div class="kl">Explained (known drivers)</div><div class="kv" id="vb_explained_kpi">-</div><div class="ks dn">From R&amp;O register</div></div>
@@ -2235,25 +2251,25 @@ order by ordinal_position;</pre>
         <strong style="color:var(--blue)">Net Generation:</strong> Generation data from the JPS grid. Upload via the <strong>Net_Generation</strong> sheet (columns: year, month, rate_class, count, kwh). Data sourced from <code style="background:var(--navy3);padding:1px 5px;border-radius:3px;font-size:10px">net_gen_historical</code>.
       </div>
       <div class="krow" id="ng_krow"></div>
-      <div class="card">
-        <div class="ch">Annual Net Generation <span>kWh by year · teal = latest</span>
-          <div style="display:flex;gap:7px;align-items:center">
-            <button class="btn btn-t" onclick="syncSupabase()">🔄 Sync</button>
-            <button class="btn" id="ng_clear_btn" style="display:none;background:rgba(232,64,64,.12);color:var(--red);border-color:rgba(232,64,64,.3);font-size:10px" onclick="clearNetGenData()">🗑 Clear All Data</button>
-            <span id="ng_last_sync" style="font-size:10px;color:var(--text3)">No data — upload or sync DB</span>
-          </div>
-        </div>
-        <div class="cw" style="height:220px"><canvas id="c_ng_annual"></canvas></div>
-      </div>
       <div class="g2">
         <div class="card">
-          <div class="ch">Monthly Trend <span>Last 2 years comparison</span></div>
-          <div class="cw" style="height:210px"><canvas id="c_ng_monthly"></canvas></div>
+          <div class="ch">Annual Net Generation <span>kWh by year · teal = latest</span>
+            <div style="display:flex;gap:7px;align-items:center">
+              <button class="btn btn-t" onclick="syncSupabase()">🔄 Sync</button>
+              <button class="btn" id="ng_clear_btn" style="display:none;background:rgba(232,64,64,.12);color:var(--red);border-color:rgba(232,64,64,.3);font-size:10px" onclick="clearNetGenData()">🗑 Clear All Data</button>
+              <span id="ng_last_sync" style="font-size:10px;color:var(--text3)">No data — upload or sync DB</span>
+            </div>
+          </div>
+          <div class="cw" style="height:220px"><canvas id="c_ng_annual"></canvas></div>
         </div>
         <div class="card">
           <div class="ch">YoY Growth Rate <span>Annual % change</span></div>
-          <div class="cw" style="height:210px"><canvas id="c_ng_yoy"></canvas></div>
+          <div class="cw" style="height:220px"><canvas id="c_ng_yoy"></canvas></div>
         </div>
+      </div>
+      <div class="card">
+        <div class="ch">Monthly Trend <span>Last 2 years comparison</span></div>
+        <div class="cw" style="height:210px"><canvas id="c_ng_monthly"></canvas></div>
       </div>
       <div class="card">
         <div class="ch">Net Generation Historical Data <span>MWh by month · GWh column = annual total</span>
@@ -2782,7 +2798,8 @@ function computeDefectors(){
                 c.cmt.toLowerCase().includes('chp')||c.cmt.toLowerCase().includes('self-gen')?'CHP':
                 c.cmt.toLowerCase().includes('hurricane')||c.cmt.toLowerCase().includes('damage')?'Hurricane':
                 c.cmt.toLowerCase().includes('closed')||c.cmt.toLowerCase().includes('closure')?'Closure':'Unknown';
-    return{...c,curr3:curr3.toFixed(3),prior3:prior3.toFixed(3),ratio:(ratio*100).toFixed(1),sev,consec:cons,cause,isDefector:sev!=='Normal'};
+    const kam=c.kam||'';
+    return{...c,curr3:curr3.toFixed(3),prior3:prior3.toFixed(3),ratio:(ratio*100).toFixed(1),sev,consec:cons,cause,kam,isDefector:sev!=='Normal'};
   }).filter(c=>c.isDefector);
 }
 
@@ -2949,21 +2966,61 @@ function renderCmDefection(){
     (!sev||d.sev===sev)&&(!rc||d.rate===rc)&&(!cause||d.cause===cause));
   const el=document.getElementById('cm_df_count');if(el)el.textContent=defs.length+' flagged';
   const sevClass={Critical:'def-critical',Severe:'def-severe',Moderate:'def-moderate'};
+  const _defOvr=S.get('def_overrides',{});
   document.getElementById('cm_df_tbl').innerHTML=defs.length?`<table class="dt">
-    <thead><tr><th>Acct #</th><th>Customer</th><th>Rate</th><th>Parish</th><th>Industry</th><th>3m Avg Prior</th><th>3m Avg Current</th><th>Ratio</th><th>Severity</th><th>Consec.</th><th>Cause</th></tr></thead>
-    <tbody>${defs.map(d=>`<tr>
+    <thead><tr><th>Acct #</th><th>Customer</th><th>Rate</th><th>KAM</th><th>Parish</th><th>Industry</th><th>3m Avg Prior</th><th>3m Avg Current</th><th>Ratio</th><th>Severity</th><th>Consec.</th><th>Type</th><th>Cause</th><th>✉</th></tr></thead>
+    <tbody>${defs.map(d=>{
+      const ovr=_defOvr[d.num]||{};
+      const defType=ovr.type||'Unknown';
+      const defCause=ovr.cause||d.cause||'Unknown';
+      const kamName=d.kam||'--';
+      return`<tr>
       <td style="font-size:10px;color:var(--text3)">${d.num}</td>
       <td style="font-weight:500">${d.name}</td>
       <td><span class="pill pt">${d.rate}</span></td>
+      <td style="font-size:10px;color:var(--teal)">${esc(kamName)}</td>
       <td>${d.parish}</td><td>${d.ind}</td>
       <td>${d.prior3}</td><td style="font-weight:600">${d.curr3}</td>
       <td><span class="heat hR">${d.ratio}%</span></td>
       <td><span class="def-severity ${sevClass[d.sev]||''}">${d.sev}</span></td>
       <td>${d.consec} mo.</td>
-      <td><span class="pill ${d.cause==='Self-Gen'?'pa':d.cause==='CHP'?'pp':d.cause==='Hurricane'?'pb':d.cause==='Closure'?'pr':'pgr'}">${d.cause}</span></td>
-    </tr>`).join('')}</tbody></table>`
+      <td><select style="font-size:10px;background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:2px 4px" onchange="updateDefType('${d.num.replace(/'/g,"\\'")}',this.value)"><option${defType==='Temporary'?' selected':''}>Temporary</option><option${defType==='Structural'?' selected':''}>Structural</option><option${defType==='Unknown'?' selected':''}>Unknown</option></select></td>
+      <td><select style="font-size:10px;background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:2px 4px" onchange="updateDefCause('${d.num.replace(/'/g,"\\'")}',this.value)"><option${defCause==='Solar DG'?' selected':''}>Solar DG</option><option${defCause==='CHP'?' selected':''}>CHP</option><option${defCause==='Generator'?' selected':''}>Generator</option><option${defCause==='Load Reduction'?' selected':''}>Load Reduction</option><option${defCause==='Account Closed'?' selected':''}>Account Closed</option><option${defCause==='Tariff Transfer'?' selected':''}>Tariff Transfer</option><option${defCause==='Data Error'?' selected':''}>Data Error</option><option${defCause==='Unknown'?' selected':''}>Unknown</option><option${(defCause&&!['Solar DG','CHP','Generator','Load Reduction','Account Closed','Tariff Transfer','Data Error','Unknown'].includes(defCause))?' selected':''}>Other</option></select></td>
+      <td><button style="font-size:11px;background:transparent;border:1px solid var(--border);border-radius:4px;color:var(--text2);cursor:pointer;padding:2px 5px" onclick="emailKAM('${d.num.replace(/'/g,"\\'")}','${d.name.replace(/'/g,"\\'").replace(/"/g,'&quot;')}','${kamName.replace(/'/g,"\\'")}','${defCause}','${d.sev}')">✉</button></td>
+    </tr>`;}).join('')}</tbody></table>`
     :'<div style="padding:24px;text-align:center;font-size:12px;color:var(--green)">✓ No commercial defectors match current filters.</div>';
 }
+
+function updateDefType(acct,val){
+  const o=S.get('def_overrides',{});
+  if(!o[acct])o[acct]={};
+  o[acct].type=val;
+  S.set('def_overrides',o);
+  const sb=getSB();if(sb)sb.from('jps_def_actions').upsert({acct_num:acct,defection_type:val},{onConflict:'acct_num'}).then(({error})=>{if(error)console.warn('def type save:',error);});
+}
+
+function updateDefCause(acct,val){
+  const o=S.get('def_overrides',{});
+  if(!o[acct])o[acct]={};
+  o[acct].cause=val;
+  S.set('def_overrides',o);
+  const sb=getSB();if(sb)sb.from('jps_def_actions').upsert({acct_num:acct,cause:val},{onConflict:'acct_num'}).then(({error})=>{if(error)console.warn('def cause save:',error);});
+}
+
+function emailKAM(acct,custName,kamName,cause,severity){
+  const kamLookup=sbKAM.find(k=>k.kam===kamName);
+  const email=kamLookup?.email||'';
+  const subject=encodeURIComponent(`[Defection Alert] Account ${acct} — ${custName}`);
+  const body=encodeURIComponent(`Dear ${kamName||'KAM'},\n\nThis is an automated alert from the JPS Sales Analytics Platform.\n\nAccount: ${custName} (${acct})\nSeverity: ${severity}\nCause on record: ${cause||'Not classified'}\n\nThis account has been flagged as a defector. Please review and update:\n1. Confirm the defection type (Temporary / Structural)\n2. Update the cause of defection\n3. Set the response stage (Investigation / Retention Offer / Accept Loss)\n4. Add any relevant commentary\n\nPlease log in to the platform to update the Defection Register.\n\nRegards,\nJPS Sales Analytics Platform`);
+  if(!email){
+    // No email found — open blank mailto so user can fill in manually
+    toast('No email address found for KAM: '+(kamName||'Unknown')+' — opening blank email draft','w');
+    window.open('mailto:?subject='+subject+'&body='+body);
+    return;
+  }
+  window.open('mailto:'+email+'?subject='+subject+'&body='+body);
+}
+
 function renderCmROInline(){
   const rows=RISK_OPP.filter(r=>['RT40','RT50','RT60-ST','RT70'].includes(r.rate));
   const el=document.getElementById('cm_ro_inline_tbl');if(!el)return;
@@ -3422,7 +3479,7 @@ function renderSection(id){
   else if(id==='ar'){buildReconData();renderRecon();renderArKPIs();}
   else if(id==='gl'){renderGloss();}
   else if(id==='help'){/* static content, no render needed */}
-  else if(id==='vld'){runValidation();}
+  else if(id==='vld'){runValidation();renderVldDefReg();}
   else if(id==='adm'){renderAdm();renderAdmKam();renderAdmRoleBanner();renderAdmForecast();renderPermMatrix();}
   else if(id==='es'){renderExecSummary();}
   else if(id==='vb'){renderVarianceBridge();}
@@ -3888,7 +3945,13 @@ function mkBracketCharts(){
   const co=()=>({responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:TC,font:{size:10}},grid:{color:CC}},y:{ticks:{color:TC,font:{size:10}},grid:{color:CC}}}});
   const mkBktChart=(canvasId,rc)=>{
     const bRows=sbActuals.filter(r=>String(r.rate_class||'')===rc&&(r.consumption_bucket||'').trim());
-    const BKTS=[...new Set(bRows.map(r=>(r.consumption_bucket||'').trim()))].filter(Boolean).sort();
+    const BKTS=[...new Set(bRows.map(r=>(r.consumption_bucket||'').trim()))].filter(Boolean).sort((a,b)=>{
+      const na=parseInt(a.replace(/[^0-9]/g,''))||0, nb=parseInt(b.replace(/[^0-9]/g,''))||0;
+      // "< Zero" and "< zero" sort first (value 0), then by number
+      if(a.toLowerCase().includes('zero'))return -1;
+      if(b.toLowerCase().includes('zero'))return 1;
+      return na-nb;
+    });
     const act=BKTS.map(bk=>bRows.filter(r=>Number(r[YEAR_COL])===curYear&&pMonths.includes(Number(r.month))&&(r.consumption_bucket||'').trim()===bk).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6);
     const py =BKTS.map(bk=>bRows.filter(r=>Number(r[YEAR_COL])===(curYear-1)&&pMonths.includes(Number(r.month))&&(r.consumption_bucket||'').trim()===bk).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6);
     destroyChart(canvasId);
@@ -4202,12 +4265,13 @@ function renderVariance(){
   // RT10/RT20 — which have blank jps_ac and don't map cleanly to CUSTOMERS — are
   // counted correctly by rate class.
   const rows=segs.map(seg=>{
-    const mtd_act=sbActuals.filter(r=>String(r.rate_class||r.rc||'').trim()===seg&&Number(r[YEAR_COL])===curYear&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
-    const mtd_bud=sbBudget.filter(r=>String(r.rate_class||r.rc||'').trim()===seg&&Number(r.year||r[YEAR_COL])===curYear&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
-    const mtd_ly=sbActuals.filter(r=>String(r.rate_class||r.rc||'').trim()===seg&&Number(r[YEAR_COL])===curYear-1&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
-    const ytd_act=sbActuals.filter(r=>String(r.rate_class||r.rc||'').trim()===seg&&Number(r[YEAR_COL])===curYear&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
-    const ytd_bud=sbBudget.filter(r=>String(r.rate_class||r.rc||'').trim()===seg&&Number(r.year||r[YEAR_COL])===curYear&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
-    const ytd_ly=sbActuals.filter(r=>String(r.rate_class||r.rc||'').trim()===seg&&Number(r[YEAR_COL])===curYear-1&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+    const _rcMatch=(r)=>String(r.rate_class||r.rc||r['Rate category']||'').trim().replace(/\s+/g,'')===seg.replace(/\s+/g,'');
+    const mtd_act=sbActuals.filter(r=>_rcMatch(r)&&Number(r[YEAR_COL])===curYear&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+    const mtd_bud=sbBudget.filter(r=>_rcMatch(r)&&Number(r.year||r[YEAR_COL])===curYear&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
+    const mtd_ly=sbActuals.filter(r=>_rcMatch(r)&&Number(r[YEAR_COL])===curYear-1&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+    const ytd_act=sbActuals.filter(r=>_rcMatch(r)&&Number(r[YEAR_COL])===curYear&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+    const ytd_bud=sbBudget.filter(r=>_rcMatch(r)&&Number(r.year||r[YEAR_COL])===curYear&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
+    const ytd_ly=sbActuals.filter(r=>_rcMatch(r)&&Number(r[YEAR_COL])===curYear-1&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
     return{seg,mtd_act,mtd_bud,mtd_ly,ytd_act,ytd_bud,ytd_ly};
   });
   const tot=(k)=>rows.reduce((s,r)=>s+r[k],0);
@@ -4228,6 +4292,12 @@ function renderVariance(){
       <td>${vbar(r.ytd_act,r.ytd_ly)}</td>
     </tr>`).join('')}</tbody></table>`;
   makeSortable('var_dt');
+  const noActSegs=rows.filter(r=>r.seg!=='Total'&&r.mtd_act===0&&r.mtd_ly>0).map(r=>r.seg);
+  if(noActSegs.length){
+    console.warn('[RT20/Variance] Segments with 0 current-year actuals but non-zero LY:',noActSegs,'— check that current-year data for these rate classes has been uploaded.');
+    const noteEl=document.getElementById('variance_tbl');
+    if(noteEl){const note=document.createElement('div');note.style.cssText='font-size:10px;color:var(--amber);padding:6px 8px;margin-top:4px;background:rgba(245,166,35,0.07);border-radius:4px;border-left:2px solid var(--amber)';note.textContent='⚠ Segment(s) with no current-year actuals: '+noActSegs.join(', ')+' — verify that '+curYear+' data for these rate classes has been uploaded to the database.';noteEl.appendChild(note);}
+  }
 }
 
 /* ==========================================
@@ -9067,7 +9137,60 @@ function renderLEActive(){
 function renderLEOverview(){
   if(!sbLE.length){
     const kr=document.getElementById('le_krow');
-    if(kr)kr.innerHTML='<div style="color:var(--text2);padding:20px;font-size:12px">No LE data — click 🔄 Sync.</div>';
+    if(!sbActuals.length&&!sbBudget.length){
+      if(kr)kr.innerHTML='<div style="color:var(--amber);padding:20px;font-size:12px">⚠ No LE data, actuals, or budget loaded. Click 🔄 Sync to load data.</div>';
+      return;
+    }
+    // Auto-base: actuals for closed months, budget for future months
+    const autoLabel='Auto-base';
+    const synth=[];
+    for(let m=1;m<=12;m++){
+      const useAct=m<=curMonth;
+      if(useAct){
+        sbActuals.filter(r=>Number(r[YEAR_COL]||r.year||0)===FC_BUD_YEAR&&Number(r.month||0)===m).forEach(r=>{
+          synth.push({...r,kwh_le:Number(r.kwh||0),le_label:autoLabel,year:FC_BUD_YEAR,month:m});
+        });
+      }else{
+        sbBudget.filter(b=>Number(b.year||0)===FC_BUD_YEAR&&Number(b.month||0)===m).forEach(b=>{
+          synth.push({...b,kwh_le:Number(b.kwh_budget||b.kwh||0),le_label:autoLabel,year:FC_BUD_YEAR,month:m});
+        });
+      }
+    }
+    if(!synth.length){
+      if(kr)kr.innerHTML='<div style="color:var(--text2);padding:20px;font-size:12px">No LE data loaded. Sync DB or upload LE data.</div>';
+      return;
+    }
+    // Temporarily populate sbLE with synth for rendering, then restore
+    if(kr)kr.innerHTML='<div style="background:rgba(55,138,221,.07);border-left:3px solid var(--blue);border-radius:4px;padding:8px 13px;font-size:11px;color:var(--text2);margin-bottom:8px;grid-column:1/-1">📊 <strong>Auto-base LE</strong> — actuals for months 1–'+curMonth+', budget for months '+(curMonth+1)+'–12. Upload LE data or save a version to persist.</div>';
+    // Render overview with synth rows
+    const mos2=lePeriodMonths();
+    leSavedLabels=[autoLabel];
+    leCmpToggles[autoLabel]=true;
+    if(leCmpToggles['__bud']===undefined)leCmpToggles['__bud']=true;
+    if(leCmpToggles['__act']===undefined)leCmpToggles['__act']=true;
+    const curRows2=leFilterRows(synth.filter(d=>d.year===FC_BUD_YEAR));
+    const actCur2=sbActuals.filter(d=>Number(d.year||d.cal_year||0)===FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)}));
+    const budCur2=sbBudget.filter(d=>Number(d.year||0)===FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)}));
+    const leTotal2=leSum(curRows2,mos2);
+    const actTotal2=actSum(leFilterRows(actCur2),mos2);
+    const budTotal2=budSum(leFilterRows(budCur2),mos2);
+    if(kr)kr.innerHTML+=
+      leKpi('Auto LE ('+getPH()+')',leTotal2,null,n=>fmtE(n,1))+
+      leKpi('LE vs Budget',leTotal2,budTotal2,n=>fmtE(n,1))+
+      leKpi('LE vs Actuals',leTotal2,actTotal2,n=>fmtE(n,1));
+    // Build chart with synth
+    const datasets2=[];
+    datasets2.push({label:autoLabel,data:mos2.map(m=>leSum(curRows2,[m])),borderColor:'#f5a623',backgroundColor:'rgba(245,166,35,.15)',tension:.3,pointRadius:3,fill:true,borderWidth:2});
+    if(leCmpToggles['__bud']!==false) datasets2.push({label:'Budget',data:mos2.map(m=>budSum(budCur2,[m])),borderColor:'#3498db',backgroundColor:'transparent',borderDash:[4,3],tension:.3,pointRadius:2,fill:false,borderWidth:1.5});
+    if(leCmpToggles['__act']!==false) datasets2.push({label:'Actuals',data:mos2.map(m=>actSum(actCur2,[m])),borderColor:'#2ecc71',backgroundColor:'transparent',tension:.3,pointRadius:3,fill:false,borderWidth:2});
+    const togDiv2=document.getElementById('le_ov_toggles');
+    if(togDiv2) togDiv2.innerHTML='<span style="font-size:10px;color:var(--text3)">Auto-base from actuals + budget</span>';
+    const TC2=getComputedStyle(document.documentElement).getPropertyValue('--text2').trim()||'#aaa';
+    const CC2=getComputedStyle(document.documentElement).getPropertyValue('--border').trim()||'rgba(255,255,255,0.07)';
+    mkChart('c_le_ov_main',{type:'line',data:{labels:mos2.map(m=>LE_MO[m-1]),datasets:datasets2},options:co({
+      plugins:{legend:{display:true,labels:{color:TC2,font:{size:10}}}},
+      scales:{y:{ticks:{color:TC2,font:{size:10},callback:v=>fmtE(v,0)},grid:{color:CC2}}}
+    })});
     return;
   }
   const mos=lePeriodMonths();
@@ -9149,7 +9272,11 @@ function toggleLELine(btn){
 }
 
 function renderLEMonthly(){
-  if(!sbLE.length)return;
+  if(!sbLE.length){
+    // If we have actuals+budget, the auto-base in renderLEOverview handles the LE data for that tab.
+    // Monthly view just silently returns — user should see auto-base banner on Overview tab.
+    return;
+  }
   const mos=lePeriodMonths();
   const curRows=leFilterRows(leGetCurrentRows().filter(d=>d.year===FC_BUD_YEAR));
   const actCur =leFilterRows(sbActuals.filter(d=>Number(d.year||d.cal_year||0)===FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)})));
@@ -9941,8 +10068,53 @@ function renderVldAnomalies(){
   </tr>`).join('')}</tbody></table>`;
 }
 
+function vldTab(id,btn){
+  document.querySelectorAll('#vld .ssec').forEach(el=>el.classList.remove('on'));
+  const target=document.getElementById(id);if(target)target.classList.add('on');
+  if(btn){const stabs=btn.closest('.stabs');if(stabs)stabs.querySelectorAll('.stab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');}
+  if(id==='vld_tab_def')renderVldDefReg();
+}
+
+function renderVldDefReg(){
+  const tbl=document.getElementById('vld_def_reg_tbl');if(!tbl)return;
+  if(!CUSTOMERS.length&&!sbActuals.length){tbl.innerHTML='<div style="padding:20px;text-align:center;font-size:11px;color:var(--text3)">No data loaded. Sync database first.</div>';return;}
+  const q=(document.getElementById('vld_def_reg_q')?.value||'').toLowerCase();
+  const sevF=document.getElementById('vld_def_reg_sev')?.value||'';
+  const rcF=document.getElementById('vld_def_reg_rc')?.value||'';
+  const CM_RCS=new Set(['RT40','RT50','RT60-ST','RT70']);
+  let defs=computeDefectors().filter(d=>CM_RCS.has(d.rate));
+  if(q)defs=defs.filter(d=>d.name.toLowerCase().includes(q)||d.num.includes(q));
+  if(sevF)defs=defs.filter(d=>d.sev===sevF);
+  if(rcF)defs=defs.filter(d=>d.rate===rcF);
+  const cnt=document.getElementById('vld_def_reg_count');if(cnt)cnt.textContent=defs.length+' flagged';
+  const sevClass={Critical:'def-critical',Severe:'def-severe',Moderate:'def-moderate'};
+  const _defOvr=S.get('def_overrides',{});
+  tbl.innerHTML=defs.length?`<table class="dt">
+    <thead><tr><th>Acct #</th><th>Customer</th><th>Rate</th><th>KAM</th><th>Parish</th><th>3m Avg Prior</th><th>3m Avg Current</th><th>Ratio</th><th>Severity</th><th>Consec.</th><th>Type</th><th>Cause</th><th>✉</th></tr></thead>
+    <tbody>${defs.map(d=>{
+      const ovr=_defOvr[d.num]||{};
+      const defType=ovr.type||'Unknown';
+      const defCause=ovr.cause||d.cause||'Unknown';
+      const kamName=d.kam||'--';
+      return`<tr>
+      <td style="font-size:10px;color:var(--text3)">${d.num}</td>
+      <td style="font-weight:500">${d.name}</td>
+      <td><span class="pill pt">${d.rate}</span></td>
+      <td style="font-size:10px;color:var(--teal)">${esc(kamName)}</td>
+      <td>${d.parish}</td>
+      <td>${d.prior3}</td><td style="font-weight:600">${d.curr3}</td>
+      <td><span class="heat hR">${d.ratio}%</span></td>
+      <td><span class="def-severity ${sevClass[d.sev]||''}">${d.sev}</span></td>
+      <td>${d.consec} mo.</td>
+      <td><select style="font-size:10px;background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:2px 4px" onchange="updateDefType('${d.num.replace(/'/g,"\\'")}',this.value)"><option${defType==='Temporary'?' selected':''}>Temporary</option><option${defType==='Structural'?' selected':''}>Structural</option><option${defType==='Unknown'?' selected':''}>Unknown</option></select></td>
+      <td><select style="font-size:10px;background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:2px 4px" onchange="updateDefCause('${d.num.replace(/'/g,"\\'")}',this.value)"><option${defCause==='Solar DG'?' selected':''}>Solar DG</option><option${defCause==='CHP'?' selected':''}>CHP</option><option${defCause==='Generator'?' selected':''}>Generator</option><option${defCause==='Load Reduction'?' selected':''}>Load Reduction</option><option${defCause==='Account Closed'?' selected':''}>Account Closed</option><option${defCause==='Tariff Transfer'?' selected':''}>Tariff Transfer</option><option${defCause==='Data Error'?' selected':''}>Data Error</option><option${defCause==='Unknown'?' selected':''}>Unknown</option></select></td>
+      <td><button style="font-size:11px;background:transparent;border:1px solid var(--border);border-radius:4px;color:var(--text2);cursor:pointer;padding:2px 5px" onclick="emailKAM('${d.num.replace(/'/g,"\\'")}','${d.name.replace(/'/g,"\\'").replace(/"/g,'&quot;')}','${kamName.replace(/'/g,"\\'")}','${defCause}','${d.sev}')">✉</button></td>
+    </tr>`;}).join('')}</tbody></table>`
+    :'<div style="padding:24px;text-align:center;font-size:12px;color:var(--green)">✓ No commercial defectors match current filters.</div>';
+}
+
 /* ── App version ────────────────────────────────────────────────────── */
-const APP_VERSION = '1.0.93';
+const APP_VERSION = '1.0.95';
 
 // Stamp version into navbar once DOM is ready
 (function stampVersion(){
