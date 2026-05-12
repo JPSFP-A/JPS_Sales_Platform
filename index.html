@@ -390,7 +390,7 @@ document.getElementById('schema_stale_banner').style.display='none';
 <div class="sidebar" id="sidebar">
   <div class="sb-logo">
     <h2>⚡ JPS Analytics</h2>
-    <p>Sales Platform v1.0.96</p>
+    <p>Sales Platform v1.0.97</p>
   </div>
   <div class="nav-sec">
     <div class="nav-lbl">Analysis</div>
@@ -1150,6 +1150,20 @@ document.getElementById('schema_stale_banner').style.display='none';
 
     <!-- === DATA VALIDATION / DEFECTION === -->
     <div id="vld" class="sec">
+      <!-- Validation KPI summary — always visible, updated by runValidation() -->
+      <div class="krow" style="margin-bottom:10px">
+        <div class="kpi kr"><div class="kl">Dropped Accounts</div><div class="kv" id="vld_dropped_count">--</div><div class="ks dn" id="vld_dropped_gwh">-- GWh lost</div></div>
+        <div class="kpi ka"><div class="kl">GWh Deflections</div><div class="kv" id="vld_deflect_count">--</div><div class="ks dn" id="vld_deflect_gwh">-- GWh at risk</div></div>
+        <div class="kpi kt"><div class="kl">No History Groups</div><div class="kv" id="vld_nohistory_count">--</div><div class="ks nt">accounts with no prior year</div></div>
+        <div class="kpi ka"><div class="kl">MoM Anomalies</div><div class="kv" id="vld_anom_count">--</div><div class="ks dn">events &gt;25% swing</div></div>
+        <div class="kpi kt"><div class="kl">Last Validated</div><div class="kv" id="vld_ts" style="font-size:11px">--</div><div class="ks nt">Sync DB to refresh</div></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <button class="btn btn-t" onclick="runValidation()">🔍 Run Validation</button>
+        <button class="btn btn-o" onclick="exportTableCSV('vld_dropped_tbl','validation_dropped_accounts')">⬇ Export Dropped</button>
+        <button class="btn btn-o" onclick="exportTableCSV('vld_deflect_tbl','validation_deflections')">⬇ Export Deflections</button>
+        <button class="btn btn-o" onclick="exportTableCSV('vld_anom_tbl','validation_anomalies')">⬇ Export Anomalies</button>
+      </div>
       <div class="stabs" style="margin-bottom:12px">
         <button class="stab on" onclick="vldTab('vld_tab_def',this)">📉 Defection Register</button>
         <button class="stab" onclick="vldTab('vld_tab_dropped',this)">🚫 Dropped Accounts</button>
@@ -1173,32 +1187,6 @@ document.getElementById('schema_stale_banner').style.display='none';
 
       <!-- Sub-tab: Dropped Accounts (existing content moved here) -->
       <div id="vld_tab_dropped" class="ssec">
-      <div class="krow">
-        <div class="kpi kr"><div class="kl">Dropped Accounts</div><div class="kv" id="vld_dropped_count">--</div><div class="ks dn" id="vld_dropped_gwh">-- GWh lost</div></div>
-        <div class="kpi ka"><div class="kl">GWh Deflections</div><div class="kv" id="vld_deflect_count">--</div><div class="ks dn" id="vld_deflect_gwh">-- GWh at risk</div></div>
-        <div class="kpi kt"><div class="kl">No History Groups</div><div class="kv" id="vld_nohistory_count">--</div><div class="ks nt">accounts with no prior year</div></div>
-        <div class="kpi ka"><div class="kl">MoM Anomalies</div><div class="kv" id="vld_anom_count">--</div><div class="ks dn">events &gt;25% swing</div></div>
-        <div class="kpi kt"><div class="kl">Last Validated</div><div class="kv" id="vld_ts" style="font-size:11px">--</div><div class="ks nt">Sync DB to refresh</div></div>
-      </div>
-      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-        <button class="btn btn-t" onclick="runValidation()">🔍 Run Validation</button>
-        <button class="btn btn-o" onclick="exportTableCSV('vld_dropped_tbl','validation_dropped_accounts')">⬇ Export Dropped</button>
-        <button class="btn btn-o" onclick="exportTableCSV('vld_deflect_tbl','validation_deflections')">⬇ Export Deflections</button>
-        <button class="btn btn-o" onclick="exportTableCSV('vld_anom_tbl','validation_anomalies')">⬇ Export Anomalies</button>
-      </div>
-      <div class="krow">
-        <div class="kpi kr"><div class="kl">Dropped Accounts</div><div class="kv" id="vld_dropped_count">--</div><div class="ks dn" id="vld_dropped_gwh">-- GWh lost</div></div>
-        <div class="kpi ka"><div class="kl">GWh Deflections</div><div class="kv" id="vld_deflect_count">--</div><div class="ks dn" id="vld_deflect_gwh">-- GWh at risk</div></div>
-        <div class="kpi kt"><div class="kl">No History Groups</div><div class="kv" id="vld_nohistory_count">--</div><div class="ks nt">accounts with no prior year</div></div>
-        <div class="kpi ka"><div class="kl">MoM Anomalies</div><div class="kv" id="vld_anom_count">--</div><div class="ks dn">events &gt;25% swing</div></div>
-        <div class="kpi kt"><div class="kl">Last Validated</div><div class="kv" id="vld_ts" style="font-size:11px">--</div><div class="ks nt">Sync DB to refresh</div></div>
-      </div>
-      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-        <button class="btn btn-t" onclick="runValidation()">🔍 Run Validation</button>
-        <button class="btn btn-o" onclick="exportTableCSV('vld_dropped_tbl','validation_dropped_accounts')">⬇ Export Dropped</button>
-        <button class="btn btn-o" onclick="exportTableCSV('vld_deflect_tbl','validation_deflections')">⬇ Export Deflections</button>
-        <button class="btn btn-o" onclick="exportTableCSV('vld_anom_tbl','validation_anomalies')">⬇ Export Anomalies</button>
-      </div>
 
       <!-- Dropped Accounts -->
       <div class="card" style="margin-bottom:10px;border-color:rgba(232,64,64,.25)">
@@ -8815,7 +8803,7 @@ async function syncSupabase(silent=false){
     else log.push('KAM: ⚠ jps_kam not found — run schema SQL');
 
     if(amData){sbAccountMaster=amData;log.push(`Account Master: jps_account_master (${amData.length} accounts)`);}
-    else log.push('Account Master: ⚠ jps_account_master not found — run schema SQL');
+    else log.push('Account Master: jps_account_master not found (optional — run schema SQL to enable)');
 
     const actOk=_useCachedActuals||!!actData;
     if(!_useCachedActuals&&actData){
@@ -8861,12 +8849,12 @@ async function syncSupabase(silent=false){
     else log.push('Net Gen: ⚠ net_gen_historical not accessible');
 
     if(ev){sbEvData=ev;log.push(`EV Data: jps_ev_accounts (${ev.length} rows)`);}
-    else log.push('EV Data: ⚠ jps_ev_accounts not found (create table to populate)');
+    else log.push('EV Data: jps_ev_accounts not found (optional — create table to populate)');
 
     if(pl){PERIOD_LOCKS=pl;log.push(`Period Locks: jps_period_locks (${pl.length} locked)`);}
+    else log.push('Period Locks: jps_period_locks not found (optional — run schema SQL in Admin)');
     if(fcvData){sbForecastVersions=fcvData;log.push(`Forecast versions: ${fcvData.length}`);}
     if(fcData){sbForecast=fcData;log.push(`Forecast rows: ${fcData.length}`);}
-    else log.push('Period Locks: ⚠ jps_period_locks not found (run schema SQL in Admin)');
 
     const anyOk=actOk||budOk||!!ng;
     sbConnected=anyOk;
