@@ -390,7 +390,7 @@ document.getElementById('schema_stale_banner').style.display='none';
 <div class="sidebar" id="sidebar">
   <div class="sb-logo">
     <h2>⚡ JPS Analytics</h2>
-    <p>Sales Platform v1.0.97</p>
+    <p>Sales Platform v1.0.98</p>
   </div>
   <div class="nav-sec">
     <div class="nav-lbl">Analysis</div>
@@ -8507,8 +8507,8 @@ async function sbTable(tbl,opts={}){
     const{data,error}=await q;
     return(!error&&Array.isArray(data))?data:null;
   }
-  // Paginated fetch — 5000-row pages minimise round-trips
-  const PAGE=5000;
+  // Paginated fetch — 10000-row pages minimise round-trips
+  const PAGE=10000;
   let all=[],from=0;
   for(;;){
     let q=sb.from(tbl).select(opts.cols||'*').range(from,from+PAGE-1);
@@ -8770,10 +8770,12 @@ async function syncSupabase(silent=false){
     if(!_yearColConfirmed)await detectYearCol(sb);
 
     // ── Fire ALL queries in parallel — always fetch fresh (no cache skip) ──
-    const _actYearCutoff=new Date().getFullYear()-2; // fetch last 3 years
+    const _actYearCutoff=new Date().getFullYear()-1; // fetch current + prior year only
     const _useCachedActuals=false; // always fetch fresh actuals
     // Use the confirmed YEAR_COL for the gte filter (handles both 'year' and 'cal_year')
     const _yearFilterCol=YEAR_COL||'year';
+    // Only fetch columns the platform uses — skips created_at, saves bandwidth
+    const _actCols='id,year,month,jps_ac,name,rate_class,parish,consumption_bucket,kwh,revenue_jmd,demand_kva,customer_count';
     const [
       indData,kamData,amData,actData,
       budData,leData,sysStatsData,lossesFcData,
@@ -8783,7 +8785,7 @@ async function syncSupabase(silent=false){
       sbTable('jps_industries',{}),
       sbTable('jps_kam',{}),
       sbTable('jps_account_master',{limit:50000}),
-      sbTable('jps_actuals',{gte:[_yearFilterCol,_actYearCutoff]}),
+      sbTable('jps_actuals',{gte:[_yearFilterCol,_actYearCutoff],cols:_actCols}),
       sbTable('jps_budget',{limit:50000}),
       sbTable('jps_le',{limit:100000}),
       sbTable('jps_system_stats',{order:'year,month'}),
