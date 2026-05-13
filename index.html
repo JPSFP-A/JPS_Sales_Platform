@@ -390,7 +390,7 @@ document.getElementById('schema_stale_banner').style.display='none';
 <div class="sidebar" id="sidebar">
   <div class="sb-logo">
     <h2>⚡ JPS Analytics</h2>
-    <p>Sales Platform v1.0.98</p>
+    <p>Sales Platform v1.0.99</p>
   </div>
   <div class="nav-sec">
     <div class="nav-lbl">Analysis</div>
@@ -8785,7 +8785,7 @@ async function syncSupabase(silent=false){
       sbTable('jps_industries',{}),
       sbTable('jps_kam',{}),
       sbTable('jps_account_master',{limit:50000}),
-      sbTable('jps_actuals',{gte:[_yearFilterCol,_actYearCutoff],cols:_actCols}),
+      sbTable('jps_actuals_agg',{gte:[_yearFilterCol,_actYearCutoff],cols:_actCols}),
       sbTable('jps_budget',{limit:50000}),
       sbTable('jps_le',{limit:100000}),
       sbTable('jps_system_stats',{order:'year,month'}),
