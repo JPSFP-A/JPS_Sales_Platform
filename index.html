@@ -390,7 +390,7 @@ document.getElementById('schema_stale_banner').style.display='none';
 <div class="sidebar" id="sidebar">
   <div class="sb-logo">
     <h2>⚡ JPS Analytics</h2>
-    <p>Sales Platform v1.0.99</p>
+    <p>Sales Platform v1.1.0</p>
   </div>
   <div class="nav-sec">
     <div class="nav-lbl">Analysis</div>
@@ -8785,7 +8785,17 @@ async function syncSupabase(silent=false){
       sbTable('jps_industries',{}),
       sbTable('jps_kam',{}),
       sbTable('jps_account_master',{limit:50000}),
-      sbTable('jps_actuals_agg',{gte:[_yearFilterCol,_actYearCutoff],cols:_actCols}),
+      (async()=>{
+        // RPC function bypasses PostgREST view limitations — security definer, no RLS conflict
+        try{
+          const{data,error}=await getSB().rpc('get_actuals_agg',{year_cutoff:_actYearCutoff});
+          if(error)throw error;
+          return data||null;
+        }catch(e){
+          console.warn('[sync] get_actuals_agg RPC failed, fallback to raw table:',e.message);
+          return sbTable('jps_actuals',{gte:[_yearFilterCol,_actYearCutoff],cols:_actCols});
+        }
+      })(),
       sbTable('jps_budget',{limit:50000}),
       sbTable('jps_le',{limit:100000}),
       sbTable('jps_system_stats',{order:'year,month'}),
