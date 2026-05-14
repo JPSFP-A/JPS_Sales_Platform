@@ -5318,7 +5318,13 @@ function renderCommercialKPIs(){
   sv('kpi_cm_def',defs.length);
   sv('kpi_cm_custs',comCusts.length.toLocaleString());
   // Budget account count — distinct customer numbers in commercial budget for curYear
-  const commBudAccts=new Set(sbBudget.filter(b=>!(b.consumption_bucket||'').trim()&&Number(b[YEAR_COL]||b.year||0)===curYear).map(b=>_custNum(String(b.jps_ac||'')))).size;
+  // commBudAccts: distinct commercial accounts in budget for current year.
+  // When sbBudget is aggregated (phase 1): sum distinct_accts for month 1 — each account
+  // belongs to exactly one rate_class group so this sum equals the total distinct count.
+  // When sbBudget is full granular (phase 2): use Set for exact dedup.
+  const commBudAccts=sbBudget.length&&sbBudget[0].jps_ac!==undefined
+    ?new Set(sbBudget.filter(b=>!(b.consumption_bucket||'').trim()&&Number(b[YEAR_COL]||b.year||0)===curYear).map(b=>_custNum(String(b.jps_ac||'')))).size
+    :sbBudget.filter(b=>!(b.consumption_bucket||'').trim()&&Number(b.year||0)===curYear&&Number(b.month||0)===1).reduce((s,b)=>s+Number(b.distinct_accts||0),0);
   const cmCustsNote=document.getElementById('kpi_cm_custs_note');
   if(cmCustsNote)cmCustsNote.textContent=commBudAccts?`vs ${commBudAccts.toLocaleString()} budget`:'commercial accounts';
 }
@@ -8517,8 +8523,8 @@ async function sbTable(tbl,opts={}){
     const{data,error}=await q;
     return(!error&&Array.isArray(data))?data:null;
   }
-  // Paginated fetch — 10000-row pages minimise round-trips
-  const PAGE=10000;
+  // Paginated fetch — large page size minimises round-trips; early-break skips empty final page
+  const PAGE=opts.pageSize||50000;
   let all=[],from=0;
   for(;;){
     let q=sb.from(tbl).select(opts.cols||'*').range(from,from+PAGE-1);
@@ -8527,6 +8533,7 @@ async function sbTable(tbl,opts={}){
     const{data,error}=await q;
     if(error||!Array.isArray(data)||!data.length)break;
     all=all.concat(data);
+    if(data.length<PAGE)break;   // received fewer rows than page size → last page, skip empty round-trip
     from+=data.length;           // advance by actual rows received (handles max_rows cap)
     if(from>1000000)break;       // safety cap
   }
@@ -8806,8 +8813,12 @@ async function syncSupabase(silent=false){
           return sbTable('jps_actuals',{gte:[_yearFilterCol,_actYearCutoff],cols:_actCols});
         }
       })(),
-      sbTable('jps_budget',{limit:50000}),
-      sbTable('jps_le',{limit:100000}),
+      // get_budget_agg: ~500 aggregated rows vs 32k granular — 97% less data on initial load
+      // Full per-account budget is background-loaded in phase 2 for top-customers / KAM panels
+      (async()=>{try{const{data,error}=await getSB().rpc('get_budget_agg');return(!error&&Array.isArray(data))?data:null;}catch(e){if(window.JpsMonitor)JpsMonitor.warning('sync:budget-agg',e?.message);return null;}})(),
+      // get_le_agg: ~500 aggregated rows vs 32k granular — 98% less data on initial load
+      // Full per-account LE is background-loaded in phase 2 for account search / customer adjustments
+      (async()=>{try{const{data,error}=await getSB().rpc('get_le_agg');return(!error&&Array.isArray(data))?data:null;}catch(e){if(window.JpsMonitor)JpsMonitor.warning('sync:le-agg',e?.message);return null;}})(),
       sbTable('jps_system_stats',{order:'year,month'}),
       sbTable('jps_losses_forecast',{order:'forecast_date,year,month'}),
       sbTable('net_gen_historical',{order:'year'}),
@@ -8858,8 +8869,41 @@ async function syncSupabase(silent=false){
     sbLE=leData||[];
     if(sbLE.length){
       const labels=[...new Set(sbLE.map(r=>r.le_label).filter(Boolean))];
-      log.push(`LE: jps_le (${sbLE.length} rows — ${labels.length} version(s): ${labels.join(', ')})`);
+      log.push(`LE: jps_le (${sbLE.length} aggregated rows — ${labels.length} version(s): ${labels.join(', ')})`);
     } else log.push('LE: jps_le (0 rows)');
+
+    // ── Phase 2: background upgrade to full per-account data ────────────────
+    // Aggregated RPCs power all summary charts immediately. Full granular data is
+    // fetched silently 2 s later and unlocks: top-customers budget, KAM budget
+    // breakdown, LE account-level search and per-customer adjustments.
+    if(!window._sbPhase2Pending){
+      window._sbPhase2Pending=true;
+      setTimeout(async()=>{
+        try{
+          const budCols='year,month,rate_class,parish,consumption_bucket,jps_ac,kwh_budget,revenue_budget,demand_budget,customer_count';
+          const leCols ='year,month,rate_class,parish,consumption_bucket,jps_ac,name,kwh_le,revenue_le,demand_le,customer_count,le_label';
+          const[fullBud,fullLE]=await Promise.all([
+            sbTable('jps_budget',{cols:budCols}),
+            sbTable('jps_le',   {cols:leCols})
+          ]);
+          let upgraded=false;
+          if(fullBud&&fullBud.length){
+            sbBudget=fullBud;upgraded=true;
+            if(window.JpsMonitor)JpsMonitor.info('sync:budget-upgraded','Full budget: '+fullBud.length+' rows');
+          }
+          if(fullLE&&fullLE.length){
+            sbLE=fullLE;upgraded=true;leEngine=null;
+            if(window.JpsMonitor)JpsMonitor.info('sync:le-upgraded','Full LE: '+fullLE.length+' rows');
+          }
+          if(upgraded){
+            const activeId=document.querySelector('.sec.on')?.id;
+            try{renderSection(activeId||'ov');}catch(_){}
+          }
+        }catch(e){
+          if(window.JpsMonitor)JpsMonitor.warning('sync:phase2-failed',e?.message||String(e));
+        }finally{window._sbPhase2Pending=false;}
+      },2000);
+    }
 
     sbSystemStats=sysStatsData||[];
     if(sbSystemStats.length) log.push(`System Stats: jps_system_stats (${sbSystemStats.length} rows)`);
