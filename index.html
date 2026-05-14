@@ -11,6 +11,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <!-- XLSX loaded lazily on first upload/download — saves ~1MB on initial page load -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="./config.js"></script>
+<script src="./jps-monitor.js"></script>
 <style>
 :root{
   --navy:#0d1b2a;--navy2:#1a2d42;--navy3:#243d58;--navy4:#2e4d6e;
@@ -2489,11 +2491,16 @@ async function doLogin(){
       if(r.error){
         // Profile row missing — auto-create. Check if first user.
         let isFirst=false;
-        try{const cnt=await sb.from('profiles').select('id',{count:'exact',head:true});isFirst=(cnt.count||0)===0;}catch(e2){}
+        try{const cnt=await sb.from('profiles').select('id',{count:'exact',head:true});isFirst=(cnt.count||0)===0;}catch(e2){
+          if(window.JpsMonitor)JpsMonitor.warning('auth:profile-count',e2?.message||String(e2));
+        }
         const salesRole=isFirst?'admin':'view';
         const fpaRole  =isFirst?'admin':'viewer';
         const nm=data.user.email.split('@')[0];
-        try{await sb.from('profiles').upsert({id:data.user.id,name:nm,email:data.user.email,role:fpaRole,sales_role:salesRole,territory:'All',is_active:true,created_at:new Date().toISOString()},{onConflict:'id'});}catch(e3){}
+        try{await sb.from('profiles').upsert({id:data.user.id,name:nm,email:data.user.email,role:fpaRole,sales_role:salesRole,territory:'All',is_active:true,created_at:new Date().toISOString()},{onConflict:'id'});}catch(e3){
+          if(window.JpsMonitor)JpsMonitor.error('auth:profile-create',e3?.message||String(e3),{userId:data.user.id});
+          toast('Profile setup failed — contact admin if login issues persist','w');
+        }
         profile={id:data.user.id,name:nm,email:data.user.email,sales_role:salesRole,role:fpaRole,territory:'All'};
         if(isFirst)toast('First-time setup: your account has been set as Admin','ok');
         else toast('Profile created with View access — Admin can upgrade your role in Admin → Users','w');
@@ -2576,6 +2583,7 @@ async function doRegister(){
 /* ── Common post-auth setup ── */
 function _applyLogin(user){
   CU=user;
+  if (window.JpsMonitor) JpsMonitor.setUser(CU.id || CU.email, CU.name || CU.email);
   const btn=document.getElementById('lBtn');
   if(btn){btn.textContent='Sign In →';btn.disabled=false;}
   document.getElementById('loginScreen').style.display='none';
@@ -8401,8 +8409,10 @@ function copySchemaSql(){
 /* ==========================================
    SUPABASE — Direct SDK Connection (no proxy)
 ========================================== */
-const SB_URL = 'https://bhrswnbenkvflpdjhfpa.supabase.co';
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJocnN3bmJlbmt2ZmxwZGpoZnBhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMTc0OTcsImV4cCI6MjA5MTg5MzQ5N30.JupFs0tnMn3k282PqFOSMi2ch-wtB7Ewv7O8fN16-94';
+const SB_URL = window.APP_CONFIG?.supabaseUrl || '';
+const SB_KEY = window.APP_CONFIG?.supabaseAnonKey || '';
+
+if (window.JpsMonitor) JpsMonitor.init({ getClient: getSB, appName: 'sales' });
 
 let _sbClient=null,
     sbActuals=[],       // jps_actuals          — commercial account-level monthly consumption

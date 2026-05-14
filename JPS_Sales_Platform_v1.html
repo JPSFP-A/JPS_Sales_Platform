@@ -11,6 +11,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <!-- XLSX loaded lazily on first upload/download — saves ~1MB on initial page load -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="./config.js"></script>
+<script src="./jps-monitor.js"></script>
 <style>
 :root{
   --navy:#0d1b2a;--navy2:#1a2d42;--navy3:#243d58;--navy4:#2e4d6e;
@@ -390,7 +392,7 @@ document.getElementById('schema_stale_banner').style.display='none';
 <div class="sidebar" id="sidebar">
   <div class="sb-logo">
     <h2>⚡ JPS Analytics</h2>
-    <p>Sales Platform v1.0.96</p>
+    <p>Sales Platform v1.1.0</p>
   </div>
   <div class="nav-sec">
     <div class="nav-lbl">Analysis</div>
@@ -1150,6 +1152,20 @@ document.getElementById('schema_stale_banner').style.display='none';
 
     <!-- === DATA VALIDATION / DEFECTION === -->
     <div id="vld" class="sec">
+      <!-- Validation KPI summary — always visible, updated by runValidation() -->
+      <div class="krow" style="margin-bottom:10px">
+        <div class="kpi kr"><div class="kl">Dropped Accounts</div><div class="kv" id="vld_dropped_count">--</div><div class="ks dn" id="vld_dropped_gwh">-- GWh lost</div></div>
+        <div class="kpi ka"><div class="kl">GWh Deflections</div><div class="kv" id="vld_deflect_count">--</div><div class="ks dn" id="vld_deflect_gwh">-- GWh at risk</div></div>
+        <div class="kpi kt"><div class="kl">No History Groups</div><div class="kv" id="vld_nohistory_count">--</div><div class="ks nt">accounts with no prior year</div></div>
+        <div class="kpi ka"><div class="kl">MoM Anomalies</div><div class="kv" id="vld_anom_count">--</div><div class="ks dn">events &gt;25% swing</div></div>
+        <div class="kpi kt"><div class="kl">Last Validated</div><div class="kv" id="vld_ts" style="font-size:11px">--</div><div class="ks nt">Sync DB to refresh</div></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <button class="btn btn-t" onclick="runValidation()">🔍 Run Validation</button>
+        <button class="btn btn-o" onclick="exportTableCSV('vld_dropped_tbl','validation_dropped_accounts')">⬇ Export Dropped</button>
+        <button class="btn btn-o" onclick="exportTableCSV('vld_deflect_tbl','validation_deflections')">⬇ Export Deflections</button>
+        <button class="btn btn-o" onclick="exportTableCSV('vld_anom_tbl','validation_anomalies')">⬇ Export Anomalies</button>
+      </div>
       <div class="stabs" style="margin-bottom:12px">
         <button class="stab on" onclick="vldTab('vld_tab_def',this)">📉 Defection Register</button>
         <button class="stab" onclick="vldTab('vld_tab_dropped',this)">🚫 Dropped Accounts</button>
@@ -1173,32 +1189,6 @@ document.getElementById('schema_stale_banner').style.display='none';
 
       <!-- Sub-tab: Dropped Accounts (existing content moved here) -->
       <div id="vld_tab_dropped" class="ssec">
-      <div class="krow">
-        <div class="kpi kr"><div class="kl">Dropped Accounts</div><div class="kv" id="vld_dropped_count">--</div><div class="ks dn" id="vld_dropped_gwh">-- GWh lost</div></div>
-        <div class="kpi ka"><div class="kl">GWh Deflections</div><div class="kv" id="vld_deflect_count">--</div><div class="ks dn" id="vld_deflect_gwh">-- GWh at risk</div></div>
-        <div class="kpi kt"><div class="kl">No History Groups</div><div class="kv" id="vld_nohistory_count">--</div><div class="ks nt">accounts with no prior year</div></div>
-        <div class="kpi ka"><div class="kl">MoM Anomalies</div><div class="kv" id="vld_anom_count">--</div><div class="ks dn">events &gt;25% swing</div></div>
-        <div class="kpi kt"><div class="kl">Last Validated</div><div class="kv" id="vld_ts" style="font-size:11px">--</div><div class="ks nt">Sync DB to refresh</div></div>
-      </div>
-      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-        <button class="btn btn-t" onclick="runValidation()">🔍 Run Validation</button>
-        <button class="btn btn-o" onclick="exportTableCSV('vld_dropped_tbl','validation_dropped_accounts')">⬇ Export Dropped</button>
-        <button class="btn btn-o" onclick="exportTableCSV('vld_deflect_tbl','validation_deflections')">⬇ Export Deflections</button>
-        <button class="btn btn-o" onclick="exportTableCSV('vld_anom_tbl','validation_anomalies')">⬇ Export Anomalies</button>
-      </div>
-      <div class="krow">
-        <div class="kpi kr"><div class="kl">Dropped Accounts</div><div class="kv" id="vld_dropped_count">--</div><div class="ks dn" id="vld_dropped_gwh">-- GWh lost</div></div>
-        <div class="kpi ka"><div class="kl">GWh Deflections</div><div class="kv" id="vld_deflect_count">--</div><div class="ks dn" id="vld_deflect_gwh">-- GWh at risk</div></div>
-        <div class="kpi kt"><div class="kl">No History Groups</div><div class="kv" id="vld_nohistory_count">--</div><div class="ks nt">accounts with no prior year</div></div>
-        <div class="kpi ka"><div class="kl">MoM Anomalies</div><div class="kv" id="vld_anom_count">--</div><div class="ks dn">events &gt;25% swing</div></div>
-        <div class="kpi kt"><div class="kl">Last Validated</div><div class="kv" id="vld_ts" style="font-size:11px">--</div><div class="ks nt">Sync DB to refresh</div></div>
-      </div>
-      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-        <button class="btn btn-t" onclick="runValidation()">🔍 Run Validation</button>
-        <button class="btn btn-o" onclick="exportTableCSV('vld_dropped_tbl','validation_dropped_accounts')">⬇ Export Dropped</button>
-        <button class="btn btn-o" onclick="exportTableCSV('vld_deflect_tbl','validation_deflections')">⬇ Export Deflections</button>
-        <button class="btn btn-o" onclick="exportTableCSV('vld_anom_tbl','validation_anomalies')">⬇ Export Anomalies</button>
-      </div>
 
       <!-- Dropped Accounts -->
       <div class="card" style="margin-bottom:10px;border-color:rgba(232,64,64,.25)">
@@ -2501,11 +2491,16 @@ async function doLogin(){
       if(r.error){
         // Profile row missing — auto-create. Check if first user.
         let isFirst=false;
-        try{const cnt=await sb.from('profiles').select('id',{count:'exact',head:true});isFirst=(cnt.count||0)===0;}catch(e2){}
+        try{const cnt=await sb.from('profiles').select('id',{count:'exact',head:true});isFirst=(cnt.count||0)===0;}catch(e2){
+          if(window.JpsMonitor)JpsMonitor.warning('auth:profile-count',e2?.message||String(e2));
+        }
         const salesRole=isFirst?'admin':'view';
         const fpaRole  =isFirst?'admin':'viewer';
         const nm=data.user.email.split('@')[0];
-        try{await sb.from('profiles').upsert({id:data.user.id,name:nm,email:data.user.email,role:fpaRole,sales_role:salesRole,territory:'All',is_active:true,created_at:new Date().toISOString()},{onConflict:'id'});}catch(e3){}
+        try{await sb.from('profiles').upsert({id:data.user.id,name:nm,email:data.user.email,role:fpaRole,sales_role:salesRole,territory:'All',is_active:true,created_at:new Date().toISOString()},{onConflict:'id'});}catch(e3){
+          if(window.JpsMonitor)JpsMonitor.error('auth:profile-create',e3?.message||String(e3),{userId:data.user.id});
+          toast('Profile setup failed — contact admin if login issues persist','w');
+        }
         profile={id:data.user.id,name:nm,email:data.user.email,sales_role:salesRole,role:fpaRole,territory:'All'};
         if(isFirst)toast('First-time setup: your account has been set as Admin','ok');
         else toast('Profile created with View access — Admin can upgrade your role in Admin → Users','w');
@@ -2588,6 +2583,7 @@ async function doRegister(){
 /* ── Common post-auth setup ── */
 function _applyLogin(user){
   CU=user;
+  if (window.JpsMonitor) JpsMonitor.setUser(CU.id || CU.email, CU.name || CU.email);
   const btn=document.getElementById('lBtn');
   if(btn){btn.textContent='Sign In →';btn.disabled=false;}
   document.getElementById('loginScreen').style.display='none';
@@ -8413,8 +8409,10 @@ function copySchemaSql(){
 /* ==========================================
    SUPABASE — Direct SDK Connection (no proxy)
 ========================================== */
-const SB_URL = 'https://bhrswnbenkvflpdjhfpa.supabase.co';
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJocnN3bmJlbmt2ZmxwZGpoZnBhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMTc0OTcsImV4cCI6MjA5MTg5MzQ5N30.JupFs0tnMn3k282PqFOSMi2ch-wtB7Ewv7O8fN16-94';
+const SB_URL = window.APP_CONFIG?.supabaseUrl || '';
+const SB_KEY = window.APP_CONFIG?.supabaseAnonKey || '';
+
+if (window.JpsMonitor) JpsMonitor.init({ getClient: getSB, appName: 'sales' });
 
 let _sbClient=null,
     sbActuals=[],       // jps_actuals          — commercial account-level monthly consumption
@@ -8519,8 +8517,8 @@ async function sbTable(tbl,opts={}){
     const{data,error}=await q;
     return(!error&&Array.isArray(data))?data:null;
   }
-  // Paginated fetch — 5000-row pages minimise round-trips
-  const PAGE=5000;
+  // Paginated fetch — 10000-row pages minimise round-trips
+  const PAGE=10000;
   let all=[],from=0;
   for(;;){
     let q=sb.from(tbl).select(opts.cols||'*').range(from,from+PAGE-1);
@@ -8782,10 +8780,12 @@ async function syncSupabase(silent=false){
     if(!_yearColConfirmed)await detectYearCol(sb);
 
     // ── Fire ALL queries in parallel — always fetch fresh (no cache skip) ──
-    const _actYearCutoff=new Date().getFullYear()-2; // fetch last 3 years
+    const _actYearCutoff=new Date().getFullYear()-1; // fetch current + prior year only
     const _useCachedActuals=false; // always fetch fresh actuals
     // Use the confirmed YEAR_COL for the gte filter (handles both 'year' and 'cal_year')
     const _yearFilterCol=YEAR_COL||'year';
+    // Only fetch columns the platform uses — skips created_at, saves bandwidth
+    const _actCols='id,year,month,jps_ac,name,rate_class,parish,consumption_bucket,kwh,revenue_jmd,demand_kva,customer_count';
     const [
       indData,kamData,amData,actData,
       budData,leData,sysStatsData,lossesFcData,
@@ -8795,7 +8795,17 @@ async function syncSupabase(silent=false){
       sbTable('jps_industries',{}),
       sbTable('jps_kam',{}),
       sbTable('jps_account_master',{limit:50000}),
-      sbTable('jps_actuals',{gte:[_yearFilterCol,_actYearCutoff]}),
+      (async()=>{
+        // RPC function bypasses PostgREST view limitations — security definer, no RLS conflict
+        try{
+          const{data,error}=await getSB().rpc('get_actuals_agg',{year_cutoff:_actYearCutoff});
+          if(error)throw error;
+          return data||null;
+        }catch(e){
+          console.warn('[sync] get_actuals_agg RPC failed, fallback to raw table:',e.message);
+          return sbTable('jps_actuals',{gte:[_yearFilterCol,_actYearCutoff],cols:_actCols});
+        }
+      })(),
       sbTable('jps_budget',{limit:50000}),
       sbTable('jps_le',{limit:100000}),
       sbTable('jps_system_stats',{order:'year,month'}),
@@ -8815,7 +8825,7 @@ async function syncSupabase(silent=false){
     else log.push('KAM: ⚠ jps_kam not found — run schema SQL');
 
     if(amData){sbAccountMaster=amData;log.push(`Account Master: jps_account_master (${amData.length} accounts)`);}
-    else log.push('Account Master: ⚠ jps_account_master not found — run schema SQL');
+    else log.push('Account Master: jps_account_master not found (optional — run schema SQL to enable)');
 
     const actOk=_useCachedActuals||!!actData;
     if(!_useCachedActuals&&actData){
@@ -8861,12 +8871,12 @@ async function syncSupabase(silent=false){
     else log.push('Net Gen: ⚠ net_gen_historical not accessible');
 
     if(ev){sbEvData=ev;log.push(`EV Data: jps_ev_accounts (${ev.length} rows)`);}
-    else log.push('EV Data: ⚠ jps_ev_accounts not found (create table to populate)');
+    else log.push('EV Data: jps_ev_accounts not found (optional — create table to populate)');
 
     if(pl){PERIOD_LOCKS=pl;log.push(`Period Locks: jps_period_locks (${pl.length} locked)`);}
+    else log.push('Period Locks: jps_period_locks not found (optional — run schema SQL in Admin)');
     if(fcvData){sbForecastVersions=fcvData;log.push(`Forecast versions: ${fcvData.length}`);}
     if(fcData){sbForecast=fcData;log.push(`Forecast rows: ${fcData.length}`);}
-    else log.push('Period Locks: ⚠ jps_period_locks not found (run schema SQL in Admin)');
 
     const anyOk=actOk||budOk||!!ng;
     sbConnected=anyOk;
