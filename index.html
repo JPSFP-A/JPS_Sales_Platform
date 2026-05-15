@@ -8841,10 +8841,10 @@ async function syncSupabase(silent=false){
     if(amData){sbAccountMaster=amData;log.push(`Account Master: jps_account_master (${amData.length} accounts)`);}
     else log.push('Account Master: jps_account_master not found (optional — run schema SQL to enable)');
 
-    const actOk=_useCachedActuals||!!actData;
-    if(!_useCachedActuals&&actData){
+    const actOk=!!actData;
+    if(actData){
       sbActuals=actData;
-      log.push(`Actuals: jps_actuals (${actData.length} rows — fresh fetch)`);
+      log.push(`Actuals: jps_actuals (${actData.length} rows)`);
       if(actData.length>0){
         if('year' in actData[0])          YEAR_COL='year';
         else if('cal_year' in actData[0]) YEAR_COL='cal_year';
@@ -8855,9 +8855,6 @@ async function syncSupabase(silent=false){
           _showSchemaBanner('Source' in actData[0]?'fpa_raw':'cal_year');
         }
       }
-    } else if(_useCachedActuals){
-      log.push(`Actuals: ${sbActuals.length} rows (from cache)`);
-      if(sbActuals.length>0){_yearColConfirmed=true;}
     }
     if(!actOk)log.push('Actuals: ⚠ jps_actuals not accessible — check RLS policies');
 
