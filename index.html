@@ -1258,6 +1258,7 @@ document.getElementById('schema_stale_banner').style.display='none';
         <button class="btn btn-o adm-tab"    data-adm="adm_kam"      onclick="swAdm('adm_kam',this)">👤 KAM Assignment</button>
         <button class="btn btn-o adm-tab"    data-adm="adm_schema"   onclick="swAdm('adm_schema',this)">🗄 DB Schema</button>
         <button class="btn btn-o adm-tab"    data-adm="adm_audit"    onclick="swAdm('adm_audit',this);renderAuditLog()">📋 Audit Trail</button>
+        <button class="btn btn-o adm-tab"    data-adm="adm_forecast_tab" onclick="swAdm('adm_forecast_tab',this);renderAdmForecast()">⚡ Forecast</button>
         <button class="adm-tab" onclick="swAdm('adm_comments',this)">💬 Comments</button>
       </div>
 
@@ -1624,10 +1625,12 @@ order by ordinal_position;</pre>
         <div id="adm_comments_body" style="max-height:500px;overflow-y:auto"></div>
       </div>
 
-      <!-- ── Forecast Management ── -->
-      <div class="card" style="margin:16px 0">
-        <div class="ch">Forecast Management</div>
-        <div id="adm_forecast_panel"><div style="color:var(--text3);font-size:12px;padding:8px">Sync database to load forecast status.</div></div>
+      <!-- ── Forecast tab ── -->
+      <div id="adm_forecast_tab" class="adm-panel" style="display:none">
+        <div class="card">
+          <div class="ch">⚡ Forecast Management</div>
+          <div id="adm_forecast_panel"><div style="color:var(--text3);font-size:12px;padding:8px">Sync database to load forecast status.</div></div>
+        </div>
       </div>
 
     </div>
