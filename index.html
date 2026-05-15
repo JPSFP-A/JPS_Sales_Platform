@@ -404,16 +404,11 @@ document.getElementById('schema_stale_banner').style.display='none';
     <div class="nav-lbl" style="margin-top:8px">Intelligence</div>
     <div class="ni" onclick="sw('es',this)"><span class="ni-icon">📰</span>Exec Summary</div>
     <div class="ni" onclick="sw('vb',this)"><span class="ni-icon">🌊</span>Variance Bridge</div>
-    <div class="ni" onclick="sw('rr',this)"><span class="ni-icon">💰</span>Revenue Recovery</div>
     <div class="ni" onclick="sw('ng',this)"><span class="ni-icon">⚡</span>Net Generation</div>
     <div class="nav-lbl" style="margin-top:8px">Actions</div>
-    <div class="ni" onclick="sw('dr_flow',this)"><span class="ni-icon">📓</span>Defection Actions</div>
     <div class="ni" onclick="sw('vld',this)"><span class="ni-icon">🔍</span>Defection &amp; Validation</div>
     <div class="ni" onclick="sw('rb_res',this)"><span class="ni-icon">🏘</span>Residential Intel</div>
-    <div class="ni" onclick="sw('ro_adv',this)"><span class="ni-icon">📊</span>R&amp;O Pipeline</div>
-    <div class="ni" onclick="sw('rpt',this)"><span class="ni-icon">📄</span>Report Builder</div>
     <div class="nav-lbl" style="margin-top:8px">Reference</div>
-    <div class="ni" onclick="sw('ar',this)"><span class="ni-icon">🔗</span>Account Recon</div>
     <div class="ni" onclick="sw('gl',this)"><span class="ni-icon">📖</span>Glossary</div>
     <div class="ni" onclick="sw('help',this)"><span class="ni-icon">📚</span>User Guide</div>
     <div class="ni" onclick="sw('adm',this)"><span class="ni-icon">🔐</span>Admin</div>
@@ -551,7 +546,7 @@ document.getElementById('schema_stale_banner').style.display='none';
           <div class="leg" id="trend_legend">
             <span><span class="ld" style="background:#00c2a8"></span><span id="trend_lbl_act">-- Actual</span></span>
             <span><span class="ld" style="background:#378ADD;border-style:dashed"></span><span id="trend_lbl_bud">-- Budget</span></span>
-            <span><span class="ld" style="background:rgba(255,255,255,.3)"></span><span id="trend_lbl_ly">-- Actual</span></span>
+            <span><span class="ld" style="background:var(--text3)"></span><span id="trend_lbl_ly">-- Actual</span></span>
           </div>
           <div class="cw" style="height:230px"><canvas id="c_trend"></canvas></div>
         </div>
@@ -578,7 +573,7 @@ document.getElementById('schema_stale_banner').style.display='none';
         <div id="pf_cust" class="ssec on">
           <div class="tbl-controls">
             <input class="si" placeholder="🔍 Customer name or account #" id="pfc_q" oninput="renderPfCust()"/>
-            <select class="sel" id="pfc_rc" onchange="renderPfCust()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
+            <select class="sel" id="pfc_rc" onchange="renderPfCust()"><option value="">All rate classes</option><option value="RT20">RT20</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT60-ST">RT60-ST</option><option value="RT70">RT70</option></select>
             <select class="sel" id="pfc_view" onchange="renderPfCust()"><option value="top">Top performers</option><option value="bot">Bottom performers</option></select>
             <span class="row-count" id="pfc_count"></span>
           </div>
@@ -676,7 +671,7 @@ document.getElementById('schema_stale_banner').style.display='none';
           </div>
           <div class="tbl-controls">
             <input class="si" placeholder="🔍 Name or account #" id="cm_q" oninput="renderCmCust()"/>
-            <select class="sel" id="cm_rc" onchange="renderCmCust()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
+            <select class="sel" id="cm_rc" onchange="renderCmCust()"><option value="">All rate classes</option><option value="RT20">RT20</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT60-ST">RT60-ST</option><option value="RT70">RT70</option></select>
             <select class="sel" id="cm_kam_f" onchange="renderCmCust()"><option value="">All KAMs</option></select>
             <select class="sel" id="cm_trend_f" onchange="renderCmCust()"><option value="">All trends</option><option value="up">Increasing ↑</option><option value="dn">Declining ↓</option></select>
             <span class="row-count" id="cm_count"></span>
@@ -749,7 +744,7 @@ document.getElementById('schema_stale_banner').style.display='none';
             <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
               <input class="si" placeholder="🔍 Customer name or account #" id="cm_df_q" oninput="renderCmDefection()"/>
               <select class="sel" id="cm_df_sev" onchange="renderCmDefection()"><option value="">All severity</option><option value="Critical">Critical</option><option value="Severe">Severe</option><option value="Moderate">Moderate</option></select>
-              <select class="sel" id="cm_df_rc" onchange="renderCmDefection()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
+              <select class="sel" id="cm_df_rc" onchange="renderCmDefection()"><option value="">All rate classes</option><option value="RT20">RT20</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT60-ST">RT60-ST</option><option value="RT70">RT70</option></select>
               <select class="sel" id="cm_df_cause" onchange="renderCmDefection()"><option value="">All causes</option><option value="CHP">CHP/Self-gen</option><option value="Hurricane">Hurricane damage</option><option value="Closure">Business closure</option><option value="Unknown">Unknown</option></select>
               <span class="row-count" id="cm_df_count"></span>
             </div>
@@ -819,7 +814,7 @@ document.getElementById('schema_stale_banner').style.display='none';
       <div class="stabs" style="margin-bottom:12px">
         <button class="stab" onclick="sw('cm',document.querySelector('.ni[onclick*=\'cm\']'))">🏢 Customers</button>
         <button class="stab on">📉 Defection</button>
-        <button class="stab" onclick="sw('ro',document.querySelector('.ni[onclick*=\'ro_adv\']'))">⚠ Risk &amp; Opportunity</button>
+        <button class="stab" onclick="sw('vld',document.querySelector('.ni[onclick*=\'vld\']'))">🔍 Defection &amp; Validation</button>
       </div>
       <div style="background:rgba(232,64,64,.07);border-left:3px solid var(--red);border-radius:4px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:var(--text2);line-height:1.7">
         <strong style="color:var(--red)">Defection Definition:</strong> A customer is flagged as a defector when their <strong style="color:var(--text)">3-month rolling average kWh</strong> drops below <strong style="color:var(--red)">80%</strong> of the same 3-month average from the prior year. Severity is graded: <span class="def-severity def-critical">Critical &lt;50%</span> <span class="def-severity def-severe">Severe 50–65%</span> <span class="def-severity def-moderate">Moderate 65–80%</span>. Requires validation before being confirmed as structural defection vs temporary disruption (hurricane, meter, closure).
@@ -838,7 +833,7 @@ document.getElementById('schema_stale_banner').style.display='none';
         <div class="tbl-controls">
           <input class="si" placeholder="🔍 Customer name or account #" id="df_q" oninput="renderDefectors()"/>
           <select class="sel" id="df_sev" onchange="renderDefectors()"><option value="">All severity</option><option value="Critical">Critical</option><option value="Severe">Severe</option><option value="Moderate">Moderate</option></select>
-          <select class="sel" id="df_rc" onchange="renderDefectors()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
+          <select class="sel" id="df_rc" onchange="renderDefectors()"><option value="">All rate classes</option><option value="RT20">RT20</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT60-ST">RT60-ST</option><option value="RT70">RT70</option></select>
           <select class="sel" id="df_cause" onchange="renderDefectors()"><option value="">All causes</option><option value="CHP">CHP/Self-gen</option><option value="Hurricane">Hurricane damage</option><option value="Closure">Business closure</option><option value="Unknown">Unknown</option></select>
           <span class="row-count" id="df_count"></span>
         </div>
@@ -872,7 +867,7 @@ document.getElementById('schema_stale_banner').style.display='none';
         <div class="ch">6-Month Forecast Entry -- by Customer
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
             <input class="si" style="max-width:200px" placeholder="🔍 Search customer..." id="fc_q" oninput="renderFcEntry()"/>
-            <select class="sel" id="fc_rc" onchange="renderFcEntry()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
+            <select class="sel" id="fc_rc" onchange="renderFcEntry()"><option value="">All rate classes</option><option value="RT20">RT20</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT60-ST">RT60-ST</option><option value="RT70">RT70</option></select>
             <select class="sel" id="fc_kam" onchange="clearTimeout(this._t);this._t=setTimeout(()=>renderFcEntry(),250)"><option value="">All KAMs</option></select>
             <button class="btn btn-t" onclick="saveFcAll()">💾 Save All Forecasts</button>
             <button class="btn btn-o" onclick="exportTableCSV('fc_tbl','forecast_entry')">⬇ Export</button>
@@ -1181,7 +1176,7 @@ document.getElementById('schema_stale_banner').style.display='none';
         <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
           <input class="si" placeholder="🔍 Customer name or account #" id="vld_def_reg_q" oninput="renderVldDefReg()"/>
           <select class="sel" id="vld_def_reg_sev" onchange="renderVldDefReg()"><option value="">All severity</option><option value="Critical">Critical</option><option value="Severe">Severe</option><option value="Moderate">Moderate</option></select>
-          <select class="sel" id="vld_def_reg_rc" onchange="renderVldDefReg()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
+          <select class="sel" id="vld_def_reg_rc" onchange="renderVldDefReg()"><option value="">All rate classes</option><option value="RT20">RT20</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT60-ST">RT60-ST</option><option value="RT70">RT70</option></select>
           <span class="row-count" id="vld_def_reg_count"></span>
         </div>
         <div class="tbl-wrap" id="vld_def_reg_tbl"><div style="padding:20px;font-size:11px;color:var(--text3);text-align:center">Load actuals data to see defection register.</div></div>
@@ -1200,7 +1195,7 @@ document.getElementById('schema_stale_banner').style.display='none';
         </div>
         <div class="tbl-controls">
           <input class="si" placeholder="🔍 Account # or name..." id="vld_drop_q" oninput="renderVldDropped()"/>
-          <select class="sel" id="vld_drop_rc" onchange="renderVldDropped()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
+          <select class="sel" id="vld_drop_rc" onchange="renderVldDropped()"><option value="">All rate classes</option><option value="RT20">RT20</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT60-ST">RT60-ST</option><option value="RT70">RT70</option></select>
           <span class="row-count" id="vld_drop_count_lbl"></span>
         </div>
         <div class="tbl-wrap" id="vld_dropped_tbl"><div style="padding:20px;text-align:center;font-size:11px;color:var(--text3)">Click <strong>Run Validation</strong> to analyse the data.</div></div>
@@ -1215,7 +1210,7 @@ document.getElementById('schema_stale_banner').style.display='none';
         </div>
         <div class="tbl-controls">
           <input class="si" placeholder="🔍 Account # or name..." id="vld_def_q" oninput="renderVldDeflections()"/>
-          <select class="sel" id="vld_def_rc" onchange="renderVldDeflections()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
+          <select class="sel" id="vld_def_rc" onchange="renderVldDeflections()"><option value="">All rate classes</option><option value="RT20">RT20</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT60-ST">RT60-ST</option><option value="RT70">RT70</option></select>
           <select class="sel" id="vld_def_sev" onchange="renderVldDeflections()">
             <option value="">All severity</option>
             <option value="Critical">Critical (&lt;50%)</option>
@@ -1235,7 +1230,7 @@ document.getElementById('schema_stale_banner').style.display='none';
         </div>
         <div class="tbl-controls">
           <input class="si" placeholder="🔍 Account # or name..." id="vld_anom_q" oninput="renderVldAnomalies()"/>
-          <select class="sel" id="vld_anom_rc" onchange="renderVldAnomalies()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
+          <select class="sel" id="vld_anom_rc" onchange="renderVldAnomalies()"><option value="">All rate classes</option><option value="RT20">RT20</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT60-ST">RT60-ST</option><option value="RT70">RT70</option></select>
           <select class="sel" id="vld_anom_yr" onchange="renderVldAnomalies()">
             <option value="">All years</option><option id="vld_anom_yr_cy" value="2026">2026</option><option id="vld_anom_yr_py" value="2025">2025</option>
           </select>
@@ -2955,7 +2950,7 @@ function renderCmDefection(){
   const sev=document.getElementById('cm_df_sev')?.value||'';
   const rc=document.getElementById('cm_df_rc')?.value||'';
   const cause=document.getElementById('cm_df_cause')?.value||'';
-  const CM_RCS=new Set(['RT40','RT50','RT60-ST','RT70']);
+  const CM_RCS=new Set(['RT20','RT40','RT50','RT60-ST','RT70']);
   const defs=computeDefectors().filter(d=>
     CM_RCS.has(d.rate)&&
     (!q||(d.name.toLowerCase().includes(q)||d.num.includes(q)))&&
@@ -3018,7 +3013,7 @@ function emailKAM(acct,custName,kamName,cause,severity){
 }
 
 function renderCmROInline(){
-  const rows=RISK_OPP.filter(r=>['RT40','RT50','RT60-ST','RT70'].includes(r.rate));
+  const rows=RISK_OPP.filter(r=>['RT20','RT40','RT50','RT60-ST','RT70'].includes(r.rate));
   const el=document.getElementById('cm_ro_inline_tbl');if(!el)return;
   el.innerHTML=rows.length?`<table class="dt">
     <thead><tr><th>Type</th><th>Customer</th><th>Rate</th><th>Parish</th><th>Level</th><th>Source</th><th>Status</th><th>Comment</th></tr></thead>
@@ -3121,7 +3116,7 @@ function generateCommentary(section){
 
     if(section==='cm'){
       const cy=curYear,py=cy-1;
-      const _cmRCsCmt=new Set(['RT40','RT50','RT60-ST','RT70']);
+      const _cmRCsCmt=new Set(['RT20','RT40','RT50','RT60-ST','RT70']);
       const comm=sbActuals.filter(r=>!r.consumption_bucket&&_cmRCsCmt.has(String(r.rate_class||'').trim()));
       const sum=(yr,mos)=>comm.filter(r=>Number(r.year)===yr&&mos.includes(Number(r.month))).reduce((s,r)=>s+Number(r.kwh||0),0);
       const ytdMos=Array.from({length:curMonth},(_,i)=>i+1);
@@ -3188,7 +3183,7 @@ function generateCommentary(section){
     } else if(section==='cmk'){
       // KAM-focused commentary
       const cy=curYear,py=cy-1;
-      const _cmkRCs=new Set(['RT40','RT50','RT60-ST','RT70']);
+      const _cmkRCs=new Set(['RT20','RT40','RT50','RT60-ST','RT70']);
       const comm=sbActuals.filter(r=>!r.consumption_bucket&&_cmkRCs.has(String(r.rate_class||'').trim()));
       const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
       const ytdMos=Array.from({length:curMonth},(_,i)=>i+1);
@@ -3926,7 +3921,9 @@ function exportTableCSV(tableId,filename){
    CHARTS
 ========================================== */
 const CC='rgba(255,255,255,0.05)',TC='#5a7a96';
-function co(ex={}){return{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:TC,font:{size:10}},grid:{color:CC}},y:{ticks:{color:TC,font:{size:10}},grid:{color:CC}}},...ex};}
+function getCC(){const v=getComputedStyle(document.documentElement).getPropertyValue('--border').trim();return v||CC;}
+function getTC(){const v=getComputedStyle(document.documentElement).getPropertyValue('--text2').trim();return v||TC;}
+function co(ex={}){const _CC=getCC(),_TC=getTC();return{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:_TC,font:{size:10}},grid:{color:_CC}},y:{ticks:{color:_TC,font:{size:10}},grid:{color:_CC}}},...ex};}
 function destroyChart(id){if(chartInstances[id]){chartInstances[id].destroy();delete chartInstances[id];}}
 function mkChart(id,cfg){
   const el=document.getElementById(id);
@@ -4020,7 +4017,7 @@ function buildCharts(){
     datasets:[
       {label:`${curYear} Actual`,data:trendAct26,backgroundColor:'rgba(0,194,168,0.6)',borderColor:'#00c2a8',borderWidth:1,borderRadius:2,order:1},
       {label:`${curYear} Budget`,data:trendBud26,type:'line',borderColor:'#378ADD',borderDash:[5,3],backgroundColor:'transparent',tension:.35,pointRadius:3,order:0},
-      {label:`${curYear-1} Actual`,data:trendAct25,type:'line',borderColor:'rgba(255,255,255,0.25)',backgroundColor:'transparent',tension:.35,pointRadius:2,order:0},
+      {label:`${curYear-1} Actual`,data:trendAct25,type:'line',borderColor:getComputedStyle(document.documentElement).getPropertyValue('--text3').trim()||'rgba(255,255,255,0.35)',backgroundColor:'transparent',tension:.35,pointRadius:2,order:0},
     ]},options:{...co(),onClick:(e,el)=>{
       if(el.length){const idx=el[0].index;document.getElementById('trend_drill_info').textContent=`Filtered: Month ${idx+1} -- showing customers for this period`;}
     }}});
@@ -4030,7 +4027,7 @@ function buildCharts(){
   if(_dnutLbl) _dnutLbl.textContent=`${getPH()} ${curYear}`;
 
   const _dnutPM=getPM(),_dnutPMSet=new Set(_dnutPM);
-  const donutRCs=['RT10','RT20','RT40','RT50','RT70','RT60-ST'];
+  const donutRCs=['RT10','RT20','RT20','RT40','RT50','RT70','RT60-ST'];
   // Period-filtered donut: sum period months from .m[] for commercial; from sbActuals for residential
   const donutData=donutRCs.map(rc=>{
     if(rc==='RT10'||rc==='RT20'){
@@ -4040,7 +4037,7 @@ function buildCharts(){
   });
   mkChart('c_donut',{type:'doughnut',data:{labels:donutRCs,datasets:[{data:donutData,backgroundColor:['#00c2a8','#00957f','#378ADD','#185FA5','#f5a623','#5a7a96'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},cutout:'60%'}});
 
-  const cm1RCs=['RT40','RT50','RT70','RT60-ST'];
+  const cm1RCs=['RT20','RT40','RT50','RT70','RT60-ST'];
   const _cm1PM=getPM(),_cm1PMSet=new Set(_cm1PM),_cm1PH=getPH();
   // Period comparison — sum period months for BOTH years
   const _cm1P=(yr)=>cm1RCs.map(rc=>sbActuals.filter(r=>String(r.rate_class||'')==rc&&Number(r[YEAR_COL])===yr&&_cm1PMSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6);
@@ -4149,7 +4146,7 @@ function renderPfCust(){
     });
   }
 
-  const CM_RCS_PF=new Set(['RT40','RT50','RT60-ST','RT70']);
+  const CM_RCS_PF=new Set(['RT20','RT40','RT50','RT60-ST','RT70']);
   let d=CUSTOMERS.map(c=>({
     ...c,
     cur:getPeriodY26(c),
@@ -4217,8 +4214,8 @@ function renderPfInd(){
   makeSortable('pfi_dt');
 }
 function renderPfRC(){
-  const rcDefs={RT10:'Low-use Residential','RT20':'Gen. Service / SME',RT40:'LV Commercial',RT50:'MV Commercial',RT70:'Large Industrial',ST:'Street Lights',EV:'Electric Vehicle'};
-  const rcList=['RT10','RT20','RT40','RT50','RT70','RT60-ST'];
+  const rcDefs={RT10:'Low-use Residential','RT20':'Small Commercial',RT40:'LV Commercial',RT50:'MV Commercial',RT70:'Large Industrial',ST:'Street Lights',EV:'Electric Vehicle'};
+  const rcList=['RT10','RT20','RT20','RT40','RT50','RT70','RT60-ST'];
   const py=curYear-1, cy=curYear;
   const pm=getPM(),pmSet=new Set(pm),ph=getPH();
   // Use sbActuals directly, filtered to period months
@@ -4248,7 +4245,7 @@ function renderPfRC(){
 function renderPfPar(){
   const pm=getPM(),pmSet=new Set(pm),ph=getPH();
   const py=curYear-1,cy=curYear;
-  const COMM_RCS=new Set(['RT40','RT50','RT60-ST','RT70','BU']);
+  const COMM_RCS=new Set(['RT20','RT20','RT40','RT50','RT60-ST','RT70','BU']);
   // Build from sbActuals filtered to period months
   const parMap={};
   sbActuals.forEach(r=>{
@@ -4282,7 +4279,7 @@ function renderPfPar(){
   makeSortable('pfp_dt');
 }
 function renderVariance(){
-  const segs=['RT10','RT20','RT40','RT50','RT70','RT60-ST'];
+  const segs=['RT10','RT20','RT20','RT40','RT50','RT70','RT60-ST'];
   // Always read actuals directly from sbActuals (not CUSTOMERS) so residential
   // RT10/RT20 — which have blank jps_ac and don't map cleanly to CUSTOMERS — are
   // counted correctly by rate class.
@@ -4404,7 +4401,7 @@ function renderKamPerformance(){
   }
   const cy=curYear,py=cy-1;
   const pm=getPM(),pmSet=new Set(pm),ph=getPH();
-  const _kamRCs=new Set(['RT40','RT50','RT60-ST','RT70']);
+  const _kamRCs=new Set(['RT20','RT40','RT50','RT60-ST','RT70']);
   const comm=sbActuals.filter(r=>!r.consumption_bucket&&_kamRCs.has(String(r.rate_class||'').trim()));
   const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
   // Build per-KAM totals for the selected period
@@ -4496,7 +4493,7 @@ function renderCmIndTbl(){
   // Build period-filtered industry map from sbActuals (same approach as renderPfInd)
   const _indLkp={};
   if(sbIndustries&&sbIndustries.length)sbIndustries.forEach(x=>{_indLkp[String(x.jps_ac||'').trim()]=x.industry||'';});
-  const CM_RCS=new Set(['RT40','RT50','RT60-ST','RT70']);
+  const CM_RCS=new Set(['RT20','RT40','RT50','RT60-ST','RT70']);
   const indMap={},indRcMap={};
   sbActuals.forEach(r=>{
     const yr=Number(r[YEAR_COL]||r.year||0),mo=Number(r.month||0);
@@ -5229,7 +5226,7 @@ function renderOverviewKPIs(){
   if(!CUSTOMERS.length)return;
   const pm=getPM(),pmSet=new Set(pm),ph=getPH();
   const resRCs=['RT10','RT20'];
-  const comRCs=['RT40','RT50','RT70','RT60-ST'];
+  const comRCs=['RT20','RT40','RT50','RT70','RT60-ST'];
   // Period-filtered sums — use sbActuals directly so all rate classes (incl. RT20) are counted
   const mtd=sbActuals.filter(r=>Number(r[YEAR_COL]||r.year||0)===curYear&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0)/1e6,0);
   const ytd=mtd;
@@ -5262,7 +5259,7 @@ function renderOverviewKPIs(){
   sv('kpi_ytd_yoy',(vYoY>=0?'+':'')+vYoY.toFixed(1)+'% YoY');
   sc('kpi_ytd_yoy',vYoY>=0?'tbadge tbg':'tbadge tbr');
   // ── Total customer count: commercial (distinct accounts) + residential (sum customer_count) ──
-  const commRCs=new Set(['RT40','RT50','RT60-ST','RT70','BU']);
+  const commRCs=new Set(['RT20','RT20','RT40','RT50','RT60-ST','RT70','BU']);
   const commActCount=CUSTOMERS.filter(c=>commRCs.has(c.rate)).length;
   const resActCount=sbActuals.filter(r=>['RT10','RT20'].includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===curMonth&&(r.consumption_bucket||'').trim()&&(r.consumption_bucket||'').trim()!=='< Zero').reduce((s,r)=>s+Number(r.customer_count||0),0);
   const commBudRows2=sbBudget.filter(b=>!(b.consumption_bucket||'').trim());
@@ -5287,7 +5284,7 @@ function renderOverviewKPIs(){
 function renderCommercialKPIs(){
   if(!CUSTOMERS.length)return;
   const pm=getPM(),pmSet=new Set(pm),ph=getPH();
-  const comRCs=['RT40','RT50','RT70','RT60-ST'];
+  const comRCs=['RT20','RT40','RT50','RT70','RT60-ST'];
   const comCusts=CUSTOMERS.filter(c=>comRCs.includes(c.rate));
   // Period sums from CUSTOMERS.m[] (current year) and sbBudget (budget)
   const _periSum=custs=>custs.reduce((s,c)=>s+pm.reduce((a,m)=>a+(c.m[m-1]||0),0),0);
@@ -5497,7 +5494,7 @@ function renderExecSummary() {
   const esGap0  = esAct0 - esBud0;
   const esYoY0  = esLY0>0?((esAct0-esLY0)/esLY0*100):null;
   const esYtdYoY= esYtdLY0>0?((esYtd0-esYtdLY0)/esYtdLY0*100):null;
-  const esComRCs= ['RT40','RT50','RT70','RT60-ST'];
+  const esComRCs= ['RT20','RT40','RT50','RT70','RT60-ST'];
   const esCmMtd = sbActuals.filter(r=>esComRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
   const esCmBud = sbBudget.filter(r=>esComRCs.includes(String(r.rate_class||''))&&Number(r.year||0)===curYear&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
   const esCmGap = esCmMtd - esCmBud;
@@ -6431,7 +6428,7 @@ function renderResIntelSection(id) {
         labels: CDD_DATA.months,
         datasets: [
           { label:'CDD Actual', data:CDD_DATA.cdd_actual, backgroundColor:'rgba(245,166,35,0.6)', borderRadius:2, yAxisID:'y' },
-          { label:'CDD Normal', data:CDD_DATA.cdd_normal, backgroundColor:'rgba(255,255,255,0.15)', borderRadius:2, yAxisID:'y' },
+          { label:'CDD Normal', data:CDD_DATA.cdd_normal, backgroundColor:document.documentElement.getAttribute('data-theme')==='light'?'rgba(100,116,139,0.35)':'rgba(255,255,255,0.15)', borderRadius:2, yAxisID:'y' },
           { label:'RT10 GWh', data:CDD_DATA.kwh_raw, type:'line', borderColor:'#00c2a8', backgroundColor:'transparent', tension:.35, pointRadius:4, yAxisID:'y1' },
         ]
       },
@@ -8571,6 +8568,13 @@ function buildDashboardData(){
   // CUSTOMERS — one row per CUSTOMER NUMBER (r.acct is already normalised to customer number by fcNormActuals)
   // Multiple full accounts under the same customer number are aggregated here.
   // NOTE: cy/py are dynamic — property names yPY/yCY reflect whichever year curYear is set to
+  // Skip when sbActuals is summary-only (get_actuals_summary — all jps_ac are NULL).
+  // Full data always has RT40/50/60-ST/70 per-account rows with real jps_ac values.
+  // RT20 aggregate rows also have null jps_ac in full data, so check ANY row has a value.
+  const _isSummaryActuals = sbActuals.length && !sbActuals.some(r => r.jps_ac != null && r.jps_ac !== '');
+  if(_isSummaryActuals){
+    CUSTOMERS=[];
+  } else {
   const py=curYear-1, cy=curYear;
   const custMap={};
   rows.forEach(r=>{
@@ -8600,7 +8604,7 @@ function buildDashboardData(){
   CUSTOMERS=Object.values(custMap).filter(c=>c.yPY>0||c.yCY>0).sort((a,b)=>b.yPY-a.yPY);
 
   // PARISHES — single pass
-  const COMM_RCS_SET=new Set(['RT40','RT50','RT60-ST','RT70','BU']);
+  const COMM_RCS_SET=new Set(['RT20','RT20','RT40','RT50','RT60-ST','RT70','BU']);
   const parMap={};
   rows.forEach(r=>{
     const p=r.parish||'Unknown';
@@ -8640,6 +8644,7 @@ function buildDashboardData(){
     const m={};sbIndustries.forEach(i=>m[String(i.jps_ac||'').trim()]=i.industry||'');
     CUSTOMERS.forEach(c=>{const v=m[c.num]||_kl(m,c.num);if(v)c.ind=v;});
   }
+  } // end !_isSummaryActuals — phase 2 will rebuild CUSTOMERS/PARISHES/INDUSTRIES with full jps_ac data
 
   // ── SCORECARD_DATA — now O(1) per cell via pre-built rcIdx ──
   // Previously: 28 .filter() calls over 50k rows = ~1.4M comparisons
@@ -8803,14 +8808,24 @@ async function syncSupabase(silent=false){
       sbTable('jps_kam',{}),
       sbTable('jps_account_master',{limit:50000}),
       (async()=>{
-        // RPC function bypasses PostgREST view limitations — security definer, no RLS conflict
+        // Phase 1: get_actuals_summary — ~150 rows (year×month×rate_class totals) vs 42k granular
+        // Columns match jps_actuals names; consumption_bucket/jps_ac are NULL (summary-only).
+        // Full per-account actuals (get_actuals_agg) are background-loaded in phase 2.
         try{
-          const{data,error}=await getSB().rpc('get_actuals_agg',{year_cutoff:_actYearCutoff});
+          const{data,error}=await getSB().rpc('get_actuals_summary',{year_cutoff:_actYearCutoff});
           if(error)throw error;
-          return data||null;
+          if(data&&data.length){console.log('[sync] actuals phase1: get_actuals_summary',data.length,'rows');return data;}
+          throw new Error('empty summary result');
         }catch(e){
-          console.warn('[sync] get_actuals_agg RPC failed, fallback to raw table:',e.message);
-          return sbTable('jps_actuals',{gte:[_yearFilterCol,_actYearCutoff],cols:_actCols});
+          console.warn('[sync] get_actuals_summary failed, fallback to get_actuals_agg:',e.message);
+          try{
+            const{data,error}=await getSB().rpc('get_actuals_agg',{year_cutoff:_actYearCutoff});
+            if(error)throw error;
+            return data||null;
+          }catch(e2){
+            console.warn('[sync] get_actuals_agg failed, fallback to raw table:',e2.message);
+            return sbTable('jps_actuals',{gte:[_yearFilterCol,_actYearCutoff],cols:_actCols});
+          }
         }
       })(),
       // get_budget_agg: ~500 aggregated rows vs 32k granular — 97% less data on initial load
@@ -8873,20 +8888,38 @@ async function syncSupabase(silent=false){
     } else log.push('LE: jps_le (0 rows)');
 
     // ── Phase 2: background upgrade to full per-account data ────────────────
-    // Aggregated RPCs power all summary charts immediately. Full granular data is
-    // fetched silently 2 s later and unlocks: top-customers budget, KAM budget
-    // breakdown, LE account-level search and per-customer adjustments.
+    // Summary RPCs power all KPI charts immediately (~150 rows total).
+    // Full granular data is fetched silently 2 s later and unlocks:
+    //   actuals → customer panels (ar, cm, KAM), parish drill-down, bracket charts
+    //   budget  → top-customers budget, KAM budget breakdown
+    //   LE      → account-level search and per-customer adjustments
     if(!window._sbPhase2Pending){
       window._sbPhase2Pending=true;
       setTimeout(async()=>{
         try{
           const budCols='year,month,rate_class,parish,consumption_bucket,jps_ac,kwh_budget,revenue_budget,demand_budget,customer_count';
           const leCols ='year,month,rate_class,parish,consumption_bucket,jps_ac,name,kwh_le,revenue_le,demand_le,customer_count,le_label';
-          const[fullBud,fullLE]=await Promise.all([
+          const[fullAct,fullBud,fullLE]=await Promise.all([
+            // Full per-account actuals — needed for CUSTOMERS, PARISHES, bracket charts
+            (async()=>{
+              try{
+                const{data,error}=await getSB().rpc('get_actuals_agg',{year_cutoff:_actYearCutoff});
+                if(error)throw error;
+                return(data&&data.length)?data:null;
+              }catch(e){
+                console.warn('[phase2] get_actuals_agg failed:',e.message);
+                return null;
+              }
+            })(),
             sbTable('jps_budget',{cols:budCols}),
             sbTable('jps_le',   {cols:leCols})
           ]);
           let upgraded=false;
+          if(fullAct&&fullAct.length){
+            sbActuals=fullAct;upgraded=true;
+            if(window.JpsMonitor)JpsMonitor.info('sync:actuals-upgraded','Full actuals: '+fullAct.length+' rows');
+            try{buildDashboardData();}catch(_){}  // rebuild CUSTOMERS + PARISHES now that we have jps_ac
+          }
           if(fullBud&&fullBud.length){
             sbBudget=fullBud;upgraded=true;
             if(window.JpsMonitor)JpsMonitor.info('sync:budget-upgraded','Full budget: '+fullBud.length+' rows');
@@ -9317,7 +9350,7 @@ function renderLEOverview(){
 
   mkChart('c_le_ov_main',{type:'line',data:{labels:mos.map(m=>LE_MO[m-1]),datasets},options:co({
     plugins:{legend:{display:true,labels:{color:'#5a7a96',font:{size:10}}},tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmtE(ctx.raw,2)}`}}},
-    scales:{y:{ticks:{color:'#5a7a96',font:{size:10},callback:v=>fmtE(v,0)},grid:{color:'rgba(255,255,255,0.05)'}}}}
+    scales:{y:{ticks:{color:'#5a7a96',font:{size:10},callback:v=>fmtE(v,0)},grid:{color:getCC()}}}}
   )});
 
   const rcs=[...new Set(sbLE.map(d=>d.rate_class).filter(Boolean))].sort();
@@ -9328,7 +9361,7 @@ function renderLEOverview(){
     {label:'Budget',    data:budByRC,backgroundColor:'rgba(52,152,219,.5)'}
   ]},options:co({
     plugins:{legend:{display:true,labels:{color:'#5a7a96',font:{size:10}}},tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmtE(ctx.raw,2)}`}}},
-    scales:{y:{ticks:{color:'#5a7a96',font:{size:10},callback:v=>fmtE(v,0)},grid:{color:'rgba(255,255,255,0.05)'}}}}
+    scales:{y:{ticks:{color:'#5a7a96',font:{size:10},callback:v=>fmtE(v,0)},grid:{color:getCC()}}}}
   )});
 
   const rcTbl=document.getElementById('le_rc_tbl');
@@ -9344,7 +9377,7 @@ function renderLEOverview(){
     labels:[`FY${FC_PY} Actual`,`FY${FC_BUD_YEAR} LE`,`FY${FC_BUD_YEAR} Budget`],
     datasets:[{label:'kWh',data:[actFY0,leFY,budFY0],backgroundColor:['rgba(52,152,219,.6)','rgba(245,166,35,.7)','rgba(46,204,113,.6)']}]
   },options:co({plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmtE(ctx.raw,2)}}},
-    scales:{y:{ticks:{color:'#5a7a96',font:{size:10},callback:v=>fmtE(v,0)},grid:{color:'rgba(255,255,255,0.05)'}}}}
+    scales:{y:{ticks:{color:'#5a7a96',font:{size:10},callback:v=>fmtE(v,0)},grid:{color:getCC()}}}}
   )});
 }
 
@@ -9376,7 +9409,7 @@ function renderLEMonthly(){
 
   mkChart('c_le_monthly',{type:'line',data:{labels:mos.map(m=>LE_MO[m-1]),datasets},options:co({
     plugins:{legend:{display:true,labels:{color:'#5a7a96',font:{size:10}}},tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmtE(ctx.raw,2)}`}}},
-    scales:{y:{ticks:{color:'#5a7a96',font:{size:10},callback:v=>fmtE(v,0)},grid:{color:'rgba(255,255,255,0.05)'}}}}
+    scales:{y:{ticks:{color:'#5a7a96',font:{size:10},callback:v=>fmtE(v,0)},grid:{color:getCC()}}}}
   )});
 
   const tbl=document.getElementById('le_monthly_tbl');
@@ -9431,7 +9464,7 @@ function renderLEAdjustPreview(){
     {label:'Budget',     data:mos.map(m=>budSum(bud,[m])),borderColor:'#3498db',backgroundColor:'transparent',tension:.3,pointRadius:2,fill:false,borderDash:[4,3]}
   ]},options:co({
     plugins:{legend:{display:true,labels:{color:'#5a7a96',font:{size:10}}},tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmtE(ctx.raw,2)}`}}},
-    scales:{y:{ticks:{color:'#5a7a96',font:{size:10},callback:v=>fmtE(v,0)},grid:{color:'rgba(255,255,255,0.05)'}}}}
+    scales:{y:{ticks:{color:'#5a7a96',font:{size:10},callback:v=>fmtE(v,0)},grid:{color:getCC()}}}}
   )});
   const allMos=[1,2,3,4,5,6,7,8,9,10,11,12];
   const kr=document.getElementById('le_adj_krow');
@@ -9498,7 +9531,7 @@ function renderLECompare(){
 
   mkChart('c_le_compare',{type:'line',data:{labels:mos.map(m=>LE_MO[m-1]),datasets},options:co({
     plugins:{legend:{display:true,labels:{color:'#5a7a96',font:{size:10}}},tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmtE(ctx.raw,2)}`}}},
-    scales:{y:{ticks:{color:'#5a7a96',font:{size:10},callback:v=>fmtE(v,0)},grid:{color:'rgba(255,255,255,0.05)'}}}}
+    scales:{y:{ticks:{color:'#5a7a96',font:{size:10},callback:v=>fmtE(v,0)},grid:{color:getCC()}}}}
   )});
 
   const rcs=[...new Set(sbLE.map(d=>d.rate_class).filter(Boolean))].sort();
@@ -9540,7 +9573,7 @@ function renderLELosses(){
     {label:'Losses (LE)',  type:'bar', data:mos.map(m=>leM(m).losses_kwh||0),    backgroundColor:'rgba(231,76,60,.5)',order:2}
   ]},options:co({
     plugins:{legend:{display:true,labels:{color:'#5a7a96',font:{size:10}}},tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmtE(ctx.raw,2)}`}}},
-    scales:{y:{ticks:{color:'#5a7a96',font:{size:10},callback:v=>fmtE(v,0)},grid:{color:'rgba(255,255,255,0.05)'}}}}
+    scales:{y:{ticks:{color:'#5a7a96',font:{size:10},callback:v=>fmtE(v,0)},grid:{color:getCC()}}}}
   )});
 
   const fDates=[...new Set(sbLossesForecast.map(d=>d.forecast_date))].sort();
@@ -9553,7 +9586,7 @@ function renderLELosses(){
     {label:'12m Fcst', data:mos.map(m=>pct(fcRows,m)),borderColor:'#9b59b6',backgroundColor:'transparent',borderDash:[2,2],tension:.3,pointRadius:2,fill:false,spanGaps:false}
   ]},options:co({
     plugins:{legend:{display:true,labels:{color:'#5a7a96',font:{size:10}}},tooltip:{callbacks:{label:ctx=>ctx.raw!=null?`${ctx.dataset.label}: ${ctx.raw.toFixed(2)}%`:'--'}}},
-    scales:{y:{ticks:{color:'#5a7a96',font:{size:10},callback:v=>v.toFixed(1)+'%'},grid:{color:'rgba(255,255,255,0.05)'}}}}
+    scales:{y:{ticks:{color:'#5a7a96',font:{size:10},callback:v=>v.toFixed(1)+'%'},grid:{color:getCC()}}}}
   )});
 
   const tbl=document.getElementById('le_loss_tbl');
@@ -9620,7 +9653,7 @@ function renderLEVariance(){
     {label:'Budget',data:top.map(r=>r.bud),backgroundColor:'rgba(52,152,219,.5)'}
   ]},options:co({
     plugins:{legend:{display:true,labels:{color:'#5a7a96',font:{size:10}}},tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmtE(ctx.raw,2)}`}}},
-    scales:{y:{ticks:{color:'#5a7a96',font:{size:10},callback:v=>fmtE(v,0)},grid:{color:'rgba(255,255,255,0.05)'}}}}
+    scales:{y:{ticks:{color:'#5a7a96',font:{size:10},callback:v=>fmtE(v,0)},grid:{color:getCC()}}}}
   )});
   const tbl=document.getElementById('le_var_tbl');
   if(!tbl)return;
@@ -10166,7 +10199,7 @@ function renderVldDefReg(){
   const q=(document.getElementById('vld_def_reg_q')?.value||'').toLowerCase();
   const sevF=document.getElementById('vld_def_reg_sev')?.value||'';
   const rcF=document.getElementById('vld_def_reg_rc')?.value||'';
-  const CM_RCS=new Set(['RT40','RT50','RT60-ST','RT70']);
+  const CM_RCS=new Set(['RT20','RT40','RT50','RT60-ST','RT70']);
   let defs=computeDefectors().filter(d=>CM_RCS.has(d.rate));
   if(q)defs=defs.filter(d=>d.name.toLowerCase().includes(q)||d.num.includes(q));
   if(sevF)defs=defs.filter(d=>d.sev===sevF);
