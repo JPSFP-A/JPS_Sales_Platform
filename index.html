@@ -981,7 +981,7 @@ document.getElementById('schema_stale_banner').style.display='none';
             <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:6px">
               <thead><tr style="background:var(--navy3)"><th style="padding:5px 8px;text-align:left;color:var(--teal)">Sheet Name</th><th style="padding:5px 8px;text-align:left;color:var(--teal)">Purpose</th><th style="padding:5px 8px;text-align:left;color:var(--teal)">Key Columns</th></tr></thead>
               <tbody>
-                <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Actuals</td><td style="padding:5px 8px">Monthly billed kWh &amp; revenue. Commercial: <em>customer_count=1</em>, bucket blank. Residential: fill bucket + <em>customer_count</em> = billed customers in that bracket.</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">year, month, jps_ac, name, consumption_bucket, kwh, revenue_jmd, parish, rate_class, demand_kva, <strong>customer_count</strong></td></tr>
+                <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Actuals</td><td style="padding:5px 8px">Monthly billed kWh &amp; revenue. <strong>Commercial (RT20–RT70):</strong> bucket blank, <em>customer_count=1</em>. <strong>Residential (RT10):</strong> fill bucket + <em>customer_count</em>. Optional <em>meter_number</em> for sub-account tracking. RT10 rows are aggregated server-side by parish/bracket; all commercial rows preserved per-account.</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">year, month, jps_ac, meter_number, name, consumption_bucket, kwh, revenue_jmd, parish, rate_class, demand_kva, <strong>customer_count</strong></td></tr>
                 <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Budget</td><td style="padding:5px 8px">Commercial + residential in one sheet. Commercial: fill <em>jps_ac</em>, blank bucket, <em>customer_count=1</em>. Residential: blank <em>jps_ac</em>, fill <em>consumption_bucket</em> &amp; <em>customer_count</em>.</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">year, month, jps_ac, name, rate_class, parish, consumption_bucket, kwh_budget, revenue_budget, demand_budget, <strong>customer_count</strong></td></tr>
                 <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">KAM</td><td style="padding:5px 8px">Account → KAM. <em>jps_ac</em> = customer number only e.g. 100001 (no dash)</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">jps_ac, kam</td></tr>
                 <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700">Industries</td><td style="padding:5px 8px">Account → Industry. <em>jps_ac</em> = customer number only e.g. 100001 (no dash)</td><td style="padding:5px 8px;font-family:monospace;font-size:10px">jps_ac, industry</td></tr>
@@ -994,8 +994,11 @@ document.getElementById('schema_stale_banner').style.display='none';
             <em>Overwrite month</em> — deletes all existing rows for the selected year/month first, then inserts. Use when re-uploading corrected data for a period already in the DB.<br>
             <em>Append / upsert</em> — adds new rows and updates existing ones based on the unique key. Use for incremental updates.</p>
             <p><strong style="color:var(--text)">Residential vs Commercial in Actuals:</strong><br>
-            Commercial rows leave <em>consumption_bucket</em> blank and fill <em>demand_kva</em>.<br>
-            Residential rows fill <em>consumption_bucket</em> (e.g. "0-150", "150-300") and set <em>demand_kva = 0</em>.</p>
+            Commercial rows (RT20, RT40, RT50, RT60-ST, RT70) leave <em>consumption_bucket</em> blank and fill <em>demand_kva</em>. These are preserved per-account in the DB and loaded individually for defection tracking and KAM performance.<br>
+            Residential rows (RT10) fill <em>consumption_bucket</em> (e.g. "0–150", "150–300") and set <em>demand_kva = 0</em>. The platform aggregates RT10 by parish and bracket server-side — individual meter rows are summed automatically.<br>
+            <strong>Note:</strong> RT20 (General Service) is treated as commercial — rows are preserved per-account, not aggregated with RT10.</p>
+            <p><strong style="color:var(--text)">Data loading — two-phase sync:</strong><br>
+            On every sync, the platform performs two phases. <strong>Phase 1</strong> loads a compact ~150-row rate-class/month summary — all KPI cards and overview charts render immediately. <strong>Phase 2</strong> fires 2 seconds later and loads the full per-account dataset (~200k rows) via the <code>get_actuals_agg</code> database function. All charts refresh automatically when Phase 2 completes. If Phase 1 succeeds but Phase 2 is slow, the badge shows <span style="color:var(--amber)">⚠ Partial</span> — wait or re-sync.</p>
           </div>
         </div>
 
@@ -1025,12 +1028,14 @@ document.getElementById('schema_stale_banner').style.display='none';
         </div>
 
         <!-- Residential section -->
-        <div class="card help-card" data-tags="residential rt10 rt20 parish bracket">
+        <div class="card help-card" data-tags="residential rt10 rt20 parish bracket bucket weather cdd">
           <div class="ch" style="cursor:pointer" onclick="toggleHelp(this)">🏠 Residential Section <span style="font-size:10px;color:var(--text3);font-weight:400">▾</span></div>
           <div class="help-body" style="display:none;font-size:11px;color:var(--text2);line-height:1.9;padding-top:8px">
-            <p><strong style="color:var(--text)">KPIs:</strong> MTD residential GWh, customer count YoY, average kWh per customer. Items showing "--" need actuals data uploaded via the Actuals sheet.</p>
-            <p><strong style="color:var(--text)">Parish × Consumption Bracket table:</strong> Shows kWh billed by parish broken down into consumption brackets (0–150, 150–300, 300–500, 500+). Use the bracket filter to focus on a specific usage band. This is key for identifying under- and over-performing parishes relative to prior year.</p>
-                        <p><strong style="color:var(--text)">EV chart:</strong> Tracks EV accounts and associated MWh. Early growth signal for load addition from EV charging.</p>
+            <p><strong style="color:var(--text)">KPIs:</strong> MTD residential GWh, customer count YoY, average kWh per customer. Items showing "--" need actuals data uploaded with <em>customer_count</em> column filled. Covers RT10 only — RT20 is classified as commercial.</p>
+            <p><strong style="color:var(--text)">Consumption Bracket tab:</strong> Shows kWh billed broken down into consumption brackets (0–150, 150–300, 300–500, 500+) and by parish. Use the bracket filter to focus on a specific usage band. Brackets are derived dynamically from uploaded actuals — no hardcoded values. Trend chart shows the last 6 months per bracket.</p>
+            <p><strong style="color:var(--text)">Parish tab:</strong> 3-month rolling average comparison by parish (current year vs prior year). Parishes showing a 3-month ratio below 80% are flagged as defection signals — graded Critical / Severe / Moderate.</p>
+            <p><strong style="color:var(--text)">Weather tab:</strong> Correlates raw GWh with cooling degree days (CDD). Raw kWh is pulled from RT10 actuals. CDD data requires uploading the <em>jps_cdd</em> table via Admin — until then, weather-adjusted GWh shows as zero.</p>
+            <p><strong style="color:var(--text)">EV chart:</strong> Tracks EV accounts and associated MWh. Early growth signal for load addition from EV charging.</p>
           </div>
         </div>
 
@@ -1394,8 +1399,9 @@ document.getElementById('schema_stale_banner').style.display='none';
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">
             <div class="card" style="background:var(--navy3)">
               <div style="font-weight:700;font-size:11px;margin-bottom:3px;color:var(--teal)">Actuals</div>
-              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">One row per account/bucket per month. <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">jps_ac</code> = full account no. e.g. <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">100001-001</code>. Commercial: <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">customer_count=1</code>, bucket blank. Residential: fill bucket &amp; <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">customer_count</code> = billed customers in that bracket.</div>
-              <div style="font-size:9px;color:var(--text2);background:var(--navy2);border-radius:4px;padding:5px 7px;font-family:monospace">year · month · jps_ac · name · consumption_bucket · kwh · revenue_jmd · parish · rate_class · demand_kva · <strong style="color:var(--teal)">customer_count</strong></div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">One row per account/bucket per month. <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">jps_ac</code> = full account no. e.g. <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">100001-001</code>. <strong>Commercial (RT20–RT70):</strong> <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">customer_count=1</code>, bucket blank — preserved per-account for defection &amp; forecasting. <strong>Residential (RT10):</strong> fill <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">consumption_bucket</code> &amp; <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">customer_count</code> = billed customers in that bracket. Optional: include <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">meter_number</code> for sub-account meter-level tracking.</div>
+              <div style="font-size:9px;color:var(--text2);background:var(--navy2);border-radius:4px;padding:5px 7px;font-family:monospace">year · month · jps_ac · meter_number · name · consumption_bucket · kwh · revenue_jmd · parish · rate_class · demand_kva · <strong style="color:var(--teal)">customer_count</strong></div>
+              <div style="font-size:9px;color:var(--amber);margin-top:5px">⚡ <strong>Two-phase loading:</strong> On sync, Phase 1 loads a ~150-row RC/month summary for instant renders. Phase 2 (2 s later) loads the full per-account dataset via <code style="background:var(--navy2);padding:1px 4px;border-radius:3px">get_actuals_agg</code>. All charts update automatically when Phase 2 completes.</div>
             </div>
             <div class="card" style="background:var(--navy3)">
               <div style="font-weight:700;font-size:11px;margin-bottom:3px;color:var(--teal)">Budget</div>
@@ -2856,6 +2862,12 @@ const GLOSSARY_DATA=[
   {term:'Period Filter',cat:'Platform',def:'The MTD / QTD / YTD / Annual buttons at the top of the screen. The period label shows the format: MTD → "Mar-2026", QTD → "Q1-2026", YTD → "YTD Mar-2026", Annual → "2026". Changing the year selector rebuilds all data arrays and re-renders all charts and tables automatically.'},
   {term:'Wipe All Actuals',cat:'Platform',def:'Admin function that deletes every row from jps_actuals across all years. Requires typing the confirmation code WIPE-ALL. Use before a full data reload. Writes an audit log entry.'},
   {term:'KAM Upload',cat:'Platform',def:'Two ways to import KAM assignments: (1) CSV file — go to Admin → KAM Assignment → Import KAM from CSV. CSV must have columns "Customer number" (prefix before the dash, e.g. 100590) and "KAM". One customer number maps to all matching account numbers. (2) Excel file via Admin → Upload Data with a sheet named KAM containing columns jps_ac (full account number) and kam. Can also assign one-by-one in Admin → KAM Assignment.'},
+  {term:'Two-Phase Loading',cat:'Platform',def:'The platform syncs in two steps. Phase 1 (instant): loads a compact ~150-row rate-class/month summary from get_actuals_summary. KPI cards and overview charts render immediately. Phase 2 (2 s later): loads the full per-account dataset (~200k rows) via get_actuals_agg. All charts refresh automatically. If the status badge shows ⚠ Partial, Phase 2 is still loading.'},
+  {term:'get_actuals_agg',cat:'Platform',def:'Supabase RPC function that returns the full per-account actuals. RT10 (residential) rows are aggregated by year/month/parish/consumption_bucket server-side — no individual meter rows returned. All commercial rate classes (RT20, RT40, RT50, RT60-ST, RT70) are returned per-account for defection and KAM tracking. Called in Phase 2 of sync (~2 s after connect).'},
+  {term:'Pre-Built Index',cat:'Platform',def:'After Phase 2 data loads, the app builds in-memory indexes keyed by [rate_class][year×100+month], [bucket], [parish×bucket], [account], and [month]. All chart renders use these indexes (O(months) cost) instead of scanning the full 200k-row array on every tab switch — this eliminates the lag on Residential, Forecast, and LE tabs.'},
+  {term:'Consumption Bucket',cat:'Operational',def:'A kWh range grouping for residential customers, used to profile usage distribution. Typical buckets: 0–150, 150–300, 300–500, 500–1000, 1000+. A separate bucket "< Zero" captures net-biller or zero-consumption entries. Filled in the Actuals sheet for RT10 rows. Used in the Residential Bracket charts and Parish × Bracket table.'},
+  {term:'Meter Number',cat:'Operational',def:'Optional sub-account identifier on the Actuals upload. Allows tracking individual meters under the same jps_ac account number. Particularly useful for RT20 multi-meter commercial sites. Stored in jps_actuals.meter_number but not currently used as a grouping dimension in charts.'},
+  {term:'RT20 Classification',cat:'Rate Class',def:'RT20 (General Service) is treated as commercial by this platform, not residential. RT20 rows in actuals are preserved per-account (like RT40/RT50/RT70) and appear in Commercial Customers, Defection, and KAM views. RT10 is the sole purely residential class used in Residential tab KPIs.'},
 ];
 
 const FC_SEGS=[
@@ -4567,7 +4579,7 @@ function renderRsKPIs(){
   // Net billers — aggregate across period months
 
   // Customer count — use latest month in period (headcount is a point-in-time figure)
-  const custMonth=periodMonths[periodMonths.length-1];
+  const custMonth=pm[pm.length-1];
   const resActCount=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===custMonth&&(r.consumption_bucket||'').trim()&&(r.consumption_bucket||'').trim()!=='< Zero').reduce((s,r)=>s+Number(r.customer_count||0),0);
   const resBudCount=sbBudget.filter(b=>(b.consumption_bucket||'').trim()&&(b.consumption_bucket||'').trim()!=='< Zero'&&Number(b.year)===curYear&&Number(b.month)===custMonth).reduce((s,b)=>s+Number(b.customer_count||0),0);
   rsKv('rs_kpi_cg',resActCount>0?resActCount.toLocaleString():'--');
@@ -4935,7 +4947,8 @@ function addROItem(){
 function initMrMonths(){
   const sel=document.getElementById('mr_month');if(!sel||sel.options.length>1)return;
   const ms=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const minY=sbActuals.length?Math.min(...sbActuals.map(r=>Number(r[YEAR_COL]||r.year||2024))):2024;
+  const _minYKeys=Object.keys(_actMoIdx).map(ym=>Math.floor(Number(ym)/100));
+  const minY=_minYKeys.length?_minYKeys.reduce((a,b)=>a<b?a:b):2024;
   const maxY=Math.max(curYear+1,new Date().getFullYear()+1);
   let h='';for(let y=minY;y<=maxY;y++)for(let m=0;m<12;m++)h+=`<option value="${y}-${String(m+1).padStart(2,'0')}">${ms[m]} ${y}</option>`;
   sel.innerHTML=h;sel.value=mrPeriod;
@@ -6630,7 +6643,9 @@ function renderReportBuilder() {
   if (sel && sel.options.length < 2) {
     const ms = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     let h = '';
-    const _minY=sbActuals.length?Math.min(...sbActuals.map(r=>Number(r[YEAR_COL]||r.year||2024))):2024;
+    // Use index keys (small array) — avoids stack overflow from spreading 200k elements
+    const _actYrKeys=Object.keys(_actMoIdx).map(ym=>Math.floor(Number(ym)/100));
+    const _minY=_actYrKeys.length?_actYrKeys.reduce((a,b)=>a<b?a:b):2024;
     const _maxY=Math.max(curYear+1,new Date().getFullYear()+1);
     for (let y = _minY; y <= _maxY; y++)
       for (let m = 0; m < 12; m++)
@@ -6921,7 +6936,8 @@ function renderAdmComments(){
   const ms=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const rows=[];
   // Exec narratives — scan full range of years present in sbActuals, plus one year ahead
-  const _admMinY=sbActuals.length?Math.min(...sbActuals.map(r=>Number(r[YEAR_COL]||r.year||9999)).filter(y=>y<9000)):2024;
+  const _admYrKeys=Object.keys(_actMoIdx).map(ym=>Math.floor(Number(ym)/100));
+  const _admMinY=_admYrKeys.length?_admYrKeys.reduce((a,b)=>a<b?a:b):2024;
   const _admMaxY=Math.max(curYear+1,new Date().getFullYear()+1);
   for(let y=_admMinY;y<=_admMaxY;y++){
     for(let m=1;m<=12;m++){
