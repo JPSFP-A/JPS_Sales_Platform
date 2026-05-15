@@ -8565,9 +8565,8 @@ function buildDashboardData(){
   // CUSTOMERS — one row per CUSTOMER NUMBER (r.acct is already normalised to customer number by fcNormActuals)
   // Multiple full accounts under the same customer number are aggregated here.
   // NOTE: cy/py are dynamic — property names yPY/yCY reflect whichever year curYear is set to
-  // Skip when sbActuals is summary-only (get_actuals_summary — all jps_ac are NULL).
-  // Full data always has RT40/50/60-ST/70 per-account rows with real jps_ac values.
-  // RT20 aggregate rows also have null jps_ac in full data, so check ANY row has a value.
+  // Phase 1 (get_actuals_summary) returns NULL jps_ac — skip CUSTOMERS build until Phase 2.
+  // Phase 2 (get_actuals_agg) returns real jps_ac for all commercial RCs incl. RT20.
   const _isSummaryActuals = sbActuals.length && !sbActuals.some(r => r.jps_ac != null && r.jps_ac !== '');
   if(_isSummaryActuals){
     CUSTOMERS=[];
@@ -8641,7 +8640,7 @@ function buildDashboardData(){
     const m={};sbIndustries.forEach(i=>m[String(i.jps_ac||'').trim()]=i.industry||'');
     CUSTOMERS.forEach(c=>{const v=m[c.num]||_kl(m,c.num);if(v)c.ind=v;});
   }
-  } // end !_isSummaryActuals — phase 2 will rebuild CUSTOMERS/PARISHES/INDUSTRIES with full jps_ac data
+  } // end !_isSummaryActuals
 
   // ── SCORECARD_DATA — now O(1) per cell via pre-built rcIdx ──
   // Previously: 28 .filter() calls over 50k rows = ~1.4M comparisons
@@ -8788,12 +8787,9 @@ async function syncSupabase(silent=false){
     // Detect the year column name — skip if already confirmed from a previous sync
     if(!_yearColConfirmed)await detectYearCol(sb);
 
-    // ── Fire ALL queries in parallel — always fetch fresh (no cache skip) ──
+    // ── Fire ALL queries in parallel ──
     const _actYearCutoff=new Date().getFullYear()-1; // fetch current + prior year only
-    const _useCachedActuals=false; // always fetch fresh actuals
-    // Use the confirmed YEAR_COL for the gte filter (handles both 'year' and 'cal_year')
     const _yearFilterCol=YEAR_COL||'year';
-    // Only fetch columns the platform uses — skips created_at, saves bandwidth
     const _actCols='id,year,month,jps_ac,name,rate_class,parish,consumption_bucket,kwh,revenue_jmd,demand_kva,customer_count';
     const [
       indData,kamData,amData,actData,
@@ -8805,16 +8801,15 @@ async function syncSupabase(silent=false){
       sbTable('jps_kam',{}),
       sbTable('jps_account_master',{limit:50000}),
       (async()=>{
-        // Phase 1: get_actuals_summary — ~150 rows (year×month×rate_class totals) vs 42k granular
-        // Columns match jps_actuals names; consumption_bucket/jps_ac are NULL (summary-only).
-        // Full per-account actuals (get_actuals_agg) are background-loaded in phase 2.
+        // Phase 1: get_actuals_summary — ~150 rows (year×month×rate_class totals), fast initial render
+        // jps_ac/consumption_bucket are NULL — Phase 2 upgrades to full per-account via get_actuals_agg
         try{
           const{data,error}=await getSB().rpc('get_actuals_summary',{year_cutoff:_actYearCutoff});
           if(error)throw error;
-          if(data&&data.length){console.log('[sync] actuals phase1: get_actuals_summary',data.length,'rows');return data;}
-          throw new Error('empty summary result');
+          if(data&&data.length)return data;
+          throw new Error('empty');
         }catch(e){
-          console.warn('[sync] get_actuals_summary failed, fallback to get_actuals_agg:',e.message);
+          console.warn('[sync] get_actuals_summary failed, fallback:',e.message);
           try{
             const{data,error}=await getSB().rpc('get_actuals_agg',{year_cutoff:_actYearCutoff});
             if(error)throw error;
@@ -8825,11 +8820,7 @@ async function syncSupabase(silent=false){
           }
         }
       })(),
-      // get_budget_agg: ~500 aggregated rows vs 32k granular — 97% less data on initial load
-      // Full per-account budget is background-loaded in phase 2 for top-customers / KAM panels
       (async()=>{try{const{data,error}=await getSB().rpc('get_budget_agg');return(!error&&Array.isArray(data))?data:null;}catch(e){if(window.JpsMonitor)JpsMonitor.warning('sync:budget-agg',e?.message);return null;}})(),
-      // get_le_agg: ~500 aggregated rows vs 32k granular — 98% less data on initial load
-      // Full per-account LE is background-loaded in phase 2 for account search / customer adjustments
       (async()=>{try{const{data,error}=await getSB().rpc('get_le_agg');return(!error&&Array.isArray(data))?data:null;}catch(e){if(window.JpsMonitor)JpsMonitor.warning('sync:le-agg',e?.message);return null;}})(),
       sbTable('jps_system_stats',{order:'year,month'}),
       sbTable('jps_losses_forecast',{order:'forecast_date,year,month'}),
@@ -8885,11 +8876,10 @@ async function syncSupabase(silent=false){
     } else log.push('LE: jps_le (0 rows)');
 
     // ── Phase 2: background upgrade to full per-account data ────────────────
-    // Summary RPCs power all KPI charts immediately (~150 rows total).
-    // Full granular data is fetched silently 2 s later and unlocks:
-    //   actuals → customer panels (ar, cm, KAM), parish drill-down, bracket charts
-    //   budget  → top-customers budget, KAM budget breakdown
-    //   LE      → account-level search and per-customer adjustments
+    // Phase 1 (get_actuals_summary) gives ~150 rows — fast render of all KPI/charts.
+    // Phase 2 fires 2s later: get_actuals_agg returns full per-account actuals (RT10
+    // aggregated by parish/bucket; all commercial RCs with real jps_ac/name) and full
+    // budget/LE rows. Unlocks CUSTOMERS, PARISHES, bracket drill-downs, KAM panels.
     if(!window._sbPhase2Pending){
       window._sbPhase2Pending=true;
       setTimeout(async()=>{
@@ -8897,7 +8887,6 @@ async function syncSupabase(silent=false){
           const budCols='year,month,rate_class,parish,consumption_bucket,jps_ac,kwh_budget,revenue_budget,demand_budget,customer_count';
           const leCols ='year,month,rate_class,parish,consumption_bucket,jps_ac,name,kwh_le,revenue_le,demand_le,customer_count,le_label';
           const[fullAct,fullBud,fullLE]=await Promise.all([
-            // Full per-account actuals — needed for CUSTOMERS, PARISHES, bracket charts
             (async()=>{
               try{
                 const{data,error}=await getSB().rpc('get_actuals_agg',{year_cutoff:_actYearCutoff});
@@ -8915,14 +8904,12 @@ async function syncSupabase(silent=false){
           if(fullAct&&fullAct.length){
             sbActuals=fullAct;upgraded=true;
             if(window.JpsMonitor)JpsMonitor.info('sync:actuals-upgraded','Full actuals: '+fullAct.length+' rows');
-            try{buildDashboardData();}catch(_){}  // rebuild CUSTOMERS + PARISHES now that we have jps_ac
+            try{buildDashboardData();}catch(_){}
           }
-          if(fullBud&&fullBud.length){
-            sbBudget=fullBud;upgraded=true;
+          if(fullBud&&fullBud.length){sbBudget=fullBud;upgraded=true;
             if(window.JpsMonitor)JpsMonitor.info('sync:budget-upgraded','Full budget: '+fullBud.length+' rows');
           }
-          if(fullLE&&fullLE.length){
-            sbLE=fullLE;upgraded=true;leEngine=null;
+          if(fullLE&&fullLE.length){sbLE=fullLE;upgraded=true;leEngine=null;
             if(window.JpsMonitor)JpsMonitor.info('sync:le-upgraded','Full LE: '+fullLE.length+' rows');
           }
           if(upgraded){
