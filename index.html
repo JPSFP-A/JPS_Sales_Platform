@@ -3959,17 +3959,18 @@ function mkBracketCharts(){
   const CC=getComputedStyle(document.documentElement).getPropertyValue('--border').trim()||'rgba(255,255,255,0.07)';
   const co=()=>({responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:TC,font:{size:10}},grid:{color:CC}},y:{ticks:{color:TC,font:{size:10}},grid:{color:CC}}}});
   const mkBktChart=(canvasId,rc)=>{
-    const bRows=sbActuals.filter(r=>String(r.rate_class||'')===rc&&(r.consumption_bucket||'').trim());
     const _bktOrder=s=>{
       const sl=s.toLowerCase().trim();
-      if(sl.includes('zero'))return -1;                       // "< Zero" always first
-      if(sl.includes('over'))return 999999;                   // "over 950" always last
-      if(sl.startsWith('<')){const m=sl.match(/\d+/);return m?parseInt(m[0])-0.5:0;} // "<150" → 149.5
-      const m=sl.match(/\d+/);return m?parseInt(m[0]):0;     // "150>350" → 150
+      if(sl.includes('zero'))return -1;
+      if(sl.includes('over'))return 999999;
+      if(sl.startsWith('<')){const m=sl.match(/\d+/);return m?parseInt(m[0])-0.5:0;}
+      const m=sl.match(/\d+/);return m?parseInt(m[0]):0;
     };
-    const BKTS=[...new Set(bRows.map(r=>(r.consumption_bucket||'').trim()))].filter(Boolean).sort((a,b)=>_bktOrder(a)-_bktOrder(b));
-    const act=BKTS.map(bk=>bRows.filter(r=>Number(r[YEAR_COL])===curYear&&pMonths.includes(Number(r.month))&&(r.consumption_bucket||'').trim()===bk).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6);
-    const py =BKTS.map(bk=>bRows.filter(r=>Number(r[YEAR_COL])===(curYear-1)&&pMonths.includes(Number(r.month))&&(r.consumption_bucket||'').trim()===bk).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6);
+    // Derive buckets from pre-built index — no sbActuals scan
+    const pfx=rc+'|';
+    const BKTS=[...new Set(Object.keys(_actBktIdx).filter(k=>k.startsWith(pfx)).map(k=>k.slice(pfx.length)))].filter(Boolean).sort((a,b)=>_bktOrder(a)-_bktOrder(b));
+    const act=BKTS.map(bk=>_bktSum(rc,bk,curYear,pMonths)/1e6);
+    const py =BKTS.map(bk=>_bktSum(rc,bk,curYear-1,pMonths)/1e6);
     destroyChart(canvasId);
     const cb=document.getElementById(canvasId);if(!cb)return;
     chartInstances[canvasId]=new Chart(cb,{type:'bar',data:{
@@ -3988,15 +3989,16 @@ function buildCharts(){
 
   // Build trend chart data from live sbActuals + sbBudget (real monthly seasonality)
   const trendAct26=Array(12).fill(null),trendBud26=Array(12).fill(null),trendAct25=Array(12).fill(null);
-  if(sbActuals.length){
+  if(sbActuals.length||Object.keys(_actMoIdx).length){
     for(let i=0;i<12;i++){
-      trendAct26[i]=sbActuals.filter(r=>Number(r[YEAR_COL])===curYear&&Number(r.month)===i+1).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6||null;
+      const v=_moKwh(curYear,i+1)/1e6;
+      trendAct26[i]=v||null;
     }
   }
   // Prior year — real monthly actuals, not flat spread
-  if(sbActuals.length){
+  if(sbActuals.length||Object.keys(_actMoIdx).length){
     for(let i=0;i<12;i++){
-      trendAct25[i]=sbActuals.filter(r=>Number(r[YEAR_COL])===curYear-1&&Number(r.month)===i+1).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+      trendAct25[i]=_moKwh(curYear-1,i+1)/1e6;
     }
   }
   // Budget — real monthly budget, not flat spread
@@ -4025,10 +4027,10 @@ function buildCharts(){
 
   const _dnutPM=getPM(),_dnutPMSet=new Set(_dnutPM);
   const donutRCs=['RT10','RT20','RT20','RT40','RT50','RT70','RT60-ST'];
-  // Period-filtered donut: sum period months from .m[] for commercial; from sbActuals for residential
+  // Period-filtered donut: index lookup for residential; .m[] for commercial
   const donutData=donutRCs.map(rc=>{
     if(rc==='RT10'||rc==='RT20'){
-      return sbActuals.filter(r=>String(r.rate_class||'').trim()===rc&&Number(r[YEAR_COL]||r.year||0)===curYear&&_dnutPMSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0)/1e6,0);
+      return _rcSumMos(rc,curYear,_dnutPM)/1e6;
     }
     return CUSTOMERS.filter(c=>c.rate===rc).reduce((s,c)=>s+_dnutPM.reduce((a,m)=>a+(c.m[m-1]||0),0),0);
   });
@@ -4036,8 +4038,8 @@ function buildCharts(){
 
   const cm1RCs=['RT20','RT40','RT50','RT70','RT60-ST'];
   const _cm1PM=getPM(),_cm1PMSet=new Set(_cm1PM),_cm1PH=getPH();
-  // Period comparison — sum period months for BOTH years
-  const _cm1P=(yr)=>cm1RCs.map(rc=>sbActuals.filter(r=>String(r.rate_class||'')==rc&&Number(r[YEAR_COL])===yr&&_cm1PMSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6);
+  // Period comparison — index lookup for both years
+  const _cm1P=(yr)=>cm1RCs.map(rc=>_rcSumMos(rc,yr,_cm1PM)/1e6);
   const cm1_25=_cm1P(curYear-1);
   const cm1_26=_cm1P(curYear);
   // Update HTML legend to show actual years + period
@@ -4215,8 +4217,8 @@ function renderPfRC(){
   const rcList=['RT10','RT20','RT20','RT40','RT50','RT70','RT60-ST'];
   const py=curYear-1, cy=curYear;
   const pm=getPM(),pmSet=new Set(pm),ph=getPH();
-  // Use sbActuals directly, filtered to period months
-  const _rcGwh=(rc,yr)=>sbActuals.filter(r=>String(r.rate_class||'').trim()===rc&&Number(r[YEAR_COL]||r.year||0)===yr&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+  // Index lookup — O(months) per RC
+  const _rcGwh=(rc,yr)=>_rcSumMos(rc,yr,pm)/1e6;
   const _rcBud=(rc)=>sbBudget.filter(r=>String(r.rate_class||r.rc||'').trim()===rc&&Number(r.year||0)===cy&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
   const rcs=rcList.map(rc=>({rc,desc:rcDefs[rc]||rc,
     yPY:_rcGwh(rc,py),
@@ -4277,17 +4279,15 @@ function renderPfPar(){
 }
 function renderVariance(){
   const segs=['RT10','RT20','RT20','RT40','RT50','RT70','RT60-ST'];
-  // Always read actuals directly from sbActuals (not CUSTOMERS) so residential
-  // RT10/RT20 — which have blank jps_ac and don't map cleanly to CUSTOMERS — are
-  // counted correctly by rate class.
+  // Index lookups — O(1) per seg/year/month, no full array scans
   const rows=segs.map(seg=>{
-    const _rcMatch=(r)=>String(r.rate_class||r.rc||r['Rate category']||'').trim().replace(/\s+/g,'')===seg.replace(/\s+/g,'');
-    const mtd_act=sbActuals.filter(r=>_rcMatch(r)&&Number(r[YEAR_COL])===curYear&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
-    const mtd_bud=sbBudget.filter(r=>_rcMatch(r)&&Number(r.year||r[YEAR_COL])===curYear&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
-    const mtd_ly=sbActuals.filter(r=>_rcMatch(r)&&Number(r[YEAR_COL])===curYear-1&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
-    const ytd_act=sbActuals.filter(r=>_rcMatch(r)&&Number(r[YEAR_COL])===curYear&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
-    const ytd_bud=sbBudget.filter(r=>_rcMatch(r)&&Number(r.year||r[YEAR_COL])===curYear&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
-    const ytd_ly=sbActuals.filter(r=>_rcMatch(r)&&Number(r[YEAR_COL])===curYear-1&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+    const _rcMatchBud=(r)=>String(r.rate_class||r.rc||'').trim().replace(/\s+/g,'')===seg.replace(/\s+/g,'');
+    const mtd_act=_rcSum(seg,curYear,curMonth,curMonth)/1e6;
+    const mtd_bud=sbBudget.filter(r=>_rcMatchBud(r)&&Number(r.year||r[YEAR_COL])===curYear&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
+    const mtd_ly=_rcSum(seg,curYear-1,curMonth,curMonth)/1e6;
+    const ytd_act=_rcSum(seg,curYear,1,curMonth)/1e6;
+    const ytd_bud=sbBudget.filter(r=>_rcMatchBud(r)&&Number(r.year||r[YEAR_COL])===curYear&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
+    const ytd_ly=_rcSum(seg,curYear-1,1,curMonth)/1e6;
     return{seg,mtd_act,mtd_bud,mtd_ly,ytd_act,ytd_bud,ytd_ly};
   });
   const tot=(k)=>rows.reduce((s,r)=>s+r[k],0);
@@ -4538,26 +4538,16 @@ function renderCmComment(){
    RESIDENTIAL
 ========================================== */
 function renderRsKPIs(){
-  const resRCs=['RT10','RT20'];
+  const RES=['RT10','RT20'];
   const rsKv=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  const pm=getPM(), fromM=pm[0], toM=pm[pm.length-1];
+  const _rs=(yr,f,t)=>RES.reduce((s,rc)=>s+_rcSum(rc,yr,f,t),0);
 
-  // Period months
-  const qStart=Math.floor((curMonth-1)/3)*3+1;
-  const periodMonths=curPeriod==='MTD'?[curMonth]
-    :curPeriod==='QTD'?Array.from({length:curMonth-qStart+1},(_,i)=>qStart+i)
-    :curPeriod==='YTD'?Array.from({length:curMonth},(_,i)=>i+1)
-    :Array.from({length:12},(_,i)=>i+1); // Annual
-
-  // Period kWh from sbActuals
-  const resAct=r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&periodMonths.includes(Number(r.month));
-  const resPY =r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===(curYear-1)&&periodMonths.includes(Number(r.month));
-  const resPeriodKwh=sbActuals.filter(resAct).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
-  const resPyKwh    =sbActuals.filter(resPY ).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
-  const resBudKwh   =sbBudget.filter(b=>resRCs.includes(String(b.rate_class||''))&&Number(b.year)===curYear&&periodMonths.includes(Number(b.month))).reduce((s,b)=>s+Number(b.kwh_budget||0),0)/1e6;
-
-  // YTD kWh (always 1..curMonth regardless of period selection)
-  const resYtdKwh=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
-  const resYtdLy =sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===(curYear-1)&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+  const resPeriodKwh=_rs(curYear,fromM,toM)/1e6;
+  const resPyKwh    =_rs(curYear-1,fromM,toM)/1e6;
+  const resBudKwh   =sbBudget.filter(b=>RES.includes(String(b.rate_class||''))&&Number(b.year)===curYear&&pm.includes(Number(b.month))).reduce((s,b)=>s+Number(b.kwh_budget||0),0)/1e6;
+  const resYtdKwh   =_rs(curYear,1,curMonth)/1e6;
+  const resYtdLy    =_rs(curYear-1,1,curMonth)/1e6;
 
   const has=sbActuals.length>0;
   const fmtG=v=>v>0?v.toFixed(1)+' GWh':'--';
@@ -4592,60 +4582,47 @@ function renderRsPar(){
   // Populate bracket dropdown dynamically from actual data
   const bktSel=document.getElementById('rs_bracket');
   if(bktSel){
-    const liveBuckets=[...new Set(sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&(r.consumption_bucket||'').trim()).map(r=>(r.consumption_bucket||'').trim()))].filter(Boolean).sort();
+    const liveBuckets=[...new Set(Object.keys(_actBktIdx).filter(k=>resRCs.some(rc=>k.startsWith(rc+'|'))).map(k=>k.split('|')[1]).filter(Boolean))].sort();
     const cur=bktSel.value;
     bktSel.innerHTML='<option value="">All brackets</option>'+liveBuckets.map(b=>`<option value="${b}"${b===cur?' selected':''}>${b}</option>`).join('');
   }
   const bracket=bktSel?.value||'';
 
-  // Pull residential actuals rows for period months (curPeriod-aware)
-  const pm=getPM(),pmSet=new Set(pm),ph=getPH();
-  const lastMoPeriod=pm[pm.length-1]; // last month in period — used for customer headcount
-  const curAct=sbActuals.filter(r=>
-    resRCs.includes(String(r.rate_class||''))&&
-    Number(r[YEAR_COL])===curYear&&pmSet.has(Number(r.month||0))&&
-    (r.consumption_bucket||'').trim()
-  );
-  const prevAct=sbActuals.filter(r=>
-    resRCs.includes(String(r.rate_class||''))&&
-    Number(r[YEAR_COL])===(curYear-1)&&pmSet.has(Number(r.month||0))&&
-    (r.consumption_bucket||'').trim()
-  );
-  // Customer count from last month in period only (headcount is point-in-time, not cumulative)
-  const countAgg={};
-  sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month||0)===lastMoPeriod&&(r.consumption_bucket||'').trim()&&(r.consumption_bucket||'').trim()!=='< Zero').forEach(r=>{
-    const k=`${r.parish||''}|||${(r.consumption_bucket||'').trim()}`;
-    countAgg[k]=(countAgg[k]||0)+Number(r.customer_count||0);
+  const pm=getPM(), ph=getPH(), lastMo=pm[pm.length-1];
+  const RES=['RT10','RT20'];
+
+  // Derive parishes + buckets from pre-built index keys (no sbActuals scan)
+  const resPfx=RES.map(rc=>rc+'|');
+  const parSet=new Set(), bktSet=new Set();
+  Object.keys(_actPBIdx).forEach(k=>{
+    if(!resPfx.some(p=>k.startsWith(p)))return;
+    const parts=k.split('|');
+    parSet.add(parts[1]); bktSet.add(parts[2]);
   });
+  const allBuckets=[...bktSet].filter(Boolean).sort();
+  const parishes=[...parSet].filter(Boolean).sort();
 
-  // Aggregate by parish+bucket -> {kwh, customers}
-  const buildAgg=rows=>{
-    const m={};
-    rows.forEach(r=>{
-      const k=`${r.parish||''}|||${(r.consumption_bucket||'').trim()}`;
-      if(!m[k])m[k]={kwh:0,customers:0};
-      m[k].kwh+=Number(r.kwh||0);
-      if((r.consumption_bucket||'').trim()!=='< Zero') m[k].customers+=Number(r.customer_count||0);
-    });
-    return m;
-  };
-  const currAgg=buildAgg(curAct);
-  const prevAgg=buildAgg(prevAct);
+  // Populate bracket dropdown
+  if(bktSel){
+    const cur=bktSel.value;
+    bktSel.innerHTML='<option value="">All brackets</option>'+allBuckets.map(b=>`<option value="${b}"${b===cur?' selected':''}>${b}</option>`).join('');
+  }
 
-  // Buckets and parishes — derived entirely from actual data, no hardcoded lists
-  const allBuckets=[...new Set(curAct.map(r=>(r.consumption_bucket||'').trim()))].filter(Boolean).sort();
-  const parishes=[...new Set(curAct.map(r=>String(r.parish||'')))].filter(Boolean).sort();
   const filtered=parishes.filter(p=>!q||p.toLowerCase().includes(q));
   const bucketsToShow=bracket?[bracket]:allBuckets;
 
+  // Sum kwh + headcount via index — O(parishes × buckets × months) not O(n)
   let rows=[];
   filtered.forEach(p=>{
     bucketsToShow.forEach(b=>{
-      const k=`${p}|||${b}`;
-      const curr=currAgg[k]?.kwh||0;
-      const prev=prevAgg[k]?.kwh||0;
-      const count=currAgg[k]?.customers||0;
-      rows.push({parish:p,bracket:b,curr,prev,count});
+      let curr=0, prev=0, count=0;
+      RES.forEach(rc=>{
+        const cy=_pbSum(rc,p,b,curYear,pm);
+        const py=_pbSum(rc,p,b,curYear-1,pm);
+        const ct=_pbSum(rc,p,b,curYear,[lastMo]);
+        curr+=cy.kwh; prev+=py.kwh; count+=ct.cnt;
+      });
+      if(curr>0||prev>0) rows.push({parish:p,bracket:b,curr,prev,count});
     });
   });
   // Sort by absolute YoY variance (largest impact first)
@@ -4654,7 +4631,7 @@ function renderRsPar(){
   document.getElementById('rs_count').textContent=rows.length+' rows';
   document.getElementById('rs_par_tbl').innerHTML=`<table class="dt" id="rspar_dt">
     <thead><tr><th>Parish</th><th>Bracket (kWh)</th><th>Customers</th><th>${ph} kWh (${curYear})</th><th>${ph} kWh (${curYear-1})</th><th>Var%</th><th>Signal</th></tr></thead>
-    <tbody>${rows.map(r=>{const p=pct(r.curr,r.prev);const cnt=countAgg[`${r.parish}|||${r.bracket}`]||r.count;return`<tr>
+    <tbody>${rows.map(r=>{const p=pct(r.curr,r.prev);const cnt=r.count;return`<tr>
       <td style="font-weight:500">${esc(r.parish)}</td><td>${esc(r.bracket)}</td>
       <td>${cnt>0?cnt.toLocaleString():'--'}</td>
       <td>${fmtK(r.curr)}</td><td style="color:var(--text3)">${fmtK(r.prev)}</td>
@@ -4762,9 +4739,7 @@ function renderFcKPIs(){
     months.forEach(m=>{
       const fc=S.get(`${m.key}_${c.num}`,null);
       if(fc==null)return;
-      // Find matching actual row
-      const actRow=sbActuals.find(r=>_custNum(String(r.jps_ac||''))===c.num&&Number(r[YEAR_COL])===m.year&&Number(r.month)===m.month);
-      const actual=actRow?Number(actRow.kwh||0):c.m[m.month-1]||0;
+      const actual=(_actCustIdx[c.num]||{})[m.year*100+m.month]||c.m[m.month-1]||0;
       if(actual>0){mapeTotal+=Math.abs(fc-actual)/actual;mapeCount++;}
     });
   });
@@ -4795,9 +4770,7 @@ function renderFcEntry(){
     // Use last 3 months up to curMonth (not slice(-3) which grabs Oct-Dec when most are 0)
     const hist3=c.m.slice(0,curMonth).filter(v=>v>0).slice(-3);
     const avg3=hist3.length?hist3.reduce((s,x)=>s+x,0)/hist3.length:0;
-    // Prior-year same-period avg from sbActuals
-    const pyVals=sbActuals.filter(r=>_custNum(String(r.jps_ac||''))===c.num&&Number(r[YEAR_COL])===curYear-1&&Number(r.month)<=curMonth).map(r=>Number(r.kwh||0)/1e6);
-    const pyAvg=pyVals.length?pyVals.reduce((s,x)=>s+x,0)/pyVals.length:0;
+    const pyAvg=curMonth>0?_custSum(c.num,curYear-1,1,curMonth)/1e6/curMonth:0;
     const fcCells=months.map(m=>{
       const saved=S.get(`${m.key}_${c.num}`,null);
       const val=saved||'';
@@ -5224,19 +5197,19 @@ function renderOverviewKPIs(){
   const pm=getPM(),pmSet=new Set(pm),ph=getPH();
   const resRCs=['RT10','RT20'];
   const comRCs=['RT20','RT40','RT50','RT70','RT60-ST'];
-  // Period-filtered sums — use sbActuals directly so all rate classes (incl. RT20) are counted
-  const mtd=sbActuals.filter(r=>Number(r[YEAR_COL]||r.year||0)===curYear&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0)/1e6,0);
+  // Period-filtered sums — index lookups (O(months) not O(rows))
+  const mtd=_allRCSumMos(curYear,pm)/1e6;
   const ytd=mtd;
   // Budget: sum period months from sbBudget
   const mtdBud=sbBudget.filter(b=>Number(b.year||0)===curYear&&pmSet.has(Number(b.month||0))).reduce((s,b)=>s+Number(b.kwh_budget||0)/1e6,0);
-  // PY comparison: same months last year from sbActuals
-  const ytdLY=sbActuals.filter(r=>Number(r[YEAR_COL]||r.year||0)===curYear-1&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0)/1e6,0);
+  // PY comparison: same months last year
+  const ytdLY=_allRCSumMos(curYear-1,pm)/1e6;
   const vBud=mtdBud>0?pct(mtd,mtdBud):0;
   const vYoY=ytdLY>0?pct(ytd,ytdLY):0;
-  // Period-filtered residential/commercial split
-  const resMtd=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||r.rc||'').trim())&&Number(r.year||r.cal_year||0)===curYear&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0)/1e6,0);
+  // Period-filtered residential/commercial split — index lookups
+  const resMtd=resRCs.reduce((s,rc)=>s+_rcSumMos(rc,curYear,pm),0)/1e6;
   const resBud =sbBudget.filter(b=>resRCs.includes(String(b.rate_class||'').trim())&&Number(b.year||0)===curYear&&pmSet.has(Number(b.month||0))).reduce((s,b)=>s+Number(b.kwh_budget||b.kwh||0)/1e6,0);
-  const comMtd=sbActuals.filter(r=>comRCs.includes(String(r.rate_class||r.rc||'').trim())&&Number(r.year||r.cal_year||0)===curYear&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0)/1e6,0);
+  const comMtd=comRCs.reduce((s,rc)=>s+_rcSumMos(rc,curYear,pm),0)/1e6;
   const comBud =sbBudget.filter(b=>comRCs.includes(String(b.rate_class||'').trim())&&Number(b.year||0)===curYear&&pmSet.has(Number(b.month||0))).reduce((s,b)=>s+Number(b.kwh_budget||b.kwh||0)/1e6,0);
   const lbl=ph+' '+curYear;
   const sv=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
@@ -5351,25 +5324,28 @@ async function generateTrendForecast(label, notes=''){
   const sb = getSB(); if(!sb){toast('Not connected to database','err');return;}
   if(!sbActuals.length){toast('Load actuals data first','err');return;}
   const yr = curYear;
-  const maxMo = Math.max(...sbActuals.filter(r=>Number(r[YEAR_COL])===yr&&Number(r.kwh||0)>0).map(r=>Number(r.month)).filter(Boolean));
+  // Use index to find max month with data (O(keys) not O(rows))
+  const _gtfMos=Object.keys(_actMoIdx).map(Number).filter(ym=>Math.floor(ym/100)===yr&&_actMoIdx[ym]>0).map(ym=>ym%100).filter(Boolean);
+  const maxMo=_gtfMos.length?Math.max(..._gtfMos):0;
   if(!maxMo){toast('No actuals found for '+yr,'err');return;}
 
-  // Compute 3-month average growth rate per rate_class
-  const rcs=[...new Set(sbActuals.filter(r=>Number(r[YEAR_COL])===yr).map(r=>r.rate_class).filter(Boolean))];
+  // Compute 3-month average growth rate per rate_class — index lookups
+  const rcs=Object.keys(_actRcIdx).filter(rc=>Object.keys(_actRcIdx[rc]).some(ym=>Math.floor(Number(ym)/100)===yr&&_actRcIdx[rc][ym]>0));
   const rows=[];
   for(const rc of rcs){
-    // Last 3 months of actuals
-    const last3=sbActuals.filter(r=>String(r.rate_class||'')==rc&&Number(r[YEAR_COL])===yr&&Number(r.month)>=maxMo-2&&Number(r.month)<=maxMo);
-    if(!last3.length)continue;
-    const avgKwh=last3.reduce((s,r)=>s+Number(r.kwh||0),0)/last3.length;
+    // Last 3 months of actuals via index
+    const last3Kwh=_rcSum(rc,yr,maxMo-2,maxMo);
+    const last3Cnt=[maxMo-2,maxMo-1,maxMo].filter(m=>m>=1&&_rcSum(rc,yr,m,m)>0).length;
+    if(!last3Cnt)continue;
+    const avgKwh=last3Kwh/last3Cnt;
     // Prior year same period for growth rate
-    const py3=sbActuals.filter(r=>String(r.rate_class||'')==rc&&Number(r[YEAR_COL])===(yr-1)&&Number(r.month)>=maxMo-2&&Number(r.month)<=maxMo);
-    const pyAvg=py3.length?py3.reduce((s,r)=>s+Number(r.kwh||0),0)/py3.length:avgKwh;
+    const py3Kwh=_rcSum(rc,yr-1,maxMo-2,maxMo);
+    const py3Cnt=[maxMo-2,maxMo-1,maxMo].filter(m=>m>=1&&_rcSum(rc,yr-1,m,m)>0).length;
+    const pyAvg=py3Cnt?py3Kwh/py3Cnt:avgKwh;
     const growth=pyAvg>0?(avgKwh-pyAvg)/pyAvg:0;
     // Project remaining months
     for(let mo=maxMo+1;mo<=12;mo++){
-      const pyMo=sbActuals.filter(r=>String(r.rate_class||'')==rc&&Number(r[YEAR_COL])===(yr-1)&&Number(r.month)===mo);
-      const pyKwh=pyMo.reduce((s,r)=>s+Number(r.kwh||0),0);
+      const pyKwh=_rcSum(rc,yr-1,mo,mo);
       rows.push({year:yr,month:mo,rate_class:rc,kwh_forecast:Math.round(pyKwh*(1+growth))});
     }
   }
@@ -5411,7 +5387,8 @@ function renderAdmForecast(){
   if(!el)return;
   const yr=curYear;
   const versions=sbForecastVersions.filter(v=>v.year===yr);
-  const maxMo=sbActuals.length?Math.max(...sbActuals.filter(r=>Number(r[YEAR_COL])===yr&&Number(r.kwh||0)>0).map(r=>Number(r.month)).filter(m=>m>=1&&m<=12)):0;
+  const _admMoKeys=Object.keys(_actMoIdx).map(Number).filter(ym=>Math.floor(ym/100)===yr&&_actMoIdx[ym]>0).map(ym=>ym%100).filter(m=>m>=1&&m<=12);
+  const maxMo=_admMoKeys.length?Math.max(..._admMoKeys):0;
   const MNS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const remainMos=12-maxMo;
   el.innerHTML=`
@@ -5436,28 +5413,28 @@ function renderAdmForecast(){
 
 
 function buildScorecardData(){
-  // For Annual mode: find max month that actually has data in curYear
-  // so we compare Jan-X 2026 vs Jan-X 2025 (not 3 months vs 12 months)
+  // For Annual mode: find max month that actually has data in curYear via index
   const _maxActMonth = yr => {
-    const months = sbActuals.filter(r=>Number(r[YEAR_COL])===yr&&Number(r.kwh||0)>0).map(r=>Number(r.month));
-    return months.length ? Math.max(...months) : curMonth;
+    const keys=Object.keys(_actMoIdx).map(Number).filter(ym=>Math.floor(ym/100)===yr&&_actMoIdx[ym]>0).map(ym=>ym%100);
+    return keys.length ? Math.max(...keys) : curMonth;
   };
   const effMonth = curPeriod==='Annual' ? _maxActMonth(curYear) : curMonth;
 
   return SCORECARD_SEGS.map(({seg,desc})=>{
-    const kwhAct=(rows,yr,maxMo)=>rows.filter(r=>String(r.rate_class||r.Rate_class||'')==seg&&Number(r[YEAR_COL])===yr&&Number(r.month)<=maxMo).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+    // kwhAct replaced with _rcSum (O(months) index lookup)
+    const kwhAct=(yr,maxMo)=>_rcSum(seg,yr,1,maxMo)/1e6;
     const kwhBud=(rows,yr,maxMo)=>rows.filter(r=>String(r.rate_class||'')==seg&&Number(r.year)===yr&&Number(r.month)<=maxMo).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
     const kwhFc =(yr,maxMo)=>{
       const av=activeForecastVersion();
       if(!av)return 0;
       return sbForecast.filter(r=>r.version_id===av.id&&Number(r.year)===yr&&Number(r.month)<=maxMo&&String(r.rate_class||'')==seg).reduce((s,r)=>s+Number(r.kwh_forecast||0),0)/1e6;
     };
-    const mtd_act=kwhAct(sbActuals,curYear,curMonth)-kwhAct(sbActuals,curYear,curMonth-1);
+    const mtd_act=_rcSum(seg,curYear,curMonth,curMonth)/1e6;
     const mtd_bud=kwhBud(sbBudget,curYear,curMonth)-kwhBud(sbBudget,curYear,curMonth-1);
-    const mtd_ly =kwhAct(sbActuals,curYear-1,curMonth)-kwhAct(sbActuals,curYear-1,curMonth-1);
-    const ytd_act=kwhAct(sbActuals,curYear,effMonth);
+    const mtd_ly =_rcSum(seg,curYear-1,curMonth,curMonth)/1e6;
+    const ytd_act=kwhAct(curYear,effMonth);
     const ytd_bud=kwhBud(sbBudget,curYear,effMonth);
-    const ytd_ly =kwhAct(sbActuals,curYear-1,effMonth);
+    const ytd_ly =kwhAct(curYear-1,effMonth);
     const ytd_fc =kwhFc(curYear,effMonth);
     const status=mtd_bud>0?(mtd_act>=mtd_bud*0.95?'OK':mtd_act>=mtd_bud*0.85?'Watch':'Risk'):'OK';
     return{seg,desc,mtd_act,mtd_bud,mtd_ly,ytd_act,ytd_bud,ytd_ly,ytd_fc,status};
@@ -5477,10 +5454,10 @@ function renderExecSummary() {
   if(el('es_period')) el('es_period').textContent = lbl;
   if(el('es_period_lbl')) el('es_period_lbl').textContent = lbl;
 
-  // ES KPI bar — period-aware (uses curPeriod via getPM/getPH)
-  const _esActP=(yr)=>sbActuals.filter(r=>Number(r[YEAR_COL])===yr&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+  // ES KPI bar — period-aware (uses curPeriod via getPM/getPH) — index lookups
+  const _esActP=(yr)=>_allRCSumMos(yr,pm)/1e6;
   const _esBudP=(yr)=>sbBudget.filter(r=>Number(r.year||0)===yr&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
-  const _esYtd=(yr,mo)=>sbActuals.filter(r=>Number(r[YEAR_COL])===yr&&Number(r.month)<=mo).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+  const _esYtd=(yr,mo)=>_allRCSum(yr,1,mo)/1e6;
   const _esYtdBud=(yr,mo)=>sbBudget.filter(r=>Number(r.year||0)===yr&&Number(r.month)<=mo).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
   const esAct0  = _esActP(curYear);
   const esBud0  = _esBudP(curYear);
@@ -5492,7 +5469,7 @@ function renderExecSummary() {
   const esYoY0  = esLY0>0?((esAct0-esLY0)/esLY0*100):null;
   const esYtdYoY= esYtdLY0>0?((esYtd0-esYtdLY0)/esYtdLY0*100):null;
   const esComRCs= ['RT20','RT40','RT50','RT70','RT60-ST'];
-  const esCmMtd = sbActuals.filter(r=>esComRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+  const esCmMtd = esComRCs.reduce((s,rc)=>s+_rcSumMos(rc,curYear,pm),0)/1e6;
   const esCmBud = sbBudget.filter(r=>esComRCs.includes(String(r.rate_class||''))&&Number(r.year||0)===curYear&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
   const esCmGap = esCmMtd - esCmBud;
   const esDefs  = computeDefectors().filter(d=>d.sev==='Critical'||d.sev==='Severe');
@@ -5502,7 +5479,7 @@ function renderExecSummary() {
   esKv('es_kpi_mtd_detail',hasAct ? esAct0.toFixed(1)+' vs '+(esBud0>0?esBud0.toFixed(1):'--')+' GWh' : '-- vs -- GWh');
   esKv('es_kpi_ytd_yoy',   hasAct ? (esYtdYoY!==null?(esYtdYoY>=0?'+':'')+esYtdYoY.toFixed(1)+'%':'--') : '--');
   esKv('es_kpi_ytd_detail',hasAct ? esYtd0.toFixed(1)+' vs '+esYtdLY0.toFixed(1)+' GWh YTD' : '-- vs -- GWh');
-  // Revenue — sum revenue_jmd from sbActuals for period months
+  // Revenue — sum revenue_jmd from sbActuals for period months (no index for revenue_jmd, direct scan)
   const esRevJmd=sbActuals.filter(r=>Number(r[YEAR_COL])===curYear&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.revenue_jmd||0),0);
   esKv('es_kpi_rev', esRevJmd>0 ? 'J$'+(esRevJmd/1e9).toFixed(2)+'B' : '--');
   esKv('es_kpi_cm_gap',    hasAct ? (esCmGap>=0?'+':'')+esCmGap.toFixed(1)+' GWh' : '--');
@@ -5681,8 +5658,8 @@ function getBridgeDrivers() {
 function renderVarianceBridge() {
   const drivers = getBridgeDrivers();
   const pm=getPM(),pmSet=new Set(pm),ph=getPH();
-  // Period actuals from sbActuals (all rate classes), budget from sbBudget
-  const _bAct=sbActuals.filter(r=>Number(r[YEAR_COL])===curYear&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0)/1e6,0);
+  // Period actuals — index lookup (all rate classes)
+  const _bAct=_allRCSumMos(curYear,pm)/1e6;
   const _bBud=sbBudget.filter(b=>Number(b.year||0)===curYear&&pmSet.has(Number(b.month||0))).reduce((s,b)=>s+Number(b.kwh_budget||0)/1e6,0);
   const totalGap = sbActuals.length ? _bAct - _bBud : 0;
   const explained = drivers.reduce((s,d) => s + d.gwh, 0);
@@ -6223,10 +6200,11 @@ function editDefNote(num, name) {
    P5: RESIDENTIAL INTELLIGENCE
 ===================================================== */
 
-// Buckets derived dynamically from sbActuals — no hardcoded list
+// Buckets derived from _actBktIdx — O(keys) not O(rows)
 const BRACKET_COLORS = ['#00c2a8','#00957f','#378ADD','#185FA5','#f5a623','#7F77DD','#e84040','#f5a623'];
 function getResBuckets(){
-  return [...new Set(sbActuals.filter(r=>['RT10','RT20'].includes(String(r.rate_class||''))&&(r.consumption_bucket||'').trim()&&(r.consumption_bucket||'').trim()!=='< Zero').map(r=>(r.consumption_bucket||'').trim()))].filter(Boolean).sort();
+  const resPfx=['RT10|','RT20|'];
+  return [...new Set(Object.keys(_actBktIdx).filter(k=>resPfx.some(p=>k.startsWith(p))).map(k=>k.split('|')[1]).filter(b=>b&&b!=='< Zero'))].sort();
 }
 
 
@@ -6273,10 +6251,9 @@ function renderResIntelKPIs() {
   kv('ri_kpi_custs',totalCusts>0?totalCusts.toLocaleString():'--');
   kv('ri_kpi_custs_sub',totalCusts>0?periodLbl+' headcount':'upload customer_count');
 
-  // Avg kWh per RT10 customer — summed across period months
-  const rt10ActRows=sbActuals.filter(r=>String(r.rate_class||'')==='RT10'&&Number(r[YEAR_COL])===curYear&&periodMonths.includes(Number(r.month)));
-  const rt10TotalKwh=rt10ActRows.reduce((s,r)=>s+Number(r.kwh||0),0);
-  const rt10TotalCusts=rt10ActRows.filter(r=>(r.consumption_bucket||'').trim()&&(r.consumption_bucket||'').trim()!=='< Zero').reduce((s,r)=>s+Number(r.customer_count||0),0);
+  // Avg kWh per RT10 customer — kwh from index, custs still need customer_count field
+  const rt10TotalKwh=_rcSumMos('RT10',curYear,periodMonths);
+  const rt10TotalCusts=sbActuals.filter(r=>String(r.rate_class||'')==='RT10'&&Number(r[YEAR_COL])===curYear&&periodMonths.includes(Number(r.month))&&(r.consumption_bucket||'').trim()&&(r.consumption_bucket||'').trim()!=='< Zero').reduce((s,r)=>s+Number(r.customer_count||0),0);
   const avgKwh=rt10TotalCusts>0?(rt10TotalKwh/rt10TotalCusts).toFixed(0)+' kWh':'--';
   kv('ri_kpi_avg_kwh',avgKwh);
   kv('ri_kpi_avg_kwh_sub',rt10TotalCusts>0?'per customer · '+periodLbl:'upload RT10 actuals');
@@ -6303,10 +6280,7 @@ function renderResIntelSection(id) {
           labels: trendMonths.map(t=>t.lbl),
           datasets: bkts.map((b,i) => ({
             label: b + ' kWh',
-            data: trendMonths.map(t =>
-              sbActuals.filter(r=>resRCsT.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===t.y&&Number(r.month)===t.m&&(r.consumption_bucket||'').trim()===b)
-                .reduce((s,r)=>s+Number(r.kwh||0),0)/1e6
-            ),
+            data: trendMonths.map(t => resRCsT.reduce((s,rc)=>s+_bktSum(rc,b,t.y,[t.m]),0)/1e6),
             borderColor: BRACKET_COLORS[i % BRACKET_COLORS.length],
             backgroundColor: 'transparent',
             tension: 0.35,
@@ -6357,10 +6331,16 @@ function renderResIntelSection(id) {
       const mk3 = (baseYear) => Array.from({length:3},(_,i)=>{let m=curMonth-i,y=baseYear;if(m<=0){m+=12;y--;}return{y,m};});
       const curr3months = mk3(curYear);
       const prior3months= mk3(curYear-1);
-      const parishes = [...new Set(sbActuals.filter(r=>resRCsP.includes(String(r.rate_class||''))&&r.parish).map(r=>r.parish))].sort();
+      // Parishes from _actPBIdx — no sbActuals scan needed
+      const parishes=[...new Set(Object.keys(_actPBIdx).filter(k=>resRCsP.some(rc=>k.startsWith(rc+'|'))).map(k=>k.split('|')[1]).filter(Boolean))].sort();
       if(!parishes.length){tbl.innerHTML='<div style="color:var(--text3);padding:16px;font-size:12px">No residential actuals loaded — upload data to populate this table.</div>';return;}
-      const sumResKwh = (par,mList) => mList.reduce((s,{y,m})=>s+sbActuals.filter(r=>resRCsP.includes(String(r.rate_class||''))&&r.parish===par&&Number(r[YEAR_COL])===y&&Number(r.month)===m).reduce((a,r)=>a+Number(r.kwh||0),0),0)/3;
-      const sumAllKwh = (par,mList) => mList.reduce((s,{y,m})=>s+sbActuals.filter(r=>r.parish===par&&Number(r[YEAR_COL])===y&&Number(r.month)===m).reduce((a,r)=>a+Number(r.kwh||0),0),0)/3;
+      // Index lookups — O(buckets) per parish via _parRCSum
+      const sumResKwh = (par,mList) => mList.reduce((s,{y,m})=>s+resRCsP.reduce((a,rc)=>a+_parRCSum(rc,par,y,[m]),0),0)/3;
+      // All-RC parish sum via _actPBIdx (includes all buckets across all RCs)
+      const sumAllKwh = (par,mList) => mList.reduce((s,{y,m})=>{
+        const ym=y*100+m;
+        return s+Object.entries(_actPBIdx).filter(([k])=>k.split('|')[1]===par).reduce((a,[,mm])=>a+(mm[ym]?.kwh||0),0);
+      },0)/3;
       const parishDef = parishes.map(par => {
         const curr3v = sumResKwh(par, curr3months);
         const prior3v= sumResKwh(par, prior3months);
@@ -6393,7 +6373,7 @@ function renderResIntelSection(id) {
       const _wMN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
       const _trail6=Array.from({length:6},(_,i)=>{let m=curMonth-5+i,y=curYear;if(m<=0){m+=12;y--;}return{y,m,lbl:_wMN[m-1]};});
       CDD_DATA.months    =_trail6.map(t=>t.lbl);
-      CDD_DATA.kwh_raw   =_trail6.map(t=>sbActuals.filter(r=>['RT10','RT20'].includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===t.y&&Number(r.month)===t.m).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6);
+      CDD_DATA.kwh_raw   =_trail6.map(t=>(_rcSumMos('RT10',t.y,[t.m])+_rcSumMos('RT20',t.y,[t.m]))/1e6);
       // cdd columns stay zero until jps_cdd table is uploaded
       CDD_DATA.cdd_actual=Array(6).fill(0);
       CDD_DATA.cdd_normal=Array(6).fill(0);
@@ -6451,13 +6431,21 @@ function renderBracketTable() {
     :curPeriod==='QTD'?Array.from({length:curMonth-qStart+1},(_,i)=>qStart+i)
     :curPeriod==='YTD'?Array.from({length:curMonth},(_,i)=>i+1)
     :Array.from({length:12},(_,i)=>i+1);
-  const curAct=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&periodMonths.includes(Number(r.month))&&(r.consumption_bucket||'').trim());
-  const prevAct=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===(curYear-1)&&periodMonths.includes(Number(r.month))&&(r.consumption_bucket||'').trim());
-  const buildAgg=rows=>{const m={};rows.forEach(r=>{const k=`${(r.consumption_bucket||'').trim()}|||${r.parish||''}`;if(!m[k])m[k]={kwh:0};m[k].kwh+=Number(r.kwh||0);});return m;};
-  const currAgg=buildAgg(curAct);
-  const prevAgg=buildAgg(prevAct);
+  // Build aggregates from _actPBIdx — O(PBIdx keys × periods), no sbActuals scan
+  const currAgg={},prevAgg={};
+  Object.entries(_actPBIdx).forEach(([key,mmap])=>{
+    const parts=key.split('|');const rc=parts[0],par=parts[1],bkt=parts[2];
+    if(!resRCs.includes(rc)||!bkt)return;
+    const aggKey=`${bkt}|||${par}`;
+    if(!currAgg[aggKey])currAgg[aggKey]={kwh:0};
+    if(!prevAgg[aggKey])prevAgg[aggKey]={kwh:0};
+    periodMonths.forEach(mo=>{
+      currAgg[aggKey].kwh+=(mmap[curYear*100+mo]?.kwh||0);
+      prevAgg[aggKey].kwh+=(mmap[(curYear-1)*100+mo]?.kwh||0);
+    });
+  });
   // All bracket+parish combos present in current data
-  const pairs=[...new Set(curAct.map(r=>`${(r.consumption_bucket||'').trim()}|||${r.parish||''}`))].sort();
+  const pairs=[...new Set(Object.keys(currAgg).filter(k=>currAgg[k].kwh>0))].sort();
   if(!pairs.length){tbl.innerHTML='<div style="color:var(--text3);padding:16px;font-size:12px">No residential actuals loaded — upload data to populate this table.</div>';return;}
   const rows=pairs.map(k=>{
     const[b,p]=k.split('|||');
@@ -8426,6 +8414,14 @@ let _sbClient=null,
     sbLossesForecast=[], // jps_losses_forecast  — rolling 12-month losses forecast
     sbConnected=false, sbLastSync=null;
 
+// ── Pre-built actuals indexes — rebuilt on every sync by buildDashboardData() ──
+// Eliminates repeated .filter().reduce() scans across 200k rows in render functions
+let _actRcIdx  = {}; // [rc][year*100+month] = kWh
+let _actBktIdx = {}; // [rc+'|'+bucket][ym] = kWh
+let _actPBIdx  = {}; // [rc+'|'+parish+'|'+bucket][ym] = {kwh,cnt}
+let _actCustIdx= {}; // [custNum][ym] = kWh
+let _actMoIdx  = {}; // [ym] = total kWh across all RCs
+
 function getSB(){
   if(!_sbClient&&window.supabase?.createClient)
     _sbClient=window.supabase.createClient(SB_URL,SB_KEY,{
@@ -8551,16 +8547,23 @@ function buildDashboardData(){
   // Normalise ONCE — reused for all downstream calculations (was called twice before)
   const rows=fcNormActuals(sbActuals);
 
-  // ── Pre-build O(1) lookup: rcIdx[rc][year*100+month] = total kWh ──
-  // Replaces 28 separate .filter() scans over 50k rows in SCORECARD_DATA loop
-  const rcIdx={};
+  // ── Pre-build O(1) indexes — single pass over all rows ──
+  // Shared globally so every render function can do O(months) lookups instead of O(n) scans
+  _actRcIdx={}; _actBktIdx={}; _actPBIdx={}; _actCustIdx={}; _actMoIdx={};
   rows.forEach(r=>{
-    if(!rcIdx[r.rc])rcIdx[r.rc]={};
-    const key=r.year*100+r.month;
-    rcIdx[r.rc][key]=(rcIdx[r.rc][key]||0)+r.kwh;
+    const ym=r.year*100+r.month, bkt=r.bucket||'', par=r.parish||'';
+    // RC totals
+    if(!_actRcIdx[r.rc])_actRcIdx[r.rc]={};
+    _actRcIdx[r.rc][ym]=(_actRcIdx[r.rc][ym]||0)+r.kwh;
+    // Monthly total
+    _actMoIdx[ym]=(_actMoIdx[ym]||0)+r.kwh;
+    // Bucket totals per RC
+    if(bkt){const bk=r.rc+'|'+bkt;if(!_actBktIdx[bk])_actBktIdx[bk]={};_actBktIdx[bk][ym]=(_actBktIdx[bk][ym]||0)+r.kwh;}
+    // Parish+bucket per RC
+    if(bkt&&par){const pk=r.rc+'|'+par+'|'+bkt;if(!_actPBIdx[pk])_actPBIdx[pk]={};if(!_actPBIdx[pk][ym])_actPBIdx[pk][ym]={kwh:0,cnt:0};_actPBIdx[pk][ym].kwh+=r.kwh;if(bkt!=='< Zero')_actPBIdx[pk][ym].cnt+=r.custCount;}
+    // Customer totals
+    if(r.acct&&r.acct!=='Unassigned'){if(!_actCustIdx[r.acct])_actCustIdx[r.acct]={};_actCustIdx[r.acct][ym]=(_actCustIdx[r.acct][ym]||0)+r.kwh;}
   });
-  // Helper: sum kWh for rc+year across months 1..toMonth using the index (O(toMonth) not O(n))
-  const _rcSum=(rc,year,fromM,toM)=>{const m=rcIdx[rc]||{};let s=0;for(let i=fromM;i<=toM;i++)s+=(m[year*100+i]||0);return s;};
 
   // CUSTOMERS — one row per CUSTOMER NUMBER (r.acct is already normalised to customer number by fcNormActuals)
   // Multiple full accounts under the same customer number are aggregated here.
@@ -8730,6 +8733,22 @@ function _saveDataCache(){
   try{localStorage.removeItem(_DCACHE_KEY);}catch(_){}
   console.warn('[JPS] Cache disabled — localStorage full. Clear browser storage to re-enable.');
 }
+
+// ── Index helper functions — O(months) lookups using pre-built indexes ──
+function _rcSum(rc,yr,fromM,toM){const m=_actRcIdx[rc]||{};let s=0;for(let i=fromM;i<=toM;i++)s+=(m[yr*100+i]||0);return s;}
+function _rcSumMos(rc,yr,mos){const m=_actRcIdx[rc]||{};return mos.reduce((s,mo)=>s+(m[yr*100+mo]||0),0);}
+function _bktSum(rc,bkt,yr,mos){const m=_actBktIdx[rc+'|'+bkt]||{};return mos.reduce((s,mo)=>s+(m[yr*100+mo]||0),0);}
+function _pbSum(rc,par,bkt,yr,mos){const e=_actPBIdx[rc+'|'+par+'|'+bkt];if(!e)return{kwh:0,cnt:0};return mos.reduce((a,mo)=>{const v=e[yr*100+mo];if(v){a.kwh+=v.kwh;a.cnt+=v.cnt;}return a;},{kwh:0,cnt:0});}
+function _custSum(acct,yr,fromM,toM){const m=_actCustIdx[acct]||{};let s=0;for(let i=fromM;i<=toM;i++)s+=(m[yr*100+i]||0);return s;}
+function _moKwh(yr,mo){return _actMoIdx[yr*100+mo]||0;}
+// All-RC sums — use _actMoIdx for total across all rate classes
+function _allRCSum(yr,fromM,toM){let s=0;for(let i=fromM;i<=toM;i++)s+=(_actMoIdx[yr*100+i]||0);return s;}
+function _allRCSumMos(yr,mos){return mos.reduce((s,m)=>s+(_actMoIdx[yr*100+m]||0),0);}
+// Parish+RC sum across all buckets — O(buckets) using _actPBIdx
+function _parRCSum(rc,par,yr,mos){const prefix=rc+'|'+par+'|';const entries=Object.entries(_actPBIdx).filter(([k])=>k.startsWith(prefix));return mos.reduce((s,mo)=>s+entries.reduce((a,[,mm])=>a+(mm[yr*100+mo]?.kwh||0),0),0);}
+// LE actuals helper — uses index (O(1)), respects RC filter if active
+function _leActMo(yr,mo){const frc=(document.getElementById('le_frc')?.value||'');return frc?_rcSum(frc,yr,mo,mo):_moKwh(yr,mo);}
+function _leActSum(yr,mos){return mos.reduce((s,m)=>s+_leActMo(yr,m),0);}
 
 function _loadDataCache(){
   try{
@@ -9243,10 +9262,16 @@ function renderLEOverview(){
     // Auto-base: actuals for closed months, budget for future months
     const autoLabel='Auto-base';
     const synth=[];
+    // Single pass to group actuals by month (avoids 12 serial scans)
+    const _autoActByMo={};
+    sbActuals.filter(r=>Number(r[YEAR_COL]||r.year||0)===FC_BUD_YEAR).forEach(r=>{
+      const m=Number(r.month||0);if(!m)return;
+      if(!_autoActByMo[m])_autoActByMo[m]=[];
+      _autoActByMo[m].push(r);
+    });
     for(let m=1;m<=12;m++){
-      const useAct=m<=curMonth;
-      if(useAct){
-        sbActuals.filter(r=>Number(r[YEAR_COL]||r.year||0)===FC_BUD_YEAR&&Number(r.month||0)===m).forEach(r=>{
+      if(m<=curMonth){
+        (_autoActByMo[m]||[]).forEach(r=>{
           synth.push({...r,kwh_le:Number(r.kwh||0),le_label:autoLabel,year:FC_BUD_YEAR,month:m});
         });
       }else{
@@ -9268,10 +9293,9 @@ function renderLEOverview(){
     if(leCmpToggles['__bud']===undefined)leCmpToggles['__bud']=true;
     if(leCmpToggles['__act']===undefined)leCmpToggles['__act']=true;
     const curRows2=leFilterRows(synth.filter(d=>d.year===FC_BUD_YEAR));
-    const actCur2=sbActuals.filter(d=>Number(d.year||d.cal_year||0)===FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)}));
     const budCur2=sbBudget.filter(d=>Number(d.year||0)===FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)}));
     const leTotal2=leSum(curRows2,mos2);
-    const actTotal2=actSum(leFilterRows(actCur2),mos2);
+    const actTotal2=_leActSum(FC_BUD_YEAR,mos2);
     const budTotal2=budSum(leFilterRows(budCur2),mos2);
     if(kr)kr.innerHTML+=
       leKpi('Auto LE ('+getPH()+')',leTotal2,null,n=>fmtE(n,1))+
@@ -9281,7 +9305,7 @@ function renderLEOverview(){
     const datasets2=[];
     datasets2.push({label:autoLabel,data:mos2.map(m=>leSum(curRows2,[m])),borderColor:'#f5a623',backgroundColor:'rgba(245,166,35,.15)',tension:.3,pointRadius:3,fill:true,borderWidth:2});
     if(leCmpToggles['__bud']!==false) datasets2.push({label:'Budget',data:mos2.map(m=>budSum(budCur2,[m])),borderColor:'#3498db',backgroundColor:'transparent',borderDash:[4,3],tension:.3,pointRadius:2,fill:false,borderWidth:1.5});
-    if(leCmpToggles['__act']!==false) datasets2.push({label:'Actuals',data:mos2.map(m=>actSum(actCur2,[m])),borderColor:'#2ecc71',backgroundColor:'transparent',tension:.3,pointRadius:3,fill:false,borderWidth:2});
+    if(leCmpToggles['__act']!==false) datasets2.push({label:'Actuals',data:mos2.map(m=>_leActMo(FC_BUD_YEAR,m)),borderColor:'#2ecc71',backgroundColor:'transparent',tension:.3,pointRadius:3,fill:false,borderWidth:2});
     const togDiv2=document.getElementById('le_ov_toggles');
     if(togDiv2) togDiv2.innerHTML='<span style="font-size:10px;color:var(--text3)">Auto-base from actuals + budget</span>';
     const TC2=getComputedStyle(document.documentElement).getPropertyValue('--text2').trim()||'#aaa';
@@ -9299,11 +9323,10 @@ function renderLEOverview(){
   if(leCmpToggles['__act']===undefined)leCmpToggles['__act']=true;
 
   const curRows=leFilterRows(leGetCurrentRows().filter(d=>d.year===FC_BUD_YEAR));
-  const actCur =sbActuals.filter(d=>Number(d.year||d.cal_year||0)===FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)}));
   const budCur =sbBudget.filter(d=>Number(d.year||0)===FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)}));
 
   const leTotal =leSum(curRows,mos);
-  const actTotal=actSum(leFilterRows(actCur),mos);
+  const actTotal=_leActSum(FC_BUD_YEAR,mos);
   const budTotal=budSum(leFilterRows(budCur),mos);
 
   const kr=document.getElementById('le_krow');
@@ -9327,7 +9350,7 @@ function renderLEOverview(){
     datasets.push({label,data:mos.map(m=>leSum(rows,[m])),borderColor:LE_COLORS[i%LE_COLORS.length],backgroundColor:LE_COLORS[i%LE_COLORS.length]+'30',tension:.3,pointRadius:3,fill:false,borderWidth:2});
   });
   if(leCmpToggles['__bud']!==false) datasets.push({label:'Budget',data:mos.map(m=>budSum(budCur,[m])),borderColor:'#3498db',backgroundColor:'transparent',borderDash:[4,3],tension:.3,pointRadius:2,fill:false,borderWidth:1.5});
-  if(leCmpToggles['__act']!==false) datasets.push({label:'Actuals',data:mos.map(m=>actSum(actCur,[m])),borderColor:'#2ecc71',backgroundColor:'transparent',tension:.3,pointRadius:3,fill:false,borderWidth:2});
+  if(leCmpToggles['__act']!==false) datasets.push({label:'Actuals',data:mos.map(m=>_leActMo(FC_BUD_YEAR,m)),borderColor:'#2ecc71',backgroundColor:'transparent',tension:.3,pointRadius:3,fill:false,borderWidth:2});
 
   mkChart('c_le_ov_main',{type:'line',data:{labels:mos.map(m=>LE_MO[m-1]),datasets},options:co({
     plugins:{legend:{display:true,labels:{color:'#5a7a96',font:{size:10}}},tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmtE(ctx.raw,2)}`}}},
@@ -9351,7 +9374,7 @@ function renderLEOverview(){
     makeSortable('le_rc_tbl_el');
   }
 
-  const actFY0=actSum(sbActuals.filter(d=>Number(d.year||d.cal_year||0)===FC_PY).map(d=>({...d,month:Number(d.month||0)})),[1,2,3,4,5,6,7,8,9,10,11,12]);
+  const actFY0=_leActSum(FC_PY,[1,2,3,4,5,6,7,8,9,10,11,12]);
   const leFY  =leSum(leGetCurrentRows().filter(d=>d.year===FC_BUD_YEAR),[1,2,3,4,5,6,7,8,9,10,11,12]);
   const budFY0=budSum(budCur,[1,2,3,4,5,6,7,8,9,10,11,12]);
   mkChart('c_le_fy',{type:'bar',data:{
@@ -9378,15 +9401,13 @@ function renderLEMonthly(){
   }
   const mos=lePeriodMonths();
   const curRows=leFilterRows(leGetCurrentRows().filter(d=>d.year===FC_BUD_YEAR));
-  const actCur =leFilterRows(sbActuals.filter(d=>Number(d.year||d.cal_year||0)===FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)})));
-  const actPY  =leFilterRows(sbActuals.filter(d=>Number(d.year||d.cal_year||0)===FC_PY).map(d=>({...d,month:Number(d.month||0)})));
   const bud    =leFilterRows(sbBudget.filter(d=>Number(d.year||0)===FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)})));
 
   const datasets=[];
-  if(leMonthToggles.act25) datasets.push({label:'PY Actual', data:mos.map(m=>actSum(actPY,[m])), borderColor:'#7f8c8d',backgroundColor:'transparent',tension:.3,pointRadius:2,fill:false,borderDash:[3,2]});
-  if(leMonthToggles.bud26) datasets.push({label:'Budget',    data:mos.map(m=>budSum(bud,[m])),   borderColor:'#3498db',backgroundColor:'transparent',tension:.3,pointRadius:2,fill:false,borderDash:[4,3]});
-  if(leMonthToggles.act26) datasets.push({label:'Actuals',   data:mos.map(m=>actSum(actCur,[m])),borderColor:'#2ecc71',backgroundColor:'transparent',tension:.3,pointRadius:3,fill:false});
-  if(leMonthToggles.le_cur)datasets.push({label:'Current LE',data:mos.map(m=>leSum(curRows,[m])),borderColor:'#f5a623',backgroundColor:'rgba(245,166,35,.1)',tension:.3,pointRadius:3,fill:true,borderWidth:2});
+  if(leMonthToggles.act25) datasets.push({label:'PY Actual', data:mos.map(m=>_leActMo(FC_PY,m)),       borderColor:'#7f8c8d',backgroundColor:'transparent',tension:.3,pointRadius:2,fill:false,borderDash:[3,2]});
+  if(leMonthToggles.bud26) datasets.push({label:'Budget',    data:mos.map(m=>budSum(bud,[m])),          borderColor:'#3498db',backgroundColor:'transparent',tension:.3,pointRadius:2,fill:false,borderDash:[4,3]});
+  if(leMonthToggles.act26) datasets.push({label:'Actuals',   data:mos.map(m=>_leActMo(FC_BUD_YEAR,m)),  borderColor:'#2ecc71',backgroundColor:'transparent',tension:.3,pointRadius:3,fill:false});
+  if(leMonthToggles.le_cur)datasets.push({label:'Current LE',data:mos.map(m=>leSum(curRows,[m])),       borderColor:'#f5a623',backgroundColor:'rgba(245,166,35,.1)',tension:.3,pointRadius:3,fill:true,borderWidth:2});
 
   mkChart('c_le_monthly',{type:'line',data:{labels:mos.map(m=>LE_MO[m-1]),datasets},options:co({
     plugins:{legend:{display:true,labels:{color:'#5a7a96',font:{size:10}}},tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmtE(ctx.raw,2)}`}}},
@@ -9395,7 +9416,7 @@ function renderLEMonthly(){
 
   const tbl=document.getElementById('le_monthly_tbl');
   if(tbl){
-    const rows=[1,2,3,4,5,6,7,8,9,10,11,12].map(m=>({m,le:leSum(curRows,[m]),bud:budSum(bud,[m]),act:actSum(actCur,[m]),py:actSum(actPY,[m])}));
+    const rows=[1,2,3,4,5,6,7,8,9,10,11,12].map(m=>({m,le:leSum(curRows,[m]),bud:budSum(bud,[m]),act:_leActMo(FC_BUD_YEAR,m),py:_leActMo(FC_PY,m)}));
     tbl.innerHTML=`<table id="le_mt_tbl_el"><thead><tr><th>Month</th><th>PY Actual</th><th>Budget</th><th>Actuals</th><th>Current LE</th><th>LE vs Bud</th><th>LE vs Act</th></tr></thead><tbody>${rows.map(r=>{const vb=r.le-r.bud,vbp=r.bud?vb/r.bud*100:0;const va=r.act?r.le-r.act:null,vap=r.act&&va!=null?va/r.act*100:null;return`<tr><td>${LE_MO[r.m-1]}</td><td>${fmtE(r.py,1)}</td><td>${fmtE(r.bud,1)}</td><td>${r.act?fmtE(r.act,1):'--'}</td><td>${fmtE(r.le,1)}</td><td style="${vb>=0?'color:var(--green)':'color:var(--red)'}">${vb>=0?'+':''}${fmtE(vb,1)} (${vb>=0?'+':''}${vbp.toFixed(1)}%)</td><td>${vap!=null?`<span style="${vap>=0?'color:var(--green)':'color:var(--red)'}">${vap>=0?'+':''}${fmtE(va,1)} (${vap>=0?'+':''}${vap.toFixed(1)}%)</span>`:'--'}</td></tr>`;}).join('')}<tr class="ft"><td>FY Total</td><td>${fmtE(rows.reduce((s,r)=>s+r.py,0),1)}</td><td>${fmtE(rows.reduce((s,r)=>s+r.bud,0),1)}</td><td>${fmtE(rows.filter(r=>r.act).reduce((s,r)=>s+r.act,0),1)}</td><td>${fmtE(rows.reduce((s,r)=>s+r.le,0),1)}</td><td></td><td></td></tr></tbody></table>`;
     makeSortable('le_mt_tbl_el');
   }
@@ -9506,9 +9527,8 @@ function renderLECompare(){
     datasets.push({label,data:mos.map(m=>leSum(rows,[m])),borderColor:LE_COLORS[i%LE_COLORS.length],backgroundColor:LE_COLORS[i%LE_COLORS.length]+'30',tension:.3,pointRadius:3,fill:false,borderWidth:2});
   });
   const budAll=sbBudget.filter(d=>Number(d.year||0)===FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)}));
-  const actAll=sbActuals.filter(d=>Number(d.year||d.cal_year||0)===FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)}));
   if(leCmpToggles['__bud']!==false) datasets.push({label:'Budget',data:mos.map(m=>budSum(budAll,[m])),borderColor:'#3498db',backgroundColor:'transparent',borderDash:[4,3],tension:.3,pointRadius:2,fill:false,borderWidth:1.5});
-  if(leCmpToggles['__act']!==false) datasets.push({label:'Actuals',data:mos.map(m=>actSum(actAll,[m])),borderColor:'#2ecc71',backgroundColor:'transparent',tension:.3,pointRadius:3,fill:false,borderWidth:2});
+  if(leCmpToggles['__act']!==false) datasets.push({label:'Actuals',data:mos.map(m=>_leActMo(FC_BUD_YEAR,m)),borderColor:'#2ecc71',backgroundColor:'transparent',tension:.3,pointRadius:3,fill:false,borderWidth:2});
 
   mkChart('c_le_compare',{type:'line',data:{labels:mos.map(m=>LE_MO[m-1]),datasets},options:co({
     plugins:{legend:{display:true,labels:{color:'#5a7a96',font:{size:10}}},tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmtE(ctx.raw,2)}`}}},
