@@ -2433,7 +2433,7 @@ async function detectYearCol(sb){
         await new Promise(r=>setTimeout(r,500));
         return;
       }
-    }catch(e){}
+    }catch(e){ console.warn('[schema] probe failed',e); }
     // RPC not found or failed — SCHEMA_SQL not yet run; fall through to probe
   }
 
@@ -2462,7 +2462,7 @@ async function detectYearCol(sb){
       _showSchemaBanner('fpa_raw');
       return;
     }
-  }catch(e){}
+  }catch(e){ console.warn('[schema] actuals col probe failed',e); }
 
   // Check for correct year column
   for(const col of ['year','cal_year']){
@@ -2474,7 +2474,7 @@ async function detectYearCol(sb){
         if(col==='cal_year') _showSchemaBanner('cal_year');
         return;
       }
-    }catch(e){}
+    }catch(e){ console.warn('[schema] year col detect failed',e); }
   }
 
   console.warn('[JPS] Could not detect year column — schema may need updating. Using default:',YEAR_COL);
@@ -2636,7 +2636,7 @@ async function doRegister(){
     if(error){showErr(error.message);if(btn){btn.textContent='Create Account →';btn.disabled=false;}return;}
     // Determine role: first user in profiles gets admin, others get view
     let count=1;
-    try{const r=await sb.from('profiles').select('*',{count:'exact',head:true});count=r.count??1;}catch(e){}
+    try{const r=await sb.from('profiles').select('*',{count:'exact',head:true});count=r.count??1;}catch(e){ console.error('[auth] profiles count failed',e); toast('Role check failed — reload','error'); }
     const isFirst=(count===0||count===null);
     const salesRole=isFirst?'admin':'view';
     const fpaRole  =isFirst?'admin':'viewer';
@@ -2702,7 +2702,7 @@ function setTheme(t){
   // Update active state on theme buttons
   document.querySelectorAll('.theme-btn').forEach(b=>b.classList.toggle('on',b.dataset.theme===t));
   // Rebuild charts with new colors
-  try{buildCharts();}catch(e){}
+  try{buildCharts();}catch(e){ console.warn('[charts] buildCharts failed',e); }
   const labels={dark:'🌙 Dark theme',light:'☀️ Light theme',jps:'⚡ JPS theme'};
   toast(labels[t]||'Theme applied','ok');
 }
@@ -2718,9 +2718,9 @@ function applyStoredTheme(){
    On load, Supabase is the source of truth.
 ========================================== */
 const S={
-  set(k,v){try{localStorage.setItem('jps5_'+k,JSON.stringify(v));}catch(e){}},
-  get(k,d){try{const v=localStorage.getItem('jps5_'+k);return v?JSON.parse(v):d;}catch(e){return d;}},
-  del(k){try{localStorage.removeItem('jps5_'+k);}catch(e){}}
+  set(k,v){try{localStorage.setItem('jps5_'+k,JSON.stringify(v));}catch(e){ console.warn('[storage]',e); }},
+  get(k,d){try{const v=localStorage.getItem('jps5_'+k);return v?JSON.parse(v):d;}catch(e){ console.warn('[storage]',e); return d;}},
+  del(k){try{localStorage.removeItem('jps5_'+k);}catch(e){ console.warn('[storage]',e); }}
 };
 function esc(s){const d=document.createElement('div');d.textContent=String(s??'');return d.innerHTML;}
 
@@ -2798,7 +2798,7 @@ async function dbDelete(table,match){
 async function dbSelect(table,match={}){
   const sb=getSB();if(!sb)return[];
   try{let q=sb.from(table).select('*');Object.entries(match).forEach(([k,v])=>{q=q.eq(k,v);});const{data,error}=await q;return(!error&&data)?data:[];}
-  catch(e){return[];}
+  catch(e){ console.error('[db] query failed',e); if(typeof JpsMonitor!=='undefined') JpsMonitor.error('db_query_failed',e); return []; }
 }
 
 /* ── Notes / account commentary ── */
@@ -3620,7 +3620,7 @@ function renderSection(id){
       renderCmCust();renderCmIndTbl();
     }
   }
-  else if(id==='rs'){renderRsKPIs();renderRsPar();try{mkBracketCharts();}catch(e){}}
+  else if(id==='rs'){renderRsKPIs();renderRsPar();try{mkBracketCharts();}catch(e){ console.warn('[charts] mkBracketCharts failed',e); }}
   else if(id==='df'){renderDefectors();renderDefKPIs();}
   else if(id==='fc'){renderFcEntry();renderMacroGrid();renderFcKPIs();}
   else if(id==='ro'){filterRO();updateROAutoFlags();}
@@ -10111,7 +10111,7 @@ let _myPresence={};
 
 function _rtBroadcast(type,payload){
   if(!_rtChannel)return;
-  try{_rtChannel.postMessage({type,payload,from:_myTabId,ts:Date.now()});}catch(e){}
+  try{_rtChannel.postMessage({type,payload,from:_myTabId,ts:Date.now()});}catch(e){ console.warn('[postMessage]',e); }
 }
 
 function _rtAnnouncePresence(section){
