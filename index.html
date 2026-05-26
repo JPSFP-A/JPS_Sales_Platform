@@ -3545,13 +3545,13 @@ function renderSidebarFilters(){
     segEl.innerHTML = segs.length
       ? segs.map(s=>`<span class="chip on" data-seg="${s}">${s}</span>`).join('')
       : '<span style="font-size:9px;color:var(--text3)">No data</span>';
-    segEl.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{c.classList.toggle('on');try{renderSection(document.querySelector('.sec.on')?.id);}catch(e){}});
+    segEl.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{c.classList.toggle('on');try{renderSection(document.querySelector('.sec.on')?.id);}catch(e){console.error('[JPS] seg chip renderSection:',e);}});
   }
   if(yrEl){
     yrEl.innerHTML = years.length
       ? years.map(y=>`<span class="chip on" data-year="${y}">${y}</span>`).join('')
       : '<span style="font-size:9px;color:var(--text3)">No data</span>';
-    yrEl.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{c.classList.toggle('on');try{renderSection(document.querySelector('.sec.on')?.id);}catch(e){}});
+    yrEl.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{c.classList.toggle('on');try{renderSection(document.querySelector('.sec.on')?.id);}catch(e){console.error('[JPS] yr chip renderSection:',e);}});
   }
 }
 function getActiveSegs(){return [...(document.querySelectorAll('#segChips .chip.on')||[])].map(c=>c.dataset.seg).filter(Boolean);}
@@ -9083,7 +9083,7 @@ async function syncSupabase(silent=false){
       sbTable('jps_ev_accounts',{order:'year'}),
       sbTable('jps_period_locks',{}),
       sbTable('jps_forecast_versions',{order:'created_at'}),
-      sbTable('jps_forecast',{limit:50000})
+      sbTable('jps_forecast',{gte:['year',_actYearCutoff]})
     ]);
 
     // ── Process results ────────────────────────────────────
@@ -9149,8 +9149,8 @@ async function syncSupabase(silent=false){
                 return null;
               }
             })(),
-            sbTable('jps_budget',{cols:budCols}),
-            sbTable('jps_le',   {cols:leCols})
+            sbTable('jps_budget',{cols:budCols,gte:['year',_actYearCutoff]}),
+            sbTable('jps_le',   {cols:leCols,gte:['year',_actYearCutoff]})
           ]);
           let upgraded=false;
           if(fullAct&&fullAct.length){
