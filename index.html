@@ -2342,7 +2342,11 @@ let PLATFORM_USERS=[]; // loaded from shared profiles table
 let PERIOD_LOCKS=[];   // loaded from jps_period_locks
 
 const _initDate=new Date();
-let curPeriod='MTD', curYear=_initDate.getFullYear(), curMonth=_initDate.getMonth()+1, curQtr=Math.ceil((_initDate.getMonth()+1)/3);
+const _CY=_initDate.getFullYear(), _PY=_CY-1;
+let curPeriod='MTD', curYear=_CY, curMonth=_initDate.getMonth()+1, curQtr=Math.ceil((_initDate.getMonth()+1)/3);
+// Populate dynamic year filter options
+(function(){ const cy=document.getElementById('vld_anom_yr_cy'), py=document.getElementById('vld_anom_yr_py');
+  if(cy){cy.value=_CY;cy.textContent=_CY;} if(py){py.value=_PY;py.textContent=_PY;} })();
 let YEAR_COL='year'; // auto-detected at sync — set to 'cal_year' on FP&A-seeded databases
 let _schemaFixApplied=false; // jps_normalize_schema RPC called once per session
 let mrPeriod=`${_initDate.getFullYear()}-${String(_initDate.getMonth()+1).padStart(2,'0')}`, mrRepName='', mrActiveSec='mr_ov';
