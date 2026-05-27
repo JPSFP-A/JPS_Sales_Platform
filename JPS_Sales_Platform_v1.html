@@ -4939,7 +4939,8 @@ function filterRO(){
 function updateROStatus(num,status){const r=RISK_OPP.find(x=>x.num===num);if(r){r.status=status;saveROItemToDB(r).catch(e=>console.warn('DB R&O status save:',e));}}
 function editRONote(num){
   const r=RISK_OPP.find(x=>x.num===num);if(!r)return;
-  openModal(`Note: ${r.name}`,`<textarea id="ro_note_ta">${r.cmt||''}</textarea>`,()=>{r.cmt=document.getElementById('ro_note_ta').value;closeModal();saveROItemToDB(r).catch(e=>console.warn('DB R&O note save:',e));filterRO();});
+  const modal=openModal(`Note: ${esc(r.name)}`,`<textarea id="ro_note_ta"></textarea>`,()=>{r.cmt=document.getElementById('ro_note_ta').value;closeModal();saveROItemToDB(r).catch(e=>console.warn('DB R&O note save:',e));filterRO();});
+  document.getElementById('ro_note_ta').value=r.cmt||'';
 }
 function addROItem(){
   if(checkPeriodLock()){toast('Period is locked — unlock in Admin → Period Close','err');return;}
@@ -7124,24 +7125,24 @@ function renderAdmKam(){
   }
   tbl.innerHTML=`<table class="dt" id="adm_kam_dt">
     <thead><tr><th>Acct #</th><th>Account Name</th><th>Rate</th><th>Assigned KAM</th><th>Actions</th></tr></thead>
-    <tbody>${rows.map(r=>`<tr id="kamrow_${r.ac}">
-      <td style="font-size:10px;color:var(--text3)">${r.ac}</td>
-      <td style="font-weight:500">${r.name}</td>
-      <td><span class="pill pt">${r.rc}</span></td>
-      <td id="kamdisplay_${r.ac}" style="color:${r.kam?'var(--teal)':'var(--text3)'}">${r.kam||'<em>Unassigned</em>'}</td>
+    <tbody>${rows.map(r=>`<tr id="kamrow_${esc(r.ac)}">
+      <td style="font-size:10px;color:var(--text3)">${esc(r.ac)}</td>
+      <td style="font-weight:500">${esc(r.name)}</td>
+      <td><span class="pill pt">${esc(r.rc)}</span></td>
+      <td id="kamdisplay_${esc(r.ac)}" style="color:${r.kam?'var(--teal)':'var(--text3)'}">${r.kam?esc(r.kam):'<em>Unassigned</em>'}</td>
       <td>
-        <div id="kamedit_${r.ac}" style="display:none;display:flex;gap:4px;align-items:center">
-          <input class="si" style="width:160px;padding:3px 7px;font-size:11px" id="kaminput_${r.ac}" value="${r.kam}" placeholder="KAM name..." list="kam_datalist"/>
-          <button class="btn btn-t" style="padding:3px 10px;font-size:10px" onclick="saveKamAssignment('${r.ac}')">Save</button>
-          <button class="btn btn-o" style="padding:3px 10px;font-size:10px" onclick="cancelKamEdit('${r.ac}')">✕</button>
+        <div id="kamedit_${esc(r.ac)}" style="display:none;display:flex;gap:4px;align-items:center">
+          <input class="si" style="width:160px;padding:3px 7px;font-size:11px" id="kaminput_${esc(r.ac)}" data-ac="${esc(r.ac)}" placeholder="KAM name..." list="kam_datalist"/>
+          <button class="btn btn-t" style="padding:3px 10px;font-size:10px" data-ac="${esc(r.ac)}" onclick="saveKamAssignment(this.dataset.ac)">Save</button>
+          <button class="btn btn-o" style="padding:3px 10px;font-size:10px" data-ac="${esc(r.ac)}" onclick="cancelKamEdit(this.dataset.ac)">✕</button>
         </div>
-        <div id="kamview_${r.ac}">
-          <button class="btn btn-o" style="padding:2px 10px;font-size:10px" onclick="startKamEdit('${r.ac}','${(r.kam||'').replace(/'/g,"\\'")}')">✏ Edit</button>
+        <div id="kamview_${esc(r.ac)}">
+          <button class="btn btn-o" style="padding:2px 10px;font-size:10px" data-ac="${esc(r.ac)}" data-kam="${esc(r.kam||'')}" onclick="startKamEdit(this.dataset.ac,this.dataset.kam)">✏ Edit</button>
         </div>
       </td>
     </tr>`).join('')}</tbody>
   </table>
-  <datalist id="kam_datalist">${uniqueKams.map(k=>`<option value="${k}">`).join('')}</datalist>`;
+  <datalist id="kam_datalist">${uniqueKams.map(k=>`<option value="${esc(k)}">`).join('')}</datalist>`;
   makeSortable('adm_kam_dt');
 }
 
@@ -7536,8 +7537,8 @@ function renderAdm(){
         const safeId=String(u.id||'').replace(/'/g,"\\'");
         const safeName=String(u.name||u.email||'User').replace(/'/g,"\\'");
         return`<tr style="${isPending?'opacity:0.6':''}">
-        <td style="font-weight:600">${u.name}${isPending?' <span style="font-size:9px;color:var(--amber)">(pending registration)</span>':''}</td>
-        <td style="font-size:11px;color:var(--text3)">${u.email||'--'}</td>
+        <td style="font-weight:600">${esc(u.name||'')}${isPending?' <span style="font-size:9px;color:var(--amber)">(pending registration)</span>':''}</td>
+        <td style="font-size:11px;color:var(--text3)">${esc(u.email||'--')}</td>
         <td>${(!isPending&&isAdmin)
           ?`<select class="sel" style="font-size:10px;padding:3px" onchange="changeUserRole('${safeId}',this.value)">
               ${['admin','manager','rep','view'].map(r=>`<option${(u.sales_role||u.role||'view')===r?' selected':''}>${r}</option>`).join('')}
@@ -9371,7 +9372,8 @@ function leAdjSearchCust(){
   sbLE.filter(d=>(d.name||'').toLowerCase().includes(q)).forEach(d=>{if(!seen.has(d.jps_ac))seen.set(d.jps_ac,d);});
   const matches=[...seen.values()].slice(0,20);
   if(!matches.length){res.innerHTML='<div style="font-size:11px;color:var(--text2)">No matching customers.</div>';return;}
-  res.innerHTML=matches.map(d=>{const ac=d.jps_ac||'',nm=d.name||ac,pct=leAdjustments.customer[ac]||0;return`<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px"><span style="min-width:170px;font-size:11px;color:var(--text2)">${nm} <span style="color:var(--text3)">(${ac})</span></span><input type="number" value="${pct}" step="0.5" style="width:65px;background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:2px 5px;font-size:11px" oninput="leAdjustments.customer['${ac}']=parseFloat(this.value)||0;renderLEAdjustPreview()"><span style="font-size:10px;color:var(--text3)">%</span></div>`;}).join('');
+  res.innerHTML=matches.map(d=>{const ac=esc(d.jps_ac||''),nm=esc(d.name||d.jps_ac||''),pct=leAdjustments.customer[d.jps_ac||'']||0;return`<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px"><span style="min-width:170px;font-size:11px;color:var(--text2)">${nm} <span style="color:var(--text3)">(${ac})</span></span><input type="number" value="${pct}" step="0.5" data-ac="${ac}" class="le-cust-adj-input" style="width:65px;background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:2px 5px;font-size:11px"><span style="font-size:10px;color:var(--text3)">%</span></div>`;}).join('');
+  res.querySelectorAll('.le-cust-adj-input').forEach(inp=>{inp.addEventListener('input',()=>{leAdjustments.customer[inp.dataset.ac]=parseFloat(inp.value)||0;renderLEAdjustPreview();});});
 }
 
 function renderLEAdjustPreview(){
