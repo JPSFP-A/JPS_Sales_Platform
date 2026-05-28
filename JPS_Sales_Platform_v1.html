@@ -9917,7 +9917,7 @@ function _rtStartHeartbeat(){
   _rtRequestPresence();
   _rtHeartbeat=setInterval(()=>{
     _rtAnnouncePresence(document.querySelector('.sec.on')?.id||'ov');
-  },15000);
+  },60000);
 }
 
 window.addEventListener('beforeunload',()=>{
