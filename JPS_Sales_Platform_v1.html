@@ -9480,6 +9480,7 @@ async function leCommitPreview(){
   if(commitBtn) commitBtn.style.display='none';
   if(previewBtn){previewBtn.disabled=true;previewBtn.textContent='Loading…';}
   _leCommitVersionId = null;
+  let _jfvCreated = null; // track for orphan cleanup
 
   try{
     // 1. Aggregate jps_le → (month, rate_class) → {kwh_forecast, revenue_forecast}
@@ -9501,6 +9502,7 @@ async function leCommitPreview(){
       .insert({label:fcLabel,version_type:'le',year:yr,is_active:true,notes:'Auto-created by Sales LE commit'})
       .select().single();
     if(jfvErr) throw new Error('jps_forecast_versions: '+jfvErr.message);
+    _jfvCreated = jfv.id;
 
     // Deactivate other forecast versions for same year
     await sb.from('jps_forecast_versions').update({is_active:false}).neq('id',jfv.id).eq('year',yr);
@@ -9519,7 +9521,7 @@ async function leCommitPreview(){
     if(fvErr) throw new Error('fpa_versions lookup: '+fvErr.message);
     if(!fpav){
       const {data:ins,error:insErr} = await sb.from('fpa_versions')
-        .insert({code:vCode,name:'Sales LE '+yr+' 02',kind:'LE',year:yr,extension:'sales',status:'draft',is_active:false})
+        .insert({code:vCode,name:'Sales LE '+yr+' 02',kind:'LE',year:yr,extension:'sales',status:'draft',is_active:true})
         .select('id,status').single();
       if(insErr) throw new Error('fpa_versions insert: '+insErr.message);
       fpav = ins;
@@ -9575,6 +9577,13 @@ async function leCommitPreview(){
     if(commitBtn && rows.length) commitBtn.style.display='';
 
   }catch(e){
+    // Cleanup orphaned jps_forecast_versions + jps_forecast rows if preview failed after insert
+    if(_jfvCreated){
+      try{
+        await sb.from('jps_forecast').delete().eq('version_id',_jfvCreated);
+        await sb.from('jps_forecast_versions').delete().eq('id',_jfvCreated);
+      }catch(_){}
+    }
     statusEl.innerHTML='<span style="color:var(--red)">Error: '+esc(e.message)+'</span>';
     toast('Preview failed: '+e.message,'err');
     console.error('[leCommitPreview]',e);
