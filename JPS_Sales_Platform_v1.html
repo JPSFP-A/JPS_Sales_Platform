@@ -2039,6 +2039,7 @@ order by ordinal_position;</pre>
         <button class="stab"    id="le_btn_losses"  onclick="swLE('losses',this)">⚡ System Losses</button>
         <button class="stab"    id="le_btn_risk"    onclick="swLE('risk',this)">⚠ Customer Risk</button>
         <button class="stab"    id="le_btn_var"     onclick="swLE('var',this)">📐 Variance</button>
+        <button class="stab"    id="le_btn_commit"  onclick="swLE('commit',this)">🔗 FP&amp;A Commit</button>
         <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
           <button class="btn btn-t" onclick="syncSupabase()">🔄 Sync</button>
           <span id="le_last_sync" style="font-size:10px;color:var(--text3)">No data — sync DB</span>
@@ -2231,6 +2232,25 @@ order by ordinal_position;</pre>
           </div>
           <div class="cw" style="height:230px"><canvas id="c_le_var"></canvas></div>
           <div class="tbl-wrap" id="le_var_tbl"></div>
+        </div>
+      </div>
+
+      <!-- ── FP&A COMMIT ─────────────────────────────────────── -->
+      <div id="le_tab_commit" class="le-subtab">
+        <div class="card">
+          <div class="ch">Commit Sales LE → FP&amp;A Hub
+            <div style="display:flex;gap:6px;align-items:center">
+              <select class="psel" id="le_commit_year" style="width:80px"></select>
+              <button class="btn btn-o" id="le_preview_btn" onclick="leCommitPreview()">🔍 Preview</button>
+              <button class="btn btn-t" id="le_commit_btn" onclick="leCommitWrite()" style="display:none">✓ Commit to Hub</button>
+            </div>
+          </div>
+          <div style="background:rgba(55,138,221,.07);border-left:3px solid var(--blue);border-radius:4px;padding:10px 14px;margin:8px 0;font-size:11px;color:var(--text2);line-height:1.8">
+            Aggregates the latest saved LE version by rate class → month, writes to <code style="background:var(--navy3);padding:1px 4px;border-radius:3px">fpa_facts</code> via <code style="background:var(--navy3);padding:1px 4px;border-radius:3px">map-sales-to-fpa</code>.
+            Hub will show Sales LE data in the <strong>LE2</strong> column (version <strong>LE_YYYY_02</strong>) immediately after commit.
+          </div>
+          <div id="le_commit_status" style="padding:8px 0;font-size:11px;color:var(--text2)">Select year and click Preview to review rows before committing.</div>
+          <div id="le_commit_preview" style="overflow-x:auto;margin-top:4px"></div>
         </div>
       </div>
     </div>
@@ -9172,6 +9192,7 @@ function renderLEActive(){
     case 'losses':  renderLELosses();    break;
     case 'risk':    renderLERisk();      break;
     case 'var':     renderLEVariance();  break;
+    case 'commit':  renderLECommitTab(); break;
   }
 }
 
@@ -9425,6 +9446,177 @@ async function leSaveVersion(){
     leAdjustments={rc:{},parish:{},industry:{},customer:{},bucket:{}};
     renderLEActive();
   }catch(e){toast('Save error: '+e.message,'err');}
+}
+
+// ─── FP&A COMMIT ─────────────────────────────────────────────────────────────
+let _leCommitVersionId = null;
+
+function renderLECommitTab(){
+  // Populate year selector from sbLE data
+  const sel = document.getElementById('le_commit_year');
+  if(!sel) return;
+  const years = [...new Set(sbLE.map(d=>d.year).filter(Boolean))].sort((a,b)=>b-a);
+  if(!years.length) years.push(curYear);
+  sel.innerHTML = years.map(y=>`<option value="${y}"${y===curYear?' selected':''}>${y}</option>`).join('');
+}
+
+async function leCommitPreview(){
+  const sb = getSB(); if(!sb){toast('Not connected','err');return;}
+  const statusEl  = document.getElementById('le_commit_status');
+  const previewEl = document.getElementById('le_commit_preview');
+  const commitBtn = document.getElementById('le_commit_btn');
+  const previewBtn = document.getElementById('le_preview_btn');
+  if(!statusEl||!previewEl) return;
+
+  const yr = Number(document.getElementById('le_commit_year')?.value||curYear);
+
+  // Get latest saved LE label for this year
+  const labels = [...new Set(sbLE.filter(d=>d.year===yr).map(d=>d.le_label||'').filter(Boolean))].sort();
+  const lbl = labels[labels.length-1];
+  if(!lbl){statusEl.textContent='No saved LE versions for '+yr+' — use "Save as New LE Version" in Adjust LE tab first.';return;}
+
+  statusEl.textContent = 'Preparing forecast data for "'+lbl+'"…';
+  previewEl.innerHTML = '';
+  if(commitBtn) commitBtn.style.display='none';
+  if(previewBtn){previewBtn.disabled=true;previewBtn.textContent='Loading…';}
+  _leCommitVersionId = null;
+
+  try{
+    // 1. Aggregate jps_le → (month, rate_class) → {kwh_forecast, revenue_forecast}
+    const leRows = sbLE.filter(d=>d.year===yr && (d.le_label||'')===lbl);
+    if(!leRows.length){statusEl.textContent='No LE rows for "'+lbl+'" year '+yr;return;}
+
+    const agg={};
+    leRows.forEach(r=>{
+      const k=`${r.month}|${r.rate_class||''}`;
+      if(!agg[k]) agg[k]={year:r.year,month:r.month,rate_class:r.rate_class||'',kwh_forecast:0,revenue_forecast:0};
+      agg[k].kwh_forecast   += r.kwh_le    ||0;
+      agg[k].revenue_forecast+= r.revenue_le||0;
+    });
+    const fcRows = Object.values(agg).filter(r=>r.rate_class);
+
+    // 2. Create jps_forecast_versions record
+    const fcLabel = lbl+' → FP&A';
+    const {data:jfv,error:jfvErr} = await sb.from('jps_forecast_versions')
+      .insert({label:fcLabel,version_type:'le',year:yr,is_active:true,notes:'Auto-created by Sales LE commit'})
+      .select().single();
+    if(jfvErr) throw new Error('jps_forecast_versions: '+jfvErr.message);
+
+    // Deactivate other forecast versions for same year
+    await sb.from('jps_forecast_versions').update({is_active:false}).neq('id',jfv.id).eq('year',yr);
+
+    // 3. Insert jps_forecast rows
+    const fInsRows = fcRows.map(r=>({...r,version_id:jfv.id}));
+    for(let i=0;i<fInsRows.length;i+=500){
+      const {error:fcErr} = await sb.from('jps_forecast').insert(fInsRows.slice(i,i+500));
+      if(fcErr) throw new Error('jps_forecast: '+fcErr.message);
+    }
+
+    // 4. Find or create fpa_versions with extension='sales', kind='LE'
+    const vCode = 'LE_'+yr+'_02';
+    let {data:fpav,error:fvErr} = await sb.from('fpa_versions')
+      .select('id,status').eq('code',vCode).eq('extension','sales').maybeSingle();
+    if(fvErr) throw new Error('fpa_versions lookup: '+fvErr.message);
+    if(!fpav){
+      const {data:ins,error:insErr} = await sb.from('fpa_versions')
+        .insert({code:vCode,name:'Sales LE '+yr+' 02',kind:'LE',year:yr,extension:'sales',status:'draft',is_active:false})
+        .select('id,status').single();
+      if(insErr) throw new Error('fpa_versions insert: '+insErr.message);
+      fpav = ins;
+    }
+    if(!['draft','submitted'].includes(fpav.status)){
+      statusEl.innerHTML='<span style="color:var(--amber)">⚠ Version '+vCode+' already committed ('+fpav.status+'). Cannot overwrite.</span>';
+      return;
+    }
+    _leCommitVersionId = fpav.id;
+
+    // 5. Call edge function preview
+    const {data:sess} = await sb.auth.getSession();
+    const token = sess?.session?.access_token;
+    if(!token) throw new Error('Session expired — please sign in again');
+
+    const resp = await fetch(SB_URL+'/functions/v1/map-sales-to-fpa',{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
+      body:JSON.stringify({version_id:fpav.id,preview:true})
+    });
+    const result = await resp.json();
+    if(!resp.ok||result.error) throw new Error(result.error||'Preview failed ('+resp.status+')');
+
+    // 6. Render preview
+    const mos = result.months||[];
+    const rows = result.rows||[];
+    const unmapped = result.unmapped||[];
+
+    let statusHtml = '<span style="color:var(--teal)">✓</span> Preview ready — ';
+    statusHtml += '<strong>'+result.count+'</strong> fpa_facts rows · ';
+    statusHtml += '<strong>'+result.mapped_count+'</strong> source rows mapped · ';
+    statusHtml += 'Label: <em>'+esc(fcLabel)+'</em>';
+    if(unmapped.length) statusHtml += ' · <span style="color:var(--amber)">Unmapped RCs: '+esc(unmapped.join(', '))+'</span>';
+    statusEl.innerHTML = statusHtml;
+
+    if(!rows.length){
+      previewEl.innerHTML='<div style="padding:20px;color:var(--text3);font-size:11px">No rows mapped. Check that rate class names in LE data match RT10–RT70 / R10–R70 format.</div>';
+    } else {
+      previewEl.innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:8px">
+        <thead><tr style="border-bottom:1px solid var(--border)">
+          <th style="text-align:left;padding:5px 6px;color:var(--text3)">Line ID</th>
+          ${mos.map(m=>'<th style="text-align:right;padding:5px 6px;color:var(--text3)">'+m+'</th>').join('')}
+          <th style="text-align:right;padding:5px 6px;color:var(--text3)">Total</th>
+        </tr></thead>
+        <tbody>${rows.map(r=>`<tr style="border-bottom:1px solid rgba(255,255,255,.03)">
+          <td style="padding:4px 6px;color:var(--text2)">${esc(String(r.line))}</td>
+          ${mos.map((_,i)=>'<td style="text-align:right;padding:4px 6px">'+fmtE(r['m'+(i+1)]||0,1)+'</td>').join('')}
+          <td style="text-align:right;padding:4px 6px;font-weight:600">${fmtE(r.total||0,1)}</td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+    }
+
+    if(commitBtn && rows.length) commitBtn.style.display='';
+
+  }catch(e){
+    statusEl.innerHTML='<span style="color:var(--red)">Error: '+esc(e.message)+'</span>';
+    toast('Preview failed: '+e.message,'err');
+    console.error('[leCommitPreview]',e);
+  }finally{
+    if(previewBtn){previewBtn.disabled=false;previewBtn.textContent='🔍 Preview';}
+  }
+}
+
+async function leCommitWrite(){
+  if(!_leCommitVersionId){toast('Run Preview first','w');return;}
+  const commitBtn  = document.getElementById('le_commit_btn');
+  const statusEl   = document.getElementById('le_commit_status');
+  if(commitBtn){commitBtn.disabled=true;commitBtn.textContent='Committing…';}
+
+  try{
+    const sb = getSB(); if(!sb) throw new Error('Not connected');
+    const {data:sess} = await sb.auth.getSession();
+    const token = sess?.session?.access_token;
+    if(!token) throw new Error('Session expired');
+
+    const resp = await fetch(SB_URL+'/functions/v1/map-sales-to-fpa',{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
+      body:JSON.stringify({version_id:_leCommitVersionId,preview:false,write:true})
+    });
+    const result = await resp.json();
+    if(!resp.ok||result.error) throw new Error(result.error||'Commit failed ('+resp.status+')');
+
+    statusEl.innerHTML='<span style="color:var(--teal)">✓ Committed — </span>'+
+      result.written+' rows written to <strong>fpa_facts</strong> · version <strong>'+
+      esc(String(result.version_id||_leCommitVersionId))+'</strong>. '+
+      'FP&A Hub will reflect Sales LE on next reload.';
+    if(commitBtn) commitBtn.style.display='none';
+    _leCommitVersionId = null;
+    toast('Sales LE committed: '+result.written+' rows → fpa_facts','ok');
+
+  }catch(e){
+    if(commitBtn){commitBtn.disabled=false;commitBtn.textContent='✓ Commit to Hub';}
+    statusEl.innerHTML='<span style="color:var(--red)">Error: '+esc(e.message)+'</span>';
+    toast('Commit failed: '+e.message,'err');
+    console.error('[leCommitWrite]',e);
+  }
 }
 
 // ─── COMPARE ─────────────────────────────────────────────────────────────────
