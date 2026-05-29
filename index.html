@@ -4494,6 +4494,9 @@ function renderVariance(){
       <td style="color:var(--text3)">${r.ytd_ly.toFixed(1)}</td>
       <td>${vbar(r.ytd_act,r.ytd_ly)}</td>
     </tr>`).join('')}</tbody></table>`;
+  // Guard: remove any duplicate segment rows the browser may inject during parse
+  const _vTbody=document.querySelector('#var_dt tbody');
+  if(_vTbody){const _seen=new Set();[..._vTbody.querySelectorAll('tr:not(.ft)')].forEach(tr=>{const s=tr.cells[0]?.textContent?.trim();if(_seen.has(s))tr.remove();else _seen.add(s);});}
   makeSortable('var_dt');
   const noActSegs=rows.filter(r=>r.seg!=='Total'&&r.mtd_act===0&&r.mtd_ly>0).map(r=>r.seg);
   if(noActSegs.length){
