@@ -8445,8 +8445,6 @@ function copySchemaSql(){
 const SB_URL = window.APP_CONFIG?.supabaseUrl || '';
 const SB_KEY = window.APP_CONFIG?.supabaseAnonKey || '';
 
-if (window.JpsMonitor) JpsMonitor.init({ getClient: getSB, appName: 'sales' });
-
 let _sbClient=null,
     sbActuals=[],       // jps_actuals          — commercial account-level monthly consumption
     sbBudget=[],        // jps_budget — unified budget: commercial rows (jps_ac filled) + residential rows (consumption_bucket filled)
@@ -8472,6 +8470,9 @@ function getSB(){
     });
   return _sbClient;
 }
+
+// Monitor init after getSB is defined — avoids _sbClient TDZ error
+if (window.JpsMonitor) JpsMonitor.init({ getClient: getSB, appName: 'sales' });
 
 /* ── Audit Trail ───────────────────────────────────────────────────────── */
 async function writeAudit(action, details={}){
