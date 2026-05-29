@@ -434,6 +434,56 @@ document.getElementById('schema_stale_banner').style.display='none';
   </div>
 </div>
 
+<!-- SKELETON LOADING OVERLAY — shown until first sync completes -->
+<div id="syncSkeleton" style="position:fixed;inset:0;z-index:9000;background:var(--navy1,#0d1117);display:flex;flex-direction:column;gap:0">
+  <!-- fake topbar -->
+  <div style="height:56px;background:var(--navy2,#161b22);border-bottom:1px solid var(--border,#21262d);display:flex;align-items:center;padding:0 20px;gap:12px">
+    <div class="sk-pulse" style="width:220px;height:16px;border-radius:4px"></div>
+    <div style="flex:1"></div>
+    <div class="sk-pulse" style="width:80px;height:22px;border-radius:11px"></div>
+    <div class="sk-pulse" style="width:60px;height:22px;border-radius:11px"></div>
+    <div class="sk-pulse" style="width:90px;height:22px;border-radius:11px"></div>
+  </div>
+  <!-- fake nav tabs -->
+  <div style="height:42px;background:var(--navy2,#161b22);border-bottom:1px solid var(--border,#21262d);display:flex;align-items:center;padding:0 16px;gap:6px">
+    <div class="sk-pulse" style="width:80px;height:26px;border-radius:5px"></div>
+    <div class="sk-pulse" style="width:90px;height:26px;border-radius:5px"></div>
+    <div class="sk-pulse" style="width:70px;height:26px;border-radius:5px"></div>
+    <div class="sk-pulse" style="width:100px;height:26px;border-radius:5px"></div>
+    <div class="sk-pulse" style="width:75px;height:26px;border-radius:5px"></div>
+  </div>
+  <!-- fake KPI cards -->
+  <div style="display:flex;gap:12px;padding:16px 20px">
+    <div class="sk-pulse" style="flex:1;height:80px;border-radius:8px"></div>
+    <div class="sk-pulse" style="flex:1;height:80px;border-radius:8px"></div>
+    <div class="sk-pulse" style="flex:1;height:80px;border-radius:8px"></div>
+    <div class="sk-pulse" style="flex:1;height:80px;border-radius:8px"></div>
+    <div class="sk-pulse" style="flex:1;height:80px;border-radius:8px"></div>
+  </div>
+  <!-- fake chart row -->
+  <div style="display:flex;gap:12px;padding:0 20px">
+    <div class="sk-pulse" style="flex:2;height:220px;border-radius:8px"></div>
+    <div class="sk-pulse" style="flex:1;height:220px;border-radius:8px"></div>
+  </div>
+  <!-- fake table -->
+  <div style="margin:16px 20px;border-radius:8px;overflow:hidden;border:1px solid var(--border,#21262d)">
+    <div class="sk-pulse" style="height:36px;border-radius:0"></div>
+    <div style="display:flex;flex-direction:column;gap:1px;background:var(--border,#21262d)">
+      <div class="sk-pulse" style="height:34px;border-radius:0"></div>
+      <div class="sk-pulse" style="height:34px;border-radius:0;opacity:.85"></div>
+      <div class="sk-pulse" style="height:34px;border-radius:0;opacity:.7"></div>
+      <div class="sk-pulse" style="height:34px;border-radius:0;opacity:.55"></div>
+      <div class="sk-pulse" style="height:34px;border-radius:0;opacity:.4"></div>
+    </div>
+  </div>
+  <!-- loading label -->
+  <div style="text-align:center;font-size:11px;color:var(--text3,#8b949e);letter-spacing:.5px;margin-top:8px">Loading sales data…</div>
+</div>
+<style>
+.sk-pulse{background:linear-gradient(90deg,var(--navy3,#21262d) 25%,var(--navy2,#161b22) 50%,var(--navy3,#21262d) 75%);background-size:200% 100%;animation:skshimmer 1.4s ease-in-out infinite;}
+@keyframes skshimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+</style>
+
 <!-- MAIN -->
 <div class="main" id="mainArea">
   <div class="topbar" style="position:relative">
@@ -2425,6 +2475,13 @@ function _kl(map, ac){
 const _COMM_RCS=new Set(['RT40','RT50','RT60-ST','RT70','BU']);
 function _isComm(r){ return _COMM_RCS.has(String(r.rate_class||'').trim()); }
 
+// O(1) budget row lookups via sbBudgetIdx (built after each sync)
+// Replaces O(111k) sbBudget.filter(year===y && month===m) scans per render
+function _budM(yr,mo){return sbBudgetIdx[yr+'_'+mo]||[];}
+function _budPM(yr,mos){return mos.flatMap(m=>sbBudgetIdx[yr+'_'+m]||[]);}
+function _budYtd(yr,thruMo){const r=[];for(let m=1;m<=thruMo;m++)r.push(...(sbBudgetIdx[yr+'_'+m]||[]));return r;}
+function _budAll(yr){const r=[];for(let m=1;m<=12;m++)r.push(...(sbBudgetIdx[yr+'_'+m]||[]));return r;}
+
 function _buildPrefixIdx(){
   const idx={};
   sbActuals.filter(_isComm).forEach(r=>{
@@ -4032,7 +4089,7 @@ function buildCharts(){
   // Budget — real monthly budget, not flat spread
   if(sbBudget.length){
     for(let i=0;i<12;i++){
-      trendBud26[i]=sbBudget.filter(r=>Number(r.year)===curYear&&Number(r.month)===i+1).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
+      trendBud26[i]=_budM(curYear,i+1).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
     }
   }
   // Update trend chart legend labels to match current year
@@ -4247,7 +4304,7 @@ function renderPfRC(){
   const pm=getPM(),pmSet=new Set(pm),ph=getPH();
   // Use sbActuals directly, filtered to period months
   const _rcGwh=(rc,yr)=>sbActuals.filter(r=>String(r.rate_class||'').trim()===rc&&Number(r[YEAR_COL]||r.year||0)===yr&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
-  const _rcBud=(rc)=>sbBudget.filter(r=>String(r.rate_class||r.rc||'').trim()===rc&&Number(r.year||0)===cy&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
+  const _rcBud=(rc)=>_budPM(cy,[...pmSet]).filter(r=>String(r.rate_class||r.rc||'').trim()===rc).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
   const rcs=rcList.map(rc=>({rc,desc:rcDefs[rc]||rc,
     yPY:_rcGwh(rc,py),
     yCY:_rcGwh(rc,cy),
@@ -4313,10 +4370,10 @@ function renderVariance(){
   const rows=segs.map(seg=>{
     const _rcMatch=(r)=>String(r.rate_class||r.rc||r['Rate category']||'').trim().replace(/\s+/g,'')===seg.replace(/\s+/g,'');
     const mtd_act=sbActuals.filter(r=>_rcMatch(r)&&Number(r[YEAR_COL])===curYear&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
-    const mtd_bud=sbBudget.filter(r=>_rcMatch(r)&&Number(r.year||r[YEAR_COL])===curYear&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
+    const mtd_bud=_budM(curYear,curMonth).filter(_rcMatch).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
     const mtd_ly=sbActuals.filter(r=>_rcMatch(r)&&Number(r[YEAR_COL])===curYear-1&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
     const ytd_act=sbActuals.filter(r=>_rcMatch(r)&&Number(r[YEAR_COL])===curYear&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
-    const ytd_bud=sbBudget.filter(r=>_rcMatch(r)&&Number(r.year||r[YEAR_COL])===curYear&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
+    const ytd_bud=_budYtd(curYear,curMonth).filter(_rcMatch).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
     const ytd_ly=sbActuals.filter(r=>_rcMatch(r)&&Number(r[YEAR_COL])===curYear-1&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
     return{seg,mtd_act,mtd_bud,mtd_ly,ytd_act,ytd_bud,ytd_ly};
   });
@@ -4583,7 +4640,7 @@ function renderRsKPIs(){
   const resPY =r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===(curYear-1)&&periodMonths.includes(Number(r.month));
   const resPeriodKwh=sbActuals.filter(resAct).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
   const resPyKwh    =sbActuals.filter(resPY ).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
-  const resBudKwh   =sbBudget.filter(b=>resRCs.includes(String(b.rate_class||''))&&Number(b.year)===curYear&&periodMonths.includes(Number(b.month))).reduce((s,b)=>s+Number(b.kwh_budget||0),0)/1e6;
+  const resBudKwh   =_budPM(curYear,periodMonths).filter(b=>resRCs.includes(String(b.rate_class||''))).reduce((s,b)=>s+Number(b.kwh_budget||0),0)/1e6;
 
   // YTD kWh (always 1..curMonth regardless of period selection)
   const resYtdKwh=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
@@ -4609,7 +4666,7 @@ function renderRsKPIs(){
   // Customer count — use latest month in period (headcount is a point-in-time figure)
   const custMonth=periodMonths[periodMonths.length-1];
   const resActCount=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===custMonth&&(r.consumption_bucket||'').trim()&&(r.consumption_bucket||'').trim()!=='< Zero').reduce((s,r)=>s+Number(r.customer_count||0),0);
-  const resBudCount=sbBudget.filter(b=>(b.consumption_bucket||'').trim()&&(b.consumption_bucket||'').trim()!=='< Zero'&&Number(b.year)===curYear&&Number(b.month)===custMonth).reduce((s,b)=>s+Number(b.customer_count||0),0);
+  const resBudCount=_budM(curYear,custMonth).filter(b=>(b.consumption_bucket||'').trim()&&(b.consumption_bucket||'').trim()!=='< Zero').reduce((s,b)=>s+Number(b.customer_count||0),0);
   rsKv('rs_kpi_cg',resActCount>0?resActCount.toLocaleString():'--');
   const cgNote=document.getElementById('rs_kpi_cg_note');
   if(cgNote)cgNote.textContent=resBudCount>0?`vs ${resBudCount.toLocaleString()} budget`:(resActCount===0?'upload customer_count column':'residential headcount');
@@ -5259,16 +5316,17 @@ function renderOverviewKPIs(){
   const mtd=sbActuals.filter(r=>Number(r[YEAR_COL]||r.year||0)===curYear&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0)/1e6,0);
   const ytd=mtd;
   // Budget: sum period months from sbBudget
-  const mtdBud=sbBudget.filter(b=>Number(b.year||0)===curYear&&pmSet.has(Number(b.month||0))).reduce((s,b)=>s+Number(b.kwh_budget||0)/1e6,0);
+  const mtdBud=_budPM(curYear,[...pmSet]).reduce((s,b)=>s+Number(b.kwh_budget||0)/1e6,0);
   // PY comparison: same months last year from sbActuals
   const ytdLY=sbActuals.filter(r=>Number(r[YEAR_COL]||r.year||0)===curYear-1&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0)/1e6,0);
   const vBud=mtdBud>0?pct(mtd,mtdBud):0;
   const vYoY=ytdLY>0?pct(ytd,ytdLY):0;
   // Period-filtered residential/commercial split
   const resMtd=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||r.rc||'').trim())&&Number(r.year||r.cal_year||0)===curYear&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0)/1e6,0);
-  const resBud =sbBudget.filter(b=>resRCs.includes(String(b.rate_class||'').trim())&&Number(b.year||0)===curYear&&pmSet.has(Number(b.month||0))).reduce((s,b)=>s+Number(b.kwh_budget||b.kwh||0)/1e6,0);
+  const _pmBud2=_budPM(curYear,[...pmSet]);
+  const resBud =_pmBud2.filter(b=>resRCs.includes(String(b.rate_class||'').trim())).reduce((s,b)=>s+Number(b.kwh_budget||b.kwh||0)/1e6,0);
   const comMtd=sbActuals.filter(r=>comRCs.includes(String(r.rate_class||r.rc||'').trim())&&Number(r.year||r.cal_year||0)===curYear&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0)/1e6,0);
-  const comBud =sbBudget.filter(b=>comRCs.includes(String(b.rate_class||'').trim())&&Number(b.year||0)===curYear&&pmSet.has(Number(b.month||0))).reduce((s,b)=>s+Number(b.kwh_budget||b.kwh||0)/1e6,0);
+  const comBud =_pmBud2.filter(b=>comRCs.includes(String(b.rate_class||'').trim())).reduce((s,b)=>s+Number(b.kwh_budget||b.kwh||0)/1e6,0);
   const lbl=ph+' '+curYear;
   const sv=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
   const sc=(id,cls)=>{const e=document.getElementById(id);if(e)e.className='tbadge '+cls;};
@@ -5316,7 +5374,7 @@ function renderCommercialKPIs(){
   const comCusts=CUSTOMERS.filter(c=>comRCs.includes(c.rate));
   // Period sums from CUSTOMERS.m[] (current year) and sbBudget (budget)
   const _periSum=custs=>custs.reduce((s,c)=>s+pm.reduce((a,m)=>a+(c.m[m-1]||0),0),0);
-  const _budSumRC=rcs=>sbBudget.filter(b=>rcs.includes(String(b.rate_class||''))&&Number(b.year||0)===curYear&&pmSet.has(Number(b.month||0))).reduce((s,b)=>s+Number(b.kwh_budget||0)/1e6,0);
+  const _budSumRC=rcs=>_budPM(curYear,[...pmSet]).filter(b=>rcs.includes(String(b.rate_class||''))).reduce((s,b)=>s+Number(b.kwh_budget||0)/1e6,0);
   const cmMtd=_periSum(comCusts);
   const cmBud=_budSumRC(comRCs)||comCusts.reduce((s,c)=>s+(c.bud*(pm.length/12)),0);
   const vBud=cmBud>0?pct(cmMtd,cmBud):0;
@@ -5504,9 +5562,9 @@ function renderExecSummary() {
 
   // ES KPI bar — period-aware (uses curPeriod via getPM/getPH)
   const _esActP=(yr)=>sbActuals.filter(r=>Number(r[YEAR_COL])===yr&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
-  const _esBudP=(yr)=>sbBudget.filter(r=>Number(r.year||0)===yr&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
+  const _esBudP=(yr)=>_budPM(yr,[...pmSet]).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
   const _esYtd=(yr,mo)=>sbActuals.filter(r=>Number(r[YEAR_COL])===yr&&Number(r.month)<=mo).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
-  const _esYtdBud=(yr,mo)=>sbBudget.filter(r=>Number(r.year||0)===yr&&Number(r.month)<=mo).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
+  const _esYtdBud=(yr,mo)=>_budYtd(yr,mo).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
   const esAct0  = _esActP(curYear);
   const esBud0  = _esBudP(curYear);
   const esLY0   = _esActP(curYear-1);
@@ -5518,7 +5576,7 @@ function renderExecSummary() {
   const esYtdYoY= esYtdLY0>0?((esYtd0-esYtdLY0)/esYtdLY0*100):null;
   const esComRCs= ['RT40','RT50','RT70','RT60-ST'];
   const esCmMtd = sbActuals.filter(r=>esComRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
-  const esCmBud = sbBudget.filter(r=>esComRCs.includes(String(r.rate_class||''))&&Number(r.year||0)===curYear&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
+  const esCmBud = _budPM(curYear,[...pmSet]).filter(r=>esComRCs.includes(String(r.rate_class||''))).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
   const esCmGap = esCmMtd - esCmBud;
   const esDefs  = computeDefectors().filter(d=>d.sev==='Critical'||d.sev==='Severe');
   const hasAct  = sbActuals.length > 0;
@@ -5708,7 +5766,7 @@ function renderVarianceBridge() {
   const pm=getPM(),pmSet=new Set(pm),ph=getPH();
   // Period actuals from sbActuals (all rate classes), budget from sbBudget
   const _bAct=sbActuals.filter(r=>Number(r[YEAR_COL])===curYear&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0)/1e6,0);
-  const _bBud=sbBudget.filter(b=>Number(b.year||0)===curYear&&pmSet.has(Number(b.month||0))).reduce((s,b)=>s+Number(b.kwh_budget||0)/1e6,0);
+  const _bBud=_budPM(curYear,[...pmSet]).reduce((s,b)=>s+Number(b.kwh_budget||0)/1e6,0);
   const totalGap = sbActuals.length ? _bAct - _bBud : 0;
   const explained = drivers.reduce((s,d) => s + d.gwh, 0);
   const residual = totalGap - explained;
@@ -8845,7 +8903,7 @@ async function syncSupabase(silent=false){
           return sbTable('jps_budget',{gte:['year',_actYearCutoff],cols:_budCols,limit:50000});
         }
       })(),
-      sbTable('jps_le',{limit:100000}),
+      sbTable('jps_le',{limit:100000,cols:'year,month,jps_ac,name,rate_class,parish,consumption_bucket,kwh_le,revenue_le,demand_le,customer_count,le_label',gte:['year',_actYearCutoff]}),
       sbTable('jps_system_stats',{order:'year,month'}),
       sbTable('jps_losses_forecast',{order:'forecast_date,year,month'}),
       sbTable('net_gen_historical',{order:'year'}),
@@ -9007,6 +9065,9 @@ async function syncSupabase(silent=false){
   }finally{
     _sbSyncing=false; // always release mutex
     _lastSyncAt=Date.now();
+    // Hide skeleton after first sync attempt (success or fail)
+    const sk=document.getElementById('syncSkeleton');
+    if(sk){sk.style.transition='opacity .3s';sk.style.opacity='0';setTimeout(()=>sk.remove(),320);}
   }
 }
 
@@ -9245,7 +9306,7 @@ function renderLEOverview(){
           synth.push({...r,kwh_le:Number(r.kwh||0),le_label:autoLabel,year:FC_BUD_YEAR,month:m});
         });
       }else{
-        sbBudget.filter(b=>Number(b.year||0)===FC_BUD_YEAR&&Number(b.month||0)===m).forEach(b=>{
+        _budM(FC_BUD_YEAR,m).forEach(b=>{
           synth.push({...b,kwh_le:Number(b.kwh_budget||b.kwh||0),le_label:autoLabel,year:FC_BUD_YEAR,month:m});
         });
       }
@@ -9264,7 +9325,7 @@ function renderLEOverview(){
     if(leCmpToggles['__act']===undefined)leCmpToggles['__act']=true;
     const curRows2=leFilterRows(synth.filter(d=>d.year===FC_BUD_YEAR));
     const actCur2=sbActuals.filter(d=>Number(d.year||d.cal_year||0)===FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)}));
-    const budCur2=sbBudget.filter(d=>Number(d.year||0)===FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)}));
+    const budCur2=_budAll(FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)}));
     const leTotal2=leSum(curRows2,mos2);
     const actTotal2=actSum(leFilterRows(actCur2),mos2);
     const budTotal2=budSum(leFilterRows(budCur2),mos2);
@@ -9295,7 +9356,7 @@ function renderLEOverview(){
 
   const curRows=leFilterRows(leGetCurrentRows().filter(d=>d.year===FC_BUD_YEAR));
   const actCur =sbActuals.filter(d=>Number(d.year||d.cal_year||0)===FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)}));
-  const budCur =sbBudget.filter(d=>Number(d.year||0)===FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)}));
+  const budCur =_budAll(FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)}));
 
   const leTotal =leSum(curRows,mos);
   const actTotal=actSum(leFilterRows(actCur),mos);
@@ -9375,7 +9436,7 @@ function renderLEMonthly(){
   const curRows=leFilterRows(leGetCurrentRows().filter(d=>d.year===FC_BUD_YEAR));
   const actCur =leFilterRows(sbActuals.filter(d=>Number(d.year||d.cal_year||0)===FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)})));
   const actPY  =leFilterRows(sbActuals.filter(d=>Number(d.year||d.cal_year||0)===FC_PY).map(d=>({...d,month:Number(d.month||0)})));
-  const bud    =leFilterRows(sbBudget.filter(d=>Number(d.year||0)===FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)})));
+  const bud    =leFilterRows(_budAll(FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)})));
 
   const datasets=[];
   if(leMonthToggles.act25) datasets.push({label:'PY Actual', data:mos.map(m=>actSum(actPY,[m])), borderColor:'#7f8c8d',backgroundColor:'transparent',tension:.3,pointRadius:2,fill:false,borderDash:[3,2]});
@@ -9434,7 +9495,7 @@ function renderLEAdjustPreview(){
   const curLbl=leSavedLabels[leSavedLabels.length-1]||'Apr-26 LE';
   const base=sbLE.filter(d=>(d.le_label||'Apr-26 LE')===curLbl&&d.year===FC_BUD_YEAR);
   const adj =leApplyAdjustments(base,leAdjustments);
-  const bud =sbBudget.filter(d=>Number(d.year||0)===FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)}));
+  const bud =_budAll(FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)}));
   mkChart('c_le_adj_preview',{type:'line',data:{labels:mos.map(m=>LE_MO[m-1]),datasets:[
     {label:'Current LE', data:mos.map(m=>leSum(base,[m])),borderColor:'#f5a623',backgroundColor:'transparent',tension:.3,pointRadius:2,fill:false},
     {label:'Adjusted LE',data:mos.map(m=>leSum(adj,[m])), borderColor:'#e74c3c',backgroundColor:'rgba(231,76,60,.1)',tension:.3,pointRadius:2,fill:true,borderWidth:2},
@@ -9681,7 +9742,7 @@ function renderLECompare(){
     const rows=leFilterRows(sbLE.filter(d=>(d.le_label||'Apr-26 LE')===label&&d.year===FC_BUD_YEAR));
     datasets.push({label,data:mos.map(m=>leSum(rows,[m])),borderColor:LE_COLORS[i%LE_COLORS.length],backgroundColor:LE_COLORS[i%LE_COLORS.length]+'30',tension:.3,pointRadius:3,fill:false,borderWidth:2});
   });
-  const budAll=sbBudget.filter(d=>Number(d.year||0)===FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)}));
+  const budAll=_budAll(FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)}));
   const actAll=sbActuals.filter(d=>Number(d.year||d.cal_year||0)===FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)}));
   if(leCmpToggles['__bud']!==false) datasets.push({label:'Budget',data:mos.map(m=>budSum(budAll,[m])),borderColor:'#3498db',backgroundColor:'transparent',borderDash:[4,3],tension:.3,pointRadius:2,fill:false,borderWidth:1.5});
   if(leCmpToggles['__act']!==false) datasets.push({label:'Actuals',data:mos.map(m=>actSum(actAll,[m])),borderColor:'#2ecc71',backgroundColor:'transparent',tension:.3,pointRadius:3,fill:false,borderWidth:2});
@@ -9696,7 +9757,7 @@ function renderLECompare(){
   const allMos=[1,2,3,4,5,6,7,8,9,10,11,12];
   const cmpTbl=document.getElementById('le_cmp_tbl');
   if(cmpTbl){
-    const budFY=rcs.map(rc=>budSum(sbBudget.filter(d=>Number(d.year||0)===FC_BUD_YEAR&&(d.rate_class||d['Rate category']||'')===rc).map(d=>({...d,month:Number(d.month||0)})),allMos));
+    const budFY=rcs.map(rc=>budSum(_budAll(FC_BUD_YEAR).filter(d=>(d.rate_class||d['Rate category']||'')===rc).map(d=>({...d,month:Number(d.month||0)})),allMos));
     cmpTbl.innerHTML=`<table id="le_cmp_tbl_el"><thead><tr><th>RC</th>${vis.map(l=>`<th>${l}</th>`).join('')}<th>Budget</th></tr></thead><tbody>${rcs.map((rc,ri)=>{const cells=vis.map(l=>`<td>${fmtE(leSum(sbLE.filter(d=>(d.le_label||'Apr-26 LE')===l&&d.year===FC_BUD_YEAR&&d.rate_class===rc),allMos),1)}</td>`).join('');return`<tr><td>${rc}</td>${cells}<td>${fmtE(budFY[ri],1)}</td></tr>`;}).join('')}<tr class="ft"><td>Total</td>${vis.map(l=>`<td>${fmtE(leSum(sbLE.filter(d=>(d.le_label||'Apr-26 LE')===l&&d.year===FC_BUD_YEAR),allMos),1)}</td>`).join('')}<td>${fmtE(budSum(budAll,allMos),1)}</td></tr></tbody></table>`;
     makeSortable('le_cmp_tbl_el');
   }
@@ -9759,7 +9820,7 @@ function renderLERisk(){
   const thresh=parseFloat(document.getElementById('risk_thresh')?.value)||10;
   const mos=lePeriodMonths();
   const curLE=leGetCurrentRows().filter(d=>d.year===FC_BUD_YEAR);
-  const bud  =sbBudget.filter(d=>Number(d.year||0)===FC_BUD_YEAR);
+  const bud  =_budAll(FC_BUD_YEAR);
   const custs=[...new Set(curLE.map(d=>d.jps_ac||'').filter(Boolean))];
   const atRisk=[];
   custs.forEach(ac=>{
@@ -9796,7 +9857,7 @@ function renderLEVariance(){
   const dim=document.getElementById('le_var_dim')?.value||'rc';
   const mos=lePeriodMonths();
   const curLE=leFilterRows(leGetCurrentRows().filter(d=>d.year===FC_BUD_YEAR));
-  const bud  =leFilterRows(sbBudget.filter(d=>Number(d.year||0)===FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)})));
+  const bud  =leFilterRows(_budAll(FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)})));
   const key=r=>dim==='rc'?(r.rate_class||r.rc||''):dim==='industry'?(r.industry||''):(r.name||r.jps_ac||'');
   const leMap={},budMap={};
   curLE.filter(d=>mos.includes(d.month)).forEach(d=>{const k=key(d);leMap[k]=(leMap[k]||0)+(d.kwh_le||0);});
