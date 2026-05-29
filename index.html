@@ -4536,7 +4536,6 @@ function renderCmCust(){
   sbBudget.forEach(b=>{
     if(Number(b.year||0)!==cy)return;
     if(!pmSet.has(Number(b.month||0)))return;
-    if((b.consumption_bucket||'').trim())return;
     const ac=_custNum(String(b.jps_ac||''));
     budMap[ac]=(budMap[ac]||0)+Number(b.kwh_budget||0)/1e6;
   });
@@ -8842,18 +8841,12 @@ function buildDashboardData(){
     if(r.year===py)c.yPY+=gwh;
     if(r.year===cy){c.yCY+=gwh;if(r.month>=1&&r.month<=12)c.m[r.month-1]+=gwh;}
   });
-  // Distribute RC-level budget to customers by proportional prior-year share
-  // Commercial budget rows: jps_ac filled, no consumption_bucket
-  const commBudRows=sbBudget.filter(b=>!(b.consumption_bucket||'').trim());
-  if(commBudRows.length){
-    const budRows=fcNormBudget(commBudRows);
-    const rcBud={},rcActPY={};
-    budRows.filter(r=>r.year===cy).forEach(r=>{rcBud[r.rc]=(rcBud[r.rc]||0)+r.kwh;});
-    rows.filter(r=>r.year===py).forEach(r=>{rcActPY[r.rc]=(rcActPY[r.rc]||0)+r.kwh;});
-    Object.values(custMap).forEach(c=>{
-      const share=rcActPY[c.rate]>0?(c.yPY*1e6)/rcActPY[c.rate]:0;
-      c.bud=((rcBud[c.rate]||0)*share)/1e6;
-    });
+  // Map account-level budget directly to customers by customer number (annual, GWh)
+  if(sbBudget.length){
+    const budRows=fcNormBudget(sbBudget);
+    const budByCust={};
+    budRows.filter(r=>r.year===cy).forEach(r=>{budByCust[r.acct]=(budByCust[r.acct]||0)+r.kwh;});
+    Object.values(custMap).forEach(c=>{ c.bud=(budByCust[c.num]||0)/1e6; });
   }
   CUSTOMERS=Object.values(custMap).filter(c=>c.yPY>0||c.yCY>0).sort((a,b)=>b.yPY-a.yPY);
 
