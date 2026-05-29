@@ -4374,17 +4374,28 @@ function renderPfInd(){
   makeSortable('pfi_dt');
 }
 function renderPfRC(){
-  const rcDefs={RT10:'Low-use Residential','RT20':'Small Commercial',RT40:'LV Commercial',RT50:'MV Commercial',RT70:'Large Industrial',ST:'Street Lights',EV:'Electric Vehicle'};
-  const rcList=['RT10','RT20','RT20','RT40','RT50','RT70','RT60-ST'];
+  // seg=null means all rows for that RC; seg='Residential'/'Commercial' filters by segment field
+  const rcList=[
+    {rc:'RT10',    desc:'Low-use Residential', seg:null},
+    {rc:'RT20',    desc:'RT20 Residential',    seg:'Residential'},
+    {rc:'RT20',    desc:'RT20 Commercial',     seg:'Commercial'},
+    {rc:'RT40',    desc:'LV Commercial',       seg:null},
+    {rc:'RT50',    desc:'MV Commercial',       seg:null},
+    {rc:'RT70',    desc:'Large Industrial',    seg:null},
+    {rc:'RT60-ST', desc:'RT60-ST',             seg:null},
+  ];
   const py=curYear-1, cy=curYear;
   const pm=getPM(),pmSet=new Set(pm),ph=getPH();
-  // Index lookup — O(months) per RC
-  const _rcGwh=(rc,yr)=>_rcSumMos(rc,yr,pm)/1e6;
-  const _rcBud=(rc)=>sbBudget.filter(r=>String(r.rate_class||r.rc||'').trim()===rc&&Number(r.year||0)===cy&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
-  const rcs=rcList.map(rc=>({rc,desc:rcDefs[rc]||rc,
-    yPY:_rcGwh(rc,py),
-    yCY:_rcGwh(rc,cy),
-    bud:_rcBud(rc),
+  // GWh lookup — use pre-built index for full-RC rows, filtered scan for segment splits
+  const _rcGwh=(rc,yr,seg)=>{
+    if(!seg) return _rcSumMos(rc,yr,pm)/1e6;
+    return sbActuals.filter(r=>r.rate_class===rc&&(r.segment||'')===seg&&Number(r[YEAR_COL])===yr&&pmSet.has(Number(r.month))).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+  };
+  const _rcBud=(rc,seg)=>sbBudget.filter(r=>String(r.rate_class||r.rc||'').trim()===rc&&(!seg||(r.segment||'')===seg)&&Number(r.year||0)===cy&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
+  const rcs=rcList.map(({rc,desc,seg})=>({rc,desc,
+    yPY:_rcGwh(rc,py,seg),
+    yCY:_rcGwh(rc,cy,seg),
+    bud:_rcBud(rc,seg),
     note:sbActuals.length?'from database':'Upload data to populate'
   }));
   const pfrcBanner = sbActuals.length
