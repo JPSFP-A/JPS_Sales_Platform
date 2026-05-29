@@ -4187,7 +4187,7 @@ function buildCharts(){
   if(_dnutLbl) _dnutLbl.textContent=`${getPH()} ${curYear}`;
 
   const _dnutPM=getPM(),_dnutPMSet=new Set(_dnutPM);
-  const donutRCs=['RT10','RT20','RT20','RT40','RT50','RT70','RT60-ST'];
+  const donutRCs=['RT10','RT20','RT40','RT50','RT70','RT60-ST'];
   // Period-filtered donut: index lookup for residential; .m[] for commercial
   const donutData=donutRCs.map(rc=>{
     if(rc==='RT10'||rc==='RT20'){
@@ -5426,7 +5426,7 @@ function renderOverviewKPIs(){
   sv('kpi_ytd_yoy',(vYoY>=0?'+':'')+vYoY.toFixed(1)+'% YoY');
   sc('kpi_ytd_yoy',vYoY>=0?'tbadge tbg':'tbadge tbr');
   // ── Total customer count: commercial (distinct accounts) + residential (sum customer_count) ──
-  const commRCs=new Set(['RT20','RT20','RT40','RT50','RT60-ST','RT70','BU']);
+  const commRCs=new Set(['RT20','RT40','RT50','RT60-ST','RT70','BU']);
   const commActCount=CUSTOMERS.filter(c=>commRCs.has(c.rate)).length;
   const resActCount=sbActuals.filter(r=>['RT10','RT20'].includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===curMonth&&(r.consumption_bucket||'').trim()&&(r.consumption_bucket||'').trim()!=='< Zero').reduce((s,r)=>s+Number(r.customer_count||0),0);
   const commBudRows2=sbBudget.filter(b=>!(b.consumption_bucket||'').trim());
@@ -8852,7 +8852,7 @@ function buildDashboardData(){
   CUSTOMERS=Object.values(custMap).filter(c=>c.yPY>0||c.yCY>0).sort((a,b)=>b.yPY-a.yPY);
 
   // PARISHES — single pass
-  const COMM_RCS_SET=new Set(['RT20','RT20','RT40','RT50','RT60-ST','RT70','BU']);
+  const COMM_RCS_SET=new Set(['RT20','RT40','RT50','RT60-ST','RT70','BU']);
   const parMap={};
   rows.forEach(r=>{
     const p=r.parish||'Unknown';
