@@ -8716,7 +8716,7 @@ function buildDashboardData(){
    Stores last 2 years of actuals (stripped) + all ref tables
    TTL: 10 minutes. Falls back to full Supabase sync if expired/missing.
 ========================================== */
-const _DCACHE_KEY='jps_sales_v1_cache';
+const _DCACHE_KEY='jps_sales_v2_cache'; // v2: budget schema changed (no jps_ac/name), old cache invalid
 const _DCACHE_TTL=600000; // 10 minutes
 
 function _saveDataCache(){
@@ -8843,15 +8843,15 @@ async function syncSupabase(silent=false){
         }
       })(),
       (async()=>{
-        // Mirror actuals pattern — RPC skips PostgREST pagination overhead (11 round trips → 1)
-        const _budCols='year,month,jps_ac,name,rate_class,parish,consumption_bucket,kwh_budget,revenue_budget,demand_budget,customer_count';
+        // Aggregated RPC: 111k raw rows → ~2,652 agg rows (42x reduction, no jps_ac/name needed)
+        const _budCols='year,month,rate_class,parish,consumption_bucket,kwh_budget,revenue_budget,demand_budget,customer_count';
         try{
           const{data,error}=await getSB().rpc('get_budget_agg',{year_cutoff:_actYearCutoff});
           if(error)throw error;
           return data||null;
         }catch(e){
           console.warn('[sync] get_budget_agg RPC failed, fallback to raw table:',e.message);
-          return sbTable('jps_budget',{gte:['year',_actYearCutoff],cols:_budCols,limit:50000});
+          return sbTable('jps_budget',{gte:['year',_actYearCutoff],cols:_budCols,limit:10000});
         }
       })(),
       sbTable('jps_le',{limit:100000,cols:'year,month,jps_ac,name,rate_class,parish,consumption_bucket,kwh_le,revenue_le,demand_le,customer_count,le_label',gte:['year',_actYearCutoff]}),
