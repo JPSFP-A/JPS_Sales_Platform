@@ -2992,7 +2992,7 @@ function renderCmDefection(){
       const kamName=d.kam||'--';
       return`<tr>
       <td style="font-size:10px;color:var(--text3)">${d.num}</td>
-      <td style="font-weight:500">${d.name}</td>
+      <td style="font-weight:500">${esc(d.name)}</td>
       <td><span class="pill pt">${d.rate}</span></td>
       <td style="font-size:10px;color:var(--teal)">${esc(kamName)}</td>
       <td>${d.parish}</td><td>${d.ind}</td>
@@ -3191,7 +3191,7 @@ function generateCommentary(section){
         }
         if(topAc.length){
           lines.push(`TOP ACCOUNTS BY kWh (YTD ${cy})`);
-          topAc.forEach((a,i)=>lines.push(`  ${i+1}. ${a.name} — ${(a.kwh/1e6).toFixed(2)} GWh`));
+          topAc.forEach((a,i)=>lines.push(`  ${i+1}. ${esc(a.name)} — ${(a.kwh/1e6).toFixed(2)} GWh`));
           lines.push('');
         }
       } else {
@@ -3286,7 +3286,7 @@ function generateCommentary(section){
       const topCusts=CUSTOMERS.filter(c=>!['RT10','RT20'].includes(c.rate)).sort((a,b)=>b.yCY-a.yCY).slice(0,3);
       if(topCusts.length){
         lines.push(`TOP COMMERCIAL ACCOUNTS (${cy} to date)`);
-        topCusts.forEach((c,i)=>lines.push(`  ${i+1}. ${c.name}: ${fmtE(c.yCY*1e6,1)}`));
+        topCusts.forEach((c,i)=>lines.push(`  ${i+1}. ${esc(c.name)}: ${fmtE(c.yCY*1e6,1)}`));
         lines.push('');
       }
       // Biggest mover
@@ -4184,7 +4184,7 @@ function renderPfCust(){
     <thead><tr><th>#</th><th>Acct #</th><th>Customer</th><th>Rate</th><th>Parish</th><th>Industry</th><th>${py} (${ph})</th><th>${cy} (${ph})</th><th>Budget</th><th>vs Budget</th><th>YoY</th></tr></thead>
     <tbody>${rows.map((c,i)=>{const vb=pct(c.cur,c.budP),yy=pct(c.cur,c.prev);return`<tr>
       <td style="font-weight:700;color:${mode==='top'?'var(--teal)':'var(--red)'}">${i+1}</td>
-      <td style="font-size:10px;color:var(--text3)">${c.num}</td><td style="font-weight:500">${c.name}</td>
+      <td style="font-size:10px;color:var(--text3)">${c.num}</td><td style="font-weight:500">${esc(c.name)}</td>
       <td><span class="pill pt">${c.rate}</span></td><td>${c.parish}</td><td>${c.ind||'--'}</td>
       <td>${c.prev.toFixed(1)}</td><td style="font-weight:600">${c.cur.toFixed(1)}</td>
       <td style="color:var(--text3)">${c.budP.toFixed(1)}</td>
@@ -4227,7 +4227,7 @@ function renderPfInd(){
   el.innerHTML=`<table class="dt" id="pfi_dt">
     <thead><tr><th>Industry</th><th>Rate Classes</th><th>${py} (${ph}, GWh)</th><th>${cy} (${ph}, GWh)</th><th>Var #</th><th>YoY</th><th>Signal</th><th>Notes</th></tr></thead>
     <tbody>${inds.map(i=>{const v=i.yCY-i.yPY,p=pct(i.yCY,i.yPY);return`<tr>
-      <td style="font-weight:600">${i.name}</td><td style="font-size:10px;color:var(--text3)">${i.rc}</td>
+      <td style="font-weight:600">${esc(i.name)}</td><td style="font-size:10px;color:var(--text3)">${i.rc}</td>
       <td>${i.yPY.toFixed(2)}</td><td style="font-weight:600">${i.yCY.toFixed(2)}</td>
       <td class="${v>=0?'up':'dn'}">${v>=0?'+':''}${v.toFixed(2)}</td>
       <td>${vbar(i.yCY,i.yPY)}</td>
@@ -4261,7 +4261,7 @@ function renderPfRC(){
       <td style="color:var(--text3)">${r.bud.toFixed(1)}</td>
       <td><span class="heat ${hc(vb2)}">${vb2>=0?'+':''}${vb2.toFixed(1)}%</span></td>
       <td>${vbar(r.yCY,r.yPY)}</td>
-      <td style="font-size:10px;color:var(--text3)">${r.note}</td>
+      <td style="font-size:10px;color:var(--text3)">${esc(r.note)}</td>
     </tr>`;}).join('')}</tbody></table>`;
   makeSortable('pfr_dt');
 }
@@ -4292,7 +4292,7 @@ function renderPfPar(){
   el.innerHTML=`<table class="dt" id="pfp_dt">
     <thead><tr><th>Parish</th><th>${cy} ${ph} (GWh)</th><th>${py} ${ph} (GWh)</th><th>YoY Var%</th><th>Comm. ${cy}</th><th>Comm. ${py}</th><th>Comm. Var%</th><th>Flag</th></tr></thead>
     <tbody>${parishes.map(p=>{const ov=pct(p.curr,p.prev),rv=pct(p.rc,p.rp);return`<tr>
-      <td style="font-weight:600">${p.name}</td>
+      <td style="font-weight:600">${esc(p.name)}</td>
       <td style="font-weight:600">${p.curr.toFixed(2)}</td><td style="color:var(--text3)">${p.prev.toFixed(2)}</td>
       <td><span class="heat ${hc(ov)}">${ov>=0?'+':''}${ov.toFixed(1)}%</span></td>
       <td>${p.rc.toFixed(2)}</td><td style="color:var(--text3)">${p.rp.toFixed(2)}</td>
@@ -4718,7 +4718,7 @@ function renderDefectors(){
     const val=S.get(`df_val_${d.num}`,null);
     return `<tr>
       <td style="font-size:10px;color:var(--text3)">${d.num}</td>
-      <td style="font-weight:500">${d.name}</td>
+      <td style="font-weight:500">${esc(d.name)}</td>
       <td><span class="pill pt">${d.rate}</span></td>
       <td>${d.parish}</td><td>${d.ind}</td>
       <td>${d.prior3}</td><td style="font-weight:600">${d.curr3}</td>
@@ -4833,7 +4833,7 @@ function renderFcEntry(){
     const note=S.get(`fc_note_${c.num}`,'');
     return`<tr>
       <td style="font-size:10px;color:var(--text3)">${c.num}</td>
-      <td style="font-weight:500;white-space:nowrap">${c.name}</td>
+      <td style="font-weight:500;white-space:nowrap">${esc(c.name)}</td>
       <td><span class="pill pt">${c.rate}</span></td>
       <td style="font-size:10px;color:var(--teal)">${c.kam||'--'}</td>
       <td style="font-size:10px;color:var(--text3)">${avg3.toFixed(3)}</td>
@@ -4941,7 +4941,7 @@ function filterRO(){
     <tbody>${d.map(r=>`<tr>
       <td style="font-size:10px;color:var(--text3)">${r.num}</td>
       <td style="font-size:10px;color:var(--text3)">${r.acct||'--'}</td>
-      <td style="font-weight:500">${r.name}</td>
+      <td style="font-weight:500">${esc(r.name)}</td>
       <td><span class="pill ${r.type==='Risk'?'pr':'pg'}">${r.type}</span></td>
       <td><span class="pill ${r.level==='Very high'?'pa':'pgr'}">${r.level}</span></td>
       <td><strong style="color:var(--teal)">${r.rate}</strong></td>
@@ -5029,7 +5029,7 @@ function mrRenderCust(){
     <thead><tr><th>#</th><th>Acct #</th><th>Customer</th><th>Rate</th><th>Industry</th><th>${curYear-1} YTD</th><th>${curYear} YTD</th><th>YoY</th><th>Note</th></tr></thead>
     <tbody>${rows.map((c,i)=>{const saved=S.get(`mr_note_${mrPeriod}_${c.num}`,'');return`<tr>
       <td style="color:${mode==='top'?'var(--teal)':'var(--red)'};font-weight:700">${i+1}</td>
-      <td style="color:var(--text3)">${c.num}</td><td style="font-weight:500">${c.name}</td>
+      <td style="color:var(--text3)">${c.num}</td><td style="font-weight:500">${esc(c.name)}</td>
       <td><span class="pill pt">${c.rate}</span></td><td>${c.ind}</td>
       <td>${c.yPY.toFixed(1)}</td><td style="font-weight:600">${c.yCY.toFixed(1)}</td>
       <td>${vbar(c.yCY,c.yPY)}</td>
@@ -5039,12 +5039,12 @@ function mrRenderCust(){
 }
 function renderMrInd(){
   const w=document.getElementById('mr_ind_w');if(!w)return;
-  const tbl=`<table class="dt">${INDUSTRIES.map(i=>{const p=pct(i.yCY,i.yPY);return`<tr><td style="font-weight:600">${i.name}</td><td style="font-size:10px;color:var(--text3)">${i.rc}</td><td>${i.yPY.toFixed(2)}</td><td style="font-weight:600">${i.yCY.toFixed(2)}</td><td>${vbar(i.yCY,i.yPY)}</td><td><span class="heat ${hc(p)}">${p>=0?'+':''}${p.toFixed(1)}%</span></td><td style="font-size:10px;color:var(--text3)">${i.note}</td></tr>`;}).join('')}</table>`;
+  const tbl=`<table class="dt">${INDUSTRIES.map(i=>{const p=pct(i.yCY,i.yPY);return`<tr><td style="font-weight:600">${esc(i.name)}</td><td style="font-size:10px;color:var(--text3)">${i.rc}</td><td>${i.yPY.toFixed(2)}</td><td style="font-weight:600">${i.yCY.toFixed(2)}</td><td>${vbar(i.yCY,i.yPY)}</td><td><span class="heat ${hc(p)}">${p>=0?'+':''}${p.toFixed(1)}%</span></td><td style="font-size:10px;color:var(--text3)">${esc(i.note)}</td></tr>`;}).join('')}</table>`;
   w.innerHTML=buildCmt('mr_ind','Industry commentary...','mr_ind_w')+`<div class="card"><div class="ch">Industry Performance</div>${tbl}</div>`;
 }
 function renderMrPar(){
   const w=document.getElementById('mr_par_w');if(!w)return;
-  const tbl=`<table class="dt">${PARISHES.map(p=>{const ov=pct(p.curr,p.prev),rv=pct(p.rc,p.rp);return`<tr><td style="font-weight:600">${p.name}</td><td>${fmtK(p.curr)}</td><td style="color:var(--text3)">${fmtK(p.prev)}</td><td><span class="heat ${hc(ov)}">${ov>=0?'+':''}${ov.toFixed(1)}%</span></td><td>${fmtK(p.rc)}</td><td style="color:var(--text3)">${fmtK(p.rp)}</td><td><span class="heat ${hc(rv)}">${rv>=0?'+':''}${rv.toFixed(1)}%</span></td></tr>`;}).join('')}</table>`;
+  const tbl=`<table class="dt">${PARISHES.map(p=>{const ov=pct(p.curr,p.prev),rv=pct(p.rc,p.rp);return`<tr><td style="font-weight:600">${esc(p.name)}</td><td>${fmtK(p.curr)}</td><td style="color:var(--text3)">${fmtK(p.prev)}</td><td><span class="heat ${hc(ov)}">${ov>=0?'+':''}${ov.toFixed(1)}%</span></td><td>${fmtK(p.rc)}</td><td style="color:var(--text3)">${fmtK(p.rp)}</td><td><span class="heat ${hc(rv)}">${rv>=0?'+':''}${rv.toFixed(1)}%</span></td></tr>`;}).join('')}</table>`;
   w.innerHTML=buildCmt('mr_par','Parish commentary...','mr_par_w')+`<div class="card"><div class="ch">Parish Performance</div>${tbl}</div>`;
 }
 function renderFcCmt(){const w=document.getElementById('mr_fc_cmt_w');if(w)w.innerHTML=buildCmt('mr_fc','Forecast adjustment rationale...','mr_fc_cmt_w');}
@@ -5148,7 +5148,7 @@ function renderRecon(){
       <h4><span><span class="pill ${r.type==='Name mismatch'?'pa':'pr'}">${r.type}</span> · Acct: ${r.acct}</span><span class="pill ${r.status==='Resolved'?'pg':'pa'}">${r.status}</span></h4>
       <div style="font-size:11px;color:var(--text2);margin-bottom:8px">Names found: <strong style="color:var(--text)">${r.names.join(' · ')}</strong></div>
       <div style="font-size:10px;color:var(--text3)">Rate classes: ${r.rcs.join(', ')}</div>
-      ${r.note?`<div style="font-size:11px;color:var(--teal);margin-top:6px">Resolution: ${r.note}</div>`:''}
+      ${r.note?`<div style="font-size:11px;color:var(--teal);margin-top:6px">Resolution: ${esc(r.note)}</div>`:''}
       <div class="recon-options">
         <button class="btn btn-t" onclick="resolveRecon('${r.id}','Merge','Merged to single name')">🔗 Merge Names</button>
         <button class="btn btn-o" onclick="resolveRecon('${r.id}','Keep Separate','Kept separate -- confirmed different entities')">📌 Keep Separate</button>
@@ -5562,7 +5562,7 @@ function renderExecSummary() {
       const v = c.yCY - c.yPY, pos = v >= 0;
       return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
         <div>
-          <div style="font-size:12px;font-weight:600;color:var(--text)">${c.name}</div>
+          <div style="font-size:12px;font-weight:600;color:var(--text)">${esc(c.name)}</div>
           <div style="font-size:10px;color:var(--text3)">${c.rate} &middot; ${c.ind}</div>
         </div>
         <div style="text-align:right">
@@ -5579,7 +5579,7 @@ function renderExecSummary() {
     el('es_top_risks').innerHTML = risks.map(r => `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
         <div>
-          <div style="font-size:12px;font-weight:600;color:var(--text)">${r.name}</div>
+          <div style="font-size:12px;font-weight:600;color:var(--text)">${esc(r.name)}</div>
           <div style="font-size:10px;color:var(--text3)">${r.rate} &middot; <span class="pill ${r.level==='Very high'?'pa':'pgr'}">${r.level}</span> &middot; <span class="pill ${r.source==='Defection'?'pr':'pgr'}">${r.source}</span></div>
         </div>
         <div style="text-align:right">
@@ -5596,7 +5596,7 @@ function renderExecSummary() {
       : critSev.slice(0,5).map(d => `
         <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
           <div>
-            <div style="font-size:12px;font-weight:600;color:var(--text)">${d.name}</div>
+            <div style="font-size:12px;font-weight:600;color:var(--text)">${esc(d.name)}</div>
             <div style="font-size:10px;color:var(--text3)">${d.rate} &middot; ${d.cause} &middot; ${d.consec} months</div>
           </div>
           <span class="def-severity ${d.sev==='Critical'?'def-critical':'def-severe'}">${d.sev} ${d.ratio}%</span>
@@ -5608,7 +5608,7 @@ function renderExecSummary() {
   if(el('es_fc_accuracy')) {
     el('es_fc_accuracy').innerHTML = repAccuracy.length ? repAccuracy.map(r => `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
-        <div style="font-size:12px;font-weight:600;color:var(--text)">${r.name}</div>
+        <div style="font-size:12px;font-weight:600;color:var(--text)">${esc(r.name)}</div>
         <div style="text-align:right">
           <span style="font-size:12px;font-weight:700;color:${parseFloat(r.mape)>5?'var(--red)':'var(--green)'}">${r.score}</span>
           <span style="font-size:10px;color:var(--text3);margin-left:6px">MAPE ${r.mape}</span>
@@ -5953,7 +5953,7 @@ function renderRevenueRecovery() {
         <span class="pill ${d.impact==='Positive'?'pg':'pr'}" style="flex-shrink:0;margin-top:1px">${d.impact}</span>
         <div>
           <div style="font-size:11px;font-weight:600;color:var(--text)">${d.driver}</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:2px">${d.note}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">${esc(d.note)}</div>
         </div>
       </div>`).join('');
   }
@@ -6159,7 +6159,7 @@ function renderDefFlow() {
   const stageCols = { Investigation:'pa', 'Retention Offer':'pt', 'Tariff Review':'pb', 'Accept Loss':'pr', Closed:'pg' };
   const rows = actions.map(a => `<tr>
     <td style="font-size:10px;color:var(--text3)">${a.num}</td>
-    <td style="font-weight:500">${a.name}</td>
+    <td style="font-weight:500">${esc(a.name)}</td>
     <td><span class="pill pt">${a.rate}</span></td>
     <td><span class="def-severity ${a.sev==='Critical'?'def-critical':a.sev==='Severe'?'def-severe':'def-moderate'}">${a.sev}</span></td>
     <td><span class="pill ${a.cause==='Self-Gen'?'pa':a.cause==='Hurricane'?'pb':'pgr'}">${a.cause}</span></td>
@@ -6544,7 +6544,7 @@ function renderROAdvanced() {
         return `<tr${aged?' style="background:rgba(232,64,64,0.04)"':''}>
           <td style="font-size:10px;color:var(--text3)">${r.num}</td>
           <td style="font-size:10px;color:var(--text3)">${r.acct||'-'}</td>
-          <td style="font-weight:500;max-width:150px">${r.name}</td>
+          <td style="font-weight:500;max-width:150px">${esc(r.name)}</td>
           <td><span class="pill ${r.type==='Risk'?'pr':'pg'}">${r.type}</span></td>
           <td><strong style="color:var(--teal)">${r.rate}</strong></td>
           <td><span class="pill ${r.level==='Very high'?'pa':'pgr'}">${r.level}</span></td>
@@ -6880,7 +6880,7 @@ function generateReport() {
   if (S.get('rpt_sel_rpt_ro', true)) {
     const roRows = RISK_OPP.length
       ? RISK_OPP.map((r,i) => `<tr style="background:${i%2===0?'#f9f9f9':'#fff'}">
-          <td style="padding:5px 8px">${r.name}</td>
+          <td style="padding:5px 8px">${esc(r.name)}</td>
           <td style="padding:5px 8px;color:${r.type==='Risk'?'#e84040':'#27c485'};font-weight:600">${r.type}</td>
           <td style="padding:5px 8px">${r.level}</td>
           <td style="padding:5px 8px">${r.rate}</td>
@@ -10093,7 +10093,7 @@ function _renderOnlinePanel(){
         <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid rgba(255,255,255,.04)${u.isMe?';background:rgba(0,194,168,.06)':''}">
           <div style="width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#003da5,#00aeef);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff;flex-shrink:0">${(u.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()}</div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:11px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.name}${u.isMe?' <span style="font-size:9px;color:var(--text3)">(you)</span>':''}</div>
+            <div style="font-size:11px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(u.name)}${u.isMe?' <span style="font-size:9px;color:var(--text3)">(you)</span>':''}</div>
             <div style="font-size:9px;color:var(--text3)">${_sectionLabel[u.section]||u.section||'—'}</div>
           </div>
           <div style="font-size:8px;font-weight:800;text-transform:uppercase;color:${roleColor(u.role)}">${u.role}</div>
@@ -10351,7 +10351,7 @@ function renderVldDefReg(){
       const kamName=d.kam||'--';
       return`<tr>
       <td style="font-size:10px;color:var(--text3)">${d.num}</td>
-      <td style="font-weight:500">${d.name}</td>
+      <td style="font-weight:500">${esc(d.name)}</td>
       <td><span class="pill pt">${d.rate}</span></td>
       <td style="font-size:10px;color:var(--teal)">${esc(kamName)}</td>
       <td>${d.parish}</td>
