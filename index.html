@@ -4483,15 +4483,15 @@ function renderVariance(){
     <thead><tr><th>Segment</th><th>MTD Actual</th><th>MTD <span class="tip" data-tip="Annual Operating Plan. The approved yearly budget.">Budget</span></th><th>MTD vs Bud</th><th>MTD <span class="tip" data-tip="Prior Year. Same period in the previous calendar/fiscal year.">LY</span></th><th>MTD YoY</th><th><span class="tip" data-tip="Year to Date. Cumulative from January to current period.">YTD</span> Actual</th><th>YTD Budget</th><th>YTD vs Bud</th><th>YTD LY</th><th>YTD YoY</th></tr></thead>
     <tbody>${rows.map(r=>`<tr${r.seg==='Total'?' class="ft"':''}>
       <td><strong>${r.seg}</strong></td>
-      <td>${r.mtd_act.toFixed(1)}</td>
-      <td style="color:var(--text3)">${r.mtd_bud.toFixed(1)}</td>
+      <td>${r.mtd_act.toFixed(2)}</td>
+      <td style="color:var(--text3)">${r.mtd_bud.toFixed(2)}</td>
       <td>${vbar(r.mtd_act,r.mtd_bud)}</td>
-      <td style="color:var(--text3)">${r.mtd_ly.toFixed(1)}</td>
+      <td style="color:var(--text3)">${r.mtd_ly.toFixed(2)}</td>
       <td>${vbar(r.mtd_act,r.mtd_ly)}</td>
-      <td>${r.ytd_act.toFixed(1)}</td>
-      <td style="color:var(--text3)">${r.ytd_bud.toFixed(1)}</td>
+      <td>${r.ytd_act.toFixed(2)}</td>
+      <td style="color:var(--text3)">${r.ytd_bud.toFixed(2)}</td>
       <td>${vbar(r.ytd_act,r.ytd_bud)}</td>
-      <td style="color:var(--text3)">${r.ytd_ly.toFixed(1)}</td>
+      <td style="color:var(--text3)">${r.ytd_ly.toFixed(2)}</td>
       <td>${vbar(r.ytd_act,r.ytd_ly)}</td>
     </tr>`).join('')}</tbody></table>`;
   // Guard: remove any duplicate segment rows the browser may inject during parse
@@ -9055,6 +9055,7 @@ function _applyDataCache(c){
 }
 
 let _sbSyncing=false; // mutex — prevents double-sync
+let _lastSyncAt=0; // epoch ms — used by visibility refresh cooldown
 let _yearColConfirmed=false; // skip detectYearCol after first successful sync
 
 async function syncSupabase(silent=false){
@@ -9313,8 +9314,16 @@ async function syncSupabase(silent=false){
     if(!silent)toast('Sync failed: '+e.message,'err');
   }finally{
     _sbSyncing=false; // always release mutex
+    _lastSyncAt=Date.now();
   }
 }
+
+// ── Auto-refresh when user returns to this tab after ≥2 min away ──────────────
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden && Date.now()-_lastSyncAt>120_000){
+    syncSupabase(true).catch(()=>{});
+  }
+});
 
 /* ==========================================
    LE FORECAST ENGINE (ported from Sales_forecastJPS)
