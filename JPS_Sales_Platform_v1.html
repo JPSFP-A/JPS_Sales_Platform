@@ -445,8 +445,7 @@ document.getElementById('schema_stale_banner').style.display='none';
       <span class="tbadge tba" id="periodLabel">-- · MTD</span>
       <span class="tbadge tbr" id="kpi_ytd_yoy">-- YoY</span>
       <span class="tbadge tbt" id="dataStatus">⚡ Sample Data</span>
-      <a href="https://jps-fp-a.vercel.app" target="_blank" style="font-size:10px;font-weight:600;color:var(--teal);text-decoration:none;padding:3px 8px;border:1px solid rgba(0,194,168,.3);border-radius:5px;white-space:nowrap" title="Open FP&amp;A Platform">FP&amp;A ↗</a>
-      <span class="sb-badge sb-syncing" id="sbStatus" onclick="syncSupabase()" title="Click to sync from database">↻ Connecting…</span>
+<span class="sb-badge sb-syncing" id="sbStatus" onclick="syncSupabase()" title="Click to sync from database">↻ Connecting…</span>
       <!-- Theme quick-switch -->
       <div style="display:flex;gap:2px;border:1px solid var(--border);border-radius:7px;padding:2px;background:var(--navy3)" title="Switch theme">
         <button onclick="setTheme('dark')"  data-theme="dark"  class="theme-btn on"  style="width:22px;height:22px;border:none;border-radius:5px;cursor:pointer;font-size:12px;background:transparent;line-height:1" title="Dark">🌙</button>
@@ -2421,9 +2420,14 @@ async function detectYearCol(sb){
 function _kl(map, ac){
   return map[ac]||map[String(ac||'').split('-')[0]]||'';
 }
+// Commercial rows are identified by rate class, NOT by empty consumption_bucket.
+// Uploaded data has consumption_bucket="Commercial" on all RT40/RT50 rows.
+const _COMM_RCS=new Set(['RT40','RT50','RT60-ST','RT70','BU']);
+function _isComm(r){ return _COMM_RCS.has(String(r.rate_class||'').trim()); }
+
 function _buildPrefixIdx(){
   const idx={};
-  sbActuals.filter(r=>!(r.consumption_bucket||'')).forEach(r=>{
+  sbActuals.filter(_isComm).forEach(r=>{
     const ac=String(r.jps_ac||r['JPS A/c']||'').trim();
     if(!ac)return;
     const prefix=ac.split('-')[0];
@@ -3067,7 +3071,7 @@ function renderCmPivot(){
     : period==='ytd' ? Array.from({length:curMonth},(_,i)=>i+1)
     : Array.from({length:12},(_,i)=>((curMonth-1-i+12)%12)+1); // rolling 12
 
-  const rows = sbActuals.filter(r=>!r.consumption_bucket); // commercial only
+  const rows = sbActuals.filter(_isComm); // commercial only
   const accounts = {};
   rows.forEach(r=>{
     const ac=String(r.jps_ac||'').trim();
@@ -3142,7 +3146,7 @@ function generateCommentary(section){
     if(section==='cm'){
       const cy=curYear,py=cy-1;
       const _cmRCsCmt=new Set(['RT40','RT50','RT60-ST','RT70']);
-      const comm=sbActuals.filter(r=>!r.consumption_bucket&&_cmRCsCmt.has(String(r.rate_class||'').trim()));
+      const comm=sbActuals.filter(r=>_cmRCsCmt.has(String(r.rate_class||'').trim()));
       const sum=(yr,mos)=>comm.filter(r=>Number(r.year)===yr&&mos.includes(Number(r.month))).reduce((s,r)=>s+Number(r.kwh||0),0);
       const ytdMos=Array.from({length:curMonth},(_,i)=>i+1);
       const cyYtd=sum(cy,ytdMos), pyYtd=sum(py,ytdMos);
@@ -3209,7 +3213,7 @@ function generateCommentary(section){
       // KAM-focused commentary
       const cy=curYear,py=cy-1;
       const _cmkRCs=new Set(['RT40','RT50','RT60-ST','RT70']);
-      const comm=sbActuals.filter(r=>!r.consumption_bucket&&_cmkRCs.has(String(r.rate_class||'').trim()));
+      const comm=sbActuals.filter(r=>_cmkRCs.has(String(r.rate_class||'').trim()));
       const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
       const ytdMos=Array.from({length:curMonth},(_,i)=>i+1);
       const kams={};
@@ -3244,8 +3248,8 @@ function generateCommentary(section){
       // Generic overview commentary
       const cy=curYear,py=cy-1;
       const allData=sbActuals;
-      const comm=allData.filter(r=>!r.consumption_bucket);
-      const res=allData.filter(r=>r.consumption_bucket);
+      const comm=allData.filter(_isComm);
+      const res=allData.filter(r=>!_isComm(r));
       const ytdMos=Array.from({length:curMonth},(_,i)=>i+1);
       const sum=(arr,yr,mos)=>arr.filter(r=>Number(r.year)===yr&&mos.includes(Number(r.month))).reduce((s,r)=>s+Number(r.kwh||0),0);
       const totCy=sum(allData,cy,ytdMos), totPy=sum(allData,py,ytdMos);
@@ -4360,7 +4364,7 @@ function renderCmCust(){
   sbActuals.forEach(r=>{
     if(Number(r[YEAR_COL]||r.year||0)!==py)return;
     if(!pmSet.has(Number(r.month||0)))return;
-    if((r.consumption_bucket||'').trim())return;
+    if(!_isComm(r))return;
     const acct=_custNum(String(r.jps_ac||r.account||''));
     pyMap[acct]=(pyMap[acct]||0)+Number(r.kwh||0)/1e6;
   });
@@ -4425,7 +4429,7 @@ function renderKamPerformance(){
   const cy=curYear,py=cy-1;
   const pm=getPM(),pmSet=new Set(pm),ph=getPH();
   const _kamRCs=new Set(['RT40','RT50','RT60-ST','RT70']);
-  const comm=sbActuals.filter(r=>!r.consumption_bucket&&_kamRCs.has(String(r.rate_class||'').trim()));
+  const comm=sbActuals.filter(r=>_kamRCs.has(String(r.rate_class||'').trim()));
   const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
   // Build per-KAM totals for the selected period
   const kams={};
@@ -5286,7 +5290,7 @@ function renderOverviewKPIs(){
   const commRCs=new Set(['RT40','RT50','RT60-ST','RT70','BU']);
   const commActCount=CUSTOMERS.filter(c=>commRCs.has(c.rate)).length;
   const resActCount=sbActuals.filter(r=>['RT10','RT20'].includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===curMonth&&(r.consumption_bucket||'').trim()&&(r.consumption_bucket||'').trim()!=='< Zero').reduce((s,r)=>s+Number(r.customer_count||0),0);
-  const commBudRows2=sbBudget.filter(b=>!(b.consumption_bucket||'').trim());
+  const commBudRows2=sbBudget.filter(_isComm);
   const resBudRows2 =sbBudget.filter(b=> (b.consumption_bucket||'').trim());
   const commBudCount=new Set(commBudRows2.filter(b=>Number(b[YEAR_COL]||b.year||0)===curYear).map(b=>_custNum(String(b.jps_ac||'')))).size;
   const resBudCount =resBudRows2.filter(b=>Number(b.year)===curYear&&Number(b.month)===curMonth&&(b.consumption_bucket||'').trim()!=='< Zero').reduce((s,b)=>s+Number(b.customer_count||0),0);
@@ -5339,7 +5343,7 @@ function renderCommercialKPIs(){
   sv('kpi_cm_def',defs.length);
   sv('kpi_cm_custs',comCusts.length.toLocaleString());
   // Budget account count — distinct customer numbers in commercial budget for curYear
-  const commBudAccts=new Set(sbBudget.filter(b=>!(b.consumption_bucket||'').trim()&&Number(b[YEAR_COL]||b.year||0)===curYear).map(b=>_custNum(String(b.jps_ac||'')))).size;
+  const commBudAccts=new Set(sbBudget.filter(b=>_isComm(b)&&Number(b[YEAR_COL]||b.year||0)===curYear).map(b=>_custNum(String(b.jps_ac||'')))).size;
   const cmCustsNote=document.getElementById('kpi_cm_custs_note');
   if(cmCustsNote)cmCustsNote.textContent=commBudAccts?`vs ${commBudAccts.toLocaleString()} budget`:'commercial accounts';
 }
@@ -7123,7 +7127,7 @@ function renderAdmKam(){
   // Build account list from actuals (unique CUSTOMER NUMBERS, commercial only)
   // _custNum() strips the suffix so '100001-001' and '100001-002' both map to '100001'
   const seen={};
-  sbActuals.filter(r=>!r.consumption_bucket).forEach(r=>{
+  sbActuals.filter(_isComm).forEach(r=>{
     const ac=_custNum(r.jps_ac||'');
     if(!ac||seen[ac])return;
     seen[ac]={ac,name:String(r.name||'').trim(),rc:String(r.rate_class||'').trim()};
@@ -7219,8 +7223,8 @@ async function kamBulkAssign(){
   const sb=getSB();if(!sb){toast('Not connected','err');return;}
   // Find accounts matching fromKam
   const accounts=fromKam
-    ? sbActuals.filter(r=>!r.consumption_bucket).map(r=>String(r.jps_ac||'').trim()).filter((v,i,a)=>a.indexOf(v)===i).filter(ac=>{ const cur=sbKAM.find(k=>String(k.jps_ac||'').trim()===ac)?.kam||''; return cur===fromKam; })
-    : sbActuals.filter(r=>!r.consumption_bucket).map(r=>String(r.jps_ac||'').trim()).filter((v,i,a)=>a.indexOf(v)===i).filter(ac=>!sbKAM.find(k=>String(k.jps_ac||'').trim()===ac));
+    ? sbActuals.filter(_isComm).map(r=>String(r.jps_ac||'').trim()).filter((v,i,a)=>a.indexOf(v)===i).filter(ac=>{ const cur=sbKAM.find(k=>String(k.jps_ac||'').trim()===ac)?.kam||''; return cur===fromKam; })
+    : sbActuals.filter(_isComm).map(r=>String(r.jps_ac||'').trim()).filter((v,i,a)=>a.indexOf(v)===i).filter(ac=>!sbKAM.find(k=>String(k.jps_ac||'').trim()===ac));
   if(!accounts.length){if(msg)msg.textContent='No matching accounts found.';return;}
   // Uses in-app modal (avoids blocked browser dialog APIs)
   openModal('👤 Confirm Bulk KAM Assignment',`
@@ -7288,7 +7292,7 @@ function previewKamCsv(input){
       const uniqueCusts=Object.keys(csvMap);
       if(!uniqueCusts.length){status.textContent='No data rows found in CSV.';return;}
       // Match to full account numbers from loaded actuals
-      const uniqueAcs=[...new Set(sbActuals.filter(r=>!r.consumption_bucket).map(r=>String(r.jps_ac||'').trim()).filter(Boolean))];
+      const uniqueAcs=[...new Set(sbActuals.filter(_isComm).map(r=>String(r.jps_ac||'').trim()).filter(Boolean))];
       if(!uniqueAcs.length){
         status.textContent='No commercial actuals loaded — sync the database first, then import.';
         return;
@@ -8438,6 +8442,7 @@ if (window.JpsMonitor) JpsMonitor.init({ getClient: getSB, appName: 'sales' });
 let _sbClient=null,
     sbActuals=[],       // jps_actuals          — commercial account-level monthly consumption
     sbBudget=[],        // jps_budget — unified budget: commercial rows (jps_ac filled) + residential rows (consumption_bucket filled)
+    sbBudgetIdx={},     // O(1) lookup index: 'year_month' → row array (built after each sync)
     sbAccountMaster=[], // jps_account_master    — master account list (JPS A/c PK)
     sbIndustries=[],    // jps_industries        — industry reference table
     sbKAM=[],           // jps_kam               — key account managers
@@ -8600,7 +8605,7 @@ function buildDashboardData(){
   });
   // Distribute RC-level budget to customers by proportional prior-year share
   // Commercial budget rows: jps_ac filled, no consumption_bucket
-  const commBudRows=sbBudget.filter(b=>!(b.consumption_bucket||'').trim());
+  const commBudRows=sbBudget.filter(_isComm);
   if(commBudRows.length){
     const budRows=fcNormBudget(commBudRows);
     const rcBud={},rcActPY={};
@@ -8662,7 +8667,7 @@ function buildDashboardData(){
   const mIdx2=curMonth-1;
   // Pre-build residential budget index too
   // Residential budget rows: consumption_bucket filled (aggregate rows, no jps_ac)
-  const resBudRows=sbBudget.filter(b=>(b.consumption_bucket||'').trim());
+  const resBudRows=sbBudget.filter(b=>!_isComm(b));
   const resBudIdx={};
   resBudRows.forEach(b=>{
     const rc=b.rate_class,y=Number(b.year),m=Number(b.month),v=Number(b.kwh_budget)||0;
@@ -8828,7 +8833,18 @@ async function syncSupabase(silent=false){
           return sbTable('jps_actuals',{gte:[_yearFilterCol,_actYearCutoff],cols:_actCols});
         }
       })(),
-      sbTable('jps_budget',{limit:50000}),
+      (async()=>{
+        // Mirror actuals pattern — RPC skips PostgREST pagination overhead (11 round trips → 1)
+        const _budCols='year,month,jps_ac,name,rate_class,parish,consumption_bucket,kwh_budget,revenue_budget,demand_budget,customer_count';
+        try{
+          const{data,error}=await getSB().rpc('get_budget_agg',{year_cutoff:_actYearCutoff});
+          if(error)throw error;
+          return data||null;
+        }catch(e){
+          console.warn('[sync] get_budget_agg RPC failed, fallback to raw table:',e.message);
+          return sbTable('jps_budget',{gte:['year',_actYearCutoff],cols:_budCols,limit:50000});
+        }
+      })(),
       sbTable('jps_le',{limit:100000}),
       sbTable('jps_system_stats',{order:'year,month'}),
       sbTable('jps_losses_forecast',{order:'forecast_date,year,month'}),
@@ -8870,9 +8886,15 @@ async function syncSupabase(silent=false){
     if(!actOk)log.push('Actuals: ⚠ jps_actuals not accessible — check RLS policies');
 
     sbBudget=budData||[];
+    // Build O(1) lookup: 'year_month' → row array — eliminates O(111k) .filter() scans per render
+    sbBudgetIdx={};
+    for(const r of sbBudget){
+      const k=`${Number(r.year)}_${Number(r.month)}`;
+      (sbBudgetIdx[k]=sbBudgetIdx[k]||[]).push(r);
+    }
     const budOk=sbBudget.length>0;
     if(budOk){
-      const commRows=sbBudget.filter(b=>!(b.consumption_bucket||'').trim()).length;
+      const commRows=sbBudget.filter(_isComm).length;
       const resRows =sbBudget.filter(b=> (b.consumption_bucket||'').trim()).length;
       log.push(`Budget: jps_budget (${sbBudget.length} rows — ${commRows} commercial, ${resRows} residential)`);
     } else log.push('Budget: jps_budget (0 rows — no data uploaded yet)');
