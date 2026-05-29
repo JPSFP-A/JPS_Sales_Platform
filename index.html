@@ -3426,7 +3426,7 @@ function generateCommentary(section){
         lines.push('');
       }
       // Biggest mover
-      const movers=CUSTOMERS.filter(c=>!['RT10','RT20'].includes(c.rate)&&c.yPY>0&&c.yCY>0).map(c=>({...c,delta:c.yCY-c.yPY})).sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta));
+      const movers=CUSTOMERS.filter(c=>!['RT10','RT20'].includes(c.rate)&&c.yPY!==0&&c.yCY!==0).map(c=>({...c,delta:c.yCY-c.yPY})).sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta));
       if(movers.length){const top=movers[0];lines.push(`KEY MOVER: ${top.name} ${top.delta>=0?'gained':'lost'} ${fmtE(Math.abs(top.delta)*1e6,1)} vs prior year.`);}
     }
 
@@ -4350,7 +4350,7 @@ function renderPfInd(){
     const yr=Number(r[YEAR_COL]||r.year||0),mo=Number(r.month||0);
     if(!pmSet.has(mo))return;
     if(yr!==cy&&yr!==py)return;
-    const acct=String(r.jps_ac||r.account||'').trim();
+    const acct=_custNum(String(r.jps_ac||r.account||'').trim());
     const ind=(r.industry||_indLkp[acct]||'Other').trim()||'Other';
     const rc=String(r.rate_class||'').trim();
     if(!indMap[ind]){indMap[ind]={name:ind,yPY:0,yCY:0};indRcMap[ind]=new Set();}
@@ -4700,7 +4700,7 @@ function renderCmIndTbl(){
     if(yr!==cy&&yr!==py)return;
     const rc=String(r.rate_class||'').trim();
     if(!CM_RCS.has(rc))return;   // commercial only — exclude RT10/RT20
-    const acct=String(r.jps_ac||r.account||'').trim();
+    const acct=_custNum(String(r.jps_ac||r.account||'').trim());
     const ind=(r.industry||_indLkp[acct]||'Other').trim()||'Other';
     if(!indMap[ind]){indMap[ind]={name:ind,yPY:0,yCY:0};indRcMap[ind]=new Set();}
     const gwh=Number(r.kwh||0)/1e6;
@@ -4928,7 +4928,7 @@ function renderFcKPIs(){
     months.forEach(m=>{
       const v=S.get(`${m.key}_${c.num}`,null);
       if(v){entered++;
-        const hist3=c.m.slice(0,curMonth).filter(x=>x>0).slice(-3);
+        const hist3=c.m.slice(0,curMonth).filter(x=>x!==0).slice(-3);
         const avg3=hist3.length?hist3.reduce((s,x)=>s+x,0)/hist3.length:0;
         const ratio=avg3>0?v/avg3:1;
         if(ratio>=0.85&&ratio<=1.15)onTrend++;else offTrend++;
@@ -4970,7 +4970,7 @@ function renderFcEntry(){
   });
   const rows=custData.map(c=>{
     // Use last 3 months up to curMonth (not slice(-3) which grabs Oct-Dec when most are 0)
-    const hist3=c.m.slice(0,curMonth).filter(v=>v>0).slice(-3);
+    const hist3=c.m.slice(0,curMonth).filter(v=>v!==0).slice(-3);
     const avg3=hist3.length?hist3.reduce((s,x)=>s+x,0)/hist3.length:0;
     const pyAvg=curMonth>0?_custSum(c.num,curYear-1,1,curMonth)/1e6/curMonth:0;
     const fcCells=months.map(m=>{
