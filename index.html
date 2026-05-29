@@ -4729,7 +4729,7 @@ function renderRsKPIs(){
 
   // Customer count — use latest month in period (headcount is a point-in-time figure)
   const custMonth=pm[pm.length-1];
-  const resActCount=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===custMonth&&(r.consumption_bucket||'').trim()&&(r.consumption_bucket||'').trim()!=='< Zero').reduce((s,r)=>s+Number(r.customer_count||0),0);
+  const resActCount=sbActuals.filter(r=>RES.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month)===custMonth&&(r.consumption_bucket||'').trim()&&(r.consumption_bucket||'').trim()!=='< Zero').reduce((s,r)=>s+Number(r.customer_count||0),0);
   const resBudCount=sbBudget.filter(b=>(b.consumption_bucket||'').trim()&&(b.consumption_bucket||'').trim()!=='< Zero'&&Number(b.year)===curYear&&Number(b.month)===custMonth).reduce((s,b)=>s+Number(b.customer_count||0),0);
   rsKv('rs_kpi_cg',resActCount>0?resActCount.toLocaleString():'--');
   const cgNote=document.getElementById('rs_kpi_cg_note');
