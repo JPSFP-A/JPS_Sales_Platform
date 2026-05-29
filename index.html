@@ -9384,7 +9384,7 @@ function fcNormActuals(rows){
       custCount:Number(d.customer_count||d['Customer Count']||0),
       year,month
     };
-  }).filter(d=>d.year>0&&d.month>0&&d.kwh>0);
+  }).filter(d=>d.year>0&&d.month>0);  // include negative kWh (credits/reversals are part of net billing)
 }
 function fcNormBudget(rows){
   return rows.map(d=>{
