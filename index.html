@@ -4374,10 +4374,8 @@ function renderPfInd(){
   makeSortable('pfi_dt');
 }
 function renderPfRC(){
-  // seg=null means all rows for that RC; seg='Residential'/'Commercial' filters by segment field
   const rcList=[
-    {rc:'RT10',    desc:'RT10 Residential',    seg:'Residential'},
-    {rc:'RT10',    desc:'RT10 Commercial',     seg:'Commercial'},
+    {rc:'RT10',    desc:'Low-use Residential', seg:null},
     {rc:'RT20',    desc:'General Service',     seg:null},
     {rc:'RT40',    desc:'LV Commercial',       seg:null},
     {rc:'RT50',    desc:'MV Commercial',       seg:null},
