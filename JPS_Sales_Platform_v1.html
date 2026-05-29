@@ -8445,7 +8445,7 @@ function copySchemaSql(){
 const SB_URL = window.APP_CONFIG?.supabaseUrl || '';
 const SB_KEY = window.APP_CONFIG?.supabaseAnonKey || '';
 
-let _sbClient=null,
+var _sbClient=null, // var (not let) — hoisted as undefined, avoids TDZ when JpsMonitor calls getSB() before this line executes
     sbActuals=[],       // jps_actuals          — commercial account-level monthly consumption
     sbBudget=[],        // jps_budget — unified budget: commercial rows (jps_ac filled) + residential rows (consumption_bucket filled)
     sbBudgetIdx={},     // O(1) lookup index: 'year_month' → row array (built after each sync)
