@@ -4376,13 +4376,13 @@ function renderPfInd(){
 function renderPfRC(){
   // seg=null means all rows for that RC; seg='Residential'/'Commercial' filters by segment field
   const rcList=[
-    {rc:'RT10',    desc:'Low-use Residential', seg:null},
-    {rc:'RT20',    desc:'RT20 Residential',    seg:'Residential'},
-    {rc:'RT20',    desc:'RT20 Commercial',     seg:'Commercial'},
+    {rc:'RT10',    desc:'RT10 Residential',    seg:'Residential'},
+    {rc:'RT10',    desc:'RT10 Commercial',     seg:'Commercial'},
+    {rc:'RT20',    desc:'General Service',     seg:null},
     {rc:'RT40',    desc:'LV Commercial',       seg:null},
     {rc:'RT50',    desc:'MV Commercial',       seg:null},
     {rc:'RT70',    desc:'Large Industrial',    seg:null},
-    {rc:'RT60-ST', desc:'RT60-ST',             seg:null},
+    {rc:'RT60-ST', desc:'Street Lighting',     seg:null},
   ];
   const py=curYear-1, cy=curYear;
   const pm=getPM(),pmSet=new Set(pm),ph=getPH();
