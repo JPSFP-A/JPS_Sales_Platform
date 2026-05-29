@@ -4401,6 +4401,7 @@ function renderPfRC(){
   const pfrcBanner = sbActuals.length
     ? `<div style="background:rgba(32,201,151,.1);border-left:3px solid var(--green);border-radius:4px;padding:8px 13px;margin-bottom:9px;font-size:11px;color:var(--green);font-weight:500">&#10003; Rate-class data loaded from database &mdash; ${sbActuals.length.toLocaleString()} records</div>`
     : `<div style="background:rgba(245,166,35,.12);border-left:3px solid var(--amber);border-radius:4px;padding:8px 13px;margin-bottom:9px;font-size:11px;color:var(--amber);font-weight:500">&#9888; No data loaded &mdash; sync or upload an Excel file to populate rate-class performance</div>`;
+  const totPY=rcs.reduce((s,r)=>s+r.yPY,0), totCY=rcs.reduce((s,r)=>s+r.yCY,0), totBud=rcs.reduce((s,r)=>s+r.bud,0);
   document.getElementById('pfr_tbl').innerHTML=pfrcBanner+`<table class="dt" id="pfr_dt">
     <thead><tr><th>Rate Class</th><th>Description</th><th>${curYear-1} (${ph}, GWh)</th><th>${curYear} (${ph}, GWh)</th><th>Budget</th><th>vs Budget</th><th>YoY</th><th>Notes</th></tr></thead>
     <tbody>${rcs.map(r=>{const vb2=pct(r.yCY,r.bud),yy=pct(r.yCY,r.yPY);return`<tr>
@@ -4410,13 +4411,20 @@ function renderPfRC(){
       <td><span class="heat ${hc(vb2)}">${vb2>=0?'+':''}${vb2.toFixed(1)}%</span></td>
       <td>${vbar(r.yCY,r.yPY)}</td>
       <td style="font-size:10px;color:var(--text3)">${esc(r.note)}</td>
-    </tr>`;}).join('')}</tbody></table>`;
+    </tr>`;}).join('')}
+    <tr class="ft">
+      <td colspan="2"><strong>Total</strong></td>
+      <td>${totPY.toFixed(1)}</td><td style="font-weight:700">${totCY.toFixed(1)}</td>
+      <td style="color:var(--text3)">${totBud.toFixed(1)}</td>
+      <td><span class="heat ${hc(pct(totCY,totBud))}">${pct(totCY,totBud)>=0?'+':''}${pct(totCY,totBud).toFixed(1)}%</span></td>
+      <td>${vbar(totCY,totPY)}</td><td></td>
+    </tr></tbody></table>`;
   makeSortable('pfr_dt');
 }
 function renderPfPar(){
   const pm=getPM(),pmSet=new Set(pm),ph=getPH();
   const py=curYear-1,cy=curYear;
-  const COMM_RCS=new Set(['RT20','RT20','RT40','RT50','RT60-ST','RT70','BU']);
+  const COMM_RCS=new Set(['RT20','RT40','RT50','RT60-ST','RT70','BU']);
   // Build from sbActuals filtered to period months
   const parMap={};
   sbActuals.forEach(r=>{
@@ -4437,6 +4445,7 @@ function renderPfPar(){
     el.innerHTML='<div style="padding:20px;text-align:center;font-size:11px;color:var(--text3)">No parish data — sync actuals to populate.</div>';
     return;
   }
+  const parTot=parishes.reduce((a,p)=>({curr:a.curr+p.curr,prev:a.prev+p.prev,rc:a.rc+p.rc,rp:a.rp+p.rp}),{curr:0,prev:0,rc:0,rp:0});
   el.innerHTML=`<table class="dt" id="pfp_dt">
     <thead><tr><th>Parish</th><th>${cy} ${ph} (GWh)</th><th>${py} ${ph} (GWh)</th><th>YoY Var%</th><th>Comm. ${cy}</th><th>Comm. ${py}</th><th>Comm. Var%</th><th>Flag</th></tr></thead>
     <tbody>${parishes.map(p=>{const ov=pct(p.curr,p.prev),rv=pct(p.rc,p.rp);return`<tr>
@@ -4446,11 +4455,19 @@ function renderPfPar(){
       <td>${p.rc.toFixed(2)}</td><td style="color:var(--text3)">${p.rp.toFixed(2)}</td>
       <td><span class="heat ${hc(rv)}">${rv>=0?'+':''}${rv.toFixed(1)}%</span></td>
       <td>${Math.abs(ov)>5?'⚠':'●'}</td>
-    </tr>`;}).join('')}</tbody></table>`;
+    </tr>`;}).join('')}
+    <tr class="ft">
+      <td><strong>Total</strong></td>
+      <td style="font-weight:700">${parTot.curr.toFixed(2)}</td><td style="color:var(--text3)">${parTot.prev.toFixed(2)}</td>
+      <td><span class="heat ${hc(pct(parTot.curr,parTot.prev))}">${pct(parTot.curr,parTot.prev)>=0?'+':''}${pct(parTot.curr,parTot.prev).toFixed(1)}%</span></td>
+      <td>${parTot.rc.toFixed(2)}</td><td style="color:var(--text3)">${parTot.rp.toFixed(2)}</td>
+      <td><span class="heat ${hc(pct(parTot.rc,parTot.rp))}">${pct(parTot.rc,parTot.rp)>=0?'+':''}${pct(parTot.rc,parTot.rp).toFixed(1)}%</span></td>
+      <td></td>
+    </tr></tbody></table>`;
   makeSortable('pfp_dt');
 }
 function renderVariance(){
-  const segs=['RT10','RT20','RT20','RT40','RT50','RT70','RT60-ST'];
+  const segs=['RT10','RT20','RT40','RT50','RT70','RT60-ST'];
   // Index lookups — O(1) per seg/year/month, no full array scans
   const rows=segs.map(seg=>{
     const _rcMatchBud=(r)=>String(r.rate_class||r.rc||'').trim().replace(/\s+/g,'')===seg.replace(/\s+/g,'');
@@ -4530,25 +4547,34 @@ function renderCmCust(){
     return true;
   });
   document.getElementById('cm_count').textContent=d.length+' customers';
+  let cmTotPY=0,cmTotCY=0,cmTotB=0;
+  const cmRows=d.map(c=>{
+    const saved=S.get(`note_${c.num}`,'');
+    const kamName=c.kam||'--';
+    const pCY=periCY(c),pPY=pyMap[c.num]||0,pB=budMap[c.num]||0;
+    cmTotPY+=pPY; cmTotCY+=pCY; cmTotB+=pB;
+    return`<tr>
+      <td style="font-size:10px;color:var(--text3)">${esc(c.num)}</td>
+      <td style="font-weight:500">${esc(c.name)}</td>
+      <td><span class="pill pt">${c.rate}</span></td>
+      <td style="font-size:10px;color:var(--teal);cursor:pointer" onclick="filterByKam('${(c.kam||'').replace(/'/g,"\\'")}',event)" title="Click to filter by this KAM">${esc(kamName)}</td>
+      <td>${esc(c.ind)}</td><td>${esc(c.parish)}</td>
+      <td>${pPY.toFixed(1)}</td><td style="font-weight:600">${pCY.toFixed(1)}</td>
+      <td style="color:var(--text3)">${pB>0?pB.toFixed(1):'--'}</td>
+      <td>${pB>0?`<span class="heat ${hc(pct(pCY,pB))}">${pct(pCY,pB)>=0?'+':''}${pct(pCY,pB).toFixed(1)}%</span>`:'--'}</td>
+      <td>${vbar(pCY,pPY)}</td>
+      <td><span style="font-size:10px;color:${saved?'var(--teal)':'var(--text3)'};cursor:pointer" title="${saved?saved:''}" onclick="editNote('${c.num}','${c.name.replace(/'/g,"\\'")}','cm_cust_tbl')">${saved?'📝 '+saved.substring(0,28)+(saved.length>28?'…':''):'✏ Add note'}</span></td>
+    </tr>`;}).join('');
   document.getElementById('cm_cust_tbl').innerHTML=`<table class="dt" id="cm_dt">
     <thead><tr><th>Acct #</th><th>Customer</th><th>Rate</th><th>KAM</th><th>Industry</th><th>Parish</th><th>${py} (${ph})</th><th>${cy} (${ph})</th><th>Budget</th><th>vs Budget</th><th>YoY</th><th>Note</th></tr></thead>
-    <tbody>${d.map(c=>{
-      const saved=S.get(`note_${c.num}`,'');
-      const kamName=c.kam||'--';
-      const pCY=periCY(c),pPY=pyMap[c.num]||0,pB=budMap[c.num]||0;
-      return`<tr>
-        <td style="font-size:10px;color:var(--text3)">${esc(c.num)}</td>
-        <td style="font-weight:500">${esc(c.name)}</td>
-        <td><span class="pill pt">${c.rate}</span></td>
-        <td style="font-size:10px;color:var(--teal);cursor:pointer" onclick="filterByKam('${(c.kam||'').replace(/'/g,"\\'")}',event)" title="Click to filter by this KAM">${esc(kamName)}</td>
-        <td>${esc(c.ind)}</td><td>${esc(c.parish)}</td>
-        <td>${pPY.toFixed(1)}</td><td style="font-weight:600">${pCY.toFixed(1)}</td>
-        <td style="color:var(--text3)">${pB>0?pB.toFixed(1):'--'}</td>
-        <td>${pB>0?`<span class="heat ${hc(pct(pCY,pB))}">${pct(pCY,pB)>=0?'+':''}${pct(pCY,pB).toFixed(1)}%</span>`:'--'}</td>
-        <td>${vbar(pCY,pPY)}</td>
-        <td><span style="font-size:10px;color:${saved?'var(--teal)':'var(--text3)'};cursor:pointer" title="${saved?saved:''}" onclick="editNote('${c.num}','${c.name.replace(/'/g,"\\'")}','cm_cust_tbl')">${saved?'📝 '+saved.substring(0,28)+(saved.length>28?'…':''):'✏ Add note'}</span></td>
-      </tr>`;}).join('')}
-    </tbody></table>`;
+    <tbody>${cmRows}
+    <tr class="ft">
+      <td colspan="6"><strong>Total (${d.length} customers)</strong></td>
+      <td>${cmTotPY.toFixed(1)}</td><td style="font-weight:700">${cmTotCY.toFixed(1)}</td>
+      <td style="color:var(--text3)">${cmTotB>0?cmTotB.toFixed(1):'--'}</td>
+      <td>${cmTotB>0?`<span class="heat ${hc(pct(cmTotCY,cmTotB))}">${pct(cmTotCY,cmTotB)>=0?'+':''}${pct(cmTotCY,cmTotB).toFixed(1)}%</span>`:'--'}</td>
+      <td>${vbar(cmTotCY,cmTotPY)}</td><td></td>
+    </tr></tbody></table>`;
   makeSortable('cm_dt');
   renderKamPerformance();
 }
