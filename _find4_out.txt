@@ -1,0 +1,141 @@
+L2381 [detectYearCol]: if(sbActuals && sbActuals.length > 0){
+L2382 [detectYearCol]: const r = sbActuals[0];
+L2435 [_buildPrefixIdx]: sbActuals.filter(r=>!(r.consumption_bucket||'')).forEach(r=>{
+L3020 [renderCmPivot]: const rows = sbActuals.filter(r=>!r.consumption_bucket); // commercial only
+L3095 [generateCommentary]: const comm=sbActuals.filter(r=>!r.consumption_bucket&&_cmRCsCmt.has(String(r.rate_class||'').trim())
+L3162 [?]: const comm=sbActuals.filter(r=>!r.consumption_bucket&&_cmkRCs.has(String(r.rate_class||'').trim()));
+L3196 [?]: const allData=sbActuals;
+L3298 [populateYearDropdowns]: const years=sbActuals.length
+L3299 [populateYearDropdowns]: ? [...new Set(sbActuals.map(r=>Number(r.year||r.cal_year||0)).filter(Boolean))].sort((a,b)=>b-a)
+L3310 [rebuildYearDropdowns]: if(!sbActuals.length)return;
+L3312 [rebuildYearDropdowns]: const years=[...new Set(sbActuals.map(r=>Number(r[YEAR_COL]||r.year||0)).filter(Boolean))].sort((a,b
+L3335 [rebuildYearDropdowns]: sbActuals.filter(r=>Number(r[YEAR_COL]||r.year||0)===activeYear)
+L3352 [renderSidebarFilters]: const segs = sbActuals.length
+L3353 [renderSidebarFilters]: ? [...new Set(sbActuals.map(r=>String(r.rate_class||r.rc||'').trim()).filter(Boolean))].sort()
+L3355 [renderSidebarFilters]: const years = sbActuals.length
+L3356 [renderSidebarFilters]: ? [...new Set(sbActuals.map(r=>Number(r.year||r.cal_year||0)).filter(Boolean))].sort()
+L3416 [renderSection]: const _r1=sbActuals[0]||{};
+L3417 [renderSection]: console.log('[JPS] renderSection:',id,'| actuals:',sbActuals.length,'| budget:',sbBudget.length,'| c
+L3580 [?]: const idsToRemove=sbActuals.filter(r=>Number(r.year||r.cal_year)===yrN&&Number(r.month)===mN).map(r=
+L3964 [mkBracketCharts]: if(!sbActuals.length)return;
+L3978 [mkBracketCharts]: const bRows=sbActuals.filter(r=>String(r.rate_class||'')===rc&&(r.consumption_bucket||'').trim());
+L4007 [buildCharts]: if(sbActuals.length){
+L4009 [buildCharts]: trendAct26[i]=sbActuals.filter(r=>Number(r[YEAR_COL])===curYear&&Number(r.month)===i+1).reduce((s,r)
+L4013 [buildCharts]: if(sbActuals.length){
+L4015 [buildCharts]: trendAct25[i]=sbActuals.filter(r=>Number(r[YEAR_COL])===curYear-1&&Number(r.month)===i+1).reduce((s,
+L4047 [?]: return sbActuals.filter(r=>String(r.rate_class||'').trim()===rc&&Number(r[YEAR_COL]||r.year||0)===cu
+L4056 [?]: const _cm1P=(yr)=>cm1RCs.map(rc=>sbActuals.filter(r=>String(r.rate_class||'')==rc&&Number(r[YEAR_COL
+L4082 [?]: const _indP=(yr)=>{const m={};sbActuals.filter(r=>Number(r[YEAR_COL])===yr&&_indPMSet.has(Number(r.m
+L4142 [renderPfCust]: if(sbActuals.length){
+L4143 [renderPfCust]: sbActuals.forEach(r=>{
+L4190 [renderPfInd]: if(!sbActuals.length){
+L4199 [renderPfInd]: sbActuals.forEach(r=>{
+L4235 [renderPfRC]: const _rcGwh=(rc,yr)=>sbActuals.filter(r=>String(r.rate_class||'').trim()===rc&&Number(r[YEAR_COL]||
+L4241 [renderPfRC]: note:sbActuals.length?'from database':'Upload data to populate'
+L4243 [renderPfRC]: const pfrcBanner = sbActuals.length
+L4244 [renderPfRC]: ? `<div style="background:rgba(32,201,151,.1);border-left:3px solid var(--green);border-radius:4px;p
+L4264 [renderPfPar]: sbActuals.forEach(r=>{
+L4301 [renderVariance]: const mtd_act=sbActuals.filter(r=>_rcMatch(r)&&Number(r[YEAR_COL])===curYear&&Number(r.month)===curM
+L4303 [renderVariance]: const mtd_ly=sbActuals.filter(r=>_rcMatch(r)&&Number(r[YEAR_COL])===curYear-1&&Number(r.month)===cur
+L4304 [renderVariance]: const ytd_act=sbActuals.filter(r=>_rcMatch(r)&&Number(r[YEAR_COL])===curYear&&Number(r.month)<=curMo
+L4306 [renderVariance]: const ytd_ly=sbActuals.filter(r=>_rcMatch(r)&&Number(r[YEAR_COL])===curYear-1&&Number(r.month)<=curM
+L4350 [renderCmCust]: sbActuals.forEach(r=>{
+L4418 [renderKamPerformance]: const comm=sbActuals.filter(r=>!r.consumption_bucket&&_kamRCs.has(String(r.rate_class||'').trim()));
+L4500 [renderCmIndTbl]: if(!sbActuals.length){
+L4511 [renderCmIndTbl]: sbActuals.forEach(r=>{
+L4570 [renderRsKPIs]: const resPeriodKwh=sbActuals.filter(resAct).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+L4571 [renderRsKPIs]: const resPyKwh    =sbActuals.filter(resPY ).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+L4575 [renderRsKPIs]: const resYtdKwh=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])==
+L4576 [renderRsKPIs]: const resYtdLy =sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])==
+L4578 [renderRsKPIs]: const has=sbActuals.length>0;
+L4597 [?]: const resActCount=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])
+L4611 [renderRsPar]: const liveBuckets=[...new Set(sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&(r.cons
+L4620 [renderRsPar]: const curAct=sbActuals.filter(r=>
+L4625 [renderRsPar]: const prevAct=sbActuals.filter(r=>
+L4632 [renderRsPar]: sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number
+L4782 [renderFcKPIs]: const actRow=sbActuals.find(r=>_custNum(String(r.jps_ac||''))===c.num&&Number(r[YEAR_COL])===m.year&
+L4815 [renderFcEntry]: const pyVals=sbActuals.filter(r=>_custNum(String(r.jps_ac||''))===c.num&&Number(r[YEAR_COL])===curYe
+L4981 [initMrMonths]: const minY=sbActuals.length?Math.min(...sbActuals.map(r=>Number(r[YEAR_COL]||r.year||2024))):2024;
+L5084 [clearFcAdj]: /* ── Build RECON_DATA from sbActuals: name mismatches + possible duplicates ── */
+L5087 [buildReconData]: if(!sbActuals.length)return;
+L5090 [buildReconData]: sbActuals.forEach(r=>{
+L5133 [renderRecon]: if(!sbActuals.length){document.getElementById('ar_list').innerHTML='<div style="padding:32px;text-al
+L5244 [renderOverviewKPIs]: const mtd=sbActuals.filter(r=>Number(r[YEAR_COL]||r.year||0)===curYear&&pmSet.has(Number(r.month||0)
+L5249 [renderOverviewKPIs]: const ytdLY=sbActuals.filter(r=>Number(r[YEAR_COL]||r.year||0)===curYear-1&&pmSet.has(Number(r.month
+L5253 [renderOverviewKPIs]: const resMtd=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||r.rc||'').trim())&&Number(r.ye
+L5255 [renderOverviewKPIs]: const comMtd=sbActuals.filter(r=>comRCs.includes(String(r.rate_class||r.rc||'').trim())&&Number(r.ye
+L5277 [?]: const resActCount=sbActuals.filter(r=>['RT10','RT20'].includes(String(r.rate_class||''))&&Number(r[Y
+L5362 [generateTrendForecast]: if(!sbActuals.length){toast('Load actuals data first','err');return;}
+L5364 [generateTrendForecast]: const maxMo = Math.max(...sbActuals.filter(r=>Number(r[YEAR_COL])===yr&&Number(r.kwh||0)>0).map(r=>N
+L5368 [generateTrendForecast]: const rcs=[...new Set(sbActuals.filter(r=>Number(r[YEAR_COL])===yr).map(r=>r.rate_class).filter(Bool
+L5372 [generateTrendForecast]: const last3=sbActuals.filter(r=>String(r.rate_class||'')==rc&&Number(r[YEAR_COL])===yr&&Number(r.mon
+L5376 [generateTrendForecast]: const py3=sbActuals.filter(r=>String(r.rate_class||'')==rc&&Number(r[YEAR_COL])===(yr-1)&&Number(r.m
+L5381 [generateTrendForecast]: const pyMo=sbActuals.filter(r=>String(r.rate_class||'')==rc&&Number(r[YEAR_COL])===(yr-1)&&Number(r.
+L5424 [renderAdmForecast]: const maxMo=sbActuals.length?Math.max(...sbActuals.filter(r=>Number(r[YEAR_COL])===yr&&Number(r.kwh|
+L5452 [buildScorecardData]: const months = sbActuals.filter(r=>Number(r[YEAR_COL])===yr&&Number(r.kwh||0)>0).map(r=>Number(r.mon
+L5465 [buildScorecardData]: const mtd_act=kwhAct(sbActuals,curYear,curMonth)-kwhAct(sbActuals,curYear,curMonth-1);
+L5467 [buildScorecardData]: const mtd_ly =kwhAct(sbActuals,curYear-1,curMonth)-kwhAct(sbActuals,curYear-1,curMonth-1);
+L5468 [buildScorecardData]: const ytd_act=kwhAct(sbActuals,curYear,effMonth);
+L5470 [buildScorecardData]: const ytd_ly =kwhAct(sbActuals,curYear-1,effMonth);
+L5491 [renderExecSummary]: const _esActP=(yr)=>sbActuals.filter(r=>Number(r[YEAR_COL])===yr&&pmSet.has(Number(r.month||0))).red
+L5493 [renderExecSummary]: const _esYtd=(yr,mo)=>sbActuals.filter(r=>Number(r[YEAR_COL])===yr&&Number(r.month)<=mo).reduce((s,r
+L5505 [renderExecSummary]: const esCmMtd = sbActuals.filter(r=>esComRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])
+L5509 [renderExecSummary]: const hasAct  = sbActuals.length > 0;
+L5516 [?]: const esRevJmd=sbActuals.filter(r=>Number(r[YEAR_COL])===curYear&&pmSet.has(Number(r.month||0))).red
+L5697 [renderVarianceBridge]: const _bAct=sbActuals.filter(r=>Number(r[YEAR_COL])===curYear&&pmSet.has(Number(r.month||0))).reduce
+L5708 [renderVarianceBridge]: _bComp=sbActuals.filter(r=>Number(r[YEAR_COL])===(curYear-1)&&pmSet.has(Number(r.month||0))).reduce(
+L5712 [renderVarianceBridge]: const totalGap = sbActuals.length ? _bAct - _bComp : 0;
+L5724 [?]: kv('vb_gap_kpi', sbActuals.length ? (totalGap>=0?'+':'')+totalGap.toFixed(1)+' GWh' : '--');
+L5726 [?]: if(vbGapDetail) vbGapDetail.textContent = sbActuals.length ? `${_bAct.toFixed(1)} vs ${_bComp.toFixe
+L5774 [renderBridgeChart]: const _bAct2=sbActuals.filter(r=>Number(r[YEAR_COL])===curYear&&pmSet.has(Number(r.month||0))&&(!rcF
+L5785 [renderBridgeChart]: _bComp2=sbActuals.filter(r=>Number(r[YEAR_COL])===(curYear-1)&&pmSet.has(Number(r.month||0))&&(!rcFi
+L5788 [renderBridgeChart]: const totalGap = sbActuals.length ? _bAct2 - _bComp2 : 0;
+L6272 [getResBuckets]: return [...new Set(sbActuals.filter(r=>['RT10','RT20'].includes(String(r.rate_class||''))&&(r.consum
+L6315 [renderResIntelKPIs]: const totalCusts=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])=
+L6320 [renderResIntelKPIs]: const rt10ActRows=sbActuals.filter(r=>String(r.rate_class||'')==='RT10'&&Number(r[YEAR_COL])===curYe
+L6350 [renderResIntelSection]: sbActuals.filter(r=>resRCsT.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===t.y&&Number(r.
+L6378 [?]: sbActuals.filter(r=>resRCsC.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===yr&&Number(r.m
+L6403 [?]: const parishes = [...new Set(sbActuals.filter(r=>resRCsP.includes(String(r.rate_class||''))&&r.paris
+L6405 [?]: const sumResKwh = (par,mList) => mList.reduce((s,{y,m})=>s+sbActuals.filter(r=>resRCsP.includes(Stri
+L6406 [?]: const sumAllKwh = (par,mList) => mList.reduce((s,{y,m})=>s+sbActuals.filter(r=>r.parish===par&&Numbe
+L6439 [?]: CDD_DATA.kwh_raw   =_trail6.map(t=>sbActuals.filter(r=>['RT10','RT20'].includes(String(r.rate_class|
+L6497 [renderBracketTable]: const curAct=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===cu
+L6498 [renderBracketTable]: const prevAct=sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===(
+L6688 [renderReportBuilder]: const _minY=sbActuals.length?Math.min(...sbActuals.map(r=>Number(r[YEAR_COL]||r.year||2024))):2024;
+L6740 [generateReport]: if (!sc.length && !sbActuals.length) {
+L6979 [renderAdmComments]: const _admMinY=sbActuals.length?Math.min(...sbActuals.map(r=>Number(r[YEAR_COL]||r.year||9999)).filt
+L7017 [doDeleteMonth]: const ids=sbActuals.filter(r=>Number(r.year||r.cal_year)===year&&Number(r.month)===month).map(r=>r.i
+L7060 [doDeleteMonthAdm]: const ids=sbActuals.filter(r=>Number(r.year||r.cal_year)===_year&&Number(r.month)===_month).map(r=>r
+L7148 [renderAdmKam]: sbActuals.filter(r=>!r.consumption_bucket).forEach(r=>{
+L7244 [kamBulkAssign]: ? sbActuals.filter(r=>!r.consumption_bucket).map(r=>String(r.jps_ac||'').trim()).filter((v,i,a)=>a.i
+L7245 [kamBulkAssign]: : sbActuals.filter(r=>!r.consumption_bucket).map(r=>String(r.jps_ac||'').trim()).filter((v,i,a)=>a.i
+L7313 [?]: const uniqueAcs=[...new Set(sbActuals.filter(r=>!r.consumption_bucket).map(r=>String(r.jps_ac||'').t
+L8461 [copySchemaSql]: sbActuals=[],       // jps_actuals          — commercial account-level monthly consumption
+L8590 [buildDashboardData]: if(!sbActuals.length)return;
+L8596 [buildDashboardData]: const rows=fcNormActuals(sbActuals);
+L8737 [_saveDataCache]: const mkStripped=minY=>sbActuals
+L8784 [_applyDataCache]: sbActuals=c.act.map(r=>{
+L8798 [_applyDataCache]: sbActuals.forEach(r=>{
+L8891 [?]: sbActuals=actData;
+L8904 [?]: log.push(`Actuals: ${sbActuals.length} rows (from cache)`);
+L8905 [?]: if(sbActuals.length>0){_yearColConfirmed=true;}
+L8975 [?]: if(sbActuals.length){
+L8979 [?]: sbActuals.forEach(r=>{
+L9027 [?]: if(el&&sbActuals.length)el.textContent=`Live · ${sbActuals.length.toLocaleString()} actuals rows`;
+L9035 [?]: else toast(`Sync complete ✓  ${sbActuals.length.toLocaleString()} actuals · ${sbBudget.length.toLoca
+L9230 [lePopulateFilters]: fill('le_find',[...new Set([...sbIndustries.map(d=>d.industry||d.name||''),...sbActuals.map(d=>d.ind
+L9262 [renderLEOverview]: if(!sbActuals.length&&!sbBudget.length){
+L9272 [renderLEOverview]: sbActuals.filter(r=>Number(r[YEAR_COL]||r.year||0)===FC_BUD_YEAR&&Number(r.month||0)===m).forEach(r=
+L9294 [?]: const actCur2=sbActuals.filter(d=>Number(d.year||d.cal_year||0)===FC_BUD_YEAR).map(d=>({...d,month:N
+L9325 [?]: const actCur =sbActuals.filter(d=>Number(d.year||d.cal_year||0)===FC_BUD_YEAR).map(d=>({...d,month:N
+L9377 [?]: const actFY0=actSum(sbActuals.filter(d=>Number(d.year||d.cal_year||0)===FC_PY).map(d=>({...d,month:N
+L9404 [renderLEMonthly]: const actCur =leFilterRows(sbActuals.filter(d=>Number(d.year||d.cal_year||0)===FC_BUD_YEAR).map(d=>(
+L9405 [renderLEMonthly]: const actPY  =leFilterRows(sbActuals.filter(d=>Number(d.year||d.cal_year||0)===FC_PY).map(d=>({...d,
+L9433 [renderLEAdjust]: const inds=[...new Set([...sbLE.map(d=>d.industry||''),...sbActuals.map(d=>d.industry||d['Industry']
+L9532 [renderLECompare]: const actAll=sbActuals.filter(d=>Number(d.year||d.cal_year||0)===FC_BUD_YEAR).map(d=>({...d,month:Nu
+L9681 [calcLeRevComponents]: const pyRows=sbActuals.filter(d=>Number(d[YEAR_COL]||d.year||0)===FC_BUD_YEAR-1);
+L10208 [runValidation]: if(!sbActuals.length){
+L10229 [runValidation]: sbActuals.forEach(r=>{
+L10246 [?]: sbActuals.forEach(r=>{
+L10268 [?]: sbActuals.forEach(r=>{
+L10397 [renderVldDefReg]: if(!CUSTOMERS.length&&!sbActuals.length){tbl.innerHTML='<div style="padding:20px;text-align:center;f
