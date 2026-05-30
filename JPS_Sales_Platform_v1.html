@@ -11,6 +11,12 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <!-- XLSX loaded lazily on first upload/download — saves ~1MB on initial page load -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+/* JpsMonitor — heartbeat → record_heartbeat RPC → fpa_audit_log (read by platform audit). */
+(function(){var APP='sales';var M={_app:APP,_clientFn:null,setUser:function(){this._beat();},
+_beat:function(){try{var c=this._clientFn&&this._clientFn();if(c&&c.rpc){c.rpc('record_heartbeat',{p_app:this._app}).then(function(){},function(){});}}catch(e){}},
+info:function(){},warning:function(){},error:function(){}};window.JpsMonitor=M;setInterval(function(){M._beat();},300000);})();
+</script>
 <script src="./config.js"></script>
 <script src="./jps-monitor.js"></script>
 <style>
@@ -8468,6 +8474,7 @@ function getSB(){
         detectSessionInUrl:false,    // prevents grabbing tokens meant for the FP&A redirect
       }
     });
+  try { if (window.JpsMonitor) { JpsMonitor._clientFn = function(){ return _sbClient; }; JpsMonitor._beat(); } } catch(e){}
   return _sbClient;
 }
 
