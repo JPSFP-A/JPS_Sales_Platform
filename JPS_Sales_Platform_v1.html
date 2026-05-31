@@ -346,7 +346,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 <div class="suite-nav">
   <span class="sn-brand">JPS Analytics Suite</span>
   <a class="sn-link sn-active" href="#">&#x2B21; Sales Platform</a>
-  <a class="sn-link" id="sn-fpa-link" href="https://jps-fp-a.vercel.app" target="_blank">&#x1F4CA; FP&amp;A Platform</a>
+  <a class="sn-link" id="sn-fpa-link" href="https://jmfinancelab.com" target="_blank">&#x1F4CA; FP&amp;A Platform</a>
   <a class="sn-back" href="javascript:history.back()">&#x21A9; Back</a>
 </div>
 
@@ -472,7 +472,7 @@ document.getElementById('schema_stale_banner').style.display='none';
             <button class="chip theme-btn"    data-theme="jps"   onclick="setTheme('jps');toggleMenu()"   title="JPS Orange">⚡ JPS</button>
           </div>
         </div>
-        <div class="umi" style="border-top:1px solid var(--border);margin-top:3px;padding-top:7px" onclick="window.open('https://jps-fp-a.vercel.app','_blank')">📊 FP&amp;A Platform ↗</div>
+        <div class="umi" style="border-top:1px solid var(--border);margin-top:3px;padding-top:7px" onclick="window.open('https://jmfinancelab.com','_blank')">📊 FP&amp;A Platform ↗</div>
         <div class="umi" onclick="dlTemplate()">📥 Download Template</div>
         <div class="umi" onclick="doLogout()">🚪 Sign Out</div>
       </div>
@@ -9664,8 +9664,11 @@ async function leCommitWrite(){
       esc(String(result.version_id||_leCommitVersionId))+'</strong>. '+
       'FP&A Hub will reflect Sales LE on next reload.';
     if(commitBtn) commitBtn.style.display='none';
+    const _dfSyncVerId = _leCommitVersionId;
     _leCommitVersionId = null;
     toast('Sales LE committed: '+result.written+' rows → fpa_facts','ok');
+    const _dfSyncYr = parseInt(document.getElementById('le_commit_year')?.value, 10) || new Date().getFullYear();
+    _syncDerivedFormulas(getSB(), _dfSyncVerId, _dfSyncYr).catch(function(e){ console.error('[DFsync]', e); });
 
   }catch(e){
     if(commitBtn){commitBtn.disabled=false;commitBtn.textContent='✓ Commit to Hub';}
@@ -10440,6 +10443,85 @@ const APP_VERSION = '1.0.96';
     });
   }catch(e){ console.warn('Session restore:',e.message); updateSbStatus('offline'); }
 })();
+
+// CSP-safe arithmetic evaluator — replaces Function()/eval (blocked by CSP 'unsafe-eval').
+function _arithEval(code) {
+  if (typeof code !== 'string') return 0;
+  var toks = [], re = /\s*([0-9]*\.?[0-9]+(?:[eE][+\-]?[0-9]+)?|[+\-*/()])\s*/g, last = 0, mm;
+  while ((mm = re.exec(code)) !== null) { if (mm.index !== last) return 0; toks.push(mm[1]); last = re.lastIndex; }
+  if (last !== code.length) return 0;
+  var p = 0;
+  function peek(){ return toks[p]; } function next(){ return toks[p++]; }
+  function expr(){ var v=term(); while(peek()==='+'||peek()==='-'){ var o=next(); var r=term(); v=o==='+'?v+r:v-r; } return v; }
+  function term(){ var v=factor(); while(peek()==='*'||peek()==='/'){ var o=next(); var r=factor(); v=o==='*'?v*r:(r===0?0:v/r); } return v; }
+  function factor(){ var t=peek(); if(t==='+'){next();return factor();} if(t==='-'){next();return -factor();} if(t==='('){next();var v=expr();if(peek()===')')next();return v;} next(); var n=parseFloat(t); return isNaN(n)?0:n; }
+  try { var r=expr(); return (typeof r==='number'&&isFinite(r))?r:0; } catch(e){ return 0; }
+}
+
+// Post-commit derived formula sync — recalculates net_inc/ebitda/etc. for this version+year
+async function _syncDerivedFormulas(sbClient, versionId, yr) {
+  if (!sbClient || !versionId || !yr) return;
+  try {
+    const { data: formulas, error: fe } = await sbClient
+      .from('fpa_derived_formulas')
+      .select('line_id,calc_expr,sort_order')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true });
+    if (fe || !formulas || !formulas.length) return;
+
+    const componentIds = new Set();
+    formulas.forEach(function(f) {
+      let m; const re = /\b([A-Za-z][A-Za-z0-9_]*)\b/g;
+      while ((m = re.exec(f.calc_expr)) !== null) componentIds.add(m[1]);
+    });
+
+    const { data: rows, error: re } = await sbClient
+      .from('fpa_facts')
+      .select('line_id,period_id,value')
+      .eq('version_id', versionId)
+      .in('line_id', Array.from(componentIds))
+      .gte('period_id', yr * 100 + 1)
+      .lte('period_id', yr * 100 + 12);
+    if (re || !rows || !rows.length) return;
+
+    const facts = {};
+    rows.forEach(function(r) {
+      if (!facts[r.line_id]) facts[r.line_id] = {};
+      facts[r.line_id][r.period_id] = r.value ?? 0;
+    });
+
+    const periods = new Set();
+    Object.values(facts).forEach(function(pm) { Object.keys(pm).forEach(function(p) { periods.add(Number(p)); }); });
+    if (!periods.size) return;
+    const sortedPeriods = Array.from(periods).sort(function(a, b) { return a - b; });
+
+    const upsertRows = [];
+    formulas.forEach(function(formula) {
+      sortedPeriods.forEach(function(p) {
+        const allKeys = Object.keys(facts).sort(function(a, b) { return b.length - a.length; });
+        let code = formula.calc_expr;
+        allKeys.forEach(function(k) {
+          const v = (facts[k] && facts[k][p] != null) ? facts[k][p] : 0;
+          code = code.replace(new RegExp('\\b' + k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'g'), String(v));
+        });
+        let val = _arithEval(code);
+        upsertRows.push({ version_id: versionId, line_id: formula.line_id, period_id: p, value: val, source: 'formula' });
+        if (!facts[formula.line_id]) facts[formula.line_id] = {};
+        facts[formula.line_id][p] = val;
+      });
+    });
+
+    for (let i = 0; i < upsertRows.length; i += 500) {
+      const { error: ue } = await sbClient
+        .from('fpa_facts')
+        .upsert(upsertRows.slice(i, i + 500), { onConflict: 'version_id,line_id,period_id' });
+      if (ue) throw ue;
+    }
+    console.log('[DFsync] recalculated', formulas.map(function(f){ return f.line_id; }).join(', '), 'for', versionId, 'yr', yr);
+  } catch(e) {
+    console.error('[DFsync]', e);
+  }
+}
 
 </script>
 </div><!-- /app-wrap -->
