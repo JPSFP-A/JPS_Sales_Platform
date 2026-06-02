@@ -6507,11 +6507,11 @@ function renderBracketTable() {
    P6: R&O ADVANCED PIPELINE
 ===================================================== */
 
-const AVG_TARIFF_BY_RC = { RT10:89, RT20:95, RT40:104, RT50:95, RT70:68, ST:51 };
 const PROB_MAP = { 'Very high':0.90, 'High':0.70, 'Medium':0.45, 'Low':0.20 };
 
 function calcRevImpact(kwh, rate) {
-  const tariff = AVG_TARIFF_BY_RC[rate] || 89;
+  const tariff = TARIFF_BY_RC[rate] ?? null;
+  if (tariff === null) return null;
   return (kwh * tariff / 1e9).toFixed(3);
 }
 
@@ -6520,20 +6520,20 @@ function renderROAdvanced() {
   const now=Date.now();
   let items = RISK_OPP.map(r => ({
     ...r,
-    rev_jmd: parseFloat(calcRevImpact(r.kwh, r.rate)),
+    rev_jmd: (v => v === null ? null : parseFloat(v))(calcRevImpact(r.kwh, r.rate)),
     prob: PROB_MAP[r.level] || 0.5,
     days_open: r.opened_at ? Math.floor((now - new Date(r.opened_at).getTime())/(86400000)) : 0,
   }));
 
-  if (sortBy === 'rev')  items.sort((a,b) => b.rev_jmd - a.rev_jmd);
+  if (sortBy === 'rev')  items.sort((a,b) => (b.rev_jmd ?? -Infinity) - (a.rev_jmd ?? -Infinity));
   if (sortBy === 'age')  items.sort((a,b) => b.days_open - a.days_open);
   if (sortBy === 'prob') items.sort((a,b) => b.prob - a.prob);
 
   const risks = items.filter(r => r.type === 'Risk');
   const opps  = items.filter(r => r.type === 'Opportunity');
-  const riskRev = risks.reduce((s,r) => s+r.rev_jmd, 0);
-  const oppRev  = opps.reduce((s,r) => s+r.rev_jmd, 0);
-  const probNet = opps.reduce((s,r) => s+(r.rev_jmd*r.prob), 0) - risks.reduce((s,r) => s+(r.rev_jmd*r.prob), 0);
+  const riskRev = risks.reduce((s,r) => s+(r.rev_jmd ?? 0), 0);
+  const oppRev  = opps.reduce((s,r) => s+(r.rev_jmd ?? 0), 0);
+  const probNet = opps.reduce((s,r) => s+((r.rev_jmd ?? 0)*r.prob), 0) - risks.reduce((s,r) => s+((r.rev_jmd ?? 0)*r.prob), 0);
   const aged    = items.filter(r => r.days_open > 90 && r.status !== 'Closed').length;
   const avgDays = (items.reduce((s,r) => s+r.days_open, 0) / items.length).toFixed(0);
 
@@ -6559,9 +6559,9 @@ function renderROAdvanced() {
           <td><strong style="color:var(--teal)">${r.rate}</strong></td>
           <td><span class="pill ${r.level==='Very high'?'pa':'pgr'}">${r.level}</span></td>
           <td>${fmtK(r.kwh)}</td>
-          <td style="font-weight:600;color:${r.type==='Risk'?'var(--red)':'var(--green)'}">${r.rev_jmd.toFixed(3)}</td>
+          <td style="font-weight:600;color:${r.type==='Risk'?'var(--red)':'var(--green)'}">${r.rev_jmd !== null ? r.rev_jmd.toFixed(3) : '—'}</td>
           <td>${(r.prob*100).toFixed(0)}%</td>
-          <td style="font-weight:600">${(r.rev_jmd*r.prob).toFixed(3)}</td>
+          <td style="font-weight:600">${r.rev_jmd !== null ? ((r.rev_jmd*r.prob).toFixed(3)) : '—'}</td>
           <td><span class="pill ${r.source==='Defection'?'pr':r.source==='Forecast'?'pa':'pgr'}">${r.source}</span></td>
           <td><span class="pill ${r.status==='Confirmed'?'pr':r.status==='Closed'?'pg':'pa'}">${r.status}</span></td>
           <td style="color:${aged?'var(--red)':'var(--text2)'}${aged?';font-weight:700':''}">${r.days_open}d${aged?' &#9888;':''}</td>
@@ -6570,9 +6570,9 @@ function renderROAdvanced() {
       }).join('')}
       <tr class="ft"><td colspan="6">Total</td>
         <td>${fmtK(items.reduce((s,r)=>s+r.kwh,0))}</td>
-        <td>${items.reduce((s,r)=>s+r.rev_jmd,0).toFixed(3)}</td>
+        <td>${items.reduce((s,r)=>s+(r.rev_jmd ?? 0),0).toFixed(3)}</td>
         <td></td>
-        <td>${items.reduce((s,r)=>s+(r.rev_jmd*r.prob),0).toFixed(3)}</td>
+        <td>${items.reduce((s,r)=>s+((r.rev_jmd ?? 0)*r.prob),0).toFixed(3)}</td>
         <td colspan="4"></td>
       </tr>
     </table>`;
@@ -8454,7 +8454,8 @@ var _sbClient=null, // var (not let) — hoisted as undefined, avoids TDZ when J
     sbLE=[],            // jps_le               — latest estimate at account/parish/bucket level
     sbSystemStats=[],   // jps_system_stats      — net gen + losses for budget/le/actuals
     sbLossesForecast=[], // jps_losses_forecast  — rolling 12-month losses forecast
-    sbConnected=false, sbLastSync=null;
+    sbConnected=false, sbLastSync=null,
+    TARIFF_BY_RC={};    // jps_tariff_rates — rate_class → avg_tariff_usd_cents (loaded at sync)
 
 function getSB(){
   if(!_sbClient&&window.supabase?.createClient)
@@ -8825,7 +8826,7 @@ async function syncSupabase(silent=false){
       indData,kamData,amData,actData,
       budData,leData,sysStatsData,lossesFcData,
       ng,ev,pl,
-      fcvData,fcData
+      fcvData,fcData,tariffData
     ] = await Promise.all([
       sbTable('jps_industries',{}),
       sbTable('jps_kam',{}),
@@ -8860,7 +8861,8 @@ async function syncSupabase(silent=false){
       sbTable('jps_ev_accounts',{order:'year'}),
       sbTable('jps_period_locks',{}),
       sbTable('jps_forecast_versions',{order:'created_at'}),
-      sbTable('jps_forecast',{limit:50000})
+      sbTable('jps_forecast',{limit:50000}),
+      sbTable('jps_tariff_rates',{cols:'rate_class,avg_tariff_usd_cents',order:'rate_class'})
     ]);
 
     // ── Process results ────────────────────────────────────
@@ -8929,6 +8931,14 @@ async function syncSupabase(silent=false){
     else log.push('Period Locks: jps_period_locks not found (optional — run schema SQL in Admin)');
     if(fcvData){sbForecastVersions=fcvData;log.push(`Forecast versions: ${fcvData.length}`);}
     if(fcData){sbForecast=fcData;log.push(`Forecast rows: ${fcData.length}`);}
+
+    if(tariffData&&tariffData.length){
+      TARIFF_BY_RC={};
+      tariffData.forEach(function(r){ TARIFF_BY_RC[r.rate_class]=r.avg_tariff_usd_cents; });
+      log.push(`Tariff rates: jps_tariff_rates (${tariffData.length} rate classes)`);
+    } else {
+      log.push('Tariff rates: ⚠ jps_tariff_rates not found — rev impact calculations will show —');
+    }
 
     const anyOk=actOk||budOk||!!ng;
     sbConnected=anyOk;
