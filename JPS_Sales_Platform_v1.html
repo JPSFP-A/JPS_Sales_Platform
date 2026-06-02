@@ -2614,9 +2614,23 @@ async function doRegister(){
 }
 
 /* ── Common post-auth setup ── */
+function _initIdleTimeout(signOutFn) {
+  var IDLE_MS = 30 * 60 * 1000;
+  var _idleTimer = null;
+  function _reset() {
+    clearTimeout(_idleTimer);
+    _idleTimer = setTimeout(function() { try { signOutFn(); } catch(e){} window.location.reload(); }, IDLE_MS);
+  }
+  ['mousedown','mousemove','keydown','scroll','touchstart','click'].forEach(function(evt) {
+    document.addEventListener(evt, _reset, { passive: true });
+  });
+  _reset();
+}
+
 function _applyLogin(user){
   CU=user;
   if (window.JpsMonitor) JpsMonitor.setUser(CU.id || CU.email, CU.name || CU.email);
+  _initIdleTimeout(function(){ getSB().auth.signOut(); });
   const btn=document.getElementById('lBtn');
   if(btn){btn.textContent='Sign In →';btn.disabled=false;}
   document.getElementById('loginScreen').style.display='none';
