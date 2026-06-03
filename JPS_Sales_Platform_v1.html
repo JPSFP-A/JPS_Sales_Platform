@@ -4392,8 +4392,9 @@ function renderCmCust(){
   sbBudget.forEach(b=>{
     if(Number(b.year||0)!==cy)return;
     if(!pmSet.has(Number(b.month||0)))return;
-    if((b.consumption_bucket||'').trim())return;
+    if(!_isComm(b))return;              // commercial accounts only (account-level budget rows)
     const ac=_custNum(String(b.jps_ac||''));
+    if(!ac)return;
     budMap[ac]=(budMap[ac]||0)+Number(b.kwh_budget||0)/1e6;
   });
   const d=CUSTOMERS.filter(c=>{
