@@ -1,4 +1,7 @@
 {
+  "rewrites": [
+    { "source": "/", "destination": "/JPS_Sales_Platform_v1.html" }
+  ],
   "headers": [
     {
       "source": "/(.*)",
