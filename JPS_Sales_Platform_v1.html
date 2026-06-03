@@ -3604,7 +3604,7 @@ async function loadExcel(input){
         const raw=XLSX.utils.sheet_to_json(actSheet);
         if(raw.length){
           const first=raw[0];
-          const isActuals=first.kwh!==undefined||first['Sum of net_kwh_billed_consump']!==undefined;
+          const isActuals=first.kwh!==undefined||first['Sum of net_kwh_billed_consump']!==undefined||first['net_kwh_billed_consump']!==undefined||first['net_billed_revenue']!==undefined;
           const isBudget =first.kwh_budget!==undefined||first['Sum of Budget']!==undefined;
 
           if(isActuals){
@@ -3612,20 +3612,20 @@ async function loadExcel(input){
             const rows=raw.map(d=>{
               let year=Number(d.year||0),month=Number(d.month||0);
               if(!year||!month){
-                const p=fcParseMonth(d['Month']||'');
+                const p=fcParseMonth(d['Month']!==undefined?d['Month']:(d['month']!==undefined?d['month']:''));
                 year=p.year;month=p.month;
               }
               return{
                 [YEAR_COL]:year, month,
-                jps_ac:         String(d.jps_ac||d['JPS A/c']||'').trim(),
-                name:           (d.name||d['Name']||'').trim(),
-                consumption_bucket:(d.consumption_bucket||'').trim(),
-                kwh:            Number(d.kwh||d['Sum of net_kwh_billed_consump']||0),
-                revenue_jmd:    Number(d.revenue_jmd||d['Revenue (JMD)']||0),
-                parish:         (d.parish||d['Updated Parish']||d['Parish']||'').trim(),
-                rate_class:     (d.rate_class||d['Rate category']||d['Rate Class']||'').trim(),
+                jps_ac:         String(d.jps_ac||d['JPS A/c']||d['Account Dump']||d['Account']||'').trim(),
+                name:           String(d.name||d['Name']||d['Name Dump']||'').trim(),
+                consumption_bucket:String(d.consumption_bucket||'').trim(),
+                kwh:            Number(d.kwh||d['Sum of net_kwh_billed_consump']||d['net_kwh_billed_consump']||0),
+                revenue_jmd:    Number(d.revenue_jmd||d['Revenue (JMD)']||d['net_billed_revenue']||0),
+                parish:         String(d.parish||d['Updated Parish']||d['Parish']||'').trim(),
+                rate_class:     String(d.rate_class||d['Rate category']||d['Rate Class']||'').trim(),
                 demand_kva:     Number(d.demand_kva||d['Demand (kVA)']||d.demand||0),
-                customer_count: Number(d.customer_count||d['Customer Count']||d['customer count']||0),
+                customer_count: Number(d.customer_count||d['Customer Count']||d['customer count']||d['Cust_Code']||0),
               };
             }).filter(d=>(d.year||d.cal_year)>0&&d.month>0&&d.jps_ac);
 
@@ -9060,8 +9060,18 @@ const FC_CUST_RCS=['RT10','RT20']; // residential RCs → use cust method in Bas
 let FC_BUD_YEAR=curYear, FC_PY=curYear-1;
 
 function fcParseMonth(str){
-  if(!str)return{year:0,month:0};
-  const s=str.trim();
+  if(str==null||str==='')return{year:0,month:0};
+  // JS Date (cellDates) → use directly
+  if(str instanceof Date && !isNaN(str))return{year:str.getFullYear(),month:str.getMonth()+1};
+  // Excel serial date number (SheetJS default returns dates as serials)
+  if(typeof str==='number'){
+    if(typeof XLSX!=='undefined' && XLSX.SSF && XLSX.SSF.parse_date_code){
+      const dc=XLSX.SSF.parse_date_code(str);
+      if(dc&&dc.y)return{year:dc.y,month:dc.m};
+    }
+    return{year:0,month:0};
+  }
+  const s=String(str).trim();
   // ISO date: "2025-01-01" or "2025-01"
   if(/^\d{4}-\d{2}/.test(s)){
     const pts=s.split('-');
