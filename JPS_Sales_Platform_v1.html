@@ -3766,6 +3766,8 @@ async function loadExcel(input){
       await writeAudit('UPLOAD_DATA',{rows:totalRows,mode,file:input.files[0]?.name||'unknown'});
       toast(`Uploaded ${totalRows.toLocaleString()} rows — refreshing…`,'ok');
       input.value='';
+      // Refresh pre-aggregated MVs so reloaded charts reflect this upload (covers jps_budget path)
+      try{ await getSB().rpc('refresh_sales_mvs'); }catch(e){ console.warn('[upload] MV refresh failed',e); if(window.JpsMonitor&&JpsMonitor.error)JpsMonitor.error('sales:mv_refresh',e.message||'error'); }
       await syncSupabase(true);
       buildCharts();
       renderSection(document.querySelector('.sec.on')?.id);
