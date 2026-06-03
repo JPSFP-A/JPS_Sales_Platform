@@ -3624,7 +3624,6 @@ async function loadExcel(input){
                 revenue_jmd:    Number(d.revenue_jmd||d['Revenue (JMD)']||d['net_billed_revenue']||0),
                 parish:         String(d.parish||d['Updated Parish']||d['Parish']||'').trim(),
                 rate_class:     String(d.rate_class||d['Rate category']||d['Rate Class']||'').trim(),
-                demand_kva:     Number(d.demand_kva||d['Demand (kVA)']||d.demand||0),
                 customer_count: Number(d.customer_count||d['Customer Count']||d['customer count']||d['Cust_Code']||0),
               };
             }).filter(d=>(d.year||d.cal_year)>0&&d.month>0&&d.jps_ac);
@@ -3639,7 +3638,6 @@ async function loadExcel(input){
               else{
                 aggMap[k].kwh          =(aggMap[k].kwh||0)          +Number(r.kwh||0);
                 aggMap[k].revenue_jmd  =(aggMap[k].revenue_jmd||0)  +Number(r.revenue_jmd||0);
-                aggMap[k].demand_kva   =Math.max(aggMap[k].demand_kva||0, Number(r.demand_kva||0));
                 aggMap[k].customer_count=(aggMap[k].customer_count||0)+Number(r.customer_count||0);
               }
             });
