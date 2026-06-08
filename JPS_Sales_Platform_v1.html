@@ -2812,8 +2812,17 @@ async function loadAllUserData(){
 ========================================== */
 let CUSTOMERS=[];
 
-// Compute defection flags from customer data
+// Compute defection flags — memoized by (curYear, curMonth, CUSTOMERS.length)
+// Called 10+ times per render cycle; result is pure given those three inputs.
+var _defCache=null, _defCacheKey='';
 function computeDefectors(){
+  const key=curYear+'-'+curMonth+'-'+CUSTOMERS.length;
+  if(_defCache&&_defCacheKey===key)return _defCache;
+  _defCache=_computeDefectorsRaw();
+  _defCacheKey=key;
+  return _defCache;
+}
+function _computeDefectorsRaw(){
   return CUSTOMERS.map(c=>{
     const m=c.m;
     // Dynamic rolling window: current 3 months ending at (curMonth-1), vs same 3 months prior year
@@ -4239,15 +4248,14 @@ function renderPfInd(){
   }
   const pm=getPM(),pmSet=new Set(pm),ph=getPH();
   const py=curYear-1,cy=curYear;
-  const _indLkp={};
-  if(sbIndustries&&sbIndustries.length)sbIndustries.forEach(x=>{_indLkp[String(x.jps_ac||'').trim()]=x.industry||'';});
+  // Use sbIndAgg (5,694 rows) instead of sbActuals (53k rows) — ~9x fewer iterations
+  const _indSrc=sbIndAgg.length?sbIndAgg:sbActuals;
   const indMap={},indRcMap={};
-  sbActuals.forEach(r=>{
-    const yr=Number(r[YEAR_COL]||r.year||0),mo=Number(r.month||0);
+  _indSrc.forEach(r=>{
+    const yr=Number(r.year||r[YEAR_COL]||0),mo=Number(r.month||0);
     if(!pmSet.has(mo))return;
     if(yr!==cy&&yr!==py)return;
-    const acct=String(r.jps_ac||r.account||'').trim();
-    const ind=(r.industry||_indLkp[acct]||'Other').trim()||'Other';
+    const ind=(String(r.industry||'Other').trim())||'Other';
     const rc=String(r.rate_class||'').trim();
     if(!indMap[ind]){indMap[ind]={name:ind,yPY:0,yCY:0};indRcMap[ind]=new Set();}
     const gwh=Number(r.kwh||0)/1e6;
@@ -4306,10 +4314,11 @@ function renderPfPar(){
   const pm=getPM(),pmSet=new Set(pm),ph=getPH();
   const py=curYear-1,cy=curYear;
   const COMM_RCS=new Set(['RT40','RT50','RT60-ST','RT70','BU']);
-  // Build from sbActuals filtered to period months
+  // Use sbParAgg (1,410 rows) instead of sbActuals (53k rows) — same logic, ~37x fewer iterations
+  const _parSrc=sbParAgg.length?sbParAgg:sbActuals;
   const parMap={};
-  sbActuals.forEach(r=>{
-    const yr=Number(r[YEAR_COL]||r.year||0),mo=Number(r.month||0);
+  _parSrc.forEach(r=>{
+    const yr=Number(r.year||r[YEAR_COL]||0),mo=Number(r.month||0);
     if(!pmSet.has(mo))return;
     if(yr!==cy&&yr!==py)return;
     const p=String(r.parish||'Unknown').trim()||'Unknown';
@@ -4855,13 +4864,26 @@ function renderFcEntry(){
     if(kamF&&(c.kam||'')!==kamF)return false;
     return true;
   });
+  // Build PY average map once — O(n) scan — replaces per-customer O(n) scans (N+1 fix)
+  const _fcPyMap={};
+  sbActuals.forEach(r=>{
+    if(Number(r[YEAR_COL]||r.year||0)!==curYear-1)return;
+    if(Number(r.month||0)>curMonth||Number(r.month||0)<1)return;
+    if(!_isComm(r))return;
+    const acct=_custNum(String(r.jps_ac||''));
+    if(!acct)return;
+    if(!_fcPyMap[acct])_fcPyMap[acct]={sum:0,cnt:0};
+    _fcPyMap[acct].sum+=Number(r.kwh||0)/1e6;
+    _fcPyMap[acct].cnt++;
+  });
+
   const rows=custData.map(c=>{
     // Use last 3 months up to curMonth (not slice(-3) which grabs Oct-Dec when most are 0)
     const hist3=c.m.slice(0,curMonth).filter(v=>v>0).slice(-3);
     const avg3=hist3.length?hist3.reduce((s,x)=>s+x,0)/hist3.length:0;
-    // Prior-year same-period avg from sbActuals
-    const pyVals=sbActuals.filter(r=>_custNum(String(r.jps_ac||''))===c.num&&Number(r[YEAR_COL])===curYear-1&&Number(r.month)<=curMonth).map(r=>Number(r.kwh||0)/1e6);
-    const pyAvg=pyVals.length?pyVals.reduce((s,x)=>s+x,0)/pyVals.length:0;
+    // Prior-year same-period avg — O(1) from pre-built map (was O(53k) per customer)
+    const pyEntry=_fcPyMap[c.num]||{sum:0,cnt:0};
+    const pyAvg=pyEntry.cnt>0?pyEntry.sum/pyEntry.cnt:0;
     const fcCells=months.map(m=>{
       const saved=S.get(`${m.key}_${c.num}`,null);
       const val=saved||'';
@@ -8484,7 +8506,10 @@ var _sbClient=null, // var (not let) — hoisted as undefined, avoids TDZ when J
     sbSystemStats=[],   // jps_system_stats      — net gen + losses for budget/le/actuals
     sbLossesForecast=[], // jps_losses_forecast  — rolling 12-month losses forecast
     sbConnected=false, sbLastSync=null,
-    TARIFF_BY_RC={};    // jps_tariff_rates — rate_class → avg_tariff_usd_cents (loaded at sync)
+    TARIFF_BY_RC={},    // jps_tariff_rates — rate_class → avg_tariff_usd_cents (loaded at sync)
+    sbRcAgg=[],         // mv_rc_agg  — 170 rows — feeds _rcIdx (replaces sbActuals scan)
+    sbParAgg=[],        // mv_parish_agg — 1,410 rows — feeds PARISHES + renderPfPar
+    sbIndAgg=[];        // mv_industry_agg — 5,694 rows — feeds INDUSTRIES + renderPfInd
 
 // Module-level RC index — populated in buildDashboardData(), read by renderVariance/renderPfRC/etc.
 // _rcIdx[rc][year*100+month] = total kWh (module-level so all render fns share it)
@@ -8622,12 +8647,15 @@ function buildDashboardData(){
   const rows=fcNormActuals(sbActuals);
 
   // ── Pre-build O(1) lookup: _rcIdx[rc][year*100+month] = total kWh ──
-  // Module-level — also used by renderVariance(), renderPfRC(), renderPfInd() etc.
+  // Prefer sbRcAgg (170 rows, all rate classes correctly aggregated) over sbActuals scan.
   _rcIdx={};
-  rows.forEach(r=>{
-    if(!_rcIdx[r.rc])_rcIdx[r.rc]={};
-    const key=r.year*100+r.month;
-    _rcIdx[r.rc][key]=(_rcIdx[r.rc][key]||0)+r.kwh;
+  const _rcSrc=sbRcAgg.length?sbRcAgg:rows;
+  _rcSrc.forEach(r=>{
+    const rc=String(r.rate_class||r.rc||'').trim();
+    if(!rc)return;
+    if(!_rcIdx[rc])_rcIdx[rc]={};
+    const key=Number(r.year)*100+Number(r.month);
+    _rcIdx[rc][key]=(_rcIdx[rc][key]||0)+Number(r.kwh||0);
   });
 
   // CUSTOMERS — one row per CUSTOMER NUMBER (r.acct is already normalised to customer number by fcNormActuals)
@@ -8660,30 +8688,31 @@ function buildDashboardData(){
     });
   }
   CUSTOMERS=Object.values(custMap).filter(c=>c.yPY>0||c.yCY>0).sort((a,b)=>b.yPY-a.yPY);
+  _defCache=null; // invalidate defector cache — CUSTOMERS rebuilt
 
-  // PARISHES — single pass
+  // PARISHES — use sbParAgg (1,410 rows) if available, else fall back to sbActuals scan
   const COMM_RCS_SET=new Set(['RT40','RT50','RT60-ST','RT70','BU']);
   const parMap={};
-  rows.forEach(r=>{
+  (sbParAgg.length?sbParAgg:rows).forEach(r=>{
     const p=r.parish||'Unknown';
     if(!parMap[p])parMap[p]={name:p,curr:0,prev:0,rc:0,rp:0};
-    const gwh=r.kwh/1e6,isComm=COMM_RCS_SET.has(r.rc);
-    if(r.year===cy){parMap[p].curr+=gwh;if(isComm)parMap[p].rc+=gwh;}
-    if(r.year===py){parMap[p].prev+=gwh;if(isComm)parMap[p].rp+=gwh;}
+    const yr=Number(r.year), kwh=Number(r.kwh||0)/1e6;
+    const isComm=COMM_RCS_SET.has(String(r.rate_class||r.rc||'').trim());
+    if(yr===cy){parMap[p].curr+=kwh;if(isComm)parMap[p].rc+=kwh;}
+    if(yr===py){parMap[p].prev+=kwh;if(isComm)parMap[p].rp+=kwh;}
   });
   PARISHES=Object.values(parMap).sort((a,b)=>b.curr-a.curr);
 
-  // INDUSTRIES — single pass, with fallback to sbIndustries lookup if r.industry is blank
-  const _indLookup={};if(sbIndustries&&sbIndustries.length)sbIndustries.forEach(i=>{_indLookup[String(i.jps_ac||'').trim()]=i.industry||'';});
+  // INDUSTRIES — use sbIndAgg (5,694 rows) if available, else fall back to sbActuals scan
   const indRcMap={},indMap={};
-  rows.forEach(r=>{
-    const indFromLookup=r.industry||_indLookup[String(r.acct||'').trim()]||'Other';
-    const i=indFromLookup||'Other';
+  (sbIndAgg.length?sbIndAgg:rows).forEach(r=>{
+    const i=(String(r.industry||'Other').trim())||'Other';
+    const yr=Number(r.year), kwh=Number(r.kwh||0)/1e6;
+    const rc=String(r.rate_class||r.rc||'').trim();
     if(!indMap[i]){indMap[i]={name:i,yPY:0,yCY:0,note:''};indRcMap[i]=new Set();}
-    const gwh=r.kwh/1e6;
-    if(r.year===py)indMap[i].yPY+=gwh;
-    if(r.year===cy)indMap[i].yCY+=gwh;
-    indRcMap[i].add(r.rc);
+    if(yr===py)indMap[i].yPY+=kwh;
+    if(yr===cy)indMap[i].yCY+=kwh;
+    indRcMap[i].add(rc);
   });
   Object.values(indMap).forEach(i=>{i.rc=[...indRcMap[i.name]].join('/');});
   INDUSTRIES=Object.values(indMap).filter(i=>i.yPY>0||i.yCY>0).sort((a,b)=>b.yPY-a.yPY);
@@ -8860,7 +8889,8 @@ async function syncSupabase(silent=false){
       indData,kamData,amData,actData,
       budData,leData,sysStatsData,lossesFcData,
       ng,ev,pl,
-      fcvData,fcData,tariffData
+      fcvData,fcData,tariffData,
+      rcAggData,parAggData,indAggData
     ] = await Promise.all([
       sbTable('jps_industries',{}),
       sbTable('jps_kam',{}),
@@ -8896,7 +8926,11 @@ async function syncSupabase(silent=false){
       sbTable('jps_period_locks',{}),
       sbTable('jps_forecast_versions',{order:'created_at'}),
       sbTable('jps_forecast',{limit:50000}),
-      sbTable('jps_tariff_rates',{cols:'rate_class,avg_tariff_usd_cents',order:'rate_class'})
+      sbTable('jps_tariff_rates',{cols:'rate_class,avg_tariff_usd_cents',order:'rate_class'}),
+      // Lean aggregates — 170/1410/5694 rows — replace sbActuals scans for _rcIdx/PARISHES/INDUSTRIES
+      (async()=>{try{const{data,error}=await getSB().rpc('get_rc_agg',{year_cutoff:_actYearCutoff});if(error)throw error;return data||[];}catch(e){console.warn('[sync] get_rc_agg failed:',e.message);return [];}})(),
+      (async()=>{try{const{data,error}=await getSB().rpc('get_parish_agg',{year_cutoff:_actYearCutoff});if(error)throw error;return data||[];}catch(e){console.warn('[sync] get_parish_agg failed:',e.message);return [];}})(),
+      (async()=>{try{const{data,error}=await getSB().rpc('get_industry_agg',{year_cutoff:_actYearCutoff});if(error)throw error;return data||[];}catch(e){console.warn('[sync] get_industry_agg failed:',e.message);return [];}})()
     ]);
 
     // ── Process results ────────────────────────────────────
@@ -8973,6 +9007,14 @@ async function syncSupabase(silent=false){
     } else {
       log.push('Tariff rates: ⚠ jps_tariff_rates not found — rev impact calculations will show —');
     }
+
+    // Lean aggregates — stored globally, used in buildDashboardData()
+    if(rcAggData&&rcAggData.length) {sbRcAgg=rcAggData; log.push(`RC agg: ${rcAggData.length} rows`);}
+    else sbRcAgg=[];
+    if(parAggData&&parAggData.length){sbParAgg=parAggData;log.push(`Parish agg: ${parAggData.length} rows`);}
+    else sbParAgg=[];
+    if(indAggData&&indAggData.length){sbIndAgg=indAggData;log.push(`Industry agg: ${indAggData.length} rows`);}
+    else sbIndAgg=[];
 
     const anyOk=actOk||budOk||!!ng;
     sbConnected=anyOk;
