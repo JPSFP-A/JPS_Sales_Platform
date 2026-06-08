@@ -3490,14 +3490,22 @@ function getPH(){
 }
 function renderSection(id){
   if(!id)return;
-  const _r1=sbActuals[0]||{};
-  console.log('[JPS] renderSection:',id,'| actuals:',sbActuals.length,'| budget:',sbBudget.length,'| customers:',typeof CUSTOMERS!=='undefined'?CUSTOMERS.length:'undef','| curYear:',curYear,'| curMonth:',curMonth,'| kwh0:',_r1.kwh,'| rc0:',_r1.rate_class,'| allKeys:',Object.keys(_r1).join(','));
-  setTimeout(()=>{const _el=document.getElementById(id);console.log('[JPS] section #'+id+' htmlLen after render:',_el?_el.innerHTML.length:0,'| display:',_el?window.getComputedStyle(_el).display:'no-el');},200);
   // Show lock banner on sections with period-sensitive data
   const lockableSections=['ov','cm','rs','rb_res','df','fc','ro','mr','ar','es','vb','rr','ng','le'];
   if(lockableSections.includes(id))maybeShowLockBanner(id);
 
-  if(id==='ov'){renderOverviewKPIs();renderPfCust();renderPfInd();renderPfRC();renderPfPar();renderVariance();}
+  if(id==='ov'){
+    renderOverviewKPIs();
+    renderVariance();
+    // Lazy: only render the currently-active performance sub-tab (default = pf_cust).
+    // renderPfInd / renderPfRC / renderPfPar fire when the user clicks those sub-tabs via perfTab().
+    const activePf=document.querySelector('#ov .ssec.on');
+    const pfId=activePf?activePf.id:'pf_cust';
+    if(pfId==='pf_cust')renderPfCust();
+    else if(pfId==='pf_ind')renderPfInd();
+    else if(pfId==='pf_rc')renderPfRC();
+    else if(pfId==='pf_par')renderPfPar();
+  }
   else if(id==='cm'){
     renderCommercialKPIs();
     const cw=document.getElementById('cm_customers_wrap');
@@ -3522,7 +3530,7 @@ function renderSection(id){
   else if(id==='ar'){buildReconData();renderRecon();renderArKPIs();}
   else if(id==='gl'){renderGloss();}
   else if(id==='help'){/* static content, no render needed */}
-  else if(id==='vld'){runValidation();renderVldDefReg();}
+  else if(id==='vld'){if(_vldStale){runValidation();_vldStale=false;}renderVldDefReg();}
   else if(id==='adm'){renderAdm();renderAdmKam();renderAdmRoleBanner();renderAdmForecast();renderPermMatrix();}
   else if(id==='es'){renderExecSummary();}
   else if(id==='vb'){renderVarianceBridge();}
@@ -4159,6 +4167,11 @@ function perfTab(id,btn){
   document.querySelectorAll('#ov .ssec').forEach(s=>s.classList.remove('on'));
   document.querySelectorAll('#ov .stab').forEach(b=>b.classList.remove('on'));
   document.getElementById(id).classList.add('on');btn.classList.add('on');
+  // Lazy-render: each sub-tab renders on first click (not all upfront on section entry)
+  if(id==='pf_cust')renderPfCust();
+  else if(id==='pf_ind')renderPfInd();
+  else if(id==='pf_rc')renderPfRC();
+  else if(id==='pf_par')renderPfPar();
 }
 function renderPfCust(){
   const q=(document.getElementById('pfc_q')?.value||'').toLowerCase();
@@ -4264,8 +4277,9 @@ function renderPfRC(){
   const rcList=['RT10','RT20','RT40','RT50','RT70','RT60-ST'];
   const py=curYear-1, cy=curYear;
   const pm=getPM(),pmSet=new Set(pm),ph=getPH();
-  // Use sbActuals directly, filtered to period months
-  const _rcGwh=(rc,yr)=>sbActuals.filter(r=>String(r.rate_class||'').trim()===rc&&Number(r[YEAR_COL]||r.year||0)===yr&&pmSet.has(Number(r.month||0))).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+  // Use module-level _rcSum (O(period-months) index lookups, not O(53k) scans)
+  const fromM=Math.min(...pm), toM=Math.max(...pm);
+  const _rcGwh=(rc,yr)=>_rcSum(rc,yr,fromM,toM)/1e6;
   const _rcBud=(rc)=>_budPM(cy,[...pmSet]).filter(r=>String(r.rate_class||r.rc||'').trim()===rc).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
   const rcs=rcList.map(rc=>({rc,desc:rcDefs[rc]||rc,
     yPY:_rcGwh(rc,py),
@@ -4326,17 +4340,16 @@ function renderPfPar(){
 }
 function renderVariance(){
   const segs=['RT10','RT20','RT40','RT50','RT70','RT60-ST'];
-  // Always read actuals directly from sbActuals (not CUSTOMERS) so residential
-  // RT10/RT20 — which have blank jps_ac and don't map cleanly to CUSTOMERS — are
-  // counted correctly by rate class.
+  // Use module-level _rcSum (O(12) index lookups) instead of 24 full sbActuals scans.
+  // Budget still scanned from sbBudget (small) via _budM/_budYtd helpers.
   const rows=segs.map(seg=>{
-    const _rcMatch=(r)=>String(r.rate_class||r.rc||r['Rate category']||'').trim().replace(/\s+/g,'')===seg.replace(/\s+/g,'');
-    const mtd_act=sbActuals.filter(r=>_rcMatch(r)&&Number(r[YEAR_COL])===curYear&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
-    const mtd_bud=_budM(curYear,curMonth).filter(_rcMatch).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
-    const mtd_ly=sbActuals.filter(r=>_rcMatch(r)&&Number(r[YEAR_COL])===curYear-1&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
-    const ytd_act=sbActuals.filter(r=>_rcMatch(r)&&Number(r[YEAR_COL])===curYear&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
-    const ytd_bud=_budYtd(curYear,curMonth).filter(_rcMatch).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
-    const ytd_ly=sbActuals.filter(r=>_rcMatch(r)&&Number(r[YEAR_COL])===curYear-1&&Number(r.month)<=curMonth).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6;
+    const _rcMatchBud=(r)=>String(r.rate_class||r.rc||'').trim()===seg;
+    const mtd_act=_rcSum(seg,curYear,curMonth,curMonth)/1e6;
+    const mtd_ly =_rcSum(seg,curYear-1,curMonth,curMonth)/1e6;
+    const ytd_act=_rcSum(seg,curYear,1,curMonth)/1e6;
+    const ytd_ly =_rcSum(seg,curYear-1,1,curMonth)/1e6;
+    const mtd_bud=_budM(curYear,curMonth).filter(_rcMatchBud).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
+    const ytd_bud=_budYtd(curYear,curMonth).filter(_rcMatchBud).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
     return{seg,mtd_act,mtd_bud,mtd_ly,ytd_act,ytd_bud,ytd_ly};
   });
   const tot=(k)=>rows.reduce((s,r)=>s+r[k],0);
@@ -4428,7 +4441,8 @@ function renderCmCust(){
       </tr>`;}).join('')}
     </tbody></table>`;
   makeSortable('cm_dt');
-  renderKamPerformance();
+  // renderKamPerformance() removed from here — was firing on every search keystroke.
+  // KAM tab renders via renderSection('cm') → kamActive branch, or swCm('kam').
 }
 
 function filterByKam(kam,e){
@@ -8472,6 +8486,13 @@ var _sbClient=null, // var (not let) — hoisted as undefined, avoids TDZ when J
     sbConnected=false, sbLastSync=null,
     TARIFF_BY_RC={};    // jps_tariff_rates — rate_class → avg_tariff_usd_cents (loaded at sync)
 
+// Module-level RC index — populated in buildDashboardData(), read by renderVariance/renderPfRC/etc.
+// _rcIdx[rc][year*100+month] = total kWh (module-level so all render fns share it)
+var _rcIdx={};
+function _rcSum(rc,year,fromM,toM){const m=_rcIdx[rc]||{};let s=0;for(let i=fromM;i<=toM;i++)s+=(m[year*100+i]||0);return s;}
+// Validation stale flag — set true after sync, cleared after runValidation()
+var _vldStale=true;
+
 function getSB(){
   if(!_sbClient&&window.supabase?.createClient)
     _sbClient=window.supabase.createClient(SB_URL,SB_KEY,{
@@ -8600,16 +8621,14 @@ function buildDashboardData(){
   // Normalise ONCE — reused for all downstream calculations (was called twice before)
   const rows=fcNormActuals(sbActuals);
 
-  // ── Pre-build O(1) lookup: rcIdx[rc][year*100+month] = total kWh ──
-  // Replaces 28 separate .filter() scans over 50k rows in SCORECARD_DATA loop
-  const rcIdx={};
+  // ── Pre-build O(1) lookup: _rcIdx[rc][year*100+month] = total kWh ──
+  // Module-level — also used by renderVariance(), renderPfRC(), renderPfInd() etc.
+  _rcIdx={};
   rows.forEach(r=>{
-    if(!rcIdx[r.rc])rcIdx[r.rc]={};
+    if(!_rcIdx[r.rc])_rcIdx[r.rc]={};
     const key=r.year*100+r.month;
-    rcIdx[r.rc][key]=(rcIdx[r.rc][key]||0)+r.kwh;
+    _rcIdx[r.rc][key]=(_rcIdx[r.rc][key]||0)+r.kwh;
   });
-  // Helper: sum kWh for rc+year across months 1..toMonth using the index (O(toMonth) not O(n))
-  const _rcSum=(rc,year,fromM,toM)=>{const m=rcIdx[rc]||{};let s=0;for(let i=fromM;i<=toM;i++)s+=(m[year*100+i]||0);return s;};
 
   // CUSTOMERS — one row per CUSTOMER NUMBER (r.acct is already normalised to customer number by fcNormActuals)
   // Multiple full accounts under the same customer number are aggregated here.
@@ -8709,7 +8728,7 @@ function buildDashboardData(){
       r.mtd_bud=_rbSum(r.seg,curYear,curMonth,curMonth)/1e6;
       r.ytd_bud=_rbSum(r.seg,curYear,1,curMonth)/1e6;
     } else {
-      // Use rcIdx for accurate month-level lookups (respects curYear/curYear-1 globally)
+      // Use module-level _rcIdx for O(1) lookups (respects curYear/curYear-1 globally)
       r.mtd_act=_rcSum(r.seg,curYear,curMonth,curMonth)/1e6;
       r.ytd_act=_rcSum(r.seg,curYear,1,curMonth)/1e6;
       r.mtd_ly =_rcSum(r.seg,curYear-1,curMonth,curMonth)/1e6;
@@ -8959,6 +8978,7 @@ async function syncSupabase(silent=false){
     sbConnected=anyOk;
     sbLastSync=new Date();
     S.set('sb_last_sync',sbLastSync.toLocaleString());
+    _vldStale=true; // mark validation cache stale — will re-run next time user opens Validation tab
     // Core = actuals accessible. Budget/ref tables missing data is a warning only.
     const coreMissing=log.filter(l=>l.includes('⚠')&&l.startsWith('Actuals'));
     if(!anyOk){updateSbStatus('offline');}
