@@ -2447,12 +2447,6 @@ function _buildPrefixIdx(){
   });
   return idx;
 }
-function _expandAccounts(custNum, prefixIdx){
-  // If the value is already a full account number, return it as-is
-  const matches=prefixIdx[custNum];
-  if(matches&&matches.size>0) return [...matches];
-  return [custNum]; // fall back: store as provided
-}
 
 function _showSchemaBanner(reason){
   if(_schemaFixApplied) return;
@@ -3490,8 +3484,6 @@ function renderSidebarFilters(){
     yrEl.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{c.classList.toggle('on');try{renderSection(document.querySelector('.sec.on')?.id);}catch(e){}});
   }
 }
-function getActiveSegs(){return [...(document.querySelectorAll('#segChips .chip.on')||[])].map(c=>c.dataset.seg).filter(Boolean);}
-function getActiveYears(){return [...(document.querySelectorAll('#yearChips .chip.on')||[])].map(c=>Number(c.dataset.year)).filter(Boolean);}
 function fmtPeriodLabel(){
   const _MNL=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   if(curPeriod==='MTD')    return _MNL[curMonth-1]+'-'+curYear;
@@ -4634,12 +4626,6 @@ function renderCmIndTbl(){
   makeSortable('cmind_dt');
 }
 let cmDimActive='industry';
-function setCmDim(dim,btn){
-  cmDimActive=dim;
-  document.querySelectorAll('#cm_dim_tabs .stab').forEach(b=>b.classList.remove('on'));
-  btn.classList.add('on');
-  renderCmComment();
-}
 function renderCmComment(){
   const w=document.getElementById('cm_cmt_wrap');if(!w)return;
   w.innerHTML=buildCmt(`cm_${cmDimActive}`,`Monthly ${cmDimActive} commentary -- analyse variance, identify drivers, note key customer movements...`,'cm_cmt_wrap');
@@ -5093,12 +5079,6 @@ function initMrMonths(){
   sel.innerHTML=h;sel.value=mrPeriod;
 }
 function mrSetPeriod(){mrPeriod=document.getElementById('mr_month')?.value||mrPeriod;mrRepName=document.getElementById('mr_rep')?.value.trim()||'';renderMrSection();}
-function mrTab(id,btn){
-  document.querySelectorAll('#mr .ssec').forEach(s=>s.classList.remove('on'));
-  document.querySelectorAll('#mr .stab').forEach(b=>b.classList.remove('on'));
-  document.getElementById(id).classList.add('on');btn.classList.add('on');
-  mrActiveSec=id;renderMrSection();
-}
 function renderMrSection(){
   if(mrActiveSec==='mr_ov')renderMrOv();
   else if(mrActiveSec==='mr_cust')mrRenderCust();
@@ -5145,7 +5125,6 @@ function renderMrPar(){
   const tbl=`<table class="dt">${PARISHES.map(p=>{const ov=pct(p.curr,p.prev),rv=pct(p.rc,p.rp);return`<tr><td style="font-weight:600">${esc(p.name)}</td><td>${fmtK(p.curr)}</td><td style="color:var(--text3)">${fmtK(p.prev)}</td><td><span class="heat ${hc(ov)}">${ov>=0?'+':''}${ov.toFixed(1)}%</span></td><td>${fmtK(p.rc)}</td><td style="color:var(--text3)">${fmtK(p.rp)}</td><td><span class="heat ${hc(rv)}">${rv>=0?'+':''}${rv.toFixed(1)}%</span></td></tr>`;}).join('')}</table>`;
   w.innerHTML=buildCmt('mr_par','Parish commentary...','mr_par_w')+`<div class="card"><div class="ch">Parish Performance</div>${tbl}</div>`;
 }
-function renderFcCmt(){const w=document.getElementById('mr_fc_cmt_w');if(w)w.innerHTML=buildCmt('mr_fc','Forecast adjustment rationale...','mr_fc_cmt_w');}
 function editMrNote(num,name,cid){
   openModal(`Review Note: ${name}`,`<textarea id="mrn_ta">${S.get(`mr_note_${mrPeriod}_${num}`,'')}</textarea>`,()=>{S.set(`mr_note_${mrPeriod}_${num}`,document.getElementById('mrn_ta').value);closeModal();renderMrSection();});
 }
@@ -5185,7 +5164,6 @@ function onFcAdjChange(seg,v){const a=S.get(`${mrPeriod}_fc_${seg}`,{type:'pct',
 function calcFcImp(base,a){if(!a.val)return{ghw:0,disp:'--'};const d=a.type==='pct'?base*a.val/100:a.val;return{ghw:d,disp:(d>=0?'+':'')+d.toFixed(1)+' GWh'+(a.type==='pct'?` (${a.val}%)`:'')};}
 function renderFcAdjSum(){let tot=0,pos=0,neg=0;FC_SEGS.forEach(s=>{const a=S.get(`${mrPeriod}_fc_${s.seg}`,{val:0});const i=calcFcImp(s.base,a);tot+=i.ghw;if(i.ghw>0)pos++;else if(i.ghw<0)neg++;});const el=document.getElementById('fcAdjSummary');if(!el)return;el.innerHTML=`<div style="text-align:center"><div style="font-size:9px;color:var(--text3);margin-bottom:3px">Net adj.</div><div style="font-size:13px;font-weight:700;color:${tot>=0?'var(--green)':'var(--red)'}">${tot>=0?'+':''}${tot.toFixed(1)} GWh</div></div><div style="text-align:center"><div style="font-size:9px;color:var(--text3);margin-bottom:3px">Up</div><div style="font-size:13px;font-weight:700;color:var(--green)">${pos}</div></div><div style="text-align:center"><div style="font-size:9px;color:var(--text3);margin-bottom:3px">Down</div><div style="font-size:13px;font-weight:700;color:var(--red)">${neg}</div></div>`;}
 function countFcAdj(){return FC_SEGS.filter(s=>S.get(`${mrPeriod}_fc_${s.seg}`,{val:0}).val!==0).length;}
-function clearFcAdj(){FC_SEGS.forEach(s=>S.del(`${mrPeriod}_fc_${s.seg}`));renderFcAdj();}
 
 /* ==========================================
    ACCOUNT RECONCILIATION
@@ -5329,17 +5307,6 @@ function saveModal(){if(_modalFn)_modalFn();}
 /* ==========================================
    EXPORT
 ========================================== */
-function exportReview(){
-  let txt=`JPS MONTHLY REVIEW -- ${mrPeriod}\nReviewer: ${mrRepName||CU.name||'?'}\n${'='.repeat(55)}\n\n`;
-  ['mr_overall','mr_cust_top','mr_cust_bot','mr_ind','mr_par','mr_fc'].forEach(k=>{
-    const list=S.get(`${mrPeriod}_${k}`,[]);
-    if(list.length){txt+=`[${k.toUpperCase()}]\n`;list.forEach(c=>txt+=`  ${c.ts} (${c.rep}): ${c.text}\n`);txt+='\n';}
-  });
-  txt+=`FORECAST ADJUSTMENTS:\n`;
-  FC_SEGS.forEach(s=>{const a=S.get(`${mrPeriod}_fc_${s.seg}`,{val:0});if(a.val){const i=calcFcImp(s.base,a);txt+=`  ${s.lbl}: ${i.disp}\n`;}});
-  const b=new Blob([txt],{type:'text/plain'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`JPS_Review_${mrPeriod}.txt`;a.click();
-  toast(`Review exported ✓ — JPS_Review_${mrPeriod}.txt`,'ok');
-}
 
 /* ==========================================
    DYNAMIC KPI HELPERS
@@ -7087,11 +7054,6 @@ function renderAdmComments(){
   </div>`).join('');
 }
 
-function showDeleteMonth(){
-  if(!can('lock_period')){toast('Admin only','err');return;}
-  const p=document.getElementById('delMonthPanel');
-  if(p){p.style.display='flex';}
-}
 
 async function doDeleteMonth(){
   const sb=getSB();if(!sb){toast('Supabase not connected','err');return;}
@@ -7900,43 +7862,6 @@ function renderPeriodClose(){
 }
 
 /* ── Download templates ── */
-function downloadTemplate(type){
-  const T={
-    actuals:{file:'jps_actuals_template.csv',
-      rows:[['account_number','customer_name','rate_class','parish','industry','jan_kwh','feb_kwh','mar_kwh','apr_kwh','may_kwh','jun_kwh','jul_kwh','aug_kwh','sep_kwh','oct_kwh','nov_kwh','dec_kwh'],
-            ['ACC001001','Sample Commercial Ltd','RT40','Kingston','Retail','150000','148000','152000','155000','160000','165000','162000','158000','153000','149000','147000','151000'],
-            ['ACC002001','Sample Residential','RT10','St. Andrew','N/A','350','340','360','380','400','420','410','390','370','355','340','355']]},
-    budget:{file:'jps_budget_template.csv',
-      rows:[['account_number','customer_name','rate_class','parish','industry','annual_budget_kwh','prior_year_kwh'],
-            ['ACC001001','Sample Commercial Ltd','RT40','Kingston','Retail','1850000','1800000'],
-            ['ACC002001','Sample Residential','RT10','St. Andrew','N/A','4200','4100']]},
-    net_gen:{file:'net_gen_historical_template.csv',
-      rows:[['year','month','source','mwh','notes'],
-            [curYear,curMonth,'JPS','000000','Replace with actual MWh'],
-            [curYear,curMonth,'IPP','00000','Replace with actual MWh']]},
-    ev_accounts:{file:'jps_ev_accounts_template.csv',
-      rows:[['year','month','accounts','mwh','notes'],
-            [curYear,curMonth,'000','000','Replace with actual values']]},
-    rr_data:{file:'jps_rr_data_template.csv',
-      rows:[['year','month','label','val_usd_000s','is_base'],
-            [curYear,curMonth,'Budget','00000','true'],
-            [curYear,curMonth,'Qty effect','0','false'],
-            [curYear,curMonth,'Mix effect','0','false'],
-            [curYear,curMonth,'FX effect','0','false'],
-            [curYear,curMonth,'Fuel cost','0','false'],
-            [curYear,curMonth,'IPP cost','0','false'],
-            [curYear,curMonth,'Expected','00000','true'],
-            [curYear,curMonth,'Billing adj.','0','false'],
-            [curYear,curMonth,'Other var.','0','false'],
-            [curYear,curMonth,'Actual','00000','true']]},
-  };
-  const t=T[type];if(!t){toast('Unknown template type','err');return;}
-  const csv=t.rows.map(r=>r.join(',')).join('\n');
-  const blob=new Blob([csv],{type:'text/csv'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=t.file;a.click();
-  URL.revokeObjectURL(a.href);
-  toast(`${t.file} downloaded ✓`,'ok');
-}
 
 /* ── DB Schema SQL ── */
 const SCHEMA_SQL=`-- JPS Unified Platform Schema — shared by FP&A + Sales
@@ -8853,82 +8778,8 @@ function buildDashboardData(){
 const _DCACHE_KEY='jps_sales_v2_cache'; // v2: budget schema changed (no jps_ac/name), old cache invalid
 const _DCACHE_TTL=600000; // 10 minutes
 
-function _saveDataCache(){
-  // Budget, account master, net gen, EV, period locks, and forecast are intentionally
-  // excluded — they push past the 5 MB localStorage quota.  Wave 2 fetches them fresh.
-  // Only actuals (stripped, 2-year window) + KAM + industries are cached.
-  const _yr=YEAR_COL||'year';
-  const mkStripped=minY=>sbActuals
-    .filter(r=>Number(r[_yr]||r.year||0)>=minY)
-    .map(r=>({
-      [_yr]:r[_yr]||r.year, month:r.month, kwh:r.kwh,
-      rate_class:r.rate_class||r.Rate_class||'',
-      jps_ac:r.jps_ac||'',
-      consumption_bucket:r.consumption_bucket||'',
-      parish:r.parish||''
-    }));
-  // Progressive fallback — try smaller payload each time quota is exceeded
-  const plans=[
-    {label:'2yr+ref', build:()=>({ts:Date.now(),yearCol:_yr,curYear,curMonth,act:mkStripped(curYear-1),kam:sbKAM,ind:sbIndustries})},
-    {label:'1yr+ref', build:()=>({ts:Date.now(),yearCol:_yr,curYear,curMonth,act:mkStripped(curYear),  kam:sbKAM,ind:sbIndustries})},
-    {label:'1yr',     build:()=>({ts:Date.now(),yearCol:_yr,curYear,curMonth,act:mkStripped(curYear),  kam:[],   ind:[]})},
-  ];
-  for(const plan of plans){
-    try{
-      const payload=JSON.stringify(plan.build());
-      localStorage.setItem(_DCACHE_KEY,payload);
-      const rows=(JSON.parse(payload).act||[]).length;
-      console.log(`[JPS] Cache saved (${plan.label}): ${rows} actuals rows, ${Math.round(payload.length/1024)} KB`);
-      return; // success — stop trying
-    }catch(e){
-      if(!(e.message||'').includes('quota')){
-        console.warn('[JPS] Cache error (non-quota):',e.message); return;
-      }
-      // quota exceeded — try next plan
-    }
-  }
-  // All plans failed — clear stale cache so the app doesn't try to load a corrupt entry
-  try{localStorage.removeItem(_DCACHE_KEY);}catch(_){}
-  console.warn('[JPS] Cache disabled — localStorage full. Clear browser storage to re-enable.');
-}
 
-function _loadDataCache(){
-  try{
-    const raw=localStorage.getItem(_DCACHE_KEY);
-    if(!raw)return null;
-    const c=JSON.parse(raw);
-    if(!c.ts||Date.now()-c.ts>_DCACHE_TTL)return null;
-    return c;
-  }catch(e){return null;}
-}
 
-function _applyDataCache(c){
-  if(!c||!c.act||!c.act.length)return false;
-  YEAR_COL=c.yearCol||YEAR_COL;
-  sbActuals=c.act.map(r=>{
-    const out={...r};
-    if(YEAR_COL!=='year')out.year=r[YEAR_COL]; // keep both col names for compat
-    return out;
-  });
-  // Restore secondary ref tables only if they were cached (older entries may omit them)
-  if(c.kam&&c.kam.length)sbKAM=c.kam;
-  if(c.ind&&c.ind.length)sbIndustries=c.ind;
-  // Budget / AM / NG / EV / PL / FCV / FC are NOT cached — Wave 2 populates them.
-  // Set period globals: prefer the explicitly saved values (O(1)), fallback to scan
-  if(c.curYear&&c.curMonth){curYear=c.curYear;curMonth=c.curMonth;}
-  else{
-    const _caNow=new Date(),_caNowY=_caNow.getFullYear(),_caNowM=_caNow.getMonth()+1;
-    let latestY=0,latestM=0;
-    sbActuals.forEach(r=>{
-      const ry=Number(r[YEAR_COL]||r.year||0),rm=Number(r.month||0);
-      if(!ry||!rm)return;
-      if(ry>_caNowY||(ry===_caNowY&&rm>_caNowM))return; // skip future months
-      if(ry>latestY||(ry===latestY&&rm>latestM)){latestY=ry;latestM=rm;}
-    });
-    if(latestY&&latestM){curYear=latestY;curMonth=latestM;}
-  }
-  return true;
-}
 
 let _sbSyncing=false; // mutex — prevents double-sync
 let _yearColConfirmed=false; // skip detectYearCol after first successful sync
@@ -9279,18 +9130,6 @@ function fcNormBudget(rows){
   }).filter(d=>d.year>0&&d.month>0);
 }
 
-function fcFilter(arr){
-  const frc=document.getElementById('le_frc')?.value||'';
-  const find=document.getElementById('le_find')?.value||'';
-  const fpar=document.getElementById('le_fpar')?.value||'';
-  const fcust=(document.getElementById('le_fcust')?.value||'').toLowerCase();
-  return arr.filter(d=>
-    (!frc||d.rc===frc)&&
-    (!find||d.industry===find)&&
-    (!fpar||d.parish===fpar)&&
-    (!fcust||d.name.toLowerCase().includes(fcust))
-  );
-}
 
 /* ==========================================
    LE ENGINE — Single-version LE with adjustments,
@@ -10008,7 +9847,6 @@ function renderLEVariance(){
 }
 
 // legacy stubs kept for any external callers
-function computeLE(){}
 /* ==========================================
    NET GENERATION SECTION
 ========================================== */
