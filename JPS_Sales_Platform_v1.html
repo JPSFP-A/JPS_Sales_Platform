@@ -1,6 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Sentry -->
+  <script>window.sentryOnLoad = function() { Sentry.init({ environment: 'sales-platform', tracesSampleRate: 0.2 }); };</script>
+  <script src="https://js.sentry-cdn.com/7ae4df3b21176e2afe0fd08eba82395a.min.js" crossorigin="anonymous"></script>
+  <!-- PostHog -->
+  <script>
+    !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.async=!0,p.src=s.api_host+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.people.toString()+" (stub)"},o="capture identify alias people.set people.set_once set register register_once unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled onFeatureFlags getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures getActiveMatchingSurveys getSurveys".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||(window.posthog=[]));
+    posthog.init('phc_rHThn22mawFpNEUedpST7dEjp2Yug8eTepXdGh5WYYXv', {api_host: 'https://us.i.posthog.com'});
+  </script>
+
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>"/>
@@ -2624,6 +2633,8 @@ function _initIdleTimeout(signOutFn) {
 function _applyLogin(user){
   CU=user;
   if (window.JpsMonitor) JpsMonitor.setUser(CU.id || CU.email, CU.name || CU.email);
+  if (window.posthog) posthog.identify(CU.id || CU.email, { email: CU.email, name: CU.name });
+  if (window.Sentry) Sentry.setUser({ id: CU.id, email: CU.email });
   _initIdleTimeout(function(){ getSB().auth.signOut(); });
   const btn=document.getElementById('lBtn');
   if(btn){btn.textContent='Sign In →';btn.disabled=false;}
