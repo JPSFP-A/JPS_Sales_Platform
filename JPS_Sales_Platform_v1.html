@@ -22,7 +22,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="shared/jps-monitor.js"></script>
 <script src="shared/jps-formatters.js"></script>
+<script src="shared/jps-auth.js"></script>
+<script src="shared/jps-nav.js"></script>
 <script>if(window.JpsMonitor)JpsMonitor.setApp('sales');</script>
+<script src="shared/jps-pw-reset.js"></script>
+<script>JpsPwReset.init({ getClient:function(){ return getSB(); }, anchorSelector:'#lBtn', emailInputId:'lEmail' });</script>
 <script src="./config.js"></script>
 <style>
 :root{
@@ -8509,16 +8513,21 @@ function _rcSum(rc,year,fromM,toM){const m=_rcIdx[rc]||{};let s=0;for(let i=from
 var _vldStale=true;
 
 function getSB(){
-  if(!_sbClient&&window.supabase?.createClient)
-    _sbClient=window.supabase.createClient(SB_URL,SB_KEY,{
-      auth:{
-        storageKey:'jps_sales_v1',   // isolates this app's session from the FP&A platform
-        autoRefreshToken:true,
-        persistSession:true,
-        detectSessionInUrl:false,    // prevents grabbing tokens meant for the FP&A redirect
-      }
-    });
-  try { if (window.JpsMonitor) { JpsMonitor._clientFn = function(){ return _sbClient; }; JpsMonitor._beat(); } } catch(e){}
+  if(!_sbClient&&window.supabase?.createClient){
+    // Platform SSO session (jps_sso_v1 cookie on .jmfinancelab.com); keeps
+    // detectSessionInUrl:false so redirect tokens meant for FP&A aren't grabbed.
+    _sbClient=window.supabase.createClient(SB_URL,SB_KEY,
+      window.JpsAuth ? JpsAuth.clientOptions({ detectSessionInUrl:false }) : {
+        auth:{
+          storageKey:'jps_sales_v1',
+          autoRefreshToken:true,
+          persistSession:true,
+          detectSessionInUrl:false,
+        }
+      });
+    try { if (window.JpsNav) JpsNav.bind(_sbClient); } catch(e){ console.warn('JpsNav bind failed', e); }
+  }
+  try { if (window.JpsMonitor) { JpsMonitor._clientFn = function(){ return _sbClient; }; JpsMonitor._beat(); } } catch(e){ console.warn('JpsMonitor init failed', e); }
   return _sbClient;
 }
 
