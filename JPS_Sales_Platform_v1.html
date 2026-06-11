@@ -355,7 +355,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 <div class="suite-nav">
   <span class="sn-brand">JPS Analytics Suite</span>
   <a class="sn-link sn-active" href="#">&#x2B21; Sales Platform</a>
-  <a class="sn-link" id="sn-fpa-link" href="https://jmfinancelab.com" target="_blank">&#x1F4CA; FP&amp;A Platform</a>
+  <a class="sn-link" id="sn-fpa-link" href="https://jmfinancelab.com" target="_blank">&#x1F4CA; Finance Platform</a>
   <a class="sn-back" href="javascript:history.back()">&#x21A9; Back</a>
 </div>
 
@@ -481,7 +481,7 @@ document.getElementById('schema_stale_banner').style.display='none';
             <button class="chip theme-btn"    data-theme="jps"   onclick="setTheme('jps');toggleMenu()"   title="JPS Orange">⚡ JPS</button>
           </div>
         </div>
-        <div class="umi" style="border-top:1px solid var(--border);margin-top:3px;padding-top:7px" onclick="window.open('https://jmfinancelab.com','_blank')">📊 FP&amp;A Platform ↗</div>
+        <div class="umi" style="border-top:1px solid var(--border);margin-top:3px;padding-top:7px" onclick="window.open('https://jmfinancelab.com','_blank')">📊 Finance Platform ↗</div>
         <div class="umi" onclick="dlTemplate()">📥 Download Template</div>
         <div class="umi" onclick="doLogout()">🚪 Sign Out</div>
       </div>
@@ -1100,7 +1100,7 @@ document.getElementById('schema_stale_banner').style.display='none';
                 <tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;color:var(--text3)">analyst</td><td style="padding:5px 8px">Read-only — no edits.</td></tr>
               </tbody>
             </table>
-            <p style="margin-top:10px">Role assignments are managed in <strong>Admin → Users &amp; Roles</strong>. Each user can have a different role for the Sales platform and the FP&amp;A platform — they share the same login credentials but have independent role assignments.</p>
+            <p style="margin-top:10px">Role assignments are managed in <strong>Admin → Users &amp; Roles</strong>. Each user can have a different role for the Sales platform and the Finance platform — they share the same login credentials but have independent role assignments.</p>
           </div>
         </div>
 
@@ -1523,12 +1523,12 @@ document.getElementById('schema_stale_banner').style.display='none';
             <button class="btn btn-o" style="border-color:rgba(232,64,64,.4);color:var(--red)" onclick="navigator.clipboard?.writeText(document.getElementById('quick_fix_sql').textContent).then(()=>toast('Quick Fix SQL copied ✓','ok'))">📋 Copy</button>
           </div>
           <div style="font-size:11px;color:var(--text2);margin-bottom:8px;line-height:1.7">
-            Use this if <code>jps_actuals</code> was created by the FP&amp;A platform with wrong columns (<code>Source</code>, <code>Rate category</code>, <code>Month</code> as text).
+            Use this if <code>jps_actuals</code> was created by the Finance platform with wrong columns (<code>Source</code>, <code>Rate category</code>, <code>Month</code> as text).
             Renames the old table to <code>jps_actuals_fpa</code> (safe backup) and creates the correct Sales Platform table with all current columns including <code>customer_count</code>.
             Also adds any missing columns to an existing correct table.
           </div>
           <pre id="quick_fix_sql" style="background:var(--navy3);border:1px solid rgba(232,64,64,.3);border-radius:7px;padding:12px;font-size:10px;color:var(--teal);white-space:pre-wrap;line-height:1.6;margin:0">-- ══ JPS Sales Platform — Quick Fix ══════════════════════════════════
--- Renames the FP&A raw-dump jps_actuals to jps_actuals_fpa (backup),
+-- Renames the Finance raw-dump jps_actuals to jps_actuals_fpa (backup),
 -- then creates the correct Sales Platform table.
 -- Run in: Supabase Dashboard → SQL Editor → New Query → Run
 -- ═════════════════════════════════════════════════════════════════════
@@ -1610,7 +1610,7 @@ order by ordinal_position;</pre>
             </ol>
           </div>
           <div style="margin-bottom:10px;font-size:11px;color:var(--text2)">
-            Idempotent — safe to run multiple times. Detects FP&amp;A format conflicts, renames legacy columns, adds missing columns to existing tables, and reloads the PostgREST schema cache.
+            Idempotent — safe to run multiple times. Detects Finance format conflicts, renames legacy columns, adds missing columns to existing tables, and reloads the PostgREST schema cache.
           </div>
           <pre id="adm_schema_sql" style="background:var(--navy3);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:10px;color:var(--teal);overflow-x:auto;white-space:pre-wrap;line-height:1.6"></pre>
         </div>
@@ -2053,7 +2053,7 @@ order by ordinal_position;</pre>
         <button class="stab"    id="le_btn_losses"  onclick="swLE('losses',this)">⚡ System Losses</button>
         <button class="stab"    id="le_btn_risk"    onclick="swLE('risk',this)">⚠ Customer Risk</button>
         <button class="stab"    id="le_btn_var"     onclick="swLE('var',this)">📐 Variance</button>
-        <button class="stab"    id="le_btn_commit"  onclick="swLE('commit',this)">🔗 FP&amp;A Commit</button>
+        <button class="stab"    id="le_btn_commit"  onclick="swLE('commit',this)">🔗 Finance Commit</button>
         <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
           <button class="btn btn-t" onclick="syncSupabase()">🔄 Sync</button>
           <span id="le_last_sync" style="font-size:10px;color:var(--text3)">No data — sync DB</span>
@@ -2249,10 +2249,10 @@ order by ordinal_position;</pre>
         </div>
       </div>
 
-      <!-- ── FP&A COMMIT ─────────────────────────────────────── -->
+      <!-- ── Finance COMMIT ─────────────────────────────────────── -->
       <div id="le_tab_commit" class="le-subtab">
         <div class="card">
-          <div class="ch">Commit Sales LE → FP&amp;A Hub
+          <div class="ch">Commit Sales LE → Finance Hub
             <div style="display:flex;gap:6px;align-items:center">
               <select class="psel" id="le_commit_year" style="width:80px"></select>
               <button class="btn btn-o" id="le_preview_btn" onclick="leCommitPreview()">🔍 Preview</button>
@@ -2328,7 +2328,7 @@ let PERIOD_LOCKS=[];   // loaded from jps_period_locks
 
 const _initDate=new Date();
 let curPeriod='MTD', curYear=_initDate.getFullYear(), curMonth=_initDate.getMonth()+1, curQtr=Math.ceil((_initDate.getMonth()+1)/3);
-let YEAR_COL='year'; // auto-detected at sync — set to 'cal_year' on FP&A-seeded databases
+let YEAR_COL='year'; // auto-detected at sync — set to 'cal_year' on Finance-seeded databases
 let _schemaFixApplied=false; // jps_normalize_schema RPC called once per session
 let mrPeriod=`${_initDate.getFullYear()}-${String(_initDate.getMonth()+1).padStart(2,'0')}`, mrRepName='', mrActiveSec='mr_ov';
 let cmDim='industry', cmDrillRC='', _modalFn=null;
@@ -2358,7 +2358,7 @@ function toast(msg, type){
 /* ── Year-column and schema-format auto-detection ──
    Probes the live jps_actuals table to determine:
      (a) whether it has the correct Sales Platform schema (year, month, jps_ac …)
-     (b) whether it has the FP&A raw-dump format (Source, Month-text, Rate category …)
+     (b) whether it has the Finance raw-dump format (Source, Month-text, Rate category …)
      (c) whether it has the legacy cal_year name instead of year
    Shows the red schema_stale_banner if the table needs the SCHEMA_SQL run.
    Called at sync start AND at upload start. */
@@ -2366,7 +2366,7 @@ async function detectYearCol(sb){
   if(!sb) return;
 
   // Priority 0: call jps_normalize_schema() via RPC — once per session.
-  // This function handles BOTH cal_year rename AND FP&A raw-dump rename,
+  // This function handles BOTH cal_year rename AND Finance raw-dump rename,
   // then sends NOTIFY pgrst,'reload schema' to flush PostgREST's schema cache.
   if(!_schemaFixApplied){
     try{
@@ -2387,23 +2387,23 @@ async function detectYearCol(sb){
     const r = sbActuals[0];
     if('year'     in r){ YEAR_COL='year';     return; }
     if('cal_year' in r){ YEAR_COL='cal_year'; return; }
-    // FP&A raw-dump format — has "Source" not "year"
+    // Finance raw-dump format — has "Source" not "year"
     if('Source' in r){
       YEAR_COL='year'; // default for uploads; banner will show
-      console.warn('[JPS] jps_actuals is FP&A raw-dump format — run SCHEMA_SQL');
+      console.warn('[JPS] jps_actuals is Finance raw-dump format — run SCHEMA_SQL');
       _showSchemaBanner('fpa_raw');
       return;
     }
   }
 
   // Priority 2: probe column names directly
-  // Check for FP&A raw-dump: if "Source" column exists, the table has wrong format
+  // Check for Finance raw-dump: if "Source" column exists, the table has wrong format
   try{
     const{error:srcErr}=await sb.from('jps_actuals').select('Source').limit(1);
     if(!srcErr){
-      // FP&A raw-dump confirmed — neither year nor cal_year exists
+      // Finance raw-dump confirmed — neither year nor cal_year exists
       YEAR_COL='year'; // uploads will fail until SCHEMA_SQL is run
-      console.warn('[JPS] jps_actuals.Source detected — FP&A raw-dump format; run SCHEMA_SQL');
+      console.warn('[JPS] jps_actuals.Source detected — Finance raw-dump format; run SCHEMA_SQL');
       _showSchemaBanner('fpa_raw');
       return;
     }
@@ -2468,7 +2468,7 @@ function _showSchemaBanner(reason){
   const msgEl=b.querySelector('span');
   if(msgEl){
     if(reason==='fpa_raw')
-      msgEl.textContent='🚨 jps_actuals has the wrong schema (FP&A format) — uploads will fail until you run the DB Schema SQL once.';
+      msgEl.textContent='🚨 jps_actuals has the wrong schema (Finance format) — uploads will fail until you run the DB Schema SQL once.';
     else if(reason==='cal_year')
       msgEl.textContent='🚨 Supabase schema cache out of date — uploads & deletes will fail until you run the DB Schema SQL once.';
     else
@@ -3833,7 +3833,7 @@ async function loadExcel(input){
       if(isSchemaErr){
         const isFpaRaw=/column "jps_ac"|column "kwh"|column "revenue_jmd"|column "month"/i.test(err.message);
         const msg=isFpaRaw
-          ? '⚠ jps_actuals has the wrong schema (FP&A format). Run Admin → DB Schema SQL to recreate it.'
+          ? '⚠ jps_actuals has the wrong schema (Finance format). Run Admin → DB Schema SQL to recreate it.'
           : '⚠ Schema error — run Admin → DB Schema SQL to fix jps_actuals and reload the cache.';
         toast(msg,'err');
         if(stEl)stEl.textContent='Schema error — run DB Schema SQL first (Admin → DB Schema)';
@@ -7638,7 +7638,7 @@ function renderAdm(){
       return;
     }
     el.innerHTML=`<table class="dt" id="users_dt">
-      <thead><tr><th>Name</th><th>Email</th><th>Sales Role</th><th>FP&amp;A Role</th><th>Territory</th><th>Status</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Name</th><th>Email</th><th>Sales Role</th><th>Finance Role</th><th>Territory</th><th>Status</th><th>Actions</th></tr></thead>
       <tbody>${PLATFORM_USERS.map(u=>{
         const isPending=u._pending===true;
         const isAdmin=can('manage_users');
@@ -7879,20 +7879,20 @@ function renderPeriodClose(){
 /* ── Download templates ── */
 
 /* ── DB Schema SQL ── */
-const SCHEMA_SQL=`-- JPS Unified Platform Schema — shared by FP&A + Sales
+const SCHEMA_SQL=`-- JPS Unified Platform Schema — shared by Finance + Sales
 -- Run in: Supabase Dashboard → SQL Editor → New Query
 -- Both platforms use the SAME Supabase project and the SAME profiles table.
 -- One sign-in per user. Roles are independent per platform.
 
 -- ══════════════════════════════════════════════════════════
 -- STEP 1: Extend the shared profiles table
--- (FP&A already created this table with a "role" column.
+-- (Finance already created this table with a "role" column.
 --  Run only the ALTER statements if profiles already exists.)
 -- ══════════════════════════════════════════════════════════
 create table if not exists public.profiles (
   id          uuid references auth.users primary key,
   name        text not null,
-  role        text not null default 'viewer'       -- FP&A role
+  role        text not null default 'viewer'       -- Finance role
               check (role in ('admin','analyst','viewer')),
   created_at  timestamptz default now()
 );
@@ -7990,20 +7990,20 @@ create policy "Managers can write account master"
 -- STEP 3: Consumption actuals and budgets
 -- ══════════════════════════════════════════════════════════
 
--- ── MIGRATION: Replace FP&A raw-dump jps_actuals with Sales Platform account-level schema.
+-- ── MIGRATION: Replace Finance raw-dump jps_actuals with Sales Platform account-level schema.
 --
--- Root cause: the FP&A platform creates jps_actuals as a raw pivot-dump with columns:
+-- Root cause: the Finance platform creates jps_actuals as a raw pivot-dump with columns:
 --   "Source" (segment), "Name", "Month" (text), "Rate category", "Updated Parish",
 --   "Sum of net_kwh_billed_consump"
 -- The Sales Platform needs per-account rows with:
 --   year (smallint), month (smallint), jps_ac (text), kwh, revenue_jmd, etc.
--- Because CREATE TABLE IF NOT EXISTS skips when the FP&A table already exists,
+-- Because CREATE TABLE IF NOT EXISTS skips when the Finance table already exists,
 -- the old table was never replaced. This migration detects and fixes that.
 --
--- Safe: jps_actuals_fpa preserves the original FP&A table structure for reference.
+-- Safe: jps_actuals_fpa preserves the original Finance table structure for reference.
 do $$ begin
-  -- Case A: FP&A raw-dump format — has "Source" column (aggregate pivot, no account numbers)
-  -- Use lower() for case-insensitive match (FP&A may have used quoted "Source" or unquoted source)
+  -- Case A: Finance raw-dump format — has "Source" column (aggregate pivot, no account numbers)
+  -- Use lower() for case-insensitive match (Finance may have used quoted "Source" or unquoted source)
   if exists (
     select 1 from information_schema.columns
     where table_schema='public' and table_name='jps_actuals'
@@ -8012,8 +8012,8 @@ do $$ begin
     -- Drop any existing backup first so we can re-run safely
     execute 'DROP TABLE IF EXISTS public.jps_actuals_fpa';
     execute 'ALTER TABLE public.jps_actuals RENAME TO jps_actuals_fpa';
-    raise notice 'jps_actuals (FP&A raw-dump) renamed to jps_actuals_fpa — fresh Sales table will be created';
-  -- Case B: FP&A used cal_year instead of year (account-level but wrong column name)
+    raise notice 'jps_actuals (Finance raw-dump) renamed to jps_actuals_fpa — fresh Sales table will be created';
+  -- Case B: Finance used cal_year instead of year (account-level but wrong column name)
   elsif exists (
     select 1 from information_schema.columns
     where table_schema='public' and table_name='jps_actuals'
@@ -8325,9 +8325,9 @@ create policy "Authenticated users can write notes"
 
 -- ══════════════════════════════════════════════════════════
 -- STEP 8: Schema normalisation function  ← RUN THIS
--- Handles both known FP&A table format issues:
---   1. FP&A raw-dump format (Source/Month-text/Rate category columns) → renames to jps_actuals_fpa
---   2. FP&A cal_year column name → renames to year
+-- Handles both known Finance table format issues:
+--   1. Finance raw-dump format (Source/Month-text/Rate category columns) → renames to jps_actuals_fpa
+--   2. Finance cal_year column name → renames to year
 -- Then creates a fresh jps_actuals with correct Sales Platform schema if needed.
 -- Notifies PostgREST to flush its schema cache.
 -- Safe to run repeatedly — fully idempotent.
@@ -8341,7 +8341,7 @@ as $$
 declare
   actions text[] := '{}';
 begin
-  -- ── jps_actuals: FP&A raw-dump format (has "Source" column) ──────────
+  -- ── jps_actuals: Finance raw-dump format (has "Source" column) ──────────
   if exists (select 1 from information_schema.columns
     where table_schema='public' and table_name='jps_actuals' and lower(column_name)='source') then
     execute 'DROP TABLE IF EXISTS public.jps_actuals_fpa';
@@ -8375,8 +8375,8 @@ begin
           EXISTS (SELECT 1 FROM profiles WHERE id=auth.uid() AND sales_role IN ('admin','manager'))
         )
     $t$;
-    actions := array_append(actions, 'jps_actuals (FP&A raw-dump) → jps_actuals_fpa; fresh Sales table created');
-  -- ── jps_actuals: FP&A cal_year column name ───────────────────────────
+    actions := array_append(actions, 'jps_actuals (Finance raw-dump) → jps_actuals_fpa; fresh Sales table created');
+  -- ── jps_actuals: Finance cal_year column name ───────────────────────────
   elsif exists (select 1 from information_schema.columns
     where table_schema='public' and table_name='jps_actuals' and column_name='cal_year') then
     alter table public.jps_actuals rename column cal_year to year;
@@ -8422,7 +8422,7 @@ notify pgrst, 'reload schema';
 --   '<paste-uuid-from-auth.users>',
 --   'J. Wilson',
 --   'Jwilson@jpsco.com',
---   'admin',       -- FP&A role
+--   'admin',       -- Finance role
 --   'admin',       -- Sales role
 --   'All',
 --   true
@@ -8515,7 +8515,7 @@ var _vldStale=true;
 function getSB(){
   if(!_sbClient&&window.supabase?.createClient){
     // Platform SSO session (jps_sso_v1 cookie on .jmfinancelab.com); keeps
-    // detectSessionInUrl:false so redirect tokens meant for FP&A aren't grabbed.
+    // detectSessionInUrl:false so redirect tokens meant for Finance aren't grabbed.
     _sbClient=window.supabase.createClient(SB_URL,SB_KEY,
       window.JpsAuth ? JpsAuth.clientOptions({ detectSessionInUrl:false }) : {
         auth:{
@@ -9524,7 +9524,7 @@ async function leSaveVersion(){
   }catch(e){toast('Save error: '+e.message,'err');}
 }
 
-// ─── FP&A COMMIT ─────────────────────────────────────────────────────────────
+// ─── Finance COMMIT ─────────────────────────────────────────────────────────────
 let _leCommitVersionId = null;
 
 function renderLECommitTab(){
@@ -9573,7 +9573,7 @@ async function leCommitPreview(){
     const fcRows = Object.values(agg).filter(r=>r.rate_class);
 
     // 2. Create jps_forecast_versions record
-    const fcLabel = lbl+' → FP&A';
+    const fcLabel = lbl+' → Finance';
     const {data:jfv,error:jfvErr} = await sb.from('jps_forecast_versions')
       .insert({label:fcLabel,version_type:'le',year:yr,is_active:true,notes:'Auto-created by Sales LE commit'})
       .select().single();
@@ -9691,7 +9691,7 @@ async function leCommitWrite(){
     statusEl.innerHTML='<span style="color:var(--teal)">✓ Committed — </span>'+
       result.written+' rows written to <strong>fpa_facts</strong> · version <strong>'+
       esc(String(result.version_id||_leCommitVersionId))+'</strong>. '+
-      'FP&A Hub will reflect Sales LE on next reload.';
+      'Finance Hub will reflect Sales LE on next reload.';
     if(commitBtn) commitBtn.style.display='none';
     const _dfSyncVerId = _leCommitVersionId;
     _leCommitVersionId = null;
@@ -10068,7 +10068,7 @@ initAll=function(){
 };
 
 // ═══════════════════════════════════════════════════════
-//  REALTIME PRESENCE ENGINE (borrowed from FP&A Platform)
+//  REALTIME PRESENCE ENGINE (borrowed from Finance Platform)
 //  BroadcastChannel — same-origin tabs, no server required
 // ═══════════════════════════════════════════════════════
 const _rtChannel=(typeof BroadcastChannel!=='undefined')?new BroadcastChannel('jps_sales_realtime'):null;
