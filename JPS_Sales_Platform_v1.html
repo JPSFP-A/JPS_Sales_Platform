@@ -2638,7 +2638,7 @@ function _applyLogin(user){
   CU=user;
   if (window.JpsMonitor) JpsMonitor.setUser(CU.id || CU.email, CU.name || CU.email);
   if (window.posthog) posthog.identify(CU.id || CU.email, { email: CU.email, name: CU.name });
-  if (window.Sentry) Sentry.setUser({ id: CU.id, email: CU.email });
+  try { if (window.Sentry) { const _su = { id: CU.id, email: CU.email }; if (typeof Sentry.setUser === 'function') Sentry.setUser(_su); else if (typeof Sentry.onLoad === 'function') Sentry.onLoad(function(){ Sentry.setUser(_su); }); } } catch(e) { console.warn('Sentry setUser failed', e); }
   _initIdleTimeout(function(){ getSB().auth.signOut(); });
   const btn=document.getElementById('lBtn');
   if(btn){btn.textContent='Sign In →';btn.disabled=false;}
