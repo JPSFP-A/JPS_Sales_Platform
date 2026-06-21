@@ -388,18 +388,7 @@ document.getElementById('schema_stale_banner').style.display='none';
     </div>
     <button class="login-btn" id="lBtn" onclick="doLogin()">Sign In →</button>
     <div class="lerr" id="lErr">Invalid email or password.</div>
-    <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center">
-      <span style="font-size:9px;color:var(--teal);cursor:pointer" onclick="showRegister()">First time? Register →</span>
-    </div>
-    <!-- Register panel -->
-    <div id="registerPanel" style="display:none;margin-top:14px;padding:12px;background:rgba(55,138,221,.07);border:1px solid var(--blue);border-radius:8px">
-      <div style="font-size:10px;color:var(--blue);font-weight:700;margin-bottom:10px">CREATE ACCOUNT</div>
-      <div class="lf" style="margin-bottom:8px"><label>Full Name</label><input class="si" id="rName" placeholder="Your full name"/></div>
-      <div class="lf" style="margin-bottom:8px"><label>Email</label><input class="si" id="rEmail" type="email" placeholder="you@jpsco.com"/></div>
-      <div class="lf" style="margin-bottom:8px"><label>Password</label><input class="si" id="rPass" type="password" placeholder="Min 8 characters"/></div>
-      <button class="login-btn" id="rBtn" onclick="doRegister()" style="background:var(--blue);color:#fff">Create Account →</button>
-      <div style="font-size:9px;color:var(--text3);margin-top:8px">First account created is automatically Admin. Subsequent accounts start as View — Admin upgrades roles in-app.</div>
-    </div>
+    <div style="margin-top:14px;font-size:9px;color:var(--text3)">Contact Admin to create an account.</div>
   </div>
 </div>
 
@@ -2563,62 +2552,6 @@ async function doLogin(){
 }
 
 /* ── Demo / offline login ── REMOVED (production build) ── */
-
-/* ── Register (first-time / self-signup) ── */
-function showRegister(){
-  const p=document.getElementById('registerPanel');
-  if(p)p.style.display=p.style.display==='none'?'':'none';
-}
-
-async function doRegister(){
-  const name =(document.getElementById('rName')?.value||'').trim();
-  const email=(document.getElementById('rEmail')?.value||'').trim();
-  const pwd  =(document.getElementById('rPass')?.value||'');
-  if(!name) {showErr('Please enter your full name.');return;}
-  if(!email){showErr('Please enter your email.');return;}
-  if(pwd.length<8){showErr('Password must be at least 8 characters.');return;}
-  const btn=document.getElementById('rBtn');
-  if(btn){btn.textContent='Creating…';btn.disabled=true;}
-  try{
-    const sb=getSB();
-    if(!sb){showErr('Supabase not configured.');if(btn){btn.textContent='Create Account →';btn.disabled=false;}return;}
-    // Sign up via Supabase Auth
-    const{data,error}=await sb.auth.signUp({email,password:pwd,options:{data:{name}}});
-    if(error){showErr(error.message);if(btn){btn.textContent='Create Account →';btn.disabled=false;}return;}
-    // Determine role: first user in profiles gets admin, others get view
-    let count=1;
-    try{const r=await sb.from('profiles').select('*',{count:'exact',head:true});count=r.count??1;}catch(e){}
-    const isFirst=(count===0||count===null);
-    const salesRole=isFirst?'admin':'view';
-    const fpaRole  =isFirst?'admin':'viewer';
-    // Insert profile row
-    if(data.user){
-      await sb.from('profiles').upsert({
-        id:data.user.id,name,email,
-        role:fpaRole,sales_role:salesRole,
-        territory:'All',is_active:true,
-        created_at:new Date().toISOString()
-      },{onConflict:'id'});
-    }
-    if(btn){btn.textContent='Create Account →';btn.disabled=false;}
-    document.getElementById('registerPanel').style.display='none';
-    // Pre-fill email for sign-in
-    const emailEl=document.getElementById('lEmail');if(emailEl)emailEl.value=email;
-    // If Supabase email confirmation is disabled, log straight in
-    if(data.session){
-      _applyLogin({
-        id:data.user.id,email,name,
-        role:salesRole,fpa_role:fpaRole,territory:'All'
-      });
-    } else {
-      showErr('Account created ✓ — sign in now.');
-    }
-    toast(`Account created${isFirst?' (Admin)':' (View — Admin will upgrade your role)'}. Sign in to continue.`,'ok');
-  }catch(e){
-    showErr('Registration failed: '+e.message);
-    if(btn){btn.textContent='Create Account →';btn.disabled=false;}
-  }
-}
 
 /* ── Common post-auth setup ── */
 function _initIdleTimeout(signOutFn) {
