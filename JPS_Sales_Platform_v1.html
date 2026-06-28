@@ -24,21 +24,29 @@
 <script src="shared/jps-formatters.js"></script>
 <script src="shared/jps-auth.js"></script>
 <script src="shared/jps-nav.js"></script>
+<script src="shared/jps-states.js"></script>
+<script src="shared/jps-submit.js"></script>
 <script>if(window.JpsMonitor)JpsMonitor.setApp('sales');</script>
 <script src="shared/jps-pw-reset.js"></script>
 <script>JpsPwReset.init({ getClient:function(){ return getSB(); }, anchorSelector:'#lBtn', emailInputId:'lEmail' });</script>
 <script src="./config.js"></script>
+<link rel="stylesheet" href="shared/jps-theme.css" />
+<style>
+/* design-eng polish: stat cards lift on hover + fade in (shared --jps tokens) */
+.kpi{transition:transform var(--jps-dur) var(--jps-ease-out),box-shadow var(--jps-dur) var(--jps-ease-out),border-color var(--jps-dur) var(--jps-ease);animation:jpsFadeUp var(--jps-dur-slow) var(--jps-ease-out) both}
+.kpi:hover{transform:translateY(-3px);box-shadow:var(--jps-shadow-lg);border-color:color-mix(in srgb,var(--jps-accent) 40%,var(--border))}
+</style>
 <style>
 :root{
   --navy:#0d1b2a;--navy2:#1a2d42;--navy3:#243d58;--navy4:#2e4d6e;
   --teal:#00c2a8;--teal2:#00957f;--teal3:rgba(0,194,168,0.15);
   --amber:#f5a623;--red:#e84040;--green:#27c485;--blue:#378ADD;
   --purple:#7F77DD;
-  --text:#e8edf2;--text2:#8fa4b8;--text3:#5a7a96;
+  --text:#e8edf2;--text2:#8fa4b8;--text3:#7e99b0;
   --border:rgba(255,255,255,0.07);--card:rgba(255,255,255,0.04);
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:13px;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+body{background:var(--navy);color:var(--text);font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:13px;display:flex;flex-direction:column;height:100vh;overflow:hidden}
 
 /* LOGIN */
 .login-screen{position:fixed;inset:0;background:var(--navy);z-index:9999;display:flex;align-items:center;justify-content:center}
@@ -77,6 +85,18 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
 .ni.on{color:var(--teal);background:var(--teal3);border-left:3px solid var(--teal)}
 .ni-icon{font-size:13px;width:16px;text-align:center;flex-shrink:0}
 .sb-bottom{padding:12px;border-top:1px solid var(--border);margin-top:auto}
+.sb-toggle{display:none;align-items:center;justify-content:center;background:transparent;
+  border:1px solid var(--border);border-radius:6px;color:var(--text);cursor:pointer;
+  font-size:16px;padding:3px 9px;margin-right:4px;line-height:1;font-family:inherit;flex-shrink:0;}
+.sb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9998;}
+.sb-overlay.open{display:block;}
+@media(max-width:767px){
+  .sidebar{position:fixed;top:0;left:0;bottom:0;z-index:9999;
+    transform:translateX(-100%);transition:transform .25s cubic-bezier(.16,1,.3,1);}
+  .sidebar.sb-open{transform:translateX(0);}
+  .sb-toggle{display:inline-flex;}
+  .period-bar{overflow-x:auto;flex-wrap:nowrap;}
+}
 .fl{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px}
 .chips{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
 .chip{padding:2px 6px;border-radius:4px;font-size:9px;font-weight:600;background:var(--navy3);color:var(--text2);cursor:pointer;border:1px solid var(--border);transition:all .13s}
@@ -301,7 +321,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
   --teal:#0096a7;--teal2:#007a8c;--teal3:rgba(0,150,167,0.12);
   --amber:#c97a00;--red:#c62828;--green:#1b7a45;--blue:#1a5fb4;
   --purple:#4a44ab;
-  --text:#1e293b;--text2:#475569;--text3:#94a3b8;
+  --text:#1e293b;--text2:#475569;--text3:#64748b;
   --border:rgba(0,0,0,0.10);--card:#ffffff;
 }
 [data-theme="light"] body{background:var(--navy)}
@@ -337,7 +357,7 @@ body{background:var(--navy);color:var(--text);font-family:-apple-system,BlinkMac
   --teal:#FF7A1A;--teal2:#cc5f0e;--teal3:rgba(255,122,26,0.15);
   --amber:#FFB800;--red:#e84040;--green:#27c485;--blue:#378ADD;
   --purple:#b07aff;
-  --text:#f4ece0;--text2:#a89070;--text3:#6a5c48;
+  --text:#f4ece0;--text2:#a89070;--text3:#9e8d78;
   --border:rgba(255,255,255,0.07);--card:rgba(255,255,255,0.04);
 }
 [data-theme="jps"] .suite-nav{background:#090f16;border-bottom-color:rgba(255,122,26,0.25)}
@@ -392,6 +412,7 @@ document.getElementById('schema_stale_banner').style.display='none';
   </div>
 </div>
 
+<div class="sb-overlay" id="sbOverlay" onclick="toggleSidebar()"></div>
 <!-- SIDEBAR -->
 <div class="sidebar" id="sidebar">
   <div class="sb-logo">
@@ -442,6 +463,7 @@ document.getElementById('schema_stale_banner').style.display='none';
 <div class="main" id="mainArea">
   <div class="topbar" style="position:relative">
     <div class="tb-left">
+      <button class="sb-toggle" id="sbToggle" aria-label="Open sidebar" aria-expanded="false" onclick="toggleSidebar()">☰</button>
       <h1>kWh Sales Forecasting &amp; Analysis</h1>
       <p>Jamaica Public Service Company · AOP 2025–2027</p>
     </div>
@@ -2308,6 +2330,17 @@ order by ordinal_position;</pre>
 </div>
 
 <script>
+function toggleSidebar(){
+  var sb=document.getElementById('sidebar'),ov=document.getElementById('sbOverlay'),
+      btn=document.getElementById('sbToggle'),open=sb&&sb.classList.toggle('sb-open');
+  if(ov)ov.classList.toggle('open',open);
+  if(btn){btn.setAttribute('aria-expanded',String(!!open));btn.textContent=open?'✕':'☰';}
+}
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'&&document.getElementById('sidebar').classList.contains('sb-open'))toggleSidebar();
+});
+</script>
+<script>
 /* ==========================================
    AUTH — Supabase Auth + role-based access
 ========================================== */
@@ -2322,6 +2355,8 @@ let _schemaFixApplied=false; // jps_normalize_schema RPC called once per session
 let mrPeriod=`${_initDate.getFullYear()}-${String(_initDate.getMonth()+1).padStart(2,'0')}`, mrRepName='', mrActiveSec='mr_ov';
 let cmDim='industry', cmDrillRC='', _modalFn=null;
 let chartInstances={};
+const MONTHS_SHORT=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTHS_LONG=['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 /* ── Toast notifications ── */
 function toast(msg, type){
@@ -2420,7 +2455,7 @@ async function detectYearCol(sb){
      Full account: '100001-001'   (stored in jps_actuals.jps_ac)
      Customer number: '100001'    (stored in jps_kam.jps_ac + jps_industries.jps_ac)
    _kl() tries the exact key first, then the customer-number prefix (before the dash).
-   _buildPrefixIdx() creates a map of customerNum → [fullAccountNums] from loaded actuals. */
+   _kl() tries the exact key first, then the customer-number prefix (before the dash). */
 function _kl(map, ac){
   return map[ac]||map[String(ac||'').split('-')[0]]||'';
 }
@@ -2436,19 +2471,6 @@ function _budPM(yr,mos){return mos.flatMap(m=>sbBudgetIdx[yr+'_'+m]||[]);}
 function _budYtd(yr,thruMo){const r=[];for(let m=1;m<=thruMo;m++)r.push(...(sbBudgetIdx[yr+'_'+m]||[]));return r;}
 function _budAll(yr){const r=[];for(let m=1;m<=12;m++)r.push(...(sbBudgetIdx[yr+'_'+m]||[]));return r;}
 
-function _buildPrefixIdx(){
-  const idx={};
-  (sbActualsComm.length?sbActualsComm:sbActuals.filter(_isComm)).forEach(r=>{
-    const ac=String(r.jps_ac||r['JPS A/c']||'').trim();
-    if(!ac)return;
-    const prefix=ac.split('-')[0];
-    if(!idx[prefix])idx[prefix]=new Set();
-    idx[prefix].add(ac);
-    if(!idx[ac])idx[ac]=new Set(); // also index full acct so exact match works
-    idx[ac].add(ac);
-  });
-  return idx;
-}
 
 function _showSchemaBanner(reason){
   if(_schemaFixApplied) return;
@@ -2878,11 +2900,10 @@ const FC_SEGS=[
 ========================================== */
 function pct(a,b){return b&&b!==0?((a-b)/b*100):0;}
 function fmtE(n,dp){if(n==null||isNaN(n))return'--';n=Number(n);const a=Math.abs(n);if(a>=1e9)return(n/1e9).toFixed(dp!=null?dp:2)+' TWh';if(a>=1e6)return(n/1e6).toFixed(dp!=null?dp:2)+' GWh';if(a>=1e3)return(n/1e3).toFixed(dp!=null?dp:1)+' MWh';return n.toFixed(dp!=null?dp:1)+' kWh';}
-function fmtK(n){return fmtE(n);}  // legacy alias — always uses energy units now
 function hc(p){if(p>5)return'hG';if(p>0)return'hg';if(p>-5)return'hr';return'hR';}
 function vbar(a,b){const p=pct(a,b),pos=p>=0;const w=Math.min(Math.abs(p)*2,55);return`<div class="vbar"><div class="vb" style="width:${w}px;background:${pos?'var(--green)':'var(--red)'}"></div><span class="${pos?'up':'dn'}">${pos?'+':''}${p.toFixed(1)}%</span></div>`;}
 function getFcMonths(){
-  const ms=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const ms=MONTHS_SHORT;
   const result=[];
   for(let i=1;i<=6;i++){
     const m=(curMonth-1+i)%12;
@@ -3112,8 +3133,8 @@ function renderCmPivot(){
   const hdr=`<thead><tr><th>Acct #</th><th>Customer</th><th>RC</th><th>${py} kWh</th><th>${cy} kWh</th><th>Δ kWh</th><th>Δ %</th></tr></thead>`;
   const row=a=>`<tr>
     <td>${esc(a.ac||'')}</td><td>${esc(a.name||'--')}</td><td>${a.rc}</td>
-    <td>${fmtK(a.py)}</td><td>${fmtK(a.cy)}</td>
-    <td class="${a.delta>=0?'up':'dn'}">${a.delta>=0?'+':''}${fmtK(a.delta)}</td>
+    <td>${fmtE(a.py)}</td><td>${fmtE(a.cy)}</td>
+    <td class="${a.delta>=0?'up':'dn'}">${a.delta>=0?'+':''}${fmtE(a.delta)}</td>
     <td class="${a.delta>=0?'up':'dn'}">${a.pct!=null?(a.delta>=0?'+':'')+a.pct.toFixed(1)+'%':'N/A'}</td>
   </tr>`;
 
@@ -3147,7 +3168,7 @@ function generateCommentary(section){
 
   try{
     const lines=[];
-    const mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const mn=MONTHS_SHORT;
     const pLbl=`${mn[(curMonth-1)%12]} ${curYear}`;
 
     if(section==='cm'){
@@ -3354,18 +3375,6 @@ function filterHelp(){
   });
 }
 
-// Populate simple year dropdowns (selYear, delYear, delYearAdm) from live data
-function populateYearDropdowns(){
-  const years=sbActuals.length
-    ? [...new Set(sbActuals.map(r=>Number(r.year||r.cal_year||0)).filter(Boolean))].sort((a,b)=>b-a)
-    : [new Date().getFullYear(),new Date().getFullYear()-1];
-  ['selYear','delYear','delYearAdm'].forEach(id=>{
-    const el=document.getElementById(id);if(!el)return;
-    const cur=el.value||String(years[0]);
-    el.innerHTML=years.map(y=>`<option value="${y}"${String(y)===cur?' selected':''}>${y}</option>`).join('');
-  });
-}
-
 // Rebuild every year-picker dropdown from the actual years present in sbActuals
 function rebuildYearDropdowns(){
   if(!sbActuals.length)return;
@@ -3397,7 +3406,7 @@ function rebuildYearDropdowns(){
                .map(r=>Number(r.month)).filter(m=>m>=1&&m<=12)
     )].sort((a,b)=>a-b);
     const lastMonth=availMonths.length?availMonths[availMonths.length-1]:curMonth;
-    const _MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const _MN=MONTHS_SHORT;
     sm.innerHTML=availMonths.map(m=>`<option value="${m}">${_MN[m-1]}</option>`).join('');
     sm.value=String(lastMonth);
     curMonth=lastMonth;
@@ -3433,7 +3442,7 @@ function renderSidebarFilters(){
   }
 }
 function fmtPeriodLabel(){
-  const _MNL=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const _MNL=MONTHS_SHORT;
   if(curPeriod==='MTD')    return _MNL[curMonth-1]+'-'+curYear;
   if(curPeriod==='QTD')    return 'Q'+curQtr+'-'+curYear;
   if(curPeriod==='YTD')    return 'YTD '+_MNL[curMonth-1]+'-'+curYear;
@@ -3464,7 +3473,7 @@ function getPM(){
 }
 /* ── Period header label for table column headings ── */
 function getPH(){
-  const MNS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const MNS=MONTHS_SHORT;
   return curPeriod==='MTD'?MNS[curMonth-1]
     :curPeriod==='QTD'?'Q'+Math.ceil(curMonth/3)+' QTD'
     :curPeriod==='YTD'?'YTD '+MNS[curMonth-1]
@@ -3518,7 +3527,7 @@ function renderSection(id){
   else if(id==='vb'){renderVarianceBridge();}
   else if(id==='rr'){renderRevenueRecovery();}
   else if(id==='dr_flow'){renderDefFlow();}
-  else if(id==='rb_res'){renderResIntel();}
+  else if(id==='rb_res'){renderResIntelKPIs();renderResIntelSection('ri_bracket');}
   else if(id==='ro_adv'){renderROAdvanced();}
   else if(id==='rpt'){renderReportBuilder();}
   else if(id==='ng'){renderNetGen();}
@@ -4052,7 +4061,7 @@ function buildCharts(){
   const _tlb=document.getElementById('trend_lbl_bud');if(_tlb)_tlb.textContent=`${curYear} Budget`;
   const _tll=document.getElementById('trend_lbl_ly'); if(_tll)_tll.textContent=`${curYear-1} Actual`;
   mkChart('c_trend',{type:'bar',data:{
-    labels:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+    labels:MONTHS_SHORT,
     datasets:[
       {label:`${curYear} Actual`,data:trendAct26,backgroundColor:'rgba(0,194,168,0.6)',borderColor:'#00c2a8',borderWidth:1,borderRadius:2,order:1},
       {label:`${curYear} Budget`,data:trendBud26,type:'line',borderColor:'#378ADD',borderDash:[5,3],backgroundColor:'transparent',tension:.35,pointRadius:3,order:0},
@@ -4135,7 +4144,7 @@ function buildCharts(){
 
   // Forecast accuracy chart — populated from saved forecast entries vs actuals
   const accMonths=[];const accAct=[];const accFc=[];
-  for(let i=5;i>=0;i--){const mi=(curMonth-1-i+12)%12;const ms=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];accMonths.push(ms[mi]);accAct.push(null);accFc.push(null);}
+  for(let i=5;i>=0;i--){const mi=(curMonth-1-i+12)%12;const ms=MONTHS_SHORT;accMonths.push(ms[mi]);accAct.push(null);accFc.push(null);}
   mkChart('c_acc',{type:'line',data:{
     labels:accMonths,
     datasets:[
@@ -4702,7 +4711,7 @@ function renderRsPar(){
     <tbody>${rows.map(r=>{const p=pct(r.curr,r.prev);const cnt=countAgg[`${r.parish}|||${r.bracket}`]||r.count;return`<tr>
       <td style="font-weight:500">${esc(r.parish)}</td><td>${esc(r.bracket)}</td>
       <td>${cnt>0?cnt.toLocaleString():'--'}</td>
-      <td>${fmtK(r.curr)}</td><td style="color:var(--text3)">${fmtK(r.prev)}</td>
+      <td>${fmtE(r.curr)}</td><td style="color:var(--text3)">${fmtE(r.prev)}</td>
       <td>${vbar(r.curr,r.prev)}</td>
       <td><span class="heat ${hc(p)}">${p>=0?'+':''}${p.toFixed(1)}%</span></td>
     </tr>`;}).join('')}</tbody></table>`;
@@ -4821,7 +4830,7 @@ function renderFcKPIs(){
   document.getElementById('fc_mape').textContent=mapeVal;
   document.getElementById('fc_pending').textContent=Math.max(0,CUSTOMERS.filter(c=>c.rate!=='RT10'&&c.rate!=='RT20').length*months.length-entered);
   document.getElementById('kpi_accuracy').textContent=accuracyVal;
-  document.getElementById('fc_period_kpi').textContent=`${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][curMonth-1]} ${curYear}`;
+  document.getElementById('fc_period_kpi').textContent=`${MONTHS_SHORT[curMonth-1]} ${curYear}`;
 }
 function renderFcEntry(){
   const q=(document.getElementById('fc_q')?.value||'').toLowerCase();
@@ -4961,10 +4970,10 @@ function filterRO(){
   const roKv = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
   roKv('ro_total',       RISK_OPP.length ? RISK_OPP.filter(r=>r.status!=='Closed').length : '--');
   roKv('ro_opp_count',   RISK_OPP.length ? roOpp.length : '--');
-  roKv('ro_opp_kwh',     RISK_OPP.length ? fmtK(roOppKwh)+' kWh' : '-- kWh');
+  roKv('ro_opp_kwh',     RISK_OPP.length ? fmtE(roOppKwh)+' kWh' : '-- kWh');
   roKv('ro_risk_count',  RISK_OPP.length ? roRisk.length : '--');
-  roKv('ro_risk_kwh',    RISK_OPP.length ? fmtK(roRiskKwh)+' kWh' : '-- kWh');
-  roKv('ro_net_pos',     RISK_OPP.length ? (roNet>=0?'+':'')+fmtK(roNet)+' kWh' : '--');
+  roKv('ro_risk_kwh',    RISK_OPP.length ? fmtE(roRiskKwh)+' kWh' : '-- kWh');
+  roKv('ro_net_pos',     RISK_OPP.length ? (roNet>=0?'+':'')+fmtE(roNet)+' kWh' : '--');
   roKv('ro_net_dir',     RISK_OPP.length ? (roNet>=0?'Net positive position':'Net risk position') : 'Net position');
 
   const stColors={New:'pt',New2:'pt','Under Review':'pa',Confirmed:'pr',Closed:'pgr'};
@@ -4978,7 +4987,7 @@ function filterRO(){
       <td><span class="pill ${r.level==='Very high'?'pa':'pgr'}">${r.level}</span></td>
       <td><strong style="color:var(--teal)">${r.rate}</strong></td>
       <td>${r.sector}</td>
-      <td style="font-weight:600">${fmtK(r.kwh)}</td>
+      <td style="font-weight:600">${fmtE(r.kwh)}</td>
       <td><span class="pill ${r.source==='Defection'?'pr':r.source==='Forecast'?'pa':'pgr'}">${r.source}</span></td>
       <td><select style="background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:2px 5px;font-size:10px" onchange="updateROStatus('${r.num}',this.value)">
         ${['New','Under Review','Confirmed','Closed'].map(s=>`<option${r.status===s?' selected':''}>${s}</option>`).join('')}
@@ -5020,7 +5029,7 @@ function addROItem(){
 ========================================== */
 function initMrMonths(){
   const sel=document.getElementById('mr_month');if(!sel||sel.options.length>1)return;
-  const ms=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const ms=MONTHS_SHORT;
   const minY=sbActuals.length?Math.min(...sbActuals.map(r=>Number(r[YEAR_COL]||r.year||2024))):2024;
   const maxY=Math.max(curYear+1,new Date().getFullYear()+1);
   let h='';for(let y=minY;y<=maxY;y++)for(let m=0;m<12;m++)h+=`<option value="${y}-${String(m+1).padStart(2,'0')}">${ms[m]} ${y}</option>`;
@@ -5070,7 +5079,7 @@ function renderMrInd(){
 }
 function renderMrPar(){
   const w=document.getElementById('mr_par_w');if(!w)return;
-  const tbl=`<table class="dt">${PARISHES.map(p=>{const ov=pct(p.curr,p.prev),rv=pct(p.rc,p.rp);return`<tr><td style="font-weight:600">${esc(p.name)}</td><td>${fmtK(p.curr)}</td><td style="color:var(--text3)">${fmtK(p.prev)}</td><td><span class="heat ${hc(ov)}">${ov>=0?'+':''}${ov.toFixed(1)}%</span></td><td>${fmtK(p.rc)}</td><td style="color:var(--text3)">${fmtK(p.rp)}</td><td><span class="heat ${hc(rv)}">${rv>=0?'+':''}${rv.toFixed(1)}%</span></td></tr>`;}).join('')}</table>`;
+  const tbl=`<table class="dt">${PARISHES.map(p=>{const ov=pct(p.curr,p.prev),rv=pct(p.rc,p.rp);return`<tr><td style="font-weight:600">${esc(p.name)}</td><td>${fmtE(p.curr)}</td><td style="color:var(--text3)">${fmtE(p.prev)}</td><td><span class="heat ${hc(ov)}">${ov>=0?'+':''}${ov.toFixed(1)}%</span></td><td>${fmtE(p.rc)}</td><td style="color:var(--text3)">${fmtE(p.rp)}</td><td><span class="heat ${hc(rv)}">${rv>=0?'+':''}${rv.toFixed(1)}%</span></td></tr>`;}).join('')}</table>`;
   w.innerHTML=buildCmt('mr_par','Parish commentary...','mr_par_w')+`<div class="card"><div class="ch">Parish Performance</div>${tbl}</div>`;
 }
 function editMrNote(num,name,cid){
@@ -5409,7 +5418,7 @@ async function generateTrendForecast(label, notes=''){
   if(!rows.length){toast('No months to forecast (data already complete for '+yr+')','w');return;}
 
   // Save version
-  const vLabel=label||(yr+' Trend Forecast ('+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][maxMo-1]+' base)');
+  const vLabel=label||(yr+' Trend Forecast ('+MONTHS_SHORT[maxMo-1]+' base)');
   const {data:ver,error:ve}=await sb.from('jps_forecast_versions').insert({label:vLabel,version_type:'trend',year:yr,is_active:true,notes}).select().single();
   if(ve){toast('Error saving forecast version: '+ve.message,'err');return;}
   // Set all others inactive
@@ -5449,7 +5458,7 @@ function renderAdmForecast(){
   let maxMo=0;
   for(const rc of _allRcsAdm){for(let m=12;m>=1;m--){if(_rcSum(rc,yr,m,m)>0){if(m>maxMo)maxMo=m;break;}}}
 
-  const MNS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const MNS=MONTHS_SHORT;
   const remainMos=12-maxMo;
   el.innerHTML=`
   <div style="margin-bottom:12px">
@@ -5509,7 +5518,7 @@ function activeForecastVersion(){
 }
 
 function renderExecSummary() {
-  const ms=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const ms=MONTHS_SHORT;
   const pm=getPM(),pmSet=new Set(pm),ph=getPH();
   const lbl = `${ph} ${curYear}`;
   const el = id => document.getElementById(id);
@@ -5607,7 +5616,7 @@ function renderExecSummary() {
           <div style="font-size:10px;color:var(--text3)">${r.rate} &middot; <span class="pill ${r.level==='Very high'?'pa':'pgr'}">${r.level}</span> &middot; <span class="pill ${r.source==='Defection'?'pr':'pgr'}">${r.source}</span></div>
         </div>
         <div style="text-align:right">
-          <div style="font-size:13px;font-weight:700;color:var(--red)">${fmtK(r.kwh)}</div>
+          <div style="font-size:13px;font-weight:700;color:var(--red)">${fmtE(r.kwh)}</div>
           <div style="font-size:10px;color:var(--text3)">kWh at risk</div>
         </div>
       </div>`).join('');
@@ -5690,7 +5699,7 @@ function saveExecNarrative() {
 }
 
 function exportExecSummary(){
-  const ms=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const ms=MONTHS_SHORT;
   const lbl=`${ms[curMonth-1]} ${curYear}`;
   const narrative=S.get(`es_narrative_${curYear}_${curMonth}`,'(No narrative saved)');
   // Build a printable HTML page and open in new tab
@@ -5938,7 +5947,7 @@ const RR_DATA = {
 
 function renderRevenueRecovery() {
   // Update chart period label
-  const ms0=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const ms0=MONTHS_SHORT;
   const rrLbl = document.getElementById('rr_chart_period_lbl');
   if(rrLbl) rrLbl.textContent = `${ms0[curMonth-1]} ${curYear} — USD thousands`;
 
@@ -6292,11 +6301,6 @@ function resTab(id, btn) {
   renderResIntelSection(id);
 }
 
-function renderResIntel() {
-  renderResIntelKPIs();
-  renderResIntelSection('ri_bracket');
-}
-
 function renderResIntelKPIs() {
   const kv=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
   const resRCs=['RT10','RT20'];
@@ -6307,7 +6311,7 @@ function renderResIntelKPIs() {
     :curPeriod==='QTD'?Array.from({length:curMonth-qStart+1},(_,i)=>qStart+i)
     :curPeriod==='YTD'?Array.from({length:curMonth},(_,i)=>i+1)
     :Array.from({length:12},(_,i)=>i+1);
-  const MNS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const MNS=MONTHS_SHORT;
   const periodLbl=curPeriod==='MTD'?MNS[curMonth-1]+' '+curYear
     :curPeriod==='QTD'?'Q'+curQtr+' '+curYear
     :curPeriod==='YTD'?'YTD '+curYear
@@ -6338,7 +6342,7 @@ function renderResIntelSection(id) {
     if (cb) {
       const bkts = getResBuckets();
       const resRCsT = ['RT10','RT20'];
-      const MN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const MN=MONTHS_SHORT;
       const trendMonths = Array.from({length:6},(_,i)=>{
         let m=curMonth-5+i, y=curYear; if(m<=0){m+=12;y--;}
         return {y, m, lbl: MN[m-1]};
@@ -6417,7 +6421,7 @@ function renderResIntelSection(id) {
         const sc = {Critical:'def-critical',Severe:'def-severe',Moderate:'def-moderate',Normal:''}[sev];
         return `<tr>
           <td style="font-weight:600">${par}</td>
-          <td>${fmtK(curr3v)}</td><td style="color:var(--text3)">${fmtK(prior3v)}</td>
+          <td>${fmtE(curr3v)}</td><td style="color:var(--text3)">${fmtE(prior3v)}</td>
           <td><span class="heat ${hc((ratio-1)*100)}">${(ratio*100).toFixed(1)}%</span></td>
           <td><span class="def-severity ${sc}">${sev}</span></td>
           <td>${vbar(currAll,prevAll)}</td>
@@ -6436,7 +6440,7 @@ function renderResIntelSection(id) {
     // Populate CDD_DATA.months and kwh_raw from sbActuals (RT10 residential GWh per month)
     // cdd_actual, cdd_normal, kwh_adj require a separate jps_cdd table — shown as zero until uploaded
     {
-      const _wMN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const _wMN=MONTHS_SHORT;
       const _trail6=Array.from({length:6},(_,i)=>{let m=curMonth-5+i,y=curYear;if(m<=0){m+=12;y--;}return{y,m,lbl:_wMN[m-1]};});
       CDD_DATA.months    =_trail6.map(t=>t.lbl);
       CDD_DATA.kwh_raw   =_trail6.map(t=>sbActuals.filter(r=>['RT10','RT20'].includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===t.y&&Number(r.month)===t.m).reduce((s,r)=>s+Number(r.kwh||0),0)/1e6);
@@ -6510,7 +6514,7 @@ function renderBracketTable() {
     const curr=currAgg[k]?.kwh||0;
     const prev=prevAgg[k]?.kwh||0;
     const v=pct(curr,prev);
-    return`<tr><td>${b} kWh</td><td>${p}</td><td>${fmtK(curr)}</td><td style="color:var(--text3)">${fmtK(prev)}</td><td>${vbar(curr,prev)}</td><td><span class="heat ${hc(v)}">${v>=0?'+':''}${v.toFixed(1)}%</span></td></tr>`;
+    return`<tr><td>${b} kWh</td><td>${p}</td><td>${fmtE(curr)}</td><td style="color:var(--text3)">${fmtE(prev)}</td><td>${vbar(curr,prev)}</td><td><span class="heat ${hc(v)}">${v>=0?'+':''}${v.toFixed(1)}%</span></td></tr>`;
   }).join('');
   tbl.innerHTML=`<table class="dt" id="ribr_dt">
     <thead><tr><th>Bracket</th><th>Parish</th><th>Current kWh</th><th>Prior kWh</th><th>Var%</th><th>Signal</th></tr></thead>
@@ -6573,7 +6577,7 @@ function renderROAdvanced() {
           <td><span class="pill ${r.type==='Risk'?'pr':'pg'}">${r.type}</span></td>
           <td><strong style="color:var(--teal)">${r.rate}</strong></td>
           <td><span class="pill ${r.level==='Very high'?'pa':'pgr'}">${r.level}</span></td>
-          <td>${fmtK(r.kwh)}</td>
+          <td>${fmtE(r.kwh)}</td>
           <td style="font-weight:600;color:${r.type==='Risk'?'var(--red)':'var(--green)'}">${r.rev_jmd !== null ? r.rev_jmd.toFixed(3) : '—'}</td>
           <td>${(r.prob*100).toFixed(0)}%</td>
           <td style="font-weight:600">${r.rev_jmd !== null ? ((r.rev_jmd*r.prob).toFixed(3)) : '—'}</td>
@@ -6584,7 +6588,7 @@ function renderROAdvanced() {
         </tr>`;
       }).join('')}
       <tr class="ft"><td colspan="6">Total</td>
-        <td>${fmtK(items.reduce((s,r)=>s+r.kwh,0))}</td>
+        <td>${fmtE(items.reduce((s,r)=>s+r.kwh,0))}</td>
         <td>${items.reduce((s,r)=>s+(r.rev_jmd ?? 0),0).toFixed(3)}</td>
         <td></td>
         <td>${items.reduce((s,r)=>s+((r.rev_jmd ?? 0)*r.prob),0).toFixed(3)}</td>
@@ -6633,7 +6637,7 @@ function renderROAdvanced() {
   destroyChart('c_roa_hist');
   const ch = document.getElementById('c_roa_hist');
   if (ch) {
-    const _mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const _mn=MONTHS_SHORT;
     // Build trailing 12 months from curYear/curMonth
     const trail12=Array.from({length:12},(_,i)=>{
       let m=curMonth-11+i,y=curYear;if(m<=0){m+=12;y--;}return{y,m,lbl:_mn[m-1]};
@@ -6686,7 +6690,7 @@ function renderReportBuilder() {
   // Period selector
   const sel = document.getElementById('rpt_period_sel');
   if (sel && sel.options.length < 2) {
-    const ms = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const ms=MONTHS_SHORT;
     let h = '';
     const _minY=sbActuals.length?Math.min(...sbActuals.map(r=>Number(r[YEAR_COL]||r.year||2024))):2024;
     const _maxY=Math.max(curYear+1,new Date().getFullYear()+1);
@@ -6725,8 +6729,8 @@ function generateReport() {
   const auth = document.getElementById('rpt_author')?.value || 'JPS Sales Analytics Team';
   const dist = document.getElementById('rpt_dist')?.value   || 'Management';
   const conf = document.getElementById('rpt_conf')?.value   || 'CONFIDENTIAL';
-  const MNF  = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  const MNS  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const MNF=MONTHS_LONG;
+  const MNS=MONTHS_SHORT;
 
   // ── Period labels ─────────────────────────────────────────────────────────
   const periodLbl = curPeriod === 'MTD'    ? `${MNF[curMonth-1]} ${curYear} — Month to Date`
@@ -6909,7 +6913,7 @@ function generateReport() {
           <td style="padding:5px 8px;color:${r.type==='Risk'?'#e84040':'#27c485'};font-weight:600">${r.type}</td>
           <td style="padding:5px 8px">${r.level}</td>
           <td style="padding:5px 8px">${r.rate}</td>
-          <td style="padding:5px 8px;text-align:right">${fmtK(r.kwh)}</td>
+          <td style="padding:5px 8px;text-align:right">${fmtE(r.kwh)}</td>
           <td style="padding:5px 8px">${r.status}</td>
           <td style="padding:5px 8px;font-size:10px;color:#666">${r.cmt||''}</td>
         </tr>`).join('')
@@ -6976,7 +6980,7 @@ function swAdm(id,btn){
 
 function renderAdmComments(){
   const el=document.getElementById('adm_comments_body');if(!el)return;
-  const ms=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const ms=MONTHS_SHORT;
   const rows=[];
   // Exec narratives — scan full range of years present in sbActuals, plus one year ahead
   const _admMinY=sbActuals.length?Math.min(...sbActuals.map(r=>Number(r[YEAR_COL]||r.year||9999)).filter(y=>y<9000)):2024;
@@ -7718,7 +7722,7 @@ function isPeriodLocked(year,month){
 // Call this before any save to block writes on locked periods
 function checkPeriodLock(){
   if(isPeriodLocked(curYear,curMonth)){
-    const mns=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const mns=MONTHS_SHORT;
     toast(`${mns[curMonth-1]} ${curYear} is locked — unlock in Admin → Period Close to make changes.`,'err');
     return true; // blocked
   }
@@ -7727,7 +7731,7 @@ function checkPeriodLock(){
 
 // Inject a lock banner at the top of any section's first element if the period is locked
 function maybeShowLockBanner(sectionId){
-  const mns=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const mns=MONTHS_SHORT;
   const sec=document.getElementById(sectionId);if(!sec)return;
   document.querySelectorAll('.lock-banner').forEach(b=>b.remove());
   if(isPeriodLocked(curYear,curMonth)){
@@ -7744,7 +7748,7 @@ function maybeShowLockBanner(sectionId){
 
 async function lockPeriodConfirm(year,month){
   if(!can('lock_period')){toast('Admin access required','err');return;}
-  const mns=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const mns=MONTHS_SHORT;
   openModal(`Lock ${mns[month-1]} ${year}`,`
     <div style="color:var(--text2);font-size:12px;margin-bottom:12px">This will make <strong>${mns[month-1]} ${year}</strong> read-only. All saves will be blocked for this period.</div>
     <div class="lf"><label>Lock notes (optional)</label><textarea id="lock_notes" class="cbox" rows="2" placeholder="e.g. Period close approved by Finance Manager, 15 Apr 2026"></textarea></div>`,
@@ -7765,7 +7769,7 @@ async function lockPeriodConfirm(year,month){
 
 async function unlockPeriodPrompt(year,month){
   if(!can('unlock_period')){toast('Admin access required','err');return;}
-  const mns=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const mns=MONTHS_SHORT;
   openModal(`🔓 Unlock ${mns[month-1]} ${year}`,
     `<div style="font-size:11px;color:var(--text2)">Re-open <strong style="color:var(--text)">${mns[month-1]} ${year}</strong> for editing? Users will be able to modify actuals for this period.</div>`,
     async ()=>{
@@ -7784,7 +7788,7 @@ async function unlockPeriodPrompt(year,month){
 
 function renderPeriodClose(){
   const el=document.getElementById('adm_period_grid');if(!el)return;
-  const mns=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const mns=MONTHS_SHORT;
   // Show current year + prior year
   let html='';
   for(const yr of[curYear-1,curYear]){
@@ -8459,6 +8463,9 @@ function getSB(){
         }
       });
     try { if (window.JpsNav) JpsNav.bind(_sbClient); } catch(e){ console.warn('JpsNav bind failed', e); }
+    (function(){ function _m(){ try { if (window.JpsSubmit) JpsSubmit.mount(_sbClient, { sourceApp: 'sales' }); } catch(e){ console.error('[submit] mount', e); } }
+      _sbClient.auth.getSession().then(function(r){ if (r && r.data && r.data.session) _m(); }).catch(function(e){ console.error('[submit] getSession', e); });
+      _sbClient.auth.onAuthStateChange(function(_e, s){ if (s) _m(); }); })();
   }
   try { if (window.JpsMonitor) { JpsMonitor._clientFn = function(){ return _sbClient; }; JpsMonitor._beat(); } } catch(e){ console.warn('JpsMonitor init failed', e); }
   return _sbClient;
@@ -8719,7 +8726,7 @@ function buildDashboardData(){
     const vb=r.mtd_bud>0?pct(r.mtd_act,r.mtd_bud):0;
     r.status=vb>=-3?'OK':vb>=-8?'Watch':'Risk';
   });
-  populateYearDropdowns();
+  rebuildYearDropdowns();
 }
 
 
@@ -8919,7 +8926,7 @@ async function syncSupabase(silent=false){
       if(dsEl){dsEl.textContent='📊 Live Data';dsEl.className='tbadge tbg';}
       // Update period label to reflect latest actual month from data
       if(sbActuals.length){
-        const mNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const mNames=MONTHS_SHORT;
         const _sbNow=new Date(),_sbNowY=_sbNow.getFullYear(),_sbNowM=_sbNow.getMonth()+1;
         let latestY=0,latestM=0;
         sbActuals.forEach(r=>{
@@ -8952,7 +8959,6 @@ async function syncSupabase(silent=false){
     try{buildDashboardData();}catch(be){console.error('buildDashboardData error:',be);}
     renderSidebarFilters();
     rebuildYearDropdowns();
-    populateYearDropdowns();
     populateKamDropdowns();
 
     // Hydrate user-generated data from DB
@@ -9095,7 +9101,6 @@ let leEngine        = null,
     leCmpToggles    = {},
     leSavedLabels   = [];
 
-const LE_MO     = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const LE_COLORS = ['#f5a623','#e74c3c','#9b59b6','#1abc9c','#3498db','#e67e22','#2ecc71','#f39c12'];
 
 // ─── entry point called by renderSection and syncSupabase ─────────────────────
@@ -9259,7 +9264,7 @@ function renderLEOverview(){
     if(togDiv2) togDiv2.innerHTML='<span style="font-size:10px;color:var(--text3)">Auto-base from actuals + budget</span>';
     const TC2=getComputedStyle(document.documentElement).getPropertyValue('--text2').trim()||'#aaa';
     const CC2=getComputedStyle(document.documentElement).getPropertyValue('--border').trim()||'rgba(255,255,255,0.07)';
-    mkChart('c_le_ov_main',{type:'line',data:{labels:mos2.map(m=>LE_MO[m-1]),datasets:datasets2},options:co({
+    mkChart('c_le_ov_main',{type:'line',data:{labels:mos2.map(m=>MONTHS_SHORT[m-1]),datasets:datasets2},options:co({
       plugins:{legend:{display:true,labels:{color:TC2,font:{size:10}}}},
       scales:{y:{ticks:{color:TC2,font:{size:10},callback:v=>fmtE(v,0)},grid:{color:CC2}}}
     })});
@@ -9302,7 +9307,7 @@ function renderLEOverview(){
   if(leCmpToggles['__bud']!==false) datasets.push({label:'Budget',data:mos.map(m=>budSum(budCur,[m])),borderColor:'#3498db',backgroundColor:'transparent',borderDash:[4,3],tension:.3,pointRadius:2,fill:false,borderWidth:1.5});
   if(leCmpToggles['__act']!==false) datasets.push({label:'Actuals',data:mos.map(m=>actSum(actCur,[m])),borderColor:'#2ecc71',backgroundColor:'transparent',tension:.3,pointRadius:3,fill:false,borderWidth:2});
 
-  mkChart('c_le_ov_main',{type:'line',data:{labels:mos.map(m=>LE_MO[m-1]),datasets},options:co({
+  mkChart('c_le_ov_main',{type:'line',data:{labels:mos.map(m=>MONTHS_SHORT[m-1]),datasets},options:co({
     plugins:{legend:{display:true,labels:{color:'#5a7a96',font:{size:10}}},tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmtE(ctx.raw,2)}`}}},
     scales:{y:{ticks:{color:'#5a7a96',font:{size:10},callback:v=>fmtE(v,0)},grid:{color:'rgba(255,255,255,0.05)'}}}}
   )});
@@ -9361,7 +9366,7 @@ function renderLEMonthly(){
   if(leMonthToggles.act26) datasets.push({label:'Actuals',   data:mos.map(m=>actSum(actCur,[m])),borderColor:'#2ecc71',backgroundColor:'transparent',tension:.3,pointRadius:3,fill:false});
   if(leMonthToggles.le_cur)datasets.push({label:'Current LE',data:mos.map(m=>leSum(curRows,[m])),borderColor:'#f5a623',backgroundColor:'rgba(245,166,35,.1)',tension:.3,pointRadius:3,fill:true,borderWidth:2});
 
-  mkChart('c_le_monthly',{type:'line',data:{labels:mos.map(m=>LE_MO[m-1]),datasets},options:co({
+  mkChart('c_le_monthly',{type:'line',data:{labels:mos.map(m=>MONTHS_SHORT[m-1]),datasets},options:co({
     plugins:{legend:{display:true,labels:{color:'#5a7a96',font:{size:10}}},tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmtE(ctx.raw,2)}`}}},
     scales:{y:{ticks:{color:'#5a7a96',font:{size:10},callback:v=>fmtE(v,0)},grid:{color:'rgba(255,255,255,0.05)'}}}}
   )});
@@ -9369,7 +9374,7 @@ function renderLEMonthly(){
   const tbl=document.getElementById('le_monthly_tbl');
   if(tbl){
     const rows=[1,2,3,4,5,6,7,8,9,10,11,12].map(m=>({m,le:leSum(curRows,[m]),bud:budSum(bud,[m]),act:actSum(actCur,[m]),py:actSum(actPY,[m])}));
-    tbl.innerHTML=`<table id="le_mt_tbl_el"><thead><tr><th>Month</th><th>PY Actual</th><th>Budget</th><th>Actuals</th><th>Current LE</th><th>LE vs Bud</th><th>LE vs Act</th></tr></thead><tbody>${rows.map(r=>{const vb=r.le-r.bud,vbp=r.bud?vb/r.bud*100:0;const va=r.act?r.le-r.act:null,vap=r.act&&va!=null?va/r.act*100:null;return`<tr><td>${LE_MO[r.m-1]}</td><td>${fmtE(r.py,1)}</td><td>${fmtE(r.bud,1)}</td><td>${r.act?fmtE(r.act,1):'--'}</td><td>${fmtE(r.le,1)}</td><td style="${vb>=0?'color:var(--green)':'color:var(--red)'}">${vb>=0?'+':''}${fmtE(vb,1)} (${vb>=0?'+':''}${vbp.toFixed(1)}%)</td><td>${vap!=null?`<span style="${vap>=0?'color:var(--green)':'color:var(--red)'}">${vap>=0?'+':''}${fmtE(va,1)} (${vap>=0?'+':''}${vap.toFixed(1)}%)</span>`:'--'}</td></tr>`;}).join('')}<tr class="ft"><td>FY Total</td><td>${fmtE(rows.reduce((s,r)=>s+r.py,0),1)}</td><td>${fmtE(rows.reduce((s,r)=>s+r.bud,0),1)}</td><td>${fmtE(rows.filter(r=>r.act).reduce((s,r)=>s+r.act,0),1)}</td><td>${fmtE(rows.reduce((s,r)=>s+r.le,0),1)}</td><td></td><td></td></tr></tbody></table>`;
+    tbl.innerHTML=`<table id="le_mt_tbl_el"><thead><tr><th>Month</th><th>PY Actual</th><th>Budget</th><th>Actuals</th><th>Current LE</th><th>LE vs Bud</th><th>LE vs Act</th></tr></thead><tbody>${rows.map(r=>{const vb=r.le-r.bud,vbp=r.bud?vb/r.bud*100:0;const va=r.act?r.le-r.act:null,vap=r.act&&va!=null?va/r.act*100:null;return`<tr><td>${MONTHS_SHORT[r.m-1]}</td><td>${fmtE(r.py,1)}</td><td>${fmtE(r.bud,1)}</td><td>${r.act?fmtE(r.act,1):'--'}</td><td>${fmtE(r.le,1)}</td><td style="${vb>=0?'color:var(--green)':'color:var(--red)'}">${vb>=0?'+':''}${fmtE(vb,1)} (${vb>=0?'+':''}${vbp.toFixed(1)}%)</td><td>${vap!=null?`<span style="${vap>=0?'color:var(--green)':'color:var(--red)'}">${vap>=0?'+':''}${fmtE(va,1)} (${vap>=0?'+':''}${vap.toFixed(1)}%)</span>`:'--'}</td></tr>`;}).join('')}<tr class="ft"><td>FY Total</td><td>${fmtE(rows.reduce((s,r)=>s+r.py,0),1)}</td><td>${fmtE(rows.reduce((s,r)=>s+r.bud,0),1)}</td><td>${fmtE(rows.filter(r=>r.act).reduce((s,r)=>s+r.act,0),1)}</td><td>${fmtE(rows.reduce((s,r)=>s+r.le,0),1)}</td><td></td><td></td></tr></tbody></table>`;
     makeSortable('le_mt_tbl_el');
   }
 }
@@ -9413,7 +9418,7 @@ function renderLEAdjustPreview(){
   const base=sbLE.filter(d=>(d.le_label||'Apr-26 LE')===curLbl&&d.year===FC_BUD_YEAR);
   const adj =leApplyAdjustments(base,leAdjustments);
   const bud =_budAll(FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)}));
-  mkChart('c_le_adj_preview',{type:'line',data:{labels:mos.map(m=>LE_MO[m-1]),datasets:[
+  mkChart('c_le_adj_preview',{type:'line',data:{labels:mos.map(m=>MONTHS_SHORT[m-1]),datasets:[
     {label:'Current LE', data:mos.map(m=>leSum(base,[m])),borderColor:'#f5a623',backgroundColor:'transparent',tension:.3,pointRadius:2,fill:false},
     {label:'Adjusted LE',data:mos.map(m=>leSum(adj,[m])), borderColor:'#e74c3c',backgroundColor:'rgba(231,76,60,.1)',tension:.3,pointRadius:2,fill:true,borderWidth:2},
     {label:'Budget',     data:mos.map(m=>budSum(bud,[m])),borderColor:'#3498db',backgroundColor:'transparent',tension:.3,pointRadius:2,fill:false,borderDash:[4,3]}
@@ -9667,7 +9672,7 @@ function renderLECompare(){
   if(leCmpToggles['__bud']!==false) datasets.push({label:'Budget',data:mos.map(m=>budSum(budAll,[m])),borderColor:'#3498db',backgroundColor:'transparent',borderDash:[4,3],tension:.3,pointRadius:2,fill:false,borderWidth:1.5});
   if(leCmpToggles['__act']!==false) datasets.push({label:'Actuals',data:mos.map(m=>actSum(actAll,[m])),borderColor:'#2ecc71',backgroundColor:'transparent',tension:.3,pointRadius:3,fill:false,borderWidth:2});
 
-  mkChart('c_le_compare',{type:'line',data:{labels:mos.map(m=>LE_MO[m-1]),datasets},options:co({
+  mkChart('c_le_compare',{type:'line',data:{labels:mos.map(m=>MONTHS_SHORT[m-1]),datasets},options:co({
     plugins:{legend:{display:true,labels:{color:'#5a7a96',font:{size:10}}},tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmtE(ctx.raw,2)}`}}},
     scales:{y:{ticks:{color:'#5a7a96',font:{size:10},callback:v=>fmtE(v,0)},grid:{color:'rgba(255,255,255,0.05)'}}}}
   )});
@@ -9705,7 +9710,7 @@ function renderLELosses(){
   }
 
   const leM=m=>leS.find(d=>d.month===m)||{};
-  mkChart('c_le_loss_kwh',{type:'bar',data:{labels:mos.map(m=>LE_MO[m-1]),datasets:[
+  mkChart('c_le_loss_kwh',{type:'bar',data:{labels:mos.map(m=>MONTHS_SHORT[m-1]),datasets:[
     {label:'Net Gen (LE)', type:'line',data:mos.map(m=>leM(m).net_gen_kwh||0),   borderColor:'#f5a623',backgroundColor:'transparent',tension:.3,pointRadius:3,fill:false,borderWidth:2,order:1},
     {label:'Sales (LE)',   type:'bar', data:mos.map(m=>leM(m).total_sales_kwh||0),backgroundColor:'rgba(52,152,219,.5)',order:2},
     {label:'Losses (LE)',  type:'bar', data:mos.map(m=>leM(m).losses_kwh||0),    backgroundColor:'rgba(231,76,60,.5)',order:2}
@@ -9717,7 +9722,7 @@ function renderLELosses(){
   const fDates=[...new Set(sbLossesForecast.map(d=>d.forecast_date))].sort();
   const fcRows=fDates.length?sbLossesForecast.filter(d=>d.forecast_date===fDates[fDates.length-1]&&d.year===FC_BUD_YEAR):[];
   const pct=(arr,m)=>{const d=arr.find(r=>r.month===m);return d!=null?(d.losses_pct||0)*100:null;};
-  mkChart('c_le_loss_pct',{type:'line',data:{labels:mos.map(m=>LE_MO[m-1]),datasets:[
+  mkChart('c_le_loss_pct',{type:'line',data:{labels:mos.map(m=>MONTHS_SHORT[m-1]),datasets:[
     {label:'Actuals',  data:mos.map(m=>pct(actS,m)), borderColor:'#2ecc71',backgroundColor:'transparent',tension:.3,pointRadius:3,fill:false,spanGaps:false},
     {label:'Budget',   data:mos.map(m=>pct(budS,m)), borderColor:'#3498db',backgroundColor:'transparent',borderDash:[4,3],tension:.3,pointRadius:2,fill:false},
     {label:'LE',       data:mos.map(m=>pct(leS,m)),  borderColor:'#f5a623',backgroundColor:'rgba(245,166,35,.1)',tension:.3,pointRadius:3,fill:true,borderWidth:2},
@@ -9730,7 +9735,7 @@ function renderLELosses(){
   const tbl=document.getElementById('le_loss_tbl');
   if(tbl){
     const rows=allMos.map(m=>({m,leG:leM(m).net_gen_kwh||0,leS2:leM(m).total_sales_kwh||0,leL:leM(m).losses_kwh||0,leP:(leM(m).losses_pct||0)*100,bP:((budS.find(d=>d.month===m)||{}).losses_pct||0)*100,aP:actS.find(d=>d.month===m)!=null?((actS.find(d=>d.month===m)||{}).losses_pct||0)*100:null,fP:fcRows.find(d=>d.month===m)!=null?((fcRows.find(d=>d.month===m)||{}).losses_pct||0)*100:null}));
-    tbl.innerHTML=`<table id="le_loss_tbl_el"><thead><tr><th>Month</th><th>Net Gen (LE)</th><th>Sales (LE)</th><th>Losses kWh (LE)</th><th>Losses% LE</th><th>Losses% Bud</th><th>Losses% Act</th><th>Losses% 12m Fcst</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${LE_MO[r.m-1]}</td><td>${fmtE(r.leG,1)}</td><td>${fmtE(r.leS2,1)}</td><td>${fmtE(r.leL,1)}</td><td>${r.leP.toFixed(2)}%</td><td>${r.bP.toFixed(2)}%</td><td>${r.aP!=null?r.aP.toFixed(2)+'%':'--'}</td><td>${r.fP!=null?r.fP.toFixed(2)+'%':'--'}</td></tr>`).join('')}</tbody></table>`;
+    tbl.innerHTML=`<table id="le_loss_tbl_el"><thead><tr><th>Month</th><th>Net Gen (LE)</th><th>Sales (LE)</th><th>Losses kWh (LE)</th><th>Losses% LE</th><th>Losses% Bud</th><th>Losses% Act</th><th>Losses% 12m Fcst</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${MONTHS_SHORT[r.m-1]}</td><td>${fmtE(r.leG,1)}</td><td>${fmtE(r.leS2,1)}</td><td>${fmtE(r.leL,1)}</td><td>${r.leP.toFixed(2)}%</td><td>${r.bP.toFixed(2)}%</td><td>${r.aP!=null?r.aP.toFixed(2)+'%':'--'}</td><td>${r.fP!=null?r.fP.toFixed(2)+'%':'--'}</td></tr>`).join('')}</tbody></table>`;
     makeSortable('le_loss_tbl_el');
   }
 }
@@ -9880,7 +9885,7 @@ function renderNetGen(){
   const peak=Math.max(...allVals), trough=Math.min(...allVals);
   const peakIdx=src.findIndex(r=>Number(r.kwh||r.net_gen_mwh||0)===peak);
   const peakRec=src[peakIdx];
-  const mNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const mNames=MONTHS_SHORT;
 
   // KPIs
   const kEl=document.getElementById('ng_krow');
@@ -10155,7 +10160,7 @@ function runValidation(){
   const ytdMos=Array.from({length:curMonth},(_,i)=>i+1);
 
   // Update period labels
-  const mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const mn=MONTHS_SHORT;
   const cyLbl=`${mn[curMonth-1]} ${cy}`;
   const el_py=document.getElementById('vld_py_lbl'); if(el_py)el_py.textContent=String(py);
   const el_cy=document.getElementById('vld_cy_lbl'); if(el_cy)el_cy.textContent=cyLbl;
@@ -10271,7 +10276,7 @@ function renderVldDropped(){
 function renderVldDeflections(){
   const tbl=document.getElementById('vld_deflect_tbl'); if(!tbl)return;
   if(!_vldDeflections.length){tbl.innerHTML='<div style="padding:20px;text-align:center;font-size:11px;color:var(--text3)">No GWh deflections found — all accounts are within 80% of prior year.</div>';return;}
-  const mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const mn=MONTHS_SHORT;
   const q=(document.getElementById('vld_def_q')?.value||'').toLowerCase();
   const rcF=document.getElementById('vld_def_rc')?.value||'';
   const sevF=document.getElementById('vld_def_sev')?.value||'';
@@ -10298,7 +10303,7 @@ function renderVldDeflections(){
 function renderVldAnomalies(){
   const tbl=document.getElementById('vld_anom_tbl'); if(!tbl)return;
   if(!_vldAnomalies.length){tbl.innerHTML='<div style="padding:20px;text-align:center;font-size:11px;color:var(--text3)">No month-on-month anomalies found.</div>';return;}
-  const mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const mn=MONTHS_SHORT;
   const q=(document.getElementById('vld_anom_q')?.value||'').toLowerCase();
   const rcF=document.getElementById('vld_anom_rc')?.value||'';
   const yrF=document.getElementById('vld_anom_yr')?.value||'';
