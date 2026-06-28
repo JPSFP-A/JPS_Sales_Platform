@@ -91,7 +91,7 @@ body{background:var(--navy);color:var(--text);font-family:'IBM Plex Sans',system
 .sb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9998;}
 .sb-overlay.open{display:block;}
 @media(max-width:767px){
-  .sidebar{position:fixed;top:0;left:0;bottom:0;z-index:9999;
+  .sidebar{position:fixed;top:38px;left:0;bottom:0;z-index:9999;
     transform:translateX(-100%);transition:transform .25s cubic-bezier(.16,1,.3,1);}
   .sidebar.sb-open{transform:translateX(0);}
   .sb-toggle{display:inline-flex;}
@@ -2594,7 +2594,7 @@ function _applyLogin(user){
   if (window.JpsMonitor) JpsMonitor.setUser(CU.id || CU.email, CU.name || CU.email);
   if (window.posthog) posthog.identify(CU.id || CU.email, { email: CU.email, name: CU.name });
   try { if (window.Sentry) { const _su = { id: CU.id, email: CU.email }; if (typeof Sentry.setUser === 'function') Sentry.setUser(_su); else if (typeof Sentry.onLoad === 'function') Sentry.onLoad(function(){ Sentry.setUser(_su); }); } } catch(e) { console.warn('Sentry setUser failed', e); }
-  _initIdleTimeout(function(){ getSB().auth.signOut(); });
+  try { _initIdleTimeout(function(){ getSB().auth.signOut(); }); } catch(e) { console.warn('[Sales] idle timeout init failed:', e); }
   const btn=document.getElementById('lBtn');
   if(btn){btn.textContent='Sign In →';btn.disabled=false;}
   document.getElementById('loginScreen').style.display='none';
