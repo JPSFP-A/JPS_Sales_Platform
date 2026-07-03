@@ -4148,7 +4148,7 @@ function buildCharts(){
   const _accFcSumIdx={}; // 'year_month' -> sum of forecast_gwh across customers (DB)
   sbFcEntries.forEach(r=>{const k=`${r.year}_${r.month}`;_accFcSumIdx[k]=(_accFcSumIdx[k]||0)+Number(r.forecast_gwh||0);});
   const _accActSumIdx={}; // 'year_month' -> commercial actual GWh
-  sbActuals.forEach(r=>{
+  (sbActualsComm.length?sbActualsComm:sbActuals).forEach(r=>{
     if(!_isComm(r))return;
     const k=`${Number(r[YEAR_COL]||r.year||0)}_${Number(r.month||0)}`;
     _accActSumIdx[k]=(_accActSumIdx[k]||0)+Number(r.kwh||0)/1e6;
@@ -4205,10 +4205,12 @@ function renderPfCust(){
   // Period-filtered curYear: sum .m[] for selected months
   const getPeriodY26=(c)=>pm.reduce((s,m)=>s+(c.m[m-1]||0),0);
 
-  // Period-filtered PY: quick single-pass scan of sbActuals
+  // Period-filtered PY: quick single-pass scan — this table is commercial-only (CM_RCS_PF),
+  // so prefer sbActualsComm (has jps_ac) over sbActuals (residential-only, no jps_ac rows)
   const pyMap={};
-  if(sbActuals.length){
-    sbActuals.forEach(r=>{
+  const _pyCustSrc=sbActualsComm.length?sbActualsComm:sbActuals;
+  if(_pyCustSrc.length){
+    _pyCustSrc.forEach(r=>{
       if(Number(r[YEAR_COL]||r.year||0)!==py)return;
       if(!pmSet.has(Number(r.month||0)))return;
       const acct=_custNum(String(r.jps_ac||r.account||''));
@@ -4413,9 +4415,10 @@ function renderCmCust(){
   const py=curYear-1,cy=curYear;
   // Period CY: sum across period months from CUSTOMERS.m[]
   const periCY=c=>pm.reduce((a,m)=>a+(c.m[m-1]||0),0);
-  // Period PY: single-pass scan of sbActuals (commercial rows only)
+  // Period PY: single-pass scan — commercial rows only, so prefer sbActualsComm
+  // (sbActuals is residential-only and never carries jps_ac-tagged commercial rows)
   const pyMap={};
-  sbActuals.forEach(r=>{
+  (sbActualsComm.length?sbActualsComm:sbActuals).forEach(r=>{
     if(Number(r[YEAR_COL]||r.year||0)!==py)return;
     if(!pmSet.has(Number(r.month||0)))return;
     if(!_isComm(r))return;
@@ -4574,12 +4577,13 @@ function renderCmIndTbl(){
   }
   const pm=getPM(),pmSet=new Set(pm),ph=getPH();
   const py=curYear-1,cy=curYear;
-  // Build period-filtered industry map from sbActuals (same approach as renderPfInd)
+  // Build period-filtered industry map — commercial rows only, so prefer sbActualsComm
+  // (sbActuals is residential-only; scanning it here would exclude every row via CM_RCS)
   const _indLkp={};
   if(sbIndustries&&sbIndustries.length)sbIndustries.forEach(x=>{_indLkp[String(x.jps_ac||'').trim()]=x.industry||'';});
   const CM_RCS=new Set(['RT40','RT50','RT60-ST','RT70']);
   const indMap={},indRcMap={};
-  sbActuals.forEach(r=>{
+  (sbActualsComm.length?sbActualsComm:sbActuals).forEach(r=>{
     const yr=Number(r[YEAR_COL]||r.year||0),mo=Number(r.month||0);
     if(!pmSet.has(mo))return;
     if(yr!==cy&&yr!==py)return;
@@ -4877,8 +4881,9 @@ function renderFcEntry(){
     return true;
   });
   // Build PY average map once — O(n) scan — replaces per-customer O(n) scans (N+1 fix)
+  // Commercial rows only, so prefer sbActualsComm (sbActuals is residential-only)
   const _fcPyMap={};
-  sbActuals.forEach(r=>{
+  (sbActualsComm.length?sbActualsComm:sbActuals).forEach(r=>{
     if(Number(r[YEAR_COL]||r.year||0)!==curYear-1)return;
     if(Number(r.month||0)>curMonth||Number(r.month||0)<1)return;
     if(!_isComm(r))return;
@@ -5186,13 +5191,14 @@ function countFcAdj(){return FC_SEGS.filter(s=>S.get(`${mrPeriod}_fc_${s.seg}`,{
 /* ==========================================
    ACCOUNT RECONCILIATION
 ========================================== */
-/* ── Build RECON_DATA from sbActuals: name mismatches + possible duplicates ── */
+/* ── Build RECON_DATA: name mismatches + possible duplicates (account-level, so needs sbActualsComm) ── */
 function buildReconData(){
   RECON_DATA=[];
-  if(!sbActuals.length)return;
+  const _reconSrc=sbActualsComm.length?sbActualsComm:sbActuals;
+  if(!_reconSrc.length)return;
   const saved=S.get('recon_resolved',{});
   const acctNames={},nameAccts={},acctRCs={};
-  sbActuals.forEach(r=>{
+  _reconSrc.forEach(r=>{
     const ac=String(r.jps_ac||'').trim();
     const nm=String(r.name||'').trim();
     const rc=String(r.rate_class||'').trim();
@@ -5438,6 +5444,14 @@ function initAll(){
   buildCharts();
   renderSection('ov');
   document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>c.classList.toggle('on'));
+  // Overview/Validation/Account Recon all need jps_ac-tagged rows (sbActualsComm), but that
+  // only loaded lazily on Commercial/Forecast/LE tabs before — kick it off now so the first
+  // paint of Overview isn't left showing zeroed-out prior-year commercial figures.
+  if(!_commDetailLoaded){
+    loadCommercialDetail().then(()=>{
+      try{buildCharts();renderSection(document.querySelector('.sec.on')?.id||'ov');}catch(e){}
+    }).catch(e=>console.warn('loadCommercialDetail:',e));
+  }
 }
 
 /* =====================================================
@@ -10361,7 +10375,10 @@ window.addEventListener('beforeunload',()=>{
 let _vldDropped=[], _vldDeflections=[], _vldAnomalies=[];
 
 function runValidation(){
-  if(!sbActuals.length){
+  // Account-level checks need jps_ac-tagged rows — sbActuals excludes those by design
+  // (get_res_actuals filters WHERE jps_ac IS NULL); sbActualsComm is the complete account universe.
+  const _vldSrc=sbActualsComm.length?sbActualsComm:sbActuals;
+  if(!_vldSrc.length){
     toast('No actuals loaded — sync the database first','w');
     ['vld_dropped_tbl','vld_deflect_tbl','vld_anom_tbl'].forEach(id=>{
       const el=document.getElementById(id);
@@ -10382,7 +10399,7 @@ function runValidation(){
   // Accounts with actuals in prior year but NO actuals in current year
   const pyAccounts={};
   const cyAccounts=new Set();
-  sbActuals.forEach(r=>{
+  _vldSrc.forEach(r=>{
     const ac=String(r.jps_ac||'').trim(); if(!ac)return;
     const yr=Number(r.year), kwh=Number(r.kwh||0);
     if(yr===py&&kwh>0){
@@ -10399,7 +10416,7 @@ function runValidation(){
   // ── 2. GWh Deflections ───────────────────────────────
   // YTD current < 80% of same-period prior year
   const acSums={};
-  sbActuals.forEach(r=>{
+  _vldSrc.forEach(r=>{
     const ac=String(r.jps_ac||'').trim(); if(!ac)return;
     const yr=Number(r.year), mo=Number(r.month), kwh=Number(r.kwh||0);
     if(!acSums[ac])acSums[ac]={ac,name:String(r.name||'').trim(),rc:String(r.rate_class||'').trim(),segment:r.consumption_bucket?'Residential':'Commercial',cy:0,py:0};
@@ -10421,7 +10438,7 @@ function runValidation(){
   // ── 3. Month-on-Month Anomalies ──────────────────────
   // For each account × year, find consecutive months where kWh swings >25%
   const momData={};
-  sbActuals.forEach(r=>{
+  _vldSrc.forEach(r=>{
     const ac=String(r.jps_ac||'').trim(); if(!ac)return;
     const yr=Number(r.year), mo=Number(r.month), kwh=Number(r.kwh||0);
     const key=`${ac}|${yr}`;
