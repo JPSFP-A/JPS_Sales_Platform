@@ -1,1 +1,9 @@
 index.legacy.html
+salesanalysis_deploy/
+analysis/
+_chk*.js
+_find*.js
+_find*_out.txt
+*.bak.html
+.claude/
+.github/

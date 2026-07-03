@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Sales Platform — Architecture Map</title>
+<style>
+:root{
+  --bg:#0F0F0F;--panel:#161616;--panel-2:#1c1c1c;--border:#2a2a2a;
+  --text:#e8e8e8;--muted:#8a8a8a;
+  --client:#4ea1ff;--route:#7bd389;--service:#c792ea;
+  --db:#ffb86b;--external:#ff6b9d;--critical:#ff3860;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;overflow:hidden;height:100vh;display:flex;flex-direction:column}
+header{background:var(--panel);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0;flex-wrap:wrap}
+header h1{font-size:14px;font-weight:700;color:var(--text)}
+header p{font-size:11px;color:var(--muted)}
+.filters{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+.chip{padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--panel-2);color:var(--muted);transition:all .15s}
+.chip:hover{color:var(--text);border-color:#555}
+.chip.on{background:var(--client);color:#000;border-color:var(--client)}
+.chip[data-f="critical"].on{background:var(--critical);color:#fff;border-color:var(--critical)}
+.chip[data-f="db"].on{background:var(--db);color:#000;border-color:var(--db)}
+.chip[data-f="external"].on{background:var(--external);color:#fff;border-color:var(--external)}
+.chip[data-f="sections"].on{background:var(--route);color:#000;border-color:var(--route)}
+.chip[data-f="data"].on{background:var(--service);color:#000;border-color:var(--service)}
+.workspace{display:flex;flex:1;min-height:0;overflow:hidden}
+#canvas-wrap{flex:1;position:relative;overflow:hidden;cursor:grab}
+#canvas-wrap.dragging{cursor:grabbing}
+#canvas{position:absolute;top:0;left:0;transform-origin:0 0}
+.cluster-label{position:absolute;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);pointer-events:none;padding:4px 8px;border-radius:4px;background:rgba(22,22,22,.85)}
+.cluster-bg{position:absolute;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.012)}
+.node{position:absolute;border-radius:8px;border:1.5px solid var(--border);padding:8px 11px;cursor:pointer;transition:border-color .15s,box-shadow .15s;background:var(--panel-2);min-width:120px}
+.node:hover{box-shadow:0 0 0 2px rgba(255,255,255,.18)}
+.node.selected{box-shadow:0 0 0 2.5px #fff}
+.node-label{font-size:11px;font-weight:700;color:var(--text);line-height:1.3}
+.node-sub{font-size:9px;color:var(--muted);margin-top:2px;line-height:1.4}
+.node-tag{display:inline-block;margin-top:4px;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:700}
+svg#edges{position:absolute;top:0;left:0;pointer-events:none;overflow:visible}
+.sidebar{width:280px;min-width:280px;background:var(--panel);border-left:1px solid var(--border);overflow-y:auto;padding:14px;flex-shrink:0}
+.sidebar h2{font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+.sidebar p{font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:8px}
+.detail-label{font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-top:10px;margin-bottom:3px}
+.detail-val{font-size:11px;color:var(--text)}
+.edge-list{margin-top:4px;display:flex;flex-direction:column;gap:3px}
+.edge-item{font-size:10px;color:var(--muted);padding:3px 7px;background:var(--panel-2);border-radius:4px;border:1px solid var(--border)}
+.finding{background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:6px;font-size:11px;line-height:1.5;color:var(--muted)}
+.finding strong{color:var(--text)}
+legend-row{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);margin-bottom:4px}
+.legend{margin-top:12px;display:flex;flex-direction:column;gap:4px}
+.legend-row{display:flex;align-items:center;gap:7px;font-size:10px;color:var(--muted)}
+.legend-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>JPS Sales Analytics Platform — Architecture Map</h1>
+    <p>JPS_Sales_Platform_v1.html &nbsp;·&nbsp; Vanilla JS + Supabase &nbsp;·&nbsp; v1.1.0</p>
+  </div>
+  <div class="filters">
+    <span class="chip on" data-f="all" onclick="filterNodes('all',this)">Overview</span>
+    <span class="chip" data-f="sections" onclick="filterNodes('sections',this)">Sections / Pages</span>
+    <span class="chip" data-f="data" onclick="filterNodes('data',this)">Data Layer</span>
+    <span class="chip" data-f="external" onclick="filterNodes('external',this)">External APIs</span>
+    <span class="chip" data-f="critical" onclick="filterNodes('critical',this)">Critical Path</span>
+    <span class="chip" data-f="all" onclick="filterNodes('all',document.querySelector('[data-f=all]'))">Show All</span>
+  </div>
+</header>
+<div class="workspace">
+  <div id="canvas-wrap">
+    <div id="canvas">
+      <svg id="edges"></svg>
+    </div>
+  </div>
+  <div class="sidebar" id="sidebar">
+    <h2>Sales Platform</h2>
+    <p>Single-file SPA — kWh sales analysis, LE forecasting, revenue recovery, defection tracking. Auth-gated via Supabase SSO shared across the JPS Analytics Suite.</p>
+
+    <div class="detail-label">Notable Findings</div>
+    <div class="finding"><strong>Schema stale banner risk:</strong> PostgREST cache drift silently breaks uploads and deletes. Auto-banner detection in place but relies on a manual DB schema SQL run.</div>
+    <div class="finding"><strong>Dual analytics stack:</strong> Both Sentry (error tracking) and PostHog (product analytics) load on every page — adds ~200 KB and two external network calls before first paint.</div>
+    <div class="finding"><strong>XLSX loaded lazily:</strong> The SheetJS library is not in the initial bundle; it is injected on first upload/download — saves ~1 MB on initial load but adds latency on first use.</div>
+    <div class="finding"><strong>LE Commit writes to fpa_facts:</strong> The LE forecast commit path crosses into the FP&amp;A Finance Hub DB tables (fpa_versions, fpa_facts, fpa_derived_formulas) — tightly coupling the Sales Platform to the Finance Hub schema.</div>
+    <div class="finding"><strong>Admin wipe-all function:</strong> doWipeAllActuals() deletes every row from jps_actuals with a .gte('id',1) — destructive with no server-side safeguard beyond a client-side confirmation code.</div>
+
+    <div class="legend">
+      <div class="legend-row"><div class="legend-dot" style="background:var(--route)"></div>Section / Page</div>
+      <div class="legend-row"><div class="legend-dot" style="background:var(--service)"></div>Service / Utility</div>
+      <div class="legend-row"><div class="legend-dot" style="background:var(--db)"></div>Database Table / RPC</div>
+      <div class="legend-row"><div class="legend-dot" style="background:var(--external)"></div>External API</div>
+      <div class="legend-row"><div class="legend-dot" style="background:var(--client)"></div>Shared / Core</div>
+      <div class="legend-row"><div class="legend-dot" style="background:var(--critical)"></div>Critical Path</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+// DATA MODEL
+// ─────────────────────────────────────────────────────────────
+
+const clusters = [
+  { id:'sections',  label:'Sections / Pages',    x:20,   y:60,  w:430, h:1060 },
+  { id:'core',      label:'Core / Shared',        x:480,  y:60,  w:240, h:340  },
+  { id:'data',      label:'Data Layer',           x:480,  y:430, w:240, h:690  },
+  { id:'external',  label:'External APIs',        x:750,  y:60,  w:220, h:340  },
+  { id:'db',        label:'Supabase Tables',      x:750,  y:430, w:220, h:690  },
+];
+
+const N = (id, cluster, label, sub, x, y, w, h, color, opts={}) =>
+  ({ id, cluster, label, sub, x, y, w, h, color, ...opts });
+
+const nodes = [
+  // ── Sections / Pages ──
+  N('ov',      'sections', 'Overview',           'KPI row + bracket charts + kWh trend',                   40,  90,  180, 60, 'route'),
+  N('cm',      'sections', 'Commercial',          'Pivot table, defection panel, R&O inline, Charts',       40,  175, 180, 60, 'route'),
+  N('rs',      'sections', 'Residential',         'Bracket table + mkBracketCharts',                        40,  260, 180, 60, 'route'),
+  N('fc',      'sections', 'Forecast Accuracy',   'Budget vs Actuals accuracy by rate class & parish',      40,  345, 180, 60, 'route'),
+  N('le',      'sections', 'LE Forecast',         'Latest Estimate — 8 sub-tabs incl. Commit to fpa_facts', 40,  430, 180, 60, 'route'),
+  N('es',      'sections', 'Exec Summary',        'renderExecSummary — YoY narrative + AI commentary',      40,  515, 180, 60, 'route'),
+  N('vb',      'sections', 'Variance Bridge',     'renderVarianceBridge + waterfall chart + driver editor', 40,  600, 180, 60, 'route'),
+  N('rr',      'sections', 'Revenue Recovery',    'renderRevenueRecovery + renderRRCharts',                 40,  685, 180, 60, 'route'),
+  N('ng',      'sections', 'Net Generation',      'Heatmap of net gen vs actuals',                          40,  770, 180, 60, 'route'),
+  N('dr_flow', 'sections', 'Defection Actions',   'renderDefFlow — per-account defection workflow',         40,  855, 180, 60, 'route'),
+  N('vld',     'sections', 'Defection & Validation','runValidation + anomaly checks',                       40,  940, 180, 60, 'route'),
+  N('rb_res',  'sections', 'Residential Intel',   'renderResIntel — bucket analysis, 6-month trend',        230, 90,  180, 60, 'route'),
+  N('ro_adv',  'sections', 'R&O Pipeline',        'renderROAdvanced — risks & opportunities register',      230, 175, 180, 60, 'route'),
+  N('rpt',     'sections', 'Report Builder',      'renderReportBuilder — PDF/print multi-section report',   230, 260, 180, 60, 'route'),
+  N('ar',      'sections', 'Account Recon',       'Reconciliation cards linking to Finance Hub',             230, 345, 180, 60, 'route'),
+  N('gl',      'sections', 'Glossary',            'Static term definitions, tagged by category',             230, 430, 180, 60, 'route'),
+  N('help',    'sections', 'User Guide',          'Accordion help sections with search filter',              230, 515, 180, 60, 'route'),
+  N('adm',     'sections', 'Admin',               'Users, roles, period locks, schema SQL, KAM mgmt, audit',230, 600, 180, 60, 'route'),
+
+  // ── Core / Shared ──
+  N('sw',       'core', 'sw()',             'Section switcher — shows/hides .sec divs, fires renderSection()', 500, 90,  200, 55, 'client'),
+  N('renderSection','core','renderSection()','Dispatch function routing to each section renderer',             500, 165, 200, 55, 'client'),
+  N('buildDashboardData','core','buildDashboardData()','Rebuilds in-memory indexes from sbActuals + sbBudget arrays', 500, 240, 200, 55, 'client'),
+  N('syncSupabase','core','syncSupabase()',  'Parallel RPC fetches on load/upload — populates sbActuals, sbBudget, etc.', 500, 315, 200, 55, 'critical', {critical:true}),
+
+  // ── Shared scripts ──
+  N('jps_auth',  'core', 'jps-auth.js',    'Shared SSO cookie jps_sso_v1 — doLogin / doLogout',  500, 420, 200, 50, 'service'),
+  N('jps_nav',   'core', 'jps-nav.js',     'Suite nav bar — hides links via get_my_app_access() RPC', 500, 490, 200, 50, 'service'),
+  N('jps_monitor','core','jps-monitor.js', 'JpsMonitor — heartbeat RPC, error logging, setUser',   500, 560, 200, 50, 'service'),
+  N('jps_submit','core', 'jps-submit.js',  'JpsSubmit — bridges data writes to shared submit layer', 500, 630, 200, 50, 'service'),
+  N('jps_pw',    'core', 'jps-pw-reset.js','Password reset via OTP code (SafeLinks workaround)',    500, 700, 200, 50, 'service'),
+  N('config_js', 'core', 'config.js',      'Supabase URL + anon key; getSB() factory',              500, 770, 200, 50, 'service'),
+  N('chart_js',  'core', 'Chart.js 4.4.1', 'CDN-loaded chart library — mkChart(), destroyChart()', 500, 840, 200, 50, 'service'),
+  N('xlsx_lazy', 'core', 'SheetJS (lazy)', 'XLSX injected on first upload/download — saves ~1MB',   500, 910, 200, 50, 'service'),
+
+  // ── External APIs ──
+  N('supabase_cdn','external','@supabase/supabase-js','CDN UMD bundle — Supabase JS client v2',    770, 90,  190, 50, 'external'),
+  N('sentry',    'external', 'Sentry SDK',      'Error tracking, environment=sales-platform, sample 20%', 770, 160, 190, 50, 'external'),
+  N('posthog',   'external', 'PostHog',          'Product analytics — identify, capture page events',      770, 230, 190, 50, 'external'),
+  N('chartjs_cdn','external','Chart.js CDN',     'cdnjs.cloudflare.com Chart.js 4.4.1',                    770, 300, 190, 50, 'external'),
+
+  // ── Supabase Tables / RPCs ──
+  N('jps_actuals', 'db', 'jps_actuals',     'Raw kWh actuals — rate_class, year, month, kwh, Source',      770, 460, 190, 50, 'db'),
+  N('jps_budget',  'db', 'jps_budget',      'AOP budget rows — year, month, rate_class, kwh_budget',       770, 530, 190, 50, 'db'),
+  N('jps_forecast','db', 'jps_forecast',    'LE forecast rows committed per version_id',                    770, 600, 190, 50, 'db'),
+  N('jps_forecast_versions','db','jps_forecast_versions','LE version registry — is_active, year',           770, 670, 190, 50, 'db'),
+  N('jps_kam',     'db', 'jps_kam',         'Key Account Manager assignments — jps_ac → kam',               770, 740, 190, 50, 'db'),
+  N('jps_period_locks','db','jps_period_locks','Period lock table — year+month lock flags',                  770, 810, 190, 50, 'db'),
+  N('jps_vb_drivers','db','jps_vb_drivers', 'Variance Bridge driver rows — year, month, label, value',      770, 880, 190, 50, 'db'),
+  N('jps_def_actions','db','jps_def_actions','Defection actions — acct_num, defection_type, cause',         770, 950, 190, 50, 'db'),
+  N('jps_notes',   'db', 'jps_notes',       'Account notes + AI narrative saves',                           770, 1020,190, 50, 'db'),
+  N('profiles',    'db', 'profiles',         'User profiles — role, sales_role, territory, is_active',       770, 1090,190, 50, 'db'),
+  N('audit_log',   'db', 'audit_log',        'Audit trail for admin actions (wipe, delete-month, etc.)',     770, 1010,190, 50, 'db'),
+  N('fpa_facts',   'db', 'fpa_facts',        'Finance Hub facts table — LE Commit writes here cross-app',    770, 1090,190, 55, 'critical', {critical:true}),
+  N('fpa_versions','db', 'fpa_versions',     'Finance Hub version registry — LE Commit upserts here',        770, 1160,190, 55, 'db'),
+
+  // RPC nodes
+  N('rpc_get_res',     'db', 'RPC: get_res_actuals',      'Returns residential actuals by year',             960, 460, 210, 45, 'db'),
+  N('rpc_get_budget',  'db', 'RPC: get_budget_agg',       'Returns budget aggregate by year',                960, 520, 210, 45, 'db'),
+  N('rpc_get_rc_agg',  'db', 'RPC: get_rc_agg',           'Rate-class aggregate rollup',                     960, 580, 210, 45, 'db'),
+  N('rpc_parish',      'db', 'RPC: get_parish_agg',       'Parish-level aggregate rollup',                   960, 635, 210, 45, 'db'),
+  N('rpc_industry',    'db', 'RPC: get_industry_agg',     'Industry-segment aggregate rollup',               960, 690, 210, 45, 'db'),
+  N('rpc_customers',   'db', 'RPC: get_customers_summary','Customer-level summary — top accounts',            960, 745, 210, 45, 'db'),
+  N('rpc_refresh_mv',  'db', 'RPC: refresh_sales_mvs',    'Refreshes materialized views after upload',        960, 800, 210, 45, 'db'),
+  N('rpc_heartbeat',   'db', 'RPC: record_heartbeat',     'JpsMonitor 60s health ping',                      960, 855, 210, 45, 'db'),
+  N('rpc_nav_access',  'db', 'RPC: get_my_app_access',    'Returns apps user can see in suite nav',           960, 910, 210, 45, 'db'),
+  N('net_gen_hist',    'db', 'net_gen_historical',         'Net generation historical data — wipe/reload',     960, 965, 210, 45, 'db'),
+];
+
+const edges = [
+  // Nav → sections via sw()
+  { from:'sw', to:'renderSection', kind:'mount', label:'dispatch' },
+  { from:'renderSection', to:'ov',      kind:'normal', label:'render' },
+  { from:'renderSection', to:'cm',      kind:'normal', label:'render' },
+  { from:'renderSection', to:'rs',      kind:'normal', label:'render' },
+  { from:'renderSection', to:'fc',      kind:'normal', label:'render' },
+  { from:'renderSection', to:'le',      kind:'normal', label:'render' },
+  { from:'renderSection', to:'es',      kind:'normal', label:'render' },
+  { from:'renderSection', to:'vb',      kind:'normal', label:'render' },
+  { from:'renderSection', to:'rr',      kind:'normal', label:'render' },
+  { from:'renderSection', to:'ng',      kind:'normal', label:'render' },
+  { from:'renderSection', to:'dr_flow', kind:'normal', label:'render' },
+  { from:'renderSection', to:'vld',     kind:'normal', label:'render' },
+  { from:'renderSection', to:'rb_res',  kind:'normal', label:'render' },
+  { from:'renderSection', to:'ro_adv',  kind:'normal', label:'render' },
+  { from:'renderSection', to:'rpt',     kind:'normal', label:'render' },
+  { from:'renderSection', to:'adm',     kind:'normal', label:'render' },
+
+  // Core data flow
+  { from:'syncSupabase', to:'buildDashboardData', kind:'critical', label:'after sync' },
+  { from:'buildDashboardData', to:'renderSection',  kind:'mount',    label:'triggers rerender' },
+
+  // syncSupabase → RPCs
+  { from:'syncSupabase', to:'rpc_get_res',    kind:'db', label:'parallel fetch' },
+  { from:'syncSupabase', to:'rpc_get_budget', kind:'db', label:'parallel fetch' },
+  { from:'syncSupabase', to:'rpc_get_rc_agg', kind:'db', label:'parallel fetch' },
+  { from:'syncSupabase', to:'rpc_parish',     kind:'db', label:'parallel fetch' },
+  { from:'syncSupabase', to:'rpc_industry',   kind:'db', label:'parallel fetch' },
+  { from:'syncSupabase', to:'rpc_customers',  kind:'db', label:'parallel fetch' },
+
+  // Upload path
+  { from:'adm', to:'jps_actuals',    kind:'db',       label:'loadExcel upsert' },
+  { from:'adm', to:'rpc_refresh_mv', kind:'db',       label:'after upload' },
+  { from:'adm', to:'jps_budget',     kind:'db',       label:'budget upsert' },
+  { from:'adm', to:'jps_kam',        kind:'db',       label:'KAM assign' },
+  { from:'adm', to:'jps_period_locks',kind:'db',      label:'lock/unlock' },
+  { from:'adm', to:'profiles',       kind:'db',       label:'role / active changes' },
+  { from:'adm', to:'audit_log',      kind:'db',       label:'writeAudit()' },
+
+  // LE Forecast cross-app critical path
+  { from:'le', to:'jps_forecast_versions', kind:'critical', label:'leCommitWrite' },
+  { from:'le', to:'jps_forecast',          kind:'critical', label:'leCommitWrite insert' },
+  { from:'le', to:'fpa_versions',          kind:'critical', label:'cross-app upsert' },
+  { from:'le', to:'fpa_facts',             kind:'critical', label:'cross-app upsert' },
+
+  // Variance bridge
+  { from:'vb', to:'jps_vb_drivers', kind:'db', label:'saveBridgeDriversToDB' },
+
+  // Defection
+  { from:'dr_flow', to:'jps_def_actions', kind:'db', label:'saveDefAction' },
+  { from:'cm',      to:'jps_def_actions', kind:'db', label:'updateDefType/Cause' },
+
+  // Notes / narratives
+  { from:'es',  to:'jps_notes', kind:'db', label:'saveAiNote' },
+  { from:'cm',  to:'jps_notes', kind:'db', label:'saveNote' },
+
+  // Net gen
+  { from:'ng', to:'net_gen_hist', kind:'db', label:'clearNetGenData / fetch' },
+
+  // Auth
+  { from:'jps_auth', to:'profiles',    kind:'db',       label:'upsert on first login' },
+  { from:'jps_auth', to:'syncSupabase',kind:'mount',    label:'triggers on session restore' },
+
+  // Monitor
+  { from:'jps_monitor', to:'rpc_heartbeat', kind:'api', label:'60s heartbeat' },
+
+  // Nav access
+  { from:'jps_nav', to:'rpc_nav_access', kind:'api', label:'get_my_app_access' },
+
+  // External
+  { from:'config_js',   to:'supabase_cdn', kind:'api',    label:'createClient' },
+  { from:'chart_js',    to:'chartjs_cdn',  kind:'api',    label:'CDN load' },
+  { from:'jps_monitor', to:'sentry',       kind:'api',    label:'error capture' },
+  { from:'renderSection',to:'posthog',     kind:'api',    label:'page events' },
+  { from:'xlsx_lazy',   to:'adm',          kind:'mount',  label:'injected on first upload' },
+];
+
+const FIXES = {};
+const KNOWN_BUGS = {
+  'schema_stale': 'PostgREST schema cache can go stale — uploads/deletes fail until jps_normalize_schema() SQL is re-run manually.',
+  'wipe_all': 'doWipeAllActuals uses .gte("id",1) — no server-side guard; one confirmation code is the only safeguard.',
+  'cross_app_le': 'LE Commit writes directly into fpa_facts and fpa_versions — Finance Hub schema changes will silently break the Sales Platform LE commit.',
+};
+
+// ─────────────────────────────────────────────────────────────
+// RENDER ENGINE
+// ─────────────────────────────────────────────────────────────
+
+const canvasEl   = document.getElementById('canvas');
+const edgesSvg   = document.getElementById('edges');
+const canvasWrap = document.getElementById('canvas-wrap');
+const sidebarEl  = document.getElementById('sidebar');
+
+const COLOR = {
+  route:    'var(--route)',
+  service:  'var(--service)',
+  db:       'var(--db)',
+  external: 'var(--external)',
+  client:   'var(--client)',
+  critical: 'var(--critical)',
+};
+const EDGE_COLOR = {
+  critical: '#ff3860',
+  api:      '#ffb86b',
+  db:       '#ffb86b',
+  mount:    '#4ea1ff',
+  normal:   '#3a3a3a',
+};
+
+let pan = { x: 30, y: 20 };
+let zoom = 0.82;
+let dragging = false, startX, startY, startPan;
+let selectedNode = null;
+let activeFilter = 'all';
+
+function applyTransform(){
+  canvasEl.style.transform = `translate(${pan.x}px,${pan.y}px) scale(${zoom})`;
+}
+
+// Build cluster backgrounds + labels
+clusters.forEach(c => {
+  const bg = document.createElement('div');
+  bg.className = 'cluster-bg';
+  bg.style.cssText = `left:${c.x}px;top:${c.y}px;width:${c.w}px;height:${c.h}px`;
+  canvasEl.appendChild(bg);
+
+  const lbl = document.createElement('div');
+  lbl.className = 'cluster-label';
+  lbl.textContent = c.label;
+  lbl.style.cssText = `left:${c.x+8}px;top:${c.y+6}px`;
+  canvasEl.appendChild(lbl);
+});
+
+// Build node elements
+const nodeEls = {};
+nodes.forEach(n => {
+  const el = document.createElement('div');
+  el.className = 'node';
+  el.id = 'n_'+n.id;
+  el.style.cssText = `left:${n.x}px;top:${n.y}px;width:${n.w}px;min-height:${n.h}px;border-color:${COLOR[n.color]||'var(--border)'}`;
+  el.dataset.cluster = n.cluster;
+  el.dataset.color   = n.color;
+  el.dataset.critical = n.critical ? '1' : '0';
+
+  const tagText = {route:'Section',service:'Shared',db:'DB/RPC',external:'External',client:'Core',critical:'Critical'}[n.color]||n.color;
+  el.innerHTML = `
+    <div class="node-label">${n.label}</div>
+    <div class="node-sub">${n.sub}</div>
+    <span class="node-tag" style="background:${COLOR[n.color]}22;color:${COLOR[n.color]};border:1px solid ${COLOR[n.color]}44">${tagText}</span>
+  `;
+  el.onclick = () => selectNode(n.id);
+  canvasEl.appendChild(el);
+  nodeEls[n.id] = { el, data: n };
+});
+
+// Build edge SVG paths
+function nodeCenter(id){
+  const n = nodeEls[id];
+  if(!n) return null;
+  const d = n.data;
+  return { x: d.x + d.w/2, y: d.y + d.h/2 };
+}
+function nodePort(id, side){
+  const n = nodeEls[id];
+  if(!n) return null;
+  const d = n.data;
+  if(side==='right') return { x: d.x + d.w, y: d.y + d.h/2 };
+  if(side==='left')  return { x: d.x,        y: d.y + d.h/2 };
+  if(side==='bottom')return { x: d.x + d.w/2, y: d.y + d.h };
+  if(side==='top')   return { x: d.x + d.w/2, y: d.y };
+  return { x: d.x + d.w/2, y: d.y + d.h/2 };
+}
+
+const edgeMap = {}; // id → edge list for sidebar
+edges.forEach((e, i) => {
+  const from = nodeEls[e.from];
+  const to   = nodeEls[e.to];
+  if(!from || !to) return;
+
+  const fd = from.data, td = to.data;
+  // Determine ports based on relative position
+  const fromRight = fd.x + fd.w < td.x + 20;
+  const toRight   = td.x + td.w < fd.x + 20;
+  const f = fromRight ? nodePort(e.from,'right') : (toRight ? nodePort(e.from,'left') : nodePort(e.from,'bottom'));
+  const t = fromRight ? nodePort(e.to,'left')    : (toRight ? nodePort(e.to,'right')  : nodePort(e.to,'top'));
+
+  const dx = (t.x - f.x) * 0.45;
+  const path = `M ${f.x} ${f.y} C ${f.x+dx} ${f.y}, ${t.x-dx} ${t.y}, ${t.x} ${t.y}`;
+
+  const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+  g.dataset.from = e.from;
+  g.dataset.to   = e.to;
+  g.dataset.kind = e.kind;
+
+  const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+  p.setAttribute('d', path);
+  p.setAttribute('fill','none');
+  p.setAttribute('stroke', EDGE_COLOR[e.kind]||'#3a3a3a');
+  p.setAttribute('stroke-width', e.kind==='critical' ? '2.5' : '1.5');
+  p.setAttribute('stroke-opacity', e.kind==='normal' ? '0.35' : '0.65');
+  if(e.kind==='critical') p.setAttribute('stroke-dasharray','6 3');
+  g.appendChild(p);
+  edgesSvg.appendChild(g);
+
+  // Track edges per node
+  if(!edgeMap[e.from]) edgeMap[e.from] = [];
+  if(!edgeMap[e.to])   edgeMap[e.to]   = [];
+  edgeMap[e.from].push({ dir:'out', other:e.to, label:e.label, kind:e.kind });
+  edgeMap[e.to].push(  { dir:'in',  other:e.from, label:e.label, kind:e.kind });
+});
+
+// Set SVG size to canvas size
+const allX = nodes.map(n => n.x + n.w);
+const allY = nodes.map(n => n.y + n.h);
+const W = Math.max(...allX) + 40;
+const H = Math.max(...allY) + 40;
+edgesSvg.setAttribute('width',  W);
+edgesSvg.setAttribute('height', H);
+canvasEl.style.width  = W+'px';
+canvasEl.style.height = H+'px';
+
+// ─────────────────────────────────────────────────────────────
+// INTERACTION
+// ─────────────────────────────────────────────────────────────
+
+function selectNode(id){
+  if(selectedNode) document.getElementById('n_'+selectedNode)?.classList.remove('selected');
+  selectedNode = id;
+  document.getElementById('n_'+id)?.classList.add('selected');
+
+  const n = nodeEls[id]?.data;
+  if(!n) return;
+
+  const conns = edgeMap[id] || [];
+  const outs  = conns.filter(e=>e.dir==='out');
+  const ins   = conns.filter(e=>e.dir==='in');
+
+  const outHtml  = outs.map(e=>`<div class="edge-item">→ ${nodeEls[e.other]?.data?.label||e.other} <span style="color:${EDGE_COLOR[e.kind]};margin-left:4px">[${e.label}]</span></div>`).join('');
+  const inHtml   = ins.map(e=>`<div class="edge-item">← ${nodeEls[e.other]?.data?.label||e.other} <span style="color:${EDGE_COLOR[e.kind]};margin-left:4px">[${e.label}]</span></div>`).join('');
+
+  const tagColor = COLOR[n.color] || '#888';
+
+  sidebarEl.innerHTML = `
+    <h2 style="color:${tagColor}">${n.label}</h2>
+    <p>${n.sub}</p>
+    ${n.critical ? `<div style="color:var(--critical);font-size:11px;font-weight:700;margin-bottom:6px">CRITICAL PATH</div>` : ''}
+    <div class="detail-label">Cluster</div>
+    <div class="detail-val">${clusters.find(c=>c.id===n.cluster)?.label||n.cluster}</div>
+    ${outs.length ? `<div class="detail-label">Calls / Writes</div><div class="edge-list">${outHtml}</div>` : ''}
+    ${ins.length  ? `<div class="detail-label">Called By</div><div class="edge-list">${inHtml}</div>` : ''}
+    ${KNOWN_BUGS[id] ? `<div class="detail-label">Known Issue</div><div class="finding" style="border-color:var(--critical)">${KNOWN_BUGS[id]}</div>` : ''}
+    <div style="margin-top:14px"><button onclick="resetSidebar()" style="font-size:10px;padding:3px 10px;border-radius:5px;border:1px solid var(--border);background:var(--panel-2);color:var(--muted);cursor:pointer">Back to overview</button></div>
+  `;
+}
+
+function resetSidebar(){
+  if(selectedNode) document.getElementById('n_'+selectedNode)?.classList.remove('selected');
+  selectedNode = null;
+  sidebarEl.innerHTML = `
+    <h2>Sales Platform</h2>
+    <p>Single-file SPA — kWh sales analysis, LE forecasting, revenue recovery, defection tracking. Auth-gated via Supabase SSO shared across the JPS Analytics Suite.</p>
+    <div class="detail-label">Notable Findings</div>
+    <div class="finding"><strong>Schema stale banner risk:</strong> PostgREST cache drift silently breaks uploads and deletes. Auto-banner detection in place but relies on a manual DB schema SQL run.</div>
+    <div class="finding"><strong>Dual analytics stack:</strong> Both Sentry (error tracking) and PostHog (product analytics) load on every page — adds ~200 KB and two external network calls before first paint.</div>
+    <div class="finding"><strong>XLSX loaded lazily:</strong> The SheetJS library is not in the initial bundle; it is injected on first upload/download — saves ~1 MB on initial load but adds latency on first use.</div>
+    <div class="finding"><strong>LE Commit writes to fpa_facts:</strong> The LE forecast commit path crosses into the FP&A Finance Hub DB tables (fpa_versions, fpa_facts, fpa_derived_formulas) — tightly coupling the Sales Platform to the Finance Hub schema.</div>
+    <div class="finding"><strong>Admin wipe-all function:</strong> doWipeAllActuals() deletes every row from jps_actuals with a .gte('id',1) — destructive with no server-side safeguard beyond a client-side confirmation code.</div>
+    <div class="legend">
+      <div class="legend-row"><div class="legend-dot" style="background:var(--route)"></div>Section / Page</div>
+      <div class="legend-row"><div class="legend-dot" style="background:var(--service)"></div>Service / Utility</div>
+      <div class="legend-row"><div class="legend-dot" style="background:var(--db)"></div>Database Table / RPC</div>
+      <div class="legend-row"><div class="legend-dot" style="background:var(--external)"></div>External API</div>
+      <div class="legend-row"><div class="legend-dot" style="background:var(--client)"></div>Shared / Core</div>
+      <div class="legend-row"><div class="legend-dot" style="background:var(--critical)"></div>Critical Path</div>
+    </div>
+  `;
+}
+
+// Filter
+function filterNodes(f, chipEl){
+  activeFilter = f;
+  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));
+  chipEl.classList.add('on');
+
+  const clusterFilter = {
+    sections: ['sections'],
+    data:     ['data','db'],
+    external: ['external'],
+    critical: null,  // special
+    all:      null,
+  };
+
+  nodes.forEach(n => {
+    const el = document.getElementById('n_'+n.id);
+    if(!el) return;
+    let show = true;
+    if(f === 'critical') show = !!n.critical;
+    else if(f !== 'all'){
+      const cf = clusterFilter[f];
+      if(cf) show = cf.includes(n.cluster) || cf.includes(n.color);
+    }
+    el.style.opacity = show ? '1' : '0.1';
+    el.style.pointerEvents = show ? 'auto' : 'none';
+  });
+
+  // Dim edges
+  edgesSvg.querySelectorAll('g').forEach(g => {
+    let show = true;
+    if(f === 'critical') show = g.dataset.kind === 'critical';
+    else if(f !== 'all'){
+      const fn = nodeEls[g.dataset.from];
+      const tn = nodeEls[g.dataset.to];
+      if(!fn || !tn) return;
+      const cf = clusterFilter[f];
+      if(cf) show = cf.includes(fn.data.cluster) || cf.includes(tn.data.cluster) || cf.includes(fn.data.color) || cf.includes(tn.data.color);
+    }
+    g.style.opacity = show ? '1' : '0.05';
+  });
+
+  document.querySelectorAll('.cluster-bg, .cluster-label').forEach(el => {
+    el.style.opacity = f==='all' ? '1' : '0.4';
+  });
+}
+
+// Pan & zoom
+canvasWrap.addEventListener('mousedown', e => {
+  if(e.target !== canvasWrap && !e.target.closest('#canvas') ) return;
+  if(e.target.classList.contains('node') || e.target.closest('.node')) return;
+  dragging = true;
+  startX = e.clientX;
+  startY = e.clientY;
+  startPan = { ...pan };
+  canvasWrap.classList.add('dragging');
+});
+window.addEventListener('mousemove', e => {
+  if(!dragging) return;
+  pan.x = startPan.x + (e.clientX - startX);
+  pan.y = startPan.y + (e.clientY - startY);
+  applyTransform();
+});
+window.addEventListener('mouseup', () => {
+  dragging = false;
+  canvasWrap.classList.remove('dragging');
+});
+canvasWrap.addEventListener('wheel', e => {
+  e.preventDefault();
+  const factor = e.deltaY > 0 ? 0.92 : 1.09;
+  const rect = canvasWrap.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  pan.x = mx - (mx - pan.x) * factor;
+  pan.y = my - (my - pan.y) * factor;
+  zoom = Math.min(2.5, Math.max(0.2, zoom * factor));
+  applyTransform();
+}, { passive: false });
+
+applyTransform();
+</script>
+</body>
+</html>

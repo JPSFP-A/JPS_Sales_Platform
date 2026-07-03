@@ -3,3 +3,8 @@
 # Secrets — never commit
 .env
 .env.local
+
+# --- excluded from commit (raw customer data + scratch + backups) ---
+analysis/
+salesanalysis_deploy/
+*.pre-submit.bak.html
