@@ -2656,6 +2656,7 @@ async function dbUpsert(table,row){
     jps_def_actions:'acct_num',
     jps_ro_register:'num',
     jps_forecast_entries:'year,month,acct_num',
+    jps_forecast_notes:'acct_num',
     jps_period_locks:'year,month',
   };
   const key=CONFLICT[table];
@@ -4142,9 +4143,34 @@ function buildCharts(){
   mkChart('c_def1',{type:'bar',data:{labels:Object.keys(defByRC),datasets:[{label:'Defectors',data:Object.values(defByRC),backgroundColor:'rgba(232,64,64,0.6)',borderColor:'#e84040',borderWidth:1,borderRadius:3}]},options:co()});
   mkChart('c_def2',{type:'doughnut',data:{labels:Object.keys(defByCause),datasets:[{data:Object.values(defByCause),backgroundColor:['#f5a623','#e84040','#378ADD','#27c485','#5a7a96'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:TC,font:{size:10}}}}}});
 
-  // Forecast accuracy chart — populated from saved forecast entries vs actuals
+  // Forecast accuracy chart — populated from saved forecast entries (DB) vs commercial actuals, trailing 6 months
   const accMonths=[];const accAct=[];const accFc=[];
-  for(let i=5;i>=0;i--){const mi=(curMonth-1-i+12)%12;const ms=MONTHS_SHORT;accMonths.push(ms[mi]);accAct.push(null);accFc.push(null);}
+  const _accFcSumIdx={}; // 'year_month' -> sum of forecast_gwh across customers (DB)
+  sbFcEntries.forEach(r=>{const k=`${r.year}_${r.month}`;_accFcSumIdx[k]=(_accFcSumIdx[k]||0)+Number(r.forecast_gwh||0);});
+  const _accActSumIdx={}; // 'year_month' -> commercial actual GWh
+  sbActuals.forEach(r=>{
+    if(!_isComm(r))return;
+    const k=`${Number(r[YEAR_COL]||r.year||0)}_${Number(r.month||0)}`;
+    _accActSumIdx[k]=(_accActSumIdx[k]||0)+Number(r.kwh||0)/1e6;
+  });
+  for(let i=5;i>=0;i--){
+    const mi0=curMonth-1-i;
+    const mNum=((mi0%12)+12)%12+1;
+    const yNum=curYear+Math.floor(mi0/12);
+    accMonths.push(MONTHS_SHORT[mNum-1]);
+    const key=`${yNum}_${mNum}`;
+    accAct.push(_accActSumIdx[key]!=null?Number(_accActSumIdx[key].toFixed(2)):null);
+    let fcTotal=_accFcSumIdx[key];
+    if(fcTotal==null){
+      let sum=0,any=false;
+      CUSTOMERS.filter(c=>c.rate!=='RT10'&&c.rate!=='RT20').forEach(c=>{
+        const v=S.get(`fc_${yNum}_${mNum}_${c.num}`,null);
+        if(v){sum+=Number(v);any=true;}
+      });
+      fcTotal=any?sum:null;
+    }
+    accFc.push(fcTotal!=null?Number(fcTotal.toFixed(2)):null);
+  }
   mkChart('c_acc',{type:'line',data:{
     labels:accMonths,
     datasets:[
@@ -4481,15 +4507,16 @@ function renderKamPerformance(){
         kams[kam].bud+=Number(b.kwh_budget||0);
     });
   }
-  // Forecast MAPE per KAM — compare localStorage fc_ values vs actuals for curMonth
-  // Each KAM's accounts have forecast values stored as fc_<ac>_<year>_<month> in localStorage
+  // Forecast MAPE per KAM — compare saved forecast entries (DB first, localStorage fallback) vs actuals for curMonth
+  const _kamFcIdx={};
+  sbFcEntries.forEach(r=>{if(Number(r.year)===cy&&Number(r.month)===curMonth)_kamFcIdx[r.acct_num]=r.forecast_gwh;});
   const fcMape={};
   Object.values(kams).forEach(k=>{
     const acList=[...k.accounts];
     let sumAbsPct=0,cnt=0;
     acList.forEach(ac=>{
       const fcKey=`fc_${cy}_${curMonth}_${ac}`;
-      const fcVal=Number(S.get(fcKey)||0);
+      const fcVal=Number((_kamFcIdx[ac]!=null?_kamFcIdx[ac]:S.get(fcKey))||0);
       // actual for this account this month
       const actVal=comm.filter(r=>String(r.jps_ac||'').trim()===ac&&Number(r.year)===cy&&Number(r.month)===curMonth).reduce((s,r)=>s+Number(r.kwh||0),0);
       if(actVal>0&&fcVal>0){
@@ -4798,10 +4825,14 @@ function validateDefector(num,name){
 ========================================== */
 function renderFcKPIs(){
   const months=getFcMonths();
+  // DB-backed entries win over localStorage — localStorage is just the pre-sync cache
+  const _fcIdx={};
+  sbFcEntries.forEach(r=>{_fcIdx[`fc_${r.year}_${r.month}_${r.acct_num}`]=r.forecast_gwh;});
+  const _fcVal=(key)=>{const v=_fcIdx[key];return(v!=null)?v:S.get(key,null);};
   let entered=0,onTrend=0,offTrend=0;
   CUSTOMERS.filter(c=>c.rate!=='RT10'&&c.rate!=='RT20').forEach(c=>{
     months.forEach(m=>{
-      const v=S.get(`${m.key}_${c.num}`,null);
+      const v=_fcVal(`${m.key}_${c.num}`);
       if(v){entered++;
         const hist3=c.m.slice(0,curMonth).filter(x=>x>0).slice(-3);
         const avg3=hist3.length?hist3.reduce((s,x)=>s+x,0)/hist3.length:0;
@@ -4814,7 +4845,7 @@ function renderFcKPIs(){
   let mapeTotal=0, mapeCount=0;
   CUSTOMERS.filter(c=>c.rate!=='RT10'&&c.rate!=='RT20').forEach(c=>{
     months.forEach(m=>{
-      const fc=S.get(`${m.key}_${c.num}`,null);
+      const fc=_fcVal(`${m.key}_${c.num}`);
       if(fc==null)return;
       // Find matching actual row
       const actRow=sbActuals.find(r=>_custNum(String(r.jps_ac||''))===c.num&&Number(r[YEAR_COL])===m.year&&Number(r.month)===m.month);
@@ -4857,6 +4888,11 @@ function renderFcEntry(){
     _fcPyMap[acct].sum+=Number(r.kwh||0)/1e6;
     _fcPyMap[acct].cnt++;
   });
+  // DB-backed forecast entries/notes — server data wins, localStorage is just the pre-sync cache
+  const _fcEntryIdx={};
+  sbFcEntries.forEach(r=>{_fcEntryIdx[`fc_${r.year}_${r.month}_${r.acct_num}`]=r.forecast_gwh;});
+  const _fcNoteIdx={};
+  sbFcNotes.forEach(r=>{_fcNoteIdx[r.acct_num]=r.note_text||'';});
 
   const rows=custData.map(c=>{
     // Use last 3 months up to curMonth (not slice(-3) which grabs Oct-Dec when most are 0)
@@ -4866,12 +4902,14 @@ function renderFcEntry(){
     const pyEntry=_fcPyMap[c.num]||{sum:0,cnt:0};
     const pyAvg=pyEntry.cnt>0?pyEntry.sum/pyEntry.cnt:0;
     const fcCells=months.map(m=>{
-      const saved=S.get(`${m.key}_${c.num}`,null);
+      const key=`${m.key}_${c.num}`;
+      const dbVal=_fcEntryIdx[key];
+      const saved=(dbVal!=null)?dbVal:S.get(key,null);
       const val=saved||'';
       const trend=saved?getTrendStatus(saved,avg3,pyAvg):'';
       return`<td style="padding:3px"><input class="fc-inp" type="number" step="0.001" value="${val}" placeholder="${avg3.toFixed(3)}" id="fci_${m.key}_${c.num}" onchange="saveFcVal('${m.key}','${c.num}',this.value,'${avg3}','${pyAvg}')"/> ${trend?`<span class="fc-trend ${trend.cls}" title="${trend.tip}">${trend.icon}</span>`:''}</td>`;
     }).join('');
-    const note=S.get(`fc_note_${c.num}`,'');
+    const note=(_fcNoteIdx[c.num]!=null)?_fcNoteIdx[c.num]:S.get(`fc_note_${c.num}`,'');
     return`<tr>
       <td style="font-size:10px;color:var(--text3)">${c.num}</td>
       <td style="font-weight:500;white-space:nowrap">${esc(c.name)}</td>
@@ -4897,12 +4935,28 @@ function getTrendStatus(val,avg3,pyAvg){
   if(r3>=0.70&&r3<=1.30)return{cls:'trend-warn',icon:'🟡',tip:'Watch: within range but approaching off-trend threshold'};
   return{cls:'trend-off',icon:'🔴',tip:'Off trend: explanation required before review can be submitted'};
 }
+function _fcNoteVal(num){
+  const row=sbFcNotes.find(n=>n.acct_num===num);
+  return(row&&row.note_text!=null)?row.note_text:S.get(`fc_note_${num}`,'');
+}
 function saveFcVal(mkey,num,val,avg3,pyAvg){
-  if(!val){S.del(`${mkey}_${num}`);return;}
-  const status=getTrendStatus(parseFloat(val),parseFloat(avg3),parseFloat(pyAvg));
-  S.set(`${mkey}_${num}`,parseFloat(val));
+  const mm=mkey.match(/^fc_(\d+)_(\d+)$/);
+  const year=mm?Number(mm[1]):curYear, month=mm?Number(mm[2]):curMonth;
+  if(!val){
+    S.del(`${mkey}_${num}`);
+    dbDelete('jps_forecast_entries',{year,month,acct_num:num});
+    sbFcEntries=sbFcEntries.filter(r=>!(Number(r.year)===year&&Number(r.month)===month&&r.acct_num===num));
+    return;
+  }
+  const fVal=parseFloat(val);
+  const status=getTrendStatus(fVal,parseFloat(avg3),parseFloat(pyAvg));
+  S.set(`${mkey}_${num}`,fVal);
+  const cust=CUSTOMERS.find(c=>c.num===num);
+  const row={year,month,acct_num:num,customer:cust?.name||'',rate_class:cust?.rate||'',kam:cust?.kam||'',forecast_gwh:fVal,author:CU.name,updated_at:new Date().toISOString()};
+  dbUpsert('jps_forecast_entries',row);
+  sbFcEntries=[...sbFcEntries.filter(r=>!(Number(r.year)===year&&Number(r.month)===month&&r.acct_num===num)),row];
   if(status.cls==='trend-off'){
-    const note=S.get(`fc_note_${num}`,'');
+    const note=_fcNoteVal(num);
     if(!note){
       setTimeout(()=>{
         editFcNote(num,CUSTOMERS.find(c=>c.num===num)?.name||num);
@@ -4919,8 +4973,15 @@ function saveFcAll(){
   toast('All forecasts saved ✓','ok');
 }
 function editFcNote(num,name){
-  openModal(`Forecast Note: ${name}`,`<textarea id="fcn_ta" placeholder="Explain forecast assumptions, off-trend rationale, customer intelligence...">${S.get(`fc_note_${num}`,'')}</textarea>`,
-  ()=>{S.set(`fc_note_${num}`,document.getElementById('fcn_ta').value);closeModal();});
+  openModal(`Forecast Note: ${name}`,`<textarea id="fcn_ta" placeholder="Explain forecast assumptions, off-trend rationale, customer intelligence...">${esc(_fcNoteVal(num))}</textarea>`,
+  ()=>{
+    const val=document.getElementById('fcn_ta').value;
+    S.set(`fc_note_${num}`,val);
+    const row={acct_num:num,customer:name,note_text:val,author:CU.name,updated_at:new Date().toISOString()};
+    dbUpsert('jps_forecast_notes',row);
+    sbFcNotes=[...sbFcNotes.filter(n=>n.acct_num!==num),row];
+    closeModal();
+  });
 }
 function renderMacroGrid(){
   const macro=FC_SEGS.map(s=>{
@@ -5393,36 +5454,69 @@ const SCORECARD_SEGS = [
 ];
 // ── Forecast Management ────────────────────────────────────────────────────
 
-async function generateTrendForecast(label, notes=''){
+async function generateTrendForecast(label, notes='', targetYear=null, opts={}){
   const sb = getSB(); if(!sb){toast('Not connected to database','err');return;}
   if(!Object.keys(_rcIdx).length){toast('Load actuals data first','err');return;}
-  const yr = curYear;
-  // Find max month from _rcIdx (all rate classes, including commercial)
+  const yr = targetYear || curYear;
+  const growthDelta=(Number(opts.growthDeltaPct)||0)/100; // e.g. 3 → +0.03 applied to every rate class's growth
+  const versionType=opts.versionType||'trend';
+  const makeActive=opts.makeActive!==false;
   const _allRcsTF=Object.keys(_rcIdx);
-  let maxMo=0;
-  for(const rc of _allRcsTF){for(let m=12;m>=1;m--){if(_rcSum(rc,yr,m,m)>0){if(m>maxMo)maxMo=m;}}}
-  if(!maxMo){toast('No actuals found for '+yr,'err');return;}
-
-  // Compute 3-month average growth rate per rate_class using _rcIdx (O(1))
   const rows=[];
-  for(const rc of _allRcsTF){
-    const avgKwh=_rcSum(rc,yr,Math.max(1,maxMo-2),maxMo)/Math.min(3,maxMo);
-    if(!avgKwh)continue;
-    const pyAvg=_rcSum(rc,yr-1,Math.max(1,maxMo-2),maxMo)/Math.min(3,maxMo)||avgKwh;
-    const growth=pyAvg>0?(avgKwh-pyAvg)/pyAvg:0;
-    for(let mo=maxMo+1;mo<=12;mo++){
-      const pyKwh=_rcSum(rc,yr-1,mo,mo);
-      rows.push({year:yr,month:mo,rate_class:rc,kwh_forecast:Math.round(pyKwh*(1+growth))});
+  let baseLabel;
+
+  if(yr<=curYear){
+    // Remainder of the current year — base = trailing computed growth off actuals
+    let maxMo=0;
+    for(const rc of _allRcsTF){for(let m=12;m>=1;m--){if(_rcSum(rc,yr,m,m)>0){if(m>maxMo)maxMo=m;}}}
+    if(!maxMo){toast('No actuals found for '+yr,'err');return;}
+    for(const rc of _allRcsTF){
+      const avgKwh=_rcSum(rc,yr,Math.max(1,maxMo-2),maxMo)/Math.min(3,maxMo);
+      if(!avgKwh)continue;
+      const pyAvg=_rcSum(rc,yr-1,Math.max(1,maxMo-2),maxMo)/Math.min(3,maxMo)||avgKwh;
+      const growth=(pyAvg>0?(avgKwh-pyAvg)/pyAvg:0)+growthDelta;
+      for(let mo=maxMo+1;mo<=12;mo++){
+        // Seasonal base: average this month across up to 3 prior years, not just last year's single value —
+        // smooths one-off anomalies (e.g. a hurricane month) instead of projecting them forward at full weight.
+        const priorYears=[yr-1,yr-2,yr-3].filter(py=>_rcSum(rc,py,mo,mo)>0);
+        const seasonalBase=priorYears.length
+          ?priorYears.reduce((s,py)=>s+_rcSum(rc,py,mo,mo),0)/priorYears.length
+          :_rcSum(rc,yr-1,mo,mo);
+        rows.push({year:yr,month:mo,rate_class:rc,kwh_forecast:Math.round(seasonalBase*(1+growth))});
+      }
     }
+    if(!rows.length){toast('No months to forecast (data already complete for '+yr+')','w');return;}
+    baseLabel=yr+' Trend Forecast ('+MONTHS_SHORT[maxMo-1]+' base)';
+  } else {
+    // Full future year — base = seasonal avg of the most recent known years,
+    // growth = Macro & Trend Assumptions grid override for that year if set, else trailing computed growth
+    const offset=yr-curYear; // 1..4 — matches macro_<rc>_yr<offset> from the assumptions grid
+    for(const rc of _allRcsTF){
+      let maxMo=0;
+      for(let m=12;m>=1;m--){if(_rcSum(rc,curYear,m,m)>0){maxMo=m;break;}}
+      const avgKwh=maxMo?_rcSum(rc,curYear,Math.max(1,maxMo-2),maxMo)/Math.min(3,maxMo):0;
+      const pyAvg=maxMo?(_rcSum(rc,curYear-1,Math.max(1,maxMo-2),maxMo)/Math.min(3,maxMo)||avgKwh):0;
+      const computedGrowth=(avgKwh&&pyAvg>0)?(avgKwh-pyAvg)/pyAvg:0;
+      const macroAssum=S.get(`macro_${rc}_yr${offset}`,null);
+      const usingMacro=macroAssum&&macroAssum.rate!=null;
+      const growth=(usingMacro?Number(macroAssum.rate)/100:computedGrowth)+growthDelta;
+      for(let mo=1;mo<=12;mo++){
+        const priorYears=[curYear,curYear-1,curYear-2].filter(py=>_rcSum(rc,py,mo,mo)>0);
+        if(!priorYears.length)continue;
+        const seasonalBase=priorYears.reduce((s,py)=>s+_rcSum(rc,py,mo,mo),0)/priorYears.length;
+        rows.push({year:yr,month:mo,rate_class:rc,kwh_forecast:Math.round(seasonalBase*Math.pow(1+growth,offset))});
+      }
+    }
+    if(!rows.length){toast('No prior-year actuals to base '+yr+' on','err');return;}
+    baseLabel=yr+' Trend Forecast (macro-assumption based)';
   }
-  if(!rows.length){toast('No months to forecast (data already complete for '+yr+')','w');return;}
 
   // Save version
-  const vLabel=label||(yr+' Trend Forecast ('+MONTHS_SHORT[maxMo-1]+' base)');
-  const {data:ver,error:ve}=await sb.from('jps_forecast_versions').insert({label:vLabel,version_type:'trend',year:yr,is_active:true,notes}).select().single();
+  const vLabel=label||baseLabel;
+  const {data:ver,error:ve}=await sb.from('jps_forecast_versions').insert({label:vLabel,version_type:versionType,year:yr,is_active:makeActive,notes}).select().single();
   if(ve){toast('Error saving forecast version: '+ve.message,'err');return;}
-  // Set all others inactive
-  await sb.from('jps_forecast_versions').update({is_active:false}).neq('id',ver.id).eq('year',yr);
+  // Set all others inactive — only when this run is meant to become THE active forecast (base scenario, not upside/downside)
+  if(makeActive)await sb.from('jps_forecast_versions').update({is_active:false}).neq('id',ver.id).eq('year',yr);
   // Insert rows
   const insRows=rows.map(r=>({...r,version_id:ver.id}));
   const chunkSize=500;
@@ -5438,6 +5532,33 @@ async function generateTrendForecast(label, notes=''){
   renderSection(document.querySelector('.sec.on')?.id);
 }
 
+async function generateScenarioSet(targetYear, deltaPct){
+  const yr=targetYear, d=Math.abs(Number(deltaPct))||3;
+  await generateTrendForecast(yr+' Base Trend Forecast','',yr,{versionType:'base',makeActive:true});
+  await generateTrendForecast(yr+' Upside (+'+d+'pp growth)','',yr,{versionType:'upside',makeActive:false,growthDeltaPct:d});
+  await generateTrendForecast(yr+' Downside (-'+d+'pp growth)','',yr,{versionType:'downside',makeActive:false,growthDeltaPct:-d});
+  toast('Scenario set generated for '+yr,'ok');
+}
+function _fcVersionTotalGwh(v){
+  return sbForecast.filter(r=>r.version_id===v.id).reduce((s,r)=>s+Number(r.kwh_forecast||0),0)/1e6;
+}
+// Portfolio-level backtest — MAPE of the trend/scenario model itself vs actuals that have since landed,
+// not just per-KAM manual entries. Only counts months where an actual now exists for that rate class.
+function _modelBacktest(v){
+  const rows=sbForecast.filter(r=>r.version_id===v.id);
+  let sumAbsPct=0,sumPct=0,cnt=0;
+  rows.forEach(r=>{
+    const actual=_rcSum(r.rate_class,Number(r.year),Number(r.month),Number(r.month));
+    if(actual>0){
+      const fc=Number(r.kwh_forecast||0);
+      sumAbsPct+=Math.abs((fc-actual)/actual)*100;
+      sumPct+=((fc-actual)/actual)*100;
+      cnt++;
+    }
+  });
+  return cnt>0?{mape:sumAbsPct/cnt,bias:sumPct/cnt,cnt,total:rows.length}:null;
+}
+
 async function deleteForecastVersion(versionId){
   const sb=getSB(); if(!sb)return;
   const {error}=await sb.from('jps_forecast_versions').delete().eq('id',versionId);
@@ -5448,35 +5569,70 @@ async function deleteForecastVersion(versionId){
   renderAdmForecast();
 }
 
+let admFcYear=null; // Admin > Forecast Management — selected target year (defaults to curYear on first render)
 function renderAdmForecast(){
   const el=document.getElementById('adm_forecast_panel');
   if(!el)return;
-  const yr=curYear;
+  if(admFcYear==null)admFcYear=curYear;
+  const yr=admFcYear;
+  const isFuture=yr>curYear;
   const versions=sbForecastVersions.filter(v=>v.year===yr);
-  // Use _rcIdx for max month detection (covers all rate classes)
+  // Use _rcIdx for max month detection (covers all rate classes) — always measured off curYear actuals
   const _allRcsAdm=Object.keys(_rcIdx);
   let maxMo=0;
-  for(const rc of _allRcsAdm){for(let m=12;m>=1;m--){if(_rcSum(rc,yr,m,m)>0){if(m>maxMo)maxMo=m;break;}}}
+  for(const rc of _allRcsAdm){for(let m=12;m>=1;m--){if(_rcSum(rc,curYear,m,m)>0){if(m>maxMo)maxMo=m;break;}}}
 
   const MNS=MONTHS_SHORT;
   const remainMos=12-maxMo;
+  const canGenerate=isFuture||(maxMo>0&&maxMo<12);
+  const yearOpts=[curYear,curYear+1,curYear+2,curYear+3,curYear+4]
+    .map(y=>`<option value="${y}"${y===yr?' selected':''}>${y}${y>curYear?' (macro assumptions)':''}</option>`).join('');
   el.innerHTML=`
   <div style="margin-bottom:12px">
-    <div style="font-size:13px;font-weight:600;color:var(--text1);margin-bottom:8px">Forecast Versions — ${yr}</div>
-    ${maxMo>0&&maxMo<12?`<div style="font-size:11px;color:var(--text3);margin-bottom:10px">Actuals through <strong>${MNS[maxMo-1]}</strong> — ${remainMos} month(s) available to forecast</div>`:''}
-    ${versions.length?versions.map(v=>`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <div style="font-size:13px;font-weight:600;color:var(--text1)">Forecast Versions —</div>
+      <select onchange="admFcYear=Number(this.value);renderAdmForecast()" style="background:var(--navy3);border:1px solid var(--navy4);color:var(--text1);padding:3px 6px;border-radius:4px;font-size:12px">${yearOpts}</select>
+    </div>
+    ${!isFuture&&maxMo>0&&maxMo<12?`<div style="font-size:11px;color:var(--text3);margin-bottom:10px">Actuals through <strong>${MNS[maxMo-1]}</strong> — ${remainMos} month(s) available to forecast</div>`:''}
+    ${isFuture?`<div style="font-size:11px;color:var(--text3);margin-bottom:10px">Full-year projection — uses the Macro &amp; Trend Assumptions grid (Forecast Accuracy tab, Yr ${yr-curYear} column) per rate class where set, trailing growth otherwise.</div>`:''}
+    ${versions.length?versions.map(v=>{
+      const bt=_modelBacktest(v);
+      const btColor=!bt?'var(--text3)':bt.mape<=5?'var(--teal)':bt.mape<=15?'#f5a623':'var(--red,#c0392b)';
+      const btLabel=bt?`${bt.mape.toFixed(1)}% MAPE (${bt.cnt}/${bt.total} mo.)`:'No actuals yet';
+      const btTitle=bt?`Bias ${bt.bias>=0?'+':''}${bt.bias.toFixed(1)}% — positive means the model over-forecasts`:'No months in this version have actuals yet to compare against';
+      return`
       <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--navy3);border-radius:6px;margin-bottom:6px">
         <span style="flex:1;font-size:12px;color:var(--text1)">${v.label}</span>
+        <span style="font-size:10px;color:${btColor}" title="${btTitle}">${btLabel}</span>
         <span style="font-size:10px;padding:2px 6px;border-radius:3px;background:${v.is_active?'var(--teal)':'var(--navy4)'};color:${v.is_active?'#000':'var(--text3)'}">${v.is_active?'ACTIVE':'inactive'}</span>
         <span style="font-size:10px;color:var(--text3)">${v.version_type}</span>
         <button onclick="deleteForecastVersion(${v.id})" style="background:var(--red,#c0392b);color:#fff;border:none;padding:2px 8px;border-radius:3px;cursor:pointer;font-size:10px">Delete</button>
-      </div>`).join(''):'<div style="color:var(--text3);font-size:12px;padding:8px 0">No forecast versions saved yet.</div>'}
-    ${maxMo>0&&maxMo<12?`
+      </div>`;
+    }).join(''):'<div style="color:var(--text3);font-size:12px;padding:8px 0">No forecast versions saved yet.</div>'}
+    ${(()=>{
+      const scen=['base','upside','downside'].map(t=>versions.filter(v=>v.version_type===t).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0]);
+      if(!scen[0])return'';
+      const cols=[{k:'base',lbl:'Base',c:'var(--teal)'},{k:'upside',lbl:'Upside',c:'var(--green,#3ba55c)'},{k:'downside',lbl:'Downside',c:'var(--red,#c0392b)'}];
+      return`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0">${cols.map((c,i)=>{
+        const v=scen[i];
+        return`<div style="padding:8px;background:var(--navy3);border-radius:6px;text-align:center">
+          <div style="font-size:10px;color:${c.c};font-weight:700">${c.lbl}</div>
+          <div style="font-size:14px;font-weight:700;color:var(--text1)">${v?_fcVersionTotalGwh(v).toFixed(1)+' GWh':'--'}</div>
+        </div>`;
+      }).join('')}</div>`;
+    })()}
+    ${canGenerate?`
     <div style="margin-top:12px;display:flex;align-items:center;gap:8px">
       <input id="fc_label_input" type="text" placeholder="Forecast label (optional)" style="flex:1;background:var(--navy3);border:1px solid var(--navy4);color:var(--text1);padding:6px 8px;border-radius:4px;font-size:12px"/>
-      <button onclick="generateTrendForecast(document.getElementById('fc_label_input')?.value)" style="background:var(--teal);color:#000;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600">Generate Trend Forecast</button>
+      <button onclick="generateTrendForecast(document.getElementById('fc_label_input')?.value,'',${yr})" style="background:var(--teal);color:#000;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600">Generate Trend Forecast</button>
     </div>
-    <div style="font-size:10px;color:var(--text3);margin-top:5px">Trend forecast projects ${remainMos} remaining months using prior-year actuals adjusted for recent growth rate. You can also upload a forecast Excel file below.</div>`:'<div style="font-size:11px;color:var(--teal);margin-top:8px">&#10003; All 12 months have actuals — no forecast needed for ${yr}.</div>'}
+    <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
+      <span style="font-size:11px;color:var(--text3)">Scenario spread</span>
+      <input id="fc_delta_input" type="number" step="0.5" value="3" style="width:54px;background:var(--navy3);border:1px solid var(--navy4);color:var(--text1);padding:6px 6px;border-radius:4px;font-size:12px"/>
+      <span style="font-size:11px;color:var(--text3)">pp</span>
+      <button onclick="generateScenarioSet(${yr},document.getElementById('fc_delta_input')?.value)" style="background:var(--navy4);color:var(--text1);border:1px solid var(--teal);padding:6px 14px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600">Generate Base/Upside/Downside</button>
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-top:5px">${isFuture?'Projects all 12 months of '+yr+'.':'Trend forecast projects '+remainMos+' remaining months using prior-year actuals adjusted for recent growth rate.'} You can also upload a forecast Excel file below.</div>`:`<div style="font-size:11px;color:var(--teal);margin-top:8px">&#10003; All 12 months have actuals — no forecast needed for ${yr}.</div>`}
   </div>`;
 }
 
@@ -5526,6 +5682,8 @@ function renderExecSummary() {
   if(el('es_period_lbl')) el('es_period_lbl').textContent = lbl;
 
   // ES KPI bar — use _rcIdx (O(1), all rate classes) — sbActuals is now residential-only
+  const _pmArr=[...pmSet].sort((a,b)=>a-b);
+  const _pmFrom=_pmArr[0]||curMonth, _pmTo=_pmArr[_pmArr.length-1]||curMonth;
   const _esRcAll=Object.keys(_rcIdx);
   const _esActP=(yr)=>_esRcAll.reduce((s,rc)=>s+_rcSum(rc,yr,_pmFrom,_pmTo),0)/1e6;
   const _esBudP=(yr)=>_budPM(yr,[...pmSet]).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
@@ -5541,8 +5699,6 @@ function renderExecSummary() {
   const esYoY0  = esLY0>0?((esAct0-esLY0)/esLY0*100):null;
   const esYtdYoY= esYtdLY0>0?((esYtd0-esYtdLY0)/esYtdLY0*100):null;
   const esComRCs= ['RT40','RT50','RT70','RT60-ST'];
-  const _pmArr=[...pmSet].sort((a,b)=>a-b);
-  const _pmFrom=_pmArr[0]||curMonth, _pmTo=_pmArr[_pmArr.length-1]||curMonth;
   // Use _rcIdx (O(1) lookup) — sbActuals is now residential-only, commercial data in _rcIdx via sbRcAgg
   const esCmMtd = esComRCs.reduce((s,rc)=>s+_rcSum(rc,curYear,_pmFrom,_pmTo),0)/1e6;
   const esCmBud = _budPM(curYear,[...pmSet]).filter(r=>esComRCs.includes(String(r.rate_class||''))).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
@@ -8239,6 +8395,56 @@ create policy "Managers can write RO register"
     exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager','rep'))
   );
 
+-- 6-month customer forecast entries (was localStorage-only — moved server-side)
+create table if not exists public.jps_forecast_entries (
+  id           uuid primary key default gen_random_uuid(),
+  year         smallint not null,
+  month        smallint not null check (month between 1 and 12),
+  acct_num     text not null,
+  customer     text default '',
+  rate_class   text default '',
+  kam          text default '',
+  forecast_gwh numeric,
+  author       text default '',
+  updated_at   timestamptz default now(),
+  created_at   timestamptz default now(),
+  unique (year, month, acct_num)
+);
+alter table public.jps_forecast_entries enable row level security;
+do $$ declare r record; begin
+  for r in select policyname from pg_policies where schemaname='public' and tablename='jps_forecast_entries'
+  loop execute format('drop policy if exists %I on public.jps_forecast_entries', r.policyname); end loop;
+end $$;
+create policy "Authenticated users can read forecast entries"
+  on public.jps_forecast_entries for select using (auth.role()='authenticated');
+create policy "Reps can write forecast entries"
+  on public.jps_forecast_entries for all using (
+    exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager','rep'))
+  );
+
+-- Off-trend forecast explanation notes (separate from general account notes in jps_user_notes)
+create table if not exists public.jps_forecast_notes (
+  id         uuid primary key default gen_random_uuid(),
+  acct_num   text not null,
+  customer   text default '',
+  note_text  text default '',
+  author     text default '',
+  updated_at timestamptz default now(),
+  created_at timestamptz default now(),
+  unique (acct_num)
+);
+alter table public.jps_forecast_notes enable row level security;
+do $$ declare r record; begin
+  for r in select policyname from pg_policies where schemaname='public' and tablename='jps_forecast_notes'
+  loop execute format('drop policy if exists %I on public.jps_forecast_notes', r.policyname); end loop;
+end $$;
+create policy "Authenticated users can read forecast notes"
+  on public.jps_forecast_notes for select using (auth.role()='authenticated');
+create policy "Reps can write forecast notes"
+  on public.jps_forecast_notes for all using (
+    exists (select 1 from profiles where id=auth.uid() and sales_role in ('admin','manager','rep'))
+  );
+
 -- AI commentary and general section notes
 create table if not exists public.jps_notes (
   id         bigserial primary key,
@@ -8429,6 +8635,8 @@ var _sbClient=null, // var (not let) — hoisted as undefined, avoids TDZ when J
     sbIndustries=[],    // jps_industries        — industry reference table
     sbKAM=[],           // jps_kam               — key account managers
     sbNetGen=[], sbEvData=[], sbForecastVersions=[], sbForecast=[],
+    sbFcEntries=[],     // jps_forecast_entries  — 6-month customer forecast entries (server-persisted)
+    sbFcNotes=[],       // jps_forecast_notes    — off-trend explanation notes
     sbLE=[],            // jps_le               — latest estimate at account/parish/bucket level
     sbSystemStats=[],   // jps_system_stats      — net gen + losses for budget/le/actuals
     sbLossesForecast=[], // jps_losses_forecast  — rolling 12-month losses forecast
@@ -8773,7 +8981,8 @@ async function syncSupabase(silent=false){
       ng,ev,pl,
       fcvData,fcData,tariffData,
       rcAggData,parAggData,indAggData,
-      custSummData
+      custSummData,
+      fcEntriesData,fcNotesData
     ] = await Promise.all([
       sbTable('jps_industries',{}),
       sbTable('jps_kam',{}),
@@ -8815,7 +9024,9 @@ async function syncSupabase(silent=false){
       (async()=>{try{const{data,error}=await getSB().rpc('get_parish_agg',{year_cutoff:_actYearCutoff});if(error)throw error;return data||[];}catch(e){console.warn('[sync] get_parish_agg failed:',e.message);return [];}})(),
       (async()=>{try{const{data,error}=await getSB().rpc('get_industry_agg',{year_cutoff:_actYearCutoff});if(error)throw error;return data||[];}catch(e){console.warn('[sync] get_industry_agg failed:',e.message);return [];}})(),
       // Customer summary — 974 rows (one per commercial customer) — replaces 41k CUSTOMERS scan
-      (async()=>{try{const{data,error}=await getSB().rpc('get_customers_summary',{year_cutoff:_actYearCutoff});if(error)throw error;return data||[];}catch(e){console.warn('[sync] get_customers_summary failed:',e.message);return [];}})()
+      (async()=>{try{const{data,error}=await getSB().rpc('get_customers_summary',{year_cutoff:_actYearCutoff});if(error)throw error;return data||[];}catch(e){console.warn('[sync] get_customers_summary failed:',e.message);return [];}})(),
+      sbTable('jps_forecast_entries',{limit:50000}),
+      sbTable('jps_forecast_notes',{limit:20000})
     ]);
 
     // ── Process results ────────────────────────────────────
@@ -8884,6 +9095,8 @@ async function syncSupabase(silent=false){
     else log.push('Period Locks: jps_period_locks not found (optional — run schema SQL in Admin)');
     if(fcvData){sbForecastVersions=fcvData;log.push(`Forecast versions: ${fcvData.length}`);}
     if(fcData){sbForecast=fcData;log.push(`Forecast rows: ${fcData.length}`);}
+    if(fcEntriesData){sbFcEntries=fcEntriesData;log.push(`Forecast entries: jps_forecast_entries (${fcEntriesData.length} rows)`);}
+    if(fcNotesData){sbFcNotes=fcNotesData;log.push(`Forecast notes: jps_forecast_notes (${fcNotesData.length} rows)`);}
 
     if(tariffData&&tariffData.length){
       TARIFF_BY_RC={};
