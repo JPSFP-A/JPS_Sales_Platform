@@ -169,12 +169,12 @@ body{background:var(--navy);color:var(--text);font-family:'IBM Plex Sans',system
 
 /* SORTABLE TABLES */
 .tbl-wrap{overflow-x:auto;overflow-y:auto;max-height:520px;margin-top:4px}
-.dt{width:100%;border-collapse:collapse;font-size:11px}
-.dt th{text-align:left;padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.3px;color:var(--text3);border-bottom:1px solid var(--border);font-weight:600;cursor:pointer;user-select:none;white-space:nowrap;position:relative}
+.dt{width:100%;border-collapse:collapse;font-size:11px;font-variant-numeric:tabular-nums}
+.dt th{text-align:left;padding:6px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:var(--text3);border-bottom:1px solid var(--border);font-weight:600;cursor:pointer;user-select:none;white-space:nowrap;position:relative}
 .dt th:hover{color:var(--teal)}
-.dt th.sort-asc::after{content:' ▲';font-size:8px;color:var(--teal)}
-.dt th.sort-desc::after{content:' ▼';font-size:8px;color:var(--teal)}
-.dt td{padding:6px 8px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle}
+.dt th.sort-asc::after{content:' ▲';font-size:9px;color:var(--teal)}
+.dt th.sort-desc::after{content:' ▼';font-size:9px;color:var(--teal)}
+.dt td{padding:6px 8px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle;font-variant-numeric:tabular-nums}
 .dt tr:hover td{background:rgba(255,255,255,.025)}
 .dt .ft td{font-weight:700;color:var(--teal);border-top:1px solid var(--border);border-bottom:none}
 .pill{display:inline-block;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:700}
@@ -2177,6 +2177,13 @@ order by ordinal_position;</pre>
               </div>
               <div id="le_adj_cust_results"></div>
             </div>
+          </div>
+
+          <!-- Key Accounts — persistent list, growth %, and free-text insights -->
+          <div style="margin-top:16px">
+            <div style="font-size:10px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Key Accounts — Insights &amp; Adjustments</div>
+            <div style="font-size:11px;color:var(--text2);margin-bottom:8px">Real top-10 accounts (RT40) with FY budget vs run-rate. Log your reasoning below each account &mdash; renewal, expansion, risk of loss &mdash; alongside the growth % that feeds the LE.</div>
+            <div id="le_key_accounts"></div>
           </div>
 
           <!-- Live impact preview -->
@@ -9623,6 +9630,7 @@ function renderLEAdjust(){
   if(el('le_adj_industry')) el('le_adj_industry').innerHTML=inds.map(k=>adjRow('industry',k)).join('');
   if(el('le_adj_bucket'))   el('le_adj_bucket').innerHTML  =bkts.map(k=>adjRow('bucket',k)).join('');
   renderLEAdjustPreview();
+  loadKeyAccounts();
 }
 
 function leAdjSearchCust(){
@@ -9659,6 +9667,111 @@ function renderLEAdjustPreview(){
     leKpi('Base LE FY',leSum(base,allMos),null,n=>fmtE(n,1))+
     leKpi('Adjusted FY',leSum(adj,allMos),leSum(base,allMos),n=>fmtE(n,1))+
     leKpi('Adj vs Budget',leSum(adj,allMos),budSum(bud,allMos),n=>fmtE(n,1));
+}
+
+// ─── KEY ACCOUNTS — persistent list, growth %, free-text insights ───────────
+let _keyAccounts=[], _keyAccountNotes={}, _keyAccountsLoading=false;
+
+async function loadKeyAccounts(){
+  const wrap=document.getElementById('le_key_accounts');
+  if(!wrap||_keyAccountsLoading)return;
+  _keyAccountsLoading=true;
+  wrap.innerHTML='<div style="font-size:11px;color:var(--text2)">Loading key accounts…</div>';
+  try{
+    const sb=getSB(); if(!sb) throw new Error('Not connected');
+    const {data:accts,error:e1}=await sb.rpc('fpa_named_commercial_accounts',{p_year:FC_BUD_YEAR,p_rate_class:'RT40',p_limit:10});
+    if(e1) throw e1;
+    _keyAccounts=accts||[];
+    if(_keyAccounts.length){
+      const acs=_keyAccounts.map(a=>{
+        const m=sbLE.find(d=>(d.name||'').toLowerCase()===(a.name||'').toLowerCase());
+        return m?m.jps_ac:null;
+      }).filter(Boolean);
+      const {data:notes,error:e2}=await sb.from('sales_key_account_notes').select('jps_ac,note,updated_by,updated_at').in('jps_ac',acs.length?acs:['__none__']);
+      if(e2) console.error('[keyAccounts] notes fetch',e2);
+      _keyAccountNotes=Object.fromEntries((notes||[]).map(n=>[n.jps_ac,n]));
+    }
+  }catch(e){
+    console.error('[keyAccounts] load failed',e);
+    wrap.innerHTML='<div style="font-size:11px;color:var(--red)">Could not load key accounts: '+esc(e.message)+'</div>';
+    _keyAccountsLoading=false;
+    return;
+  }
+  _keyAccountsLoading=false;
+  renderKeyAccounts();
+}
+
+function renderKeyAccounts(){
+  const wrap=document.getElementById('le_key_accounts');
+  if(!wrap)return;
+  if(!_keyAccounts.length){wrap.innerHTML='<div style="font-size:11px;color:var(--text2)">No RT40 accounts found for '+FC_BUD_YEAR+'.</div>';return;}
+  wrap.innerHTML=_keyAccounts.map(a=>{
+    const matches=sbLE.filter(d=>(d.name||'').toLowerCase()===(a.name||'').toLowerCase());
+    const acs=[...new Set(matches.map(m=>m.jps_ac).filter(Boolean))];
+    const ac=acs[0]||null; // representative account — used for the note record
+    const pct=acs.length?(leAdjustments.customer[acs[0]]||0):0;
+    const budGwh=a.kwh_bud_fy!=null?(Number(a.kwh_bud_fy)/1e6):null;
+    const ytdShare=a.ytd_months?a.ytd_months/12:0.5;
+    const runRateGwh=ytdShare?(Number(a.kwh_ytd)/ytdShare)/1e6:0;
+    const onTrack=budGwh?((runRateGwh/budGwh-1)*100):null;
+    const noteRec=ac?_keyAccountNotes[ac]:null;
+    const noteVal=noteRec?noteRec.note||'':'';
+    const noteMeta=noteRec?`${esc(noteRec.updated_by||'')} · ${new Date(noteRec.updated_at).toLocaleDateString()}`:'';
+    return `<div class="le-key-card" style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;background:var(--navy2)">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:6px">
+        <span style="font-size:12px;font-weight:600;color:var(--text);min-width:200px">${esc(a.name)}</span>
+        <span style="font-size:10px;color:var(--text3)">Budget ${budGwh!=null?fmtE(budGwh,1):'—'} GWh</span>
+        <span style="font-size:10px;color:var(--text3)">Run-rate ${fmtE(runRateGwh,1)} GWh</span>
+        <span style="font-size:10px;font-weight:600;color:${onTrack==null?'var(--text3)':onTrack>=0?'#2ecc71':'#e74c3c'}">${onTrack==null?'—':(onTrack>=0?'+':'')+onTrack.toFixed(1)+'% vs budget'}</span>
+        <span style="display:flex;align-items:center;gap:4px;margin-left:auto">
+          <span style="font-size:10px;color:var(--text3)">Growth</span>
+          <input type="number" value="${pct}" step="0.5" data-acs="${esc(acs.join(','))}" class="le-key-adj-input" ${acs.length?'':'disabled title="Not found in current LE labels"'} style="width:60px;background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:2px 5px;font-size:11px">
+          <span style="font-size:10px;color:var(--text3)">%</span>
+        </span>
+        ${acs.length>1?'<span style="font-size:9px;color:var(--text3)">('+acs.length+' accounts)</span>':''}
+      </div>
+      <textarea class="le-key-note-input" data-ac="${esc(ac||'')}" data-name="${esc(a.name)}" placeholder="Insight — renewal, expansion, closure risk…" style="width:100%;min-height:40px;background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:6px 8px;font-size:11px;resize:vertical" ${ac?'':'disabled'}>${esc(noteVal)}</textarea>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+        <button class="btn" onclick="saveKeyAccountNote(this)" ${ac?'':'disabled'} style="padding:3px 10px;font-size:10px">Save insight</button>
+        <span class="le-key-note-meta" style="font-size:9px;color:var(--text3)">${noteMeta}</span>
+      </div>
+    </div>`;
+  }).join('');
+  wrap.querySelectorAll('.le-key-adj-input').forEach(inp=>{
+    const acs=(inp.dataset.acs||'').split(',').filter(Boolean);
+    if(!acs.length)return;
+    inp.addEventListener('input',()=>{
+      const v=parseFloat(inp.value)||0;
+      acs.forEach(ac=>{leAdjustments.customer[ac]=v;});
+      renderLEAdjustPreview();
+    });
+  });
+}
+
+async function saveKeyAccountNote(btn){
+  const card=btn.closest('.le-key-card');
+  const ta=card?.querySelector('.le-key-note-input');
+  const metaEl=card?.querySelector('.le-key-note-meta');
+  if(!ta||!ta.dataset.ac){toast('Account not matched to current LE — cannot save','err');return;}
+  const ac=ta.dataset.ac, name=ta.dataset.name, note=ta.value.trim();
+  btn.disabled=true; const orig=btn.textContent; btn.textContent='Saving…';
+  try{
+    const sb=getSB(); if(!sb) throw new Error('Not connected');
+    const {data:{user}}=await sb.auth.getUser();
+    const who=user?.email||'unknown';
+    const {error}=await sb.from('sales_key_account_notes').upsert({
+      jps_ac:ac, account_name:name, note, updated_by:who, updated_at:new Date().toISOString(),
+    },{onConflict:'jps_ac'});
+    if(error) throw error;
+    _keyAccountNotes[ac]={jps_ac:ac,note,updated_by:who,updated_at:new Date().toISOString()};
+    if(metaEl) metaEl.textContent=who+' · '+new Date().toLocaleDateString();
+    toast('Insight saved','ok');
+  }catch(e){
+    console.error('[keyAccounts] save note failed',e);
+    toast('Save failed: '+e.message,'err');
+  }finally{
+    btn.disabled=false; btn.textContent=orig;
+  }
 }
 
 function leResetAdjustments(){
