@@ -2956,6 +2956,8 @@ function sw(id,el){
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
   const sec=document.getElementById(id);
   if(sec)sec.classList.add('on');
+  const contentEl=document.querySelector('.content');
+  if(contentEl)contentEl.scrollTop=0;
   // For df/ro, highlight the Commercial nav item in sidebar
   const cmSections=['df','ro'];
   if(cmSections.includes(id)){
@@ -2984,6 +2986,8 @@ function sw(id,el){
 function swCm(panel,btn){
   document.querySelectorAll('#cm_subtabs .stab').forEach(b=>b.classList.remove('on'));
   if(btn)btn.classList.add('on');
+  const contentEl=document.querySelector('.content');
+  if(contentEl)contentEl.scrollTop=0;
   const cw=document.getElementById('cm_customers_wrap');
   const kw=document.getElementById('cm_kam_wrap');
   const pw=document.getElementById('cm_pivot_wrap');
@@ -9427,6 +9431,8 @@ function swLE(tab,btn){
   else{const b=document.getElementById('le_btn_'+tab);if(b)b.classList.add('on');}
   document.querySelectorAll('#le .le-subtab').forEach(d=>d.classList.remove('on'));
   const el=document.getElementById('le_tab_'+tab);if(el)el.classList.add('on');
+  const contentEl=document.querySelector('.content');
+  if(contentEl)contentEl.scrollTop=0;
   renderLEActive();
 }
 
@@ -9574,6 +9580,20 @@ function renderLEOverview(){
   )});
 }
 
+function _leEmptyBanner(wrapId,label){
+  const wrap=document.getElementById(wrapId);
+  if(!wrap)return null;
+  let b=document.getElementById(wrapId+'_empty');
+  if(!b){
+    b=document.createElement('div');
+    b.id=wrapId+'_empty';
+    b.style.cssText='color:var(--amber);padding:20px;font-size:12px';
+    b.innerHTML='⚠ No saved LE version yet for the '+label+' view. See the <b>Overview</b> tab for the auto-base forecast (actuals + budget blend), or save a version from <b>Adjust LE</b>.';
+    wrap.prepend(b);
+  }
+  return b;
+}
+
 // ─── MONTHLY ─────────────────────────────────────────────────────────────────
 function toggleLELine(btn){
   const tog=btn.dataset.tog;
@@ -9583,11 +9603,12 @@ function toggleLELine(btn){
 }
 
 function renderLEMonthly(){
+  const banner=_leEmptyBanner('le_tab_mt','Monthly');
   if(!sbLE.length){
-    // If we have actuals+budget, the auto-base in renderLEOverview handles the LE data for that tab.
-    // Monthly view just silently returns — user should see auto-base banner on Overview tab.
+    if(banner)banner.style.display='block';
     return;
   }
+  if(banner)banner.style.display='none';
   const mos=lePeriodMonths();
   const curRows=leFilterRows(leGetCurrentRows().filter(d=>d.year===FC_BUD_YEAR));
   const actCur =leFilterRows(_sbAllActuals().filter(d=>Number(d.year||d.cal_year||0)===FC_BUD_YEAR).map(d=>({...d,month:Number(d.month||0)})));
@@ -9615,7 +9636,12 @@ function renderLEMonthly(){
 
 // ─── ADJUST LE ───────────────────────────────────────────────────────────────
 function renderLEAdjust(){
-  if(!sbLE.length)return;
+  const banner=_leEmptyBanner('le_tab_adj','Adjust LE');
+  if(!sbLE.length){
+    if(banner)banner.style.display='block';
+    return;
+  }
+  if(banner)banner.style.display='none';
   leSavedLabels=[...new Set(sbLE.map(d=>d.le_label||'Apr-26 LE'))].sort();
   const rcs =[...new Set(sbLE.map(d=>d.rate_class).filter(Boolean))].sort();
   const pars=[...new Set(sbLE.map(d=>d.parish).filter(Boolean))].sort();
@@ -9987,7 +10013,12 @@ async function leCommitWrite(){
 
 // ─── COMPARE ─────────────────────────────────────────────────────────────────
 function renderLECompare(){
-  if(!sbLE.length)return;
+  const banner=_leEmptyBanner('le_tab_compare','Compare');
+  if(!sbLE.length){
+    if(banner)banner.style.display='block';
+    return;
+  }
+  if(banner)banner.style.display='none';
   const mos=lePeriodMonths();
   leSavedLabels=[...new Set(sbLE.map(d=>d.le_label||'Apr-26 LE'))].sort();
   leSavedLabels.forEach(l=>{if(leCmpToggles[l]===undefined)leCmpToggles[l]=true;});
