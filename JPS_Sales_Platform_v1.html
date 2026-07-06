@@ -2944,6 +2944,9 @@ async function loadCommercialDetail(){
   }
   _commDetailLoaded=true;
   console.log('[comm] loaded',sbActualsComm.length,'commercial rows');
+  // whatever section was already rendered before this finished was residential-only —
+  // refresh it now that the full actuals set (residential+commercial) is available
+  try{renderSection(document.querySelector('.sec.on')?.id);}catch(e){console.warn('re-render after commercial load:',e);}
 }
 
 // Returns all actuals rows (residential + commercial if loaded)
