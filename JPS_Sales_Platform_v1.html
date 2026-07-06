@@ -9829,14 +9829,36 @@ async function leSaveVersion(){
   }catch(e){toast('Save error: '+e.message,'err');}
 }
 
-async function generateSeasonalLE(){
+function generateSeasonalLE(){
   const sb=getSB(); if(!sb){toast('Not connected to database','err');return;}
-  const label=prompt(`Label for this seasonal LE base (blank = default "${FC_BUD_YEAR} Seasonal Trend LE"):`);
-  if(label===null)return; // cancelled
+  const defaultLabel=`${FC_BUD_YEAR} Seasonal Trend LE`;
+  openModal(
+    '🌤 Generate Seasonal LE Base',
+    `<div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.6">
+      Builds LE for <strong>${FC_BUD_YEAR}</strong>: months 1–${curMonth} copy real actuals as-is;
+      months ${curMonth+1}–12 use each account's own trailing same-calendar-month average
+      (up to 3 prior years) scaled by its rate class's trailing growth.
+      <br><br>
+      Revenue is left <strong>blank</strong> for any account with no matching revenue history —
+      <code>jps_budget.revenue_budget</code> is not used as a fallback (it's corrupted for most of the year).
+      Re-running with the same label replaces only that label's rows.
+    </div>
+    <label style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px">Label</label>
+    <input id="le_seasonal_label" class="psel" style="width:100%;margin-top:4px;box-sizing:border-box" value="${esc(defaultLabel)}">`,
+    _runGenerateSeasonalLE,
+    '🌤 Generate',
+    'var(--teal)'
+  );
+}
+
+async function _runGenerateSeasonalLE(){
+  const sb=getSB(); if(!sb)return;
+  const label=(document.getElementById('le_seasonal_label')?.value||'').trim();
+  closeModal();
   const btn=document.getElementById('le_gen_seasonal_btn');
   if(btn){btn.disabled=true;btn.textContent='Generating…';}
   try{
-    const{data,error}=await sb.rpc('generate_seasonal_le',{p_year:FC_BUD_YEAR,p_asof_month:curMonth,p_label:label.trim()||null});
+    const{data,error}=await sb.rpc('generate_seasonal_le',{p_year:FC_BUD_YEAR,p_asof_month:curMonth,p_label:label||null});
     if(error)throw error;
     const r=Array.isArray(data)?data[0]:data;
     let msg=`Seasonal LE generated: ${r.rows_actual} actual + ${r.rows_forecast} forecast rows`;
