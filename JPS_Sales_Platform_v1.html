@@ -10256,12 +10256,19 @@ function renderDriverForecast(){
   }
 
   if(grp==='customer'){
+    // Collapsed by default — a real KAM roster can be 1,000+ accounts, and eagerly
+    // rendering all of them fully expanded produced a 300,000px page (11,924 rows
+    // for ~1,626 accounts) that was effectively unscrollable. The header row alone
+    // still shows the FY total so collapsed rows are still useful to scan/sort by eye.
     entities.forEach((e,entIdx)=>{
       const gid=`dfc_e${entIdx}`;
-      bodyHtml+=`<tbody><tr style="border-bottom:0.5px solid var(--border);cursor:pointer" onclick="const g=document.getElementById('${gid}');g.style.display=g.style.display==='none'?'table-row-group':'none'">
-        <td style="padding:7px 8px;font-weight:500" colspan="${2+months.length*2}">
-          ▾ ${esc(e.label)} <span style="color:var(--text3);font-weight:400">· ${esc(e.sub)}</span>
-        </td></tr></tbody><tbody id="${gid}">`;
+      const hid=`dfc_h${entIdx}`;
+      bodyHtml+=`<tbody><tr style="border-bottom:0.5px solid var(--border);cursor:pointer" onclick="const g=document.getElementById('${gid}'),h=document.getElementById('${hid}');const open=g.style.display==='table-row-group';g.style.display=open?'none':'table-row-group';h.textContent=open?'▸':'▾';">
+        <td style="padding:7px 8px;font-weight:500" colspan="${1+months.length*2}">
+          <span id="${hid}">▸</span> ${esc(e.label)} <span style="color:var(--text3);font-weight:400">· ${esc(e.sub)}</span>
+        </td>
+        <td style="text-align:right;padding:7px 8px;font-weight:500;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(e.chain))} GWh</td>
+      </tr></tbody><tbody id="${gid}" style="display:none">`;
       if(e.type==='account'||e.type==='newcust'){
         const a=e.ref;
         const baseCells=months.map(m=>{
