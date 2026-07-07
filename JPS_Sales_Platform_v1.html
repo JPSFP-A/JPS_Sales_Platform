@@ -2292,6 +2292,7 @@ order by ordinal_position;</pre>
 
     <!-- === DRIVER FORECAST === -->
     <div id="dfc" class="sec">
+      <div class="krow" id="dfc_krow"></div>
       <div class="card">
         <div class="ch">Driver Forecast
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
@@ -2340,11 +2341,18 @@ order by ordinal_position;</pre>
               <option>Renewal</option><option>Expansion</option><option>Confirmed defection</option>
               <option>Possible defection</option><option>Win-back</option><option>Other</option>
             </select>
+            <select id="adjlog_kam" class="psel" onchange="renderAdjustmentLog()"></select>
             <select id="adjlog_group" class="psel" onchange="renderAdjustmentLog()">
               <option value="reason_code">Group by Reason Code</option>
               <option value="rate_class">Group by Rate Class</option>
               <option value="kam">Group by KAM</option>
+              <option value="industry">Group by Industry</option>
               <option value="month">Group by Month</option>
+            </select>
+            <select id="adjlog_sort" class="psel" onchange="renderAdjustmentLog()">
+              <option value="edits">Sort: Most edits</option>
+              <option value="magnitude">Sort: Total % impact</option>
+              <option value="alpha">Sort: A–Z</option>
             </select>
             <input class="psel" id="adjlog_search" placeholder="Search account or note" oninput="renderAdjustmentLog()" style="width:190px">
             <button class="btn btn-o" onclick="exportAdjustmentLogCSV()">⬇ Export Report</button>
@@ -10215,6 +10223,28 @@ function renderDriverForecast(){
     entities.push({type:'commcohort',ref:co,chain,label:co.label,sub:`${co.members.length} accounts, no KAM assigned`});
   });
 
+  const krow=document.getElementById('dfc_krow');
+  if(krow){
+    let fyTotalGwh=0,actualYtdGwh=0,budgetTotalGwh=0;
+    entities.forEach(e=>{
+      for(let m=1;m<=12;m++){
+        const c=e.chain[m];if(!c)continue;
+        fyTotalGwh+=c.total;
+        if(lockedThru&&m<=lockedThru)actualYtdGwh+=c.total;
+      }
+    });
+    sbBudget.forEach(r=>{if(Number(r.year)===year)budgetTotalGwh+=Number(r.kwh_budget)||0;});
+    const vsB=budgetTotalGwh?((fyTotalGwh-budgetTotalGwh)/budgetTotalGwh*100):0;
+    const opAdjCount=sbOpAdj.filter(r=>Number(r.year)===year&&Number(r.operational_pct)).length;
+    krow.innerHTML=`
+      <div class="kpi kt"><div class="kl">FY Total (${year})</div><div class="kv">${_dfcFmtGwh(fyTotalGwh)} GWh</div><div class="ks nt">${lockedThru?'Actual thru '+MONTHS_SHORT[lockedThru-1]+' + forecast':'Full-year forecast'}</div></div>
+      <div class="kpi kg"><div class="kl">Actual YTD</div><div class="kv">${lockedThru?_dfcFmtGwh(actualYtdGwh):'—'}${lockedThru?' GWh':''}</div><div class="ks nt">${lockedThru?MONTHS_SHORT[0]+'–'+MONTHS_SHORT[lockedThru-1]:'No closed months yet'}</div></div>
+      <div class="kpi ${vsB>=0?'kg':'kr'}"><div class="kl">vs Budget</div><div class="kv">${vsB>=0?'+':''}${vsB.toFixed(1)}%</div><div class="ks nt">${_dfcFmtGwh(budgetTotalGwh)} GWh budget</div></div>
+      <div class="kpi kp"><div class="kl">Key Accounts</div><div class="kv">${keyAccounts.length+newCusts.length}</div><div class="ks nt">${newCusts.length?newCusts.length+' new':'own row, KAM-assigned'}</div></div>
+      <div class="kpi ka"><div class="kl">Operational Adj.</div><div class="kv">${opAdjCount}</div><div class="ks nt">active this year</div></div>
+    `;
+  }
+
   let bodyHtml='';
   const colgroup=`<colgroup><col style="width:210px">${months.map(()=>'<col style="width:60px"><col style="width:64px">').join('')}<col style="width:76px"></colgroup>`;
   const headMonths=months.map(m=>`<th colspan="2" style="text-align:center;padding:4px;font-weight:500;color:var(--text3);border-left:0.5px solid var(--border)">${MONTHS_SHORT[m-1]}</th>`).join('');
@@ -10409,17 +10439,17 @@ function renderMacroAssumptions(){
     {label:'Seasonality — residential',type:'seasonality_residential',seg:null},
     ...industries.map(ind=>({label:'Industry — '+ind,type:'industry',seg:ind}))
   ];
-  const head=months.map(m=>`<th style="text-align:right;padding:4px;font-weight:500;color:var(--text3)">${MONTHS_SHORT[m-1]}</th>`).join('');
+  const head=months.map(m=>`<th style="text-align:center;padding:4px;font-weight:500;color:var(--text3);border-left:0.5px solid var(--border)">${MONTHS_SHORT[m-1]}</th>`).join('');
   let body='';
   rows.forEach(r=>{
     const cells=months.map(m=>{
       const v=_dfcMacroLookup(r.type,r.seg,year,m);
-      return`<td style="padding:3px"><input value="${v}" onchange="macroSaveCell('${r.type}',${r.seg?`'${esc(r.seg).replace(/'/g,"\\'")}'`:'null'},${year},${m},this.value)" style="width:44px;height:22px;padding:0 4px;text-align:right;font-size:10px"></td>`;
+      return`<td style="padding:3px;text-align:center;border-left:0.5px solid var(--border)"><input value="${v}" onchange="macroSaveCell('${r.type}',${r.seg?`'${esc(r.seg).replace(/'/g,"\\'")}'`:'null'},${year},${m},this.value)" style="width:48px;height:24px;padding:0 4px;text-align:right;font-size:10px"></td>`;
     }).join('');
     body+=`<tr><td style="padding:5px 8px${r.type==='industry'?' 5px 20px':''};color:${r.type==='industry'?'var(--text3)':'var(--text)'}">${esc(r.label)}</td>${cells}</tr>`;
   });
-  wrap.innerHTML=`<table style="width:100%;min-width:640px;border-collapse:collapse;font-size:12px;table-layout:fixed">
-    <colgroup><col style="width:200px">${months.map(()=>'<col style="width:52px">').join('')}</colgroup>
+  wrap.innerHTML=`<table style="width:988px;border-collapse:collapse;font-size:12px;table-layout:fixed">
+    <colgroup><col style="width:220px">${months.map(()=>'<col style="width:64px">').join('')}</colgroup>
     <thead><tr style="border-bottom:0.5px solid var(--border-strong)"><th style="text-align:left;padding:6px 8px;font-weight:500;color:var(--text3)">Driver</th>${head}</tr></thead>
     <tbody>${body}</tbody>
   </table>`;
@@ -10445,33 +10475,56 @@ async function renderAdjustmentLog(){
   const{data,error}=await sb.from('jps_operational_adjustments').select('*').order('created_at',{ascending:false}).limit(5000);
   if(error){wrap.innerHTML=`<div style="padding:16px;color:var(--amber);font-size:12px">⚠ jps_operational_adjustments not found yet — run the schema migration, then Sync.</div>`;return;}
   const reasonFilter=document.getElementById('adjlog_reason')?.value||'';
+  const kamFilter=document.getElementById('adjlog_kam')?.value||'';
   const groupBy=document.getElementById('adjlog_group')?.value||'reason_code';
+  const sortBy=document.getElementById('adjlog_sort')?.value||'edits';
   const q=(document.getElementById('adjlog_search')?.value||'').toLowerCase();
   const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
+  const indMap={};sbIndustries.forEach(i=>indMap[String(i.jps_ac||'').trim()]=i.industry||'');
   const nameMap={};_sbAllActuals().forEach(r=>{if(r.jps_ac&&!nameMap[r.jps_ac])nameMap[r.jps_ac]=r.name;});
   const rcMap={};_sbAllActuals().forEach(r=>{if(r.jps_ac&&!rcMap[r.jps_ac])rcMap[r.jps_ac]=r.rate_class;});
+
+  const kamSel=document.getElementById('adjlog_kam');
+  if(kamSel&&!kamSel.dataset.populated){
+    const kams=[...new Set(sbKAM.map(k=>k.kam).filter(Boolean))].sort();
+    kamSel.innerHTML='<option value="">All KAMs</option>'+kams.map(k=>`<option>${esc(k)}</option>`).join('');
+    kamSel.dataset.populated='1';
+  }
+
   let rows=data.filter(r=>r.operational_pct||r.manual_kwh);
   if(reasonFilter)rows=rows.filter(r=>r.reason_code===reasonFilter);
+  if(kamFilter)rows=rows.filter(r=>_kl(kamMap,r.jps_ac)===kamFilter);
   if(q)rows=rows.filter(r=>(nameMap[r.jps_ac]||r.jps_ac||'').toLowerCase().includes(q)||(r.justification||'').toLowerCase().includes(q));
+
   const groups={};
   rows.forEach(r=>{
     const k=groupBy==='reason_code'?(r.reason_code||'—')
       :groupBy==='rate_class'?(rcMap[r.jps_ac]||'—')
       :groupBy==='kam'?(_kl(kamMap,r.jps_ac)||'Unassigned')
+      :groupBy==='industry'?(_kl(indMap,r.jps_ac)||'Unassigned')
       :`${MONTHS_SHORT[Number(r.month)-1]} ${r.year}`;
-    if(!groups[k])groups[k]={key:k,rows:[],accounts:new Set()};
+    if(!groups[k])groups[k]={key:k,rows:[],accounts:new Set(),pctSum:0};
     groups[k].rows.push(r);groups[k].accounts.add(r.jps_ac);
+    groups[k].pctSum+=Math.abs(Number(r.operational_pct)||0);
   });
+
+  const sortedGroups=Object.values(groups).sort((a,b)=>{
+    if(sortBy==='magnitude')return b.pctSum-a.pctSum;
+    if(sortBy==='alpha')return a.key.localeCompare(b.key);
+    return b.rows.length-a.rows.length; // 'edits' — default
+  });
+
   let body='';
-  Object.values(groups).sort((a,b)=>b.rows.length-a.rows.length).forEach((g,gi)=>{
+  sortedGroups.forEach((g,gi)=>{
     const gid=`adjlog_g${gi}`;
+    const sortedRows=[...g.rows].sort((a,b)=>(Number(a.year)*12+Number(a.month))-(Number(b.year)*12+Number(b.month)));
     body+=`<tr style="border-bottom:0.5px solid var(--border);cursor:pointer" onclick="document.getElementById('${gid}').style.display=document.getElementById('${gid}').style.display==='none'?'table-row-group':'none'">
       <td style="padding:6px 8px;font-weight:500">▾ ${esc(g.key)}</td>
       <td style="text-align:right;padding:6px 4px">${g.accounts.size}</td>
       <td style="text-align:right;padding:6px 4px">${g.rows.length}</td>
       <td style="padding:6px 8px;color:var(--text3)"></td>
     </tr>`;
-    body+=`<tbody id="${gid}">`+g.rows.map(r=>`<tr>
+    body+=`<tbody id="${gid}">`+sortedRows.map(r=>`<tr>
       <td style="padding:4px 8px 4px 26px;color:var(--text3)">${esc(nameMap[r.jps_ac]||r.jps_ac)}</td>
       <td style="text-align:right;padding:4px">${MONTHS_SHORT[Number(r.month)-1]} ${r.year}</td>
       <td style="text-align:right;padding:4px">${r.operational_pct?_dfcFmtPct(Number(r.operational_pct)):''}${r.manual_kwh?' / '+Number(r.manual_kwh).toLocaleString()+' kWh':''}</td>
@@ -10484,7 +10537,7 @@ async function renderAdjustmentLog(){
       <th style="text-align:left;padding:6px 8px;font-weight:500;color:var(--text3)">${groupBy.replace('_',' ')}</th>
       <th style="text-align:right;padding:6px 4px;font-weight:500;color:var(--text3)">Accounts</th>
       <th style="text-align:right;padding:6px 4px;font-weight:500;color:var(--text3)">Edits</th>
-      <th style="text-align:left;padding:6px 8px;font-weight:500;color:var(--text3)">Detail</th>
+      <th style="text-align:left;padding:6px 8px;font-weight:500;color:var(--text3)">Detail (by month)</th>
     </tr></thead>
     ${body||'<tbody><tr><td colspan="4" style="padding:16px;color:var(--text3)">No operational adjustments logged yet.</td></tr></tbody>'}
   </table>`;
