@@ -8737,7 +8737,9 @@ var _sbClient=null, // var (not let) — hoisted as undefined, avoids TDZ when J
     sbFcNotes=[],       // jps_forecast_notes    — off-trend explanation notes
     sbLE=[],            // jps_le               — latest estimate at account/parish/bucket level
     sbMacroAssum=[],    // jps_macro_assumptions — segment/industry driver % inputs, monthly
+    sbMacroAssumExists=false, // true once the table has been confirmed reachable (distinct from "0 rows yet")
     sbOpAdj=[],         // jps_operational_adjustments_current — latest op adj + manual kwh per account/month
+    sbOpAdjExists=false,
     sbNewCustomers=[],  // jps_forecast_new_customers — added-but-not-yet-real accounts
     sbSystemStats=[],   // jps_system_stats      — net gen + losses for budget/le/actuals
     sbLossesForecast=[], // jps_losses_forecast  — rolling 12-month losses forecast
@@ -9185,9 +9187,11 @@ async function syncSupabase(silent=false){
     } else log.push('LE: jps_le (0 rows)');
 
     sbMacroAssum=macroAssumData||[];
+    sbMacroAssumExists=!!macroAssumData;
     log.push(macroAssumData?`Macro Assumptions: jps_macro_assumptions (${sbMacroAssum.length} rows)`:'Macro Assumptions: ⚠ jps_macro_assumptions not found — run schema SQL');
 
     sbOpAdj=opAdjData||[];
+    sbOpAdjExists=!!opAdjData;
     log.push(opAdjData?`Operational Adjustments: jps_operational_adjustments (${sbOpAdj.length} current rows)`:'Operational Adjustments: ⚠ jps_operational_adjustments not found — run schema SQL');
 
     sbNewCustomers=newCustData||[];
@@ -10234,9 +10238,9 @@ function renderDriverForecast(){
     bodyHtml+=`<tbody>${groupRows}</tbody>`;
   }
 
-  const warnHtml=(!sbMacroAssum.length&&!sbOpAdj.length)
-    ?'<div style="padding:10px 0;color:var(--amber);font-size:11px">⚠ jps_macro_assumptions / jps_operational_adjustments not found yet — run the schema migration, then Sync. Base and totals still compute; Macro/Weather/Seasonality/Industry will read 0% until then.</div>'
-    :'';
+  const warnHtml=(!sbMacroAssumExists&&!sbOpAdjExists)
+    ?'<div style="padding:10px 0;color:var(--amber);font-size:11px">⚠ jps_macro_assumptions / jps_operational_adjustments not found — run the schema migration, then Sync. Base and totals still compute; Macro/Weather/Seasonality/Industry will read 0% until then.</div>'
+    :(!sbMacroAssum.length?'<div style="padding:10px 0;color:var(--text3);font-size:11px">No macro assumptions entered yet — set them on the Macro Assumptions tab. Every driver reads 0% until then.</div>':'');
   wrap.innerHTML=warnHtml+`<table id="dfc_tbl_el" style="width:100%;min-width:${260+months.length*130}px;border-collapse:collapse;font-size:11px;table-layout:fixed">
     ${colgroup}
     <thead>
