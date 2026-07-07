@@ -2299,11 +2299,14 @@ order by ordinal_position;</pre>
             <select id="dfc_year" class="psel" onchange="renderDriverForecast()"></select>
             <select id="dfc_group" class="psel" onchange="renderDriverForecast()">
               <option value="customer">Group by Customer</option>
+              <option value="top_bottom">Top 10 / Bottom 10</option>
               <option value="rate_class">Group by Rate Class</option>
               <option value="parish">Group by Parish</option>
               <option value="industry">Group by Industry</option>
             </select>
             <input class="psel" id="dfc_search" placeholder="Search customer or account #" oninput="renderDriverForecast()" style="width:200px">
+            <button class="btn btn-o" onclick="dfcExpandCollapseAll(true)">⊞ Expand all</button>
+            <button class="btn btn-o" onclick="dfcExpandCollapseAll(false)">⊟ Collapse all</button>
             <button class="btn btn-t" onclick="openAddCustomerModal()">+ Add Customer</button>
           </div>
         </div>
@@ -10168,6 +10171,14 @@ function dfcLoadCohortMembers(ri){
   bodyEl.dataset.loaded='1';
 }
 
+// Bulk expand/collapse — a real KAM roster is 1,600+ rows, so this can toggle a
+// lot of tbodies at once. Pure style.display flips, no recompute, stays fast.
+function dfcExpandCollapseAll(expand){
+  const tbl=document.getElementById('dfc_tbl_el');if(!tbl)return;
+  tbl.querySelectorAll('tbody[id^="dfc_e"]').forEach(tb=>{tb.style.display=expand?'table-row-group':'none';});
+  tbl.querySelectorAll('span[id^="dfc_h"]').forEach(h=>{h.textContent=expand?'▾':'▸';});
+}
+
 function _dfcDriverRowHtml(label,pctByMonth,gwhByMonth,months,muted,lockedThru){
   const cells=months.map((m,i)=>{
     if(lockedThru&&m<=lockedThru){
@@ -10255,55 +10266,71 @@ function renderDriverForecast(){
     return months.map(m=>`<td colspan="2" style="text-align:right;padding:5px;border-left:0.5px solid var(--border);font-weight:${bold?500:400}">${_dfcFmtGwh(chain[m]?chain[m].total:0)}</td>`).join('');
   }
 
+  function entityHtml(e,entIdx,defaultExpanded){
+    const gid=`dfc_e${entIdx}`;
+    const hid=`dfc_h${entIdx}`;
+    let h=`<tbody><tr style="border-bottom:0.5px solid var(--border);cursor:pointer" onclick="const g=document.getElementById('${gid}'),h=document.getElementById('${hid}');const open=g.style.display==='table-row-group';g.style.display=open?'none':'table-row-group';h.textContent=open?'▸':'▾';">
+        <td style="padding:7px 8px;font-weight:500" colspan="${1+months.length*2}">
+          <span id="${hid}">${defaultExpanded?'▾':'▸'}</span> ${esc(e.label)} <span style="color:var(--text3);font-weight:400">· ${esc(e.sub)}</span>
+        </td>
+        <td style="text-align:right;padding:7px 8px;font-weight:500;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(e.chain))} GWh</td>
+      </tr></tbody><tbody id="${gid}" style="display:${defaultExpanded?'table-row-group':'none'}">`;
+    if(e.type==='account'||e.type==='newcust'){
+      const a=e.ref;
+      const baseCells=months.map(m=>{
+        const c=e.chain[m]||{};
+        const v=(lockedThru&&m<=lockedThru)?(c.total||0):(c.base||0);
+        return`<td style="text-align:right;padding:4px;color:var(--text3);border-left:0.5px solid var(--border)">—</td><td style="text-align:right;padding:4px;background:rgba(39,196,133,.08);color:var(--green)">${_dfcFmtGwh(v)}</td>`;
+      }).join('');
+      h+=`<tr><td style="padding:4px 8px 4px 26px;color:var(--text3)">${lockedThru?'Actual / Base':'Base'}${e.type==='newcust'?' (expected kWh)':' (rolling 3-mo)'}</td>${baseCells}<td style="border-left:0.5px solid var(--border)"></td></tr>`;
+      h+=_dfcDriverRowHtml('Macro — '+_dfcSegment(a.rate_class),months.map(m=>e.chain[m]?e.chain[m].macro:0),months.map((m)=>e.chain[m]?((e.chain[m].base||0)*(e.chain[m].macro||0)/100):0),months,true,lockedThru);
+      h+=_dfcDriverRowHtml('Weather',months.map(m=>e.chain[m]?e.chain[m].weather:0),months.map(m=>e.chain[m]?((e.chain[m].base||0)*(e.chain[m].weather||0)/100):0),months,true,lockedThru);
+      h+=_dfcDriverRowHtml(_dfcSegment(a.rate_class)==='residential'?'Seasonality — residential':'Industry — '+(a.industry||'unassigned'),months.map(m=>e.chain[m]?e.chain[m].seasInd:0),months.map(m=>e.chain[m]?((e.chain[m].base||0)*(e.chain[m].seasInd||0)/100):0),months,true,lockedThru);
+      const opCells=months.map(m=>{
+        if(lockedThru&&m<=lockedThru){
+          return`<td style="padding:3px;border-left:0.5px solid var(--border);text-align:right;color:var(--text3)">—</td><td style="text-align:right;padding:4px;color:var(--text3)">—</td>`;
+        }
+        const c=e.chain[m]||{};const pct=c.oper||0,kwh=(c.base||0)*pct/100;
+        return`<td style="padding:3px;border-left:0.5px solid var(--border)"><input value="${pct}" onchange="dfcEditOperational('${a.ac||a.jps_ac}',${year},${m},this.value,'${esc(e.label).replace(/'/g,"\\'")}')" style="width:38px;height:20px;padding:0 3px;text-align:right;font-size:10px;color:${pct>0?'var(--green)':pct<0?'var(--red)':'var(--text)'}"></td><td style="text-align:right;padding:4px;background:rgba(0,194,168,.08);color:var(--teal)">${_dfcFmtGwh(kwh)}</td>`;
+      }).join('');
+      h+=`<tr style="border-bottom:0.5px solid var(--border)"><td style="padding:4px 8px 4px 26px;color:var(--text2)">Operational adj.</td>${opCells}<td style="border-left:0.5px solid var(--border)"></td></tr>`;
+      h+=`<tr style="border-bottom:0.5px solid var(--border-strong)"><td style="padding:5px 8px 5px 26px;font-weight:700">Total</td>${totalRowCells(e.chain,true)}<td style="text-align:right;padding:5px 8px;font-weight:700;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(e.chain))}</td></tr>`;
+    }else if(e.type==='rescohort'){
+      h+=`<tr style="border-bottom:0.5px solid var(--border-strong)"><td style="padding:5px 8px 5px 26px;color:var(--text2)">Cohort total</td>${totalRowCells(e.chain,false)}<td style="text-align:right;padding:5px 8px;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(e.chain))}</td></tr>`;
+    }else if(e.type==='commcohort'){
+      h+=`<tr style="border-bottom:0.5px solid var(--border)"><td style="padding:5px 8px 5px 26px;color:var(--text2)">Cohort total</td>${totalRowCells(e.chain,false)}<td style="text-align:right;padding:5px 8px;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(e.chain))}</td></tr>`;
+      const ri=_dfcCohortReg.length;
+      _dfcCohortReg.push({co:e.ref,idx,year,months});
+      h+=`<tr id="dfc_mem_row_${ri}"><td colspan="${2+months.length*2}" style="padding:4px 8px 4px 40px">
+          <a href="#" onclick="event.preventDefault();dfcLoadCohortMembers(${ri})" style="font-size:11px;color:var(--teal)">Show accounts (${e.ref.members.length}${e.ref.members.length>DFC_MEMBER_CAP?', first '+DFC_MEMBER_CAP+' — search above to find one':''})</a>
+          <div id="dfc_mem_body_${ri}"></div>
+        </td></tr>`;
+    }
+    h+='</tbody>';
+    return h;
+  }
+
   if(grp==='customer'){
     // Collapsed by default — a real KAM roster can be 1,000+ accounts, and eagerly
     // rendering all of them fully expanded produced a 300,000px page (11,924 rows
     // for ~1,626 accounts) that was effectively unscrollable. The header row alone
     // still shows the FY total so collapsed rows are still useful to scan/sort by eye.
-    entities.forEach((e,entIdx)=>{
-      const gid=`dfc_e${entIdx}`;
-      const hid=`dfc_h${entIdx}`;
-      bodyHtml+=`<tbody><tr style="border-bottom:0.5px solid var(--border);cursor:pointer" onclick="const g=document.getElementById('${gid}'),h=document.getElementById('${hid}');const open=g.style.display==='table-row-group';g.style.display=open?'none':'table-row-group';h.textContent=open?'▸':'▾';">
-        <td style="padding:7px 8px;font-weight:500" colspan="${1+months.length*2}">
-          <span id="${hid}">▸</span> ${esc(e.label)} <span style="color:var(--text3);font-weight:400">· ${esc(e.sub)}</span>
-        </td>
-        <td style="text-align:right;padding:7px 8px;font-weight:500;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(e.chain))} GWh</td>
-      </tr></tbody><tbody id="${gid}" style="display:none">`;
-      if(e.type==='account'||e.type==='newcust'){
-        const a=e.ref;
-        const baseCells=months.map(m=>{
-          const c=e.chain[m]||{};
-          const v=(lockedThru&&m<=lockedThru)?(c.total||0):(c.base||0);
-          return`<td style="text-align:right;padding:4px;color:var(--text3);border-left:0.5px solid var(--border)">—</td><td style="text-align:right;padding:4px;background:rgba(39,196,133,.08);color:var(--green)">${_dfcFmtGwh(v)}</td>`;
-        }).join('');
-        bodyHtml+=`<tr><td style="padding:4px 8px 4px 26px;color:var(--text3)">${lockedThru?'Actual / Base':'Base'}${e.type==='newcust'?' (expected kWh)':' (rolling 3-mo)'}</td>${baseCells}<td style="border-left:0.5px solid var(--border)"></td></tr>`;
-        bodyHtml+=_dfcDriverRowHtml('Macro — '+_dfcSegment(a.rate_class),months.map(m=>e.chain[m]?e.chain[m].macro:0),months.map((m)=>e.chain[m]?((e.chain[m].base||0)*(e.chain[m].macro||0)/100):0),months,true,lockedThru);
-        bodyHtml+=_dfcDriverRowHtml('Weather',months.map(m=>e.chain[m]?e.chain[m].weather:0),months.map(m=>e.chain[m]?((e.chain[m].base||0)*(e.chain[m].weather||0)/100):0),months,true,lockedThru);
-        bodyHtml+=_dfcDriverRowHtml(_dfcSegment(a.rate_class)==='residential'?'Seasonality — residential':'Industry — '+(a.industry||'unassigned'),months.map(m=>e.chain[m]?e.chain[m].seasInd:0),months.map(m=>e.chain[m]?((e.chain[m].base||0)*(e.chain[m].seasInd||0)/100):0),months,true,lockedThru);
-        const opCells=months.map(m=>{
-          if(lockedThru&&m<=lockedThru){
-            return`<td style="padding:3px;border-left:0.5px solid var(--border);text-align:right;color:var(--text3)">—</td><td style="text-align:right;padding:4px;color:var(--text3)">—</td>`;
-          }
-          const c=e.chain[m]||{};const pct=c.oper||0,kwh=(c.base||0)*pct/100;
-          return`<td style="padding:3px;border-left:0.5px solid var(--border)"><input value="${pct}" onchange="dfcEditOperational('${a.ac||a.jps_ac}',${year},${m},this.value,'${esc(e.label).replace(/'/g,"\\'")}')" style="width:38px;height:20px;padding:0 3px;text-align:right;font-size:10px;color:${pct>0?'var(--green)':pct<0?'var(--red)':'var(--text)'}"></td><td style="text-align:right;padding:4px;background:rgba(0,194,168,.08);color:var(--teal)">${_dfcFmtGwh(kwh)}</td>`;
-        }).join('');
-        bodyHtml+=`<tr style="border-bottom:0.5px solid var(--border)"><td style="padding:4px 8px 4px 26px;color:var(--text2)">Operational adj.</td>${opCells}<td style="border-left:0.5px solid var(--border)"></td></tr>`;
-        bodyHtml+=`<tr style="border-bottom:0.5px solid var(--border-strong)"><td style="padding:5px 8px 5px 26px;font-weight:700">Total</td>${totalRowCells(e.chain,true)}<td style="text-align:right;padding:5px 8px;font-weight:700;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(e.chain))}</td></tr>`;
-      }else if(e.type==='rescohort'){
-        bodyHtml+=`<tr style="border-bottom:0.5px solid var(--border-strong)"><td style="padding:5px 8px 5px 26px;color:var(--text2)">Cohort total</td>${totalRowCells(e.chain,false)}<td style="text-align:right;padding:5px 8px;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(e.chain))}</td></tr>`;
-      }else if(e.type==='commcohort'){
-        bodyHtml+=`<tr style="border-bottom:0.5px solid var(--border)"><td style="padding:5px 8px 5px 26px;color:var(--text2)">Cohort total</td>${totalRowCells(e.chain,false)}<td style="text-align:right;padding:5px 8px;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(e.chain))}</td></tr>`;
-        const ri=_dfcCohortReg.length;
-        _dfcCohortReg.push({co:e.ref,idx,year,months});
-        bodyHtml+=`<tr id="dfc_mem_row_${ri}"><td colspan="${2+months.length*2}" style="padding:4px 8px 4px 40px">
-          <a href="#" onclick="event.preventDefault();dfcLoadCohortMembers(${ri})" style="font-size:11px;color:var(--teal)">Show accounts (${e.ref.members.length}${e.ref.members.length>DFC_MEMBER_CAP?', first '+DFC_MEMBER_CAP+' — search above to find one':''})</a>
-          <div id="dfc_mem_body_${ri}"></div>
-        </td></tr>`;
-      }
-      bodyHtml+='</tbody>';
-    });
+    // Grand total is shown both here (top, always visible without scrolling) and
+    // repeated at the bottom of the list.
     const grand={};months.forEach(m=>{grand[m]={total:entities.reduce((s,e)=>s+(e.chain[m]?e.chain[m].total:0),0)};});
+    bodyHtml+=`<tbody><tr style="border-bottom:0.5px solid var(--border-strong);background:var(--card)"><td style="padding:8px 8px;font-weight:700">Grand total (${entities.length} rows below)</td>${totalRowCells(grand,true)}<td style="text-align:right;padding:8px 8px;font-weight:700;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(grand))}</td></tr></tbody>`;
+    entities.forEach((e,entIdx)=>{bodyHtml+=entityHtml(e,entIdx,false);});
     bodyHtml+=`<tbody><tr style="border-top:0.5px solid var(--border-strong)"><td style="padding:8px 8px;font-weight:700">Grand total</td>${totalRowCells(grand,true)}<td style="text-align:right;padding:8px 8px;font-weight:700;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(grand))}</td></tr></tbody>`;
+  }else if(grp==='top_bottom'){
+    // "Giants" and "smallest/at-risk" — full driver detail expanded by default
+    // since there are only 20 entities total here, not 1,600.
+    const ranked=[...entities].sort((a,b)=>fyTotal(b.chain)-fyTotal(a.chain));
+    const top10=ranked.slice(0,10);
+    const bottom10=ranked.slice(-10).reverse();
+    bodyHtml+=`<tbody><tr><td colspan="${2+months.length*2}" style="padding:10px 8px 4px;font-weight:700;color:var(--teal);font-size:11px;text-transform:uppercase;letter-spacing:.4px">Top 10 — largest by FY total</td></tr></tbody>`;
+    top10.forEach((e,i)=>{bodyHtml+=entityHtml(e,'top'+i,true);});
+    bodyHtml+=`<tbody><tr><td colspan="${2+months.length*2}" style="padding:14px 8px 4px;font-weight:700;color:var(--red);font-size:11px;text-transform:uppercase;letter-spacing:.4px">Bottom 10 — smallest by FY total</td></tr></tbody>`;
+    bottom10.forEach((e,i)=>{bodyHtml+=entityHtml(e,'bot'+i,true);});
   }else{
     const keyFn=grp==='rate_class'?e=>e.ref.rate_class:grp==='parish'?e=>e.ref.parish||'—':e=>e.ref.industry||'Residential / unassigned';
     const groups={};
