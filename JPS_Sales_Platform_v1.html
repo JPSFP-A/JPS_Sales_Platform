@@ -2296,6 +2296,7 @@ order by ordinal_position;</pre>
       <div class="card">
         <div class="ch">Driver Forecast
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <select id="dfc_year" class="psel" onchange="renderDriverForecast()"></select>
             <select id="dfc_group" class="psel" onchange="renderDriverForecast()">
               <option value="customer">Group by Customer</option>
               <option value="rate_class">Group by Rate Class</option>
@@ -8865,18 +8866,22 @@ async function sbTable(tbl,opts={}){
   }
   // Paginated fetch — 10000-row pages minimise round-trips
   const PAGE=10000;
-  let all=[],from=0;
+  let all=[],from=0,hadError=false;
   for(;;){
     let q=sb.from(tbl).select(opts.cols||'*').range(from,from+PAGE-1);
     if(opts.order)q=q.order(opts.order,{ascending:true});
     if(opts.gte)q=q.gte(opts.gte[0],opts.gte[1]); // optional lower-bound filter
     const{data,error}=await q;
-    if(error||!Array.isArray(data)||!data.length)break;
+    if(error){hadError=true;break;}
+    if(!Array.isArray(data)||!data.length)break;
     all=all.concat(data);
     from+=data.length;           // advance by actual rows received (handles max_rows cap)
     if(from>1000000)break;       // safety cap
   }
-  return all.length?all:null;
+  // A real query error means the table couldn't be reached (null, so callers can
+  // tell "not found" from "found, just empty" — a genuinely empty table must
+  // still return [], not null, or every "0 rows yet" table looks missing).
+  return hadError?null:all;
 }
 
 async function sbStorage(bucket,file){
@@ -10076,7 +10081,7 @@ function _dfcBuildIndices(){
 // (if set) enables the operational/manual adjustment lookup — only individual KAM
 // accounts and new customers pass one; cohorts pass null (their total is the sum
 // of their members' chains, computed by the caller).
-function _dfcComputeChain(idx,key,isAccount,driverCtx,opAc,year,asof,newCustCtx){
+function _dfcComputeChain(idx,key,isAccount,driverCtx,opAc,year,asof,newCustCtx,carryIn){
   const actMap=(isAccount?idx.actByAc:idx.actByCohort)[key];
   const budMap=(isAccount?idx.budByAc:idx.budByCohort)[key];
   const totals={};
@@ -10092,7 +10097,11 @@ function _dfcComputeChain(idx,key,isAccount,driverCtx,opAc,year,asof,newCustCtx)
       base=newCustCtx.expectedKwh;
     }else{
       const terms=[];
-      for(let k=1;k<=3;k++){const mm=m-k;if(mm>=1&&totals[mm])terms.push(totals[mm].total);}
+      for(let k=1;k<=3;k++){
+        const mm=m-k;
+        if(mm>=1&&totals[mm])terms.push(totals[mm].total);
+        else if(mm<=0&&carryIn&&carryIn[mm]!=null)terms.push(carryIn[mm]);
+      }
       const budFallback=budMap?budMap[`${year}_${m}`]:undefined;
       base=terms.length?terms.reduce((s,v)=>s+v,0)/terms.length:(budFallback||0);
     }
@@ -10102,6 +10111,27 @@ function _dfcComputeChain(idx,key,isAccount,driverCtx,opAc,year,asof,newCustCtx)
     totals[m]={total,isActual:false,base,macro,weather,seasInd,oper:op.pct,manual:op.kwh};
   }
   return totals;
+}
+
+// Cross-year cascade: 2027's Jan base needs Oct/Nov/Dec 2026, so a future year
+// can't be computed standalone — this recurses to the prior year first (memoized
+// per render pass) and carries its tail forward. Only FC_BUD_YEAR (the real
+// current year) has any locked/actual months; every later year is 100% forecast.
+let _dfcYearChainCache={};
+function _dfcResetYearChainCache(){_dfcYearChainCache={};}
+function _dfcGetChain(idx,key,isAccount,driverCtx,opAc,year,newCustCtx){
+  const cacheKey=`${year}|${key}|${isAccount}|${opAc||''}`;
+  if(_dfcYearChainCache[cacheKey])return _dfcYearChainCache[cacheKey];
+  let lockedThru=0,carryIn=null;
+  if(year===FC_BUD_YEAR){
+    lockedThru=curMonth;
+  }else if(year>FC_BUD_YEAR){
+    const prior=_dfcGetChain(idx,key,isAccount,driverCtx,opAc,year-1,newCustCtx);
+    carryIn={0:prior[12]?prior[12].total:0,'-1':prior[11]?prior[11].total:0,'-2':prior[10]?prior[10].total:0};
+  }
+  const chain=_dfcComputeChain(idx,key,isAccount,driverCtx,opAc,year,lockedThru,newCustCtx,carryIn);
+  _dfcYearChainCache[cacheKey]=chain;
+  return chain;
 }
 
 function _dfcFmtPct(v){return(v>=0?'+':'')+v.toFixed(1)+'%';}
@@ -10118,11 +10148,11 @@ function dfcLoadCohortMembers(ri){
     bodyEl.style.display=bodyEl.style.display==='none'?'block':'none';
     return;
   }
-  const{co,idx,year,asof,months}=reg;
+  const{co,idx,year,months}=reg;
   const shown=co.members.slice(0,DFC_MEMBER_CAP);
   let html='<table style="width:100%;margin-top:4px;border-collapse:collapse"><tbody>';
   shown.forEach(a=>{
-    const mc=_dfcComputeChain(idx,a.ac,true,{rate_class:a.rate_class,industry:a.industry},null,year,asof,null);
+    const mc=_dfcGetChain(idx,a.ac,true,{rate_class:a.rate_class,industry:a.industry},null,year,null);
     const cells=months.map(m=>`<td style="text-align:right;padding:2px 6px;color:var(--text3);font-size:11px">${_dfcFmtGwh(mc[m]?mc[m].total:0)}</td>`).join('');
     html+=`<tr><td style="padding:2px 8px 2px 0;color:var(--text3);font-size:11px;width:200px">↳ ${esc(a.name)}</td>${cells}<td style="text-align:right;padding:2px 8px;color:var(--text3);font-size:11px;border-left:0.5px solid var(--border)">${_dfcFmtGwh(_dfcFyTotal(mc,months))}</td></tr>`;
   });
@@ -10131,17 +10161,27 @@ function dfcLoadCohortMembers(ri){
   bodyEl.dataset.loaded='1';
 }
 
-function _dfcDriverRowHtml(label,pctByMonth,gwhByMonth,months,muted){
-  const cells=months.map((m,i)=>`<td style="text-align:right;padding:4px;color:${muted?'var(--text3)':'var(--text2)'};border-left:0.5px solid var(--border)">${_dfcFmtPct(pctByMonth[i])}</td><td style="text-align:right;padding:4px;color:${muted?'var(--text3)':'var(--text)'}">${_dfcFmtGwh(gwhByMonth[i])}</td>`).join('');
+function _dfcDriverRowHtml(label,pctByMonth,gwhByMonth,months,muted,lockedThru){
+  const cells=months.map((m,i)=>{
+    if(lockedThru&&m<=lockedThru){
+      return`<td style="text-align:right;padding:4px;color:var(--text3);border-left:0.5px solid var(--border)">—</td><td style="text-align:right;padding:4px;color:var(--text3)">—</td>`;
+    }
+    return`<td style="text-align:right;padding:4px;color:${muted?'var(--text3)':'var(--text2)'};border-left:0.5px solid var(--border)">${_dfcFmtPct(pctByMonth[i])}</td><td style="text-align:right;padding:4px;color:${muted?'var(--text3)':'var(--text)'}">${_dfcFmtGwh(gwhByMonth[i])}</td>`;
+  }).join('');
   return`<tr><td style="padding:4px 8px 4px 26px;color:var(--text3)">${label}</td>${cells}<td style="border-left:0.5px solid var(--border)"></td></tr>`;
 }
 
 function renderDriverForecast(){
   const wrap=document.getElementById('dfc_table');if(!wrap)return;
   _dfcCohortReg=[];
-  const year=FC_BUD_YEAR,asof=curMonth;
-  const months=[];for(let m=asof+1;m<=12;m++)months.push(m);
-  if(!months.length){wrap.innerHTML='<div style="padding:16px;color:var(--text3);font-size:12px">All 12 months are closed for '+year+' — nothing left to forecast.</div>';return;}
+  _dfcResetYearChainCache();
+  const yrSel=document.getElementById('dfc_year');
+  if(yrSel&&!yrSel.options.length){
+    for(let y=FC_BUD_YEAR;y<=FC_BUD_YEAR+4;y++)yrSel.innerHTML+=`<option value="${y}">${y}</option>`;
+  }
+  const year=parseInt(yrSel?.value)||FC_BUD_YEAR;
+  const lockedThru=year===FC_BUD_YEAR?curMonth:0; // only the real current year has any closed/actual months
+  const months=[1,2,3,4,5,6,7,8,9,10,11,12];
   const grp=document.getElementById('dfc_group')?.value||'customer';
   const q=(document.getElementById('dfc_search')?.value||'').toLowerCase();
 
@@ -10154,16 +10194,16 @@ function renderDriverForecast(){
   const idx=_dfcBuildIndices();
   const entities=[]; // {type:'account'|'newcust'|'rescohort'|'commcohort', ...}
   keyAccounts.forEach(a=>{
-    const chain=_dfcComputeChain(idx,a.ac,true,{rate_class:a.rate_class,industry:a.industry},a.ac,year,asof,null);
+    const chain=_dfcGetChain(idx,a.ac,true,{rate_class:a.rate_class,industry:a.industry},a.ac,year,null);
     entities.push({type:'account',ref:a,chain,label:a.name,sub:`${a.rate_class} · ${a.parish} · key account`});
   });
   newCusts.forEach(c=>{
     const ctx={rate_class:c.rate_class,industry:c.industry,startYear:Number(c.start_year),startMonth:Number(c.start_month),expectedKwh:Number(c.expected_kwh)||0};
-    const chain=_dfcComputeChain(idx,c.jps_ac,true,{rate_class:c.rate_class,industry:c.industry},c.jps_ac,year,asof,ctx);
+    const chain=_dfcGetChain(idx,c.jps_ac,true,{rate_class:c.rate_class,industry:c.industry},c.jps_ac,year,ctx);
     entities.push({type:'newcust',ref:c,chain,label:c.name,sub:`${c.rate_class} · ${c.parish||''} · new, from ${MONTHS_SHORT[ctx.startMonth-1]} ${ctx.startYear}`});
   });
   resCohorts.forEach(co=>{
-    const chain=_dfcComputeChain(idx,co.key,false,{rate_class:co.rate_class,industry:null},null,year,asof,null);
+    const chain=_dfcGetChain(idx,co.key,false,{rate_class:co.rate_class,industry:null},null,year,null);
     entities.push({type:'rescohort',ref:co,chain,label:co.label,sub:'residential cohort'});
   });
   commCohorts.forEach(co=>{
@@ -10172,7 +10212,7 @@ function renderDriverForecast(){
     // the drill-down list) are computed lazily, on click, capped at 50 — a
     // cohort can hold hundreds of accounts and eagerly rendering all of them
     // is what caused the original freeze against real data.
-    const chain=_dfcComputeChain(idx,co.key,false,{rate_class:co.rate_class,industry:null},null,year,asof,null);
+    const chain=_dfcGetChain(idx,co.key,false,{rate_class:co.rate_class,industry:null},null,year,null);
     entities.push({type:'commcohort',ref:co,chain,label:co.label,sub:`${co.members.length} accounts, no KAM assigned`});
   });
 
@@ -10195,12 +10235,19 @@ function renderDriverForecast(){
         </td></tr></tbody><tbody id="${gid}">`;
       if(e.type==='account'||e.type==='newcust'){
         const a=e.ref;
-        const baseCells=months.map(m=>`<td style="text-align:right;padding:4px;color:var(--text3);border-left:0.5px solid var(--border)">—</td><td style="text-align:right;padding:4px;background:rgba(39,196,133,.08);color:var(--green)">${_dfcFmtGwh(e.chain[m]?e.chain[m].base||0:0)}</td>`).join('');
-        bodyHtml+=`<tr><td style="padding:4px 8px 4px 26px;color:var(--text3)">Base${e.type==='newcust'?' (expected kWh)':' (rolling 3-mo)'}</td>${baseCells}<td style="border-left:0.5px solid var(--border)"></td></tr>`;
-        bodyHtml+=_dfcDriverRowHtml('Macro — '+_dfcSegment(a.rate_class),months.map(m=>e.chain[m]?e.chain[m].macro:0),months.map((m)=>e.chain[m]?((e.chain[m].base||0)*(e.chain[m].macro||0)/100):0),months,true);
-        bodyHtml+=_dfcDriverRowHtml('Weather',months.map(m=>e.chain[m]?e.chain[m].weather:0),months.map(m=>e.chain[m]?((e.chain[m].base||0)*(e.chain[m].weather||0)/100):0),months,true);
-        bodyHtml+=_dfcDriverRowHtml(_dfcSegment(a.rate_class)==='residential'?'Seasonality — residential':'Industry — '+(a.industry||'unassigned'),months.map(m=>e.chain[m]?e.chain[m].seasInd:0),months.map(m=>e.chain[m]?((e.chain[m].base||0)*(e.chain[m].seasInd||0)/100):0),months,true);
+        const baseCells=months.map(m=>{
+          const c=e.chain[m]||{};
+          const v=(lockedThru&&m<=lockedThru)?(c.total||0):(c.base||0);
+          return`<td style="text-align:right;padding:4px;color:var(--text3);border-left:0.5px solid var(--border)">—</td><td style="text-align:right;padding:4px;background:rgba(39,196,133,.08);color:var(--green)">${_dfcFmtGwh(v)}</td>`;
+        }).join('');
+        bodyHtml+=`<tr><td style="padding:4px 8px 4px 26px;color:var(--text3)">${lockedThru?'Actual / Base':'Base'}${e.type==='newcust'?' (expected kWh)':' (rolling 3-mo)'}</td>${baseCells}<td style="border-left:0.5px solid var(--border)"></td></tr>`;
+        bodyHtml+=_dfcDriverRowHtml('Macro — '+_dfcSegment(a.rate_class),months.map(m=>e.chain[m]?e.chain[m].macro:0),months.map((m)=>e.chain[m]?((e.chain[m].base||0)*(e.chain[m].macro||0)/100):0),months,true,lockedThru);
+        bodyHtml+=_dfcDriverRowHtml('Weather',months.map(m=>e.chain[m]?e.chain[m].weather:0),months.map(m=>e.chain[m]?((e.chain[m].base||0)*(e.chain[m].weather||0)/100):0),months,true,lockedThru);
+        bodyHtml+=_dfcDriverRowHtml(_dfcSegment(a.rate_class)==='residential'?'Seasonality — residential':'Industry — '+(a.industry||'unassigned'),months.map(m=>e.chain[m]?e.chain[m].seasInd:0),months.map(m=>e.chain[m]?((e.chain[m].base||0)*(e.chain[m].seasInd||0)/100):0),months,true,lockedThru);
         const opCells=months.map(m=>{
+          if(lockedThru&&m<=lockedThru){
+            return`<td style="padding:3px;border-left:0.5px solid var(--border);text-align:right;color:var(--text3)">—</td><td style="text-align:right;padding:4px;color:var(--text3)">—</td>`;
+          }
           const c=e.chain[m]||{};const pct=c.oper||0,kwh=(c.base||0)*pct/100;
           return`<td style="padding:3px;border-left:0.5px solid var(--border)"><input value="${pct}" onchange="dfcEditOperational('${a.ac||a.jps_ac}',${year},${m},this.value,'${esc(e.label).replace(/'/g,"\\'")}')" style="width:38px;height:20px;padding:0 3px;text-align:right;font-size:10px;color:${pct>0?'var(--green)':pct<0?'var(--red)':'var(--text)'}"></td><td style="text-align:right;padding:4px;background:rgba(0,194,168,.08);color:var(--teal)">${_dfcFmtGwh(kwh)}</td>`;
         }).join('');
@@ -10211,7 +10258,7 @@ function renderDriverForecast(){
       }else if(e.type==='commcohort'){
         bodyHtml+=`<tr style="border-bottom:0.5px solid var(--border)"><td style="padding:5px 8px 5px 26px;color:var(--text2)">Cohort total</td>${totalRowCells(e.chain,false)}<td style="text-align:right;padding:5px 8px;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(e.chain))}</td></tr>`;
         const ri=_dfcCohortReg.length;
-        _dfcCohortReg.push({co:e.ref,idx,year,asof,months});
+        _dfcCohortReg.push({co:e.ref,idx,year,months});
         bodyHtml+=`<tr id="dfc_mem_row_${ri}"><td colspan="${2+months.length*2}" style="padding:4px 8px 4px 40px">
           <a href="#" onclick="event.preventDefault();dfcLoadCohortMembers(${ri})" style="font-size:11px;color:var(--teal)">Show accounts (${e.ref.members.length}${e.ref.members.length>DFC_MEMBER_CAP?', first '+DFC_MEMBER_CAP+' — search above to find one':''})</a>
           <div id="dfc_mem_body_${ri}"></div>
