@@ -426,6 +426,9 @@ document.getElementById('schema_stale_banner').style.display='none';
     <div class="ni" onclick="sw('rs',this)"><span class="ni-icon">🏠</span>Residential</div>
     <div class="ni" onclick="sw('fc',this)"><span class="ni-icon">🎯</span>Forecast Accuracy</div>
     <div class="ni" onclick="sw('le',this)"><span class="ni-icon">📈</span>LE Forecast</div>
+    <div class="ni" onclick="sw('dfc',this)"><span class="ni-icon">🌲</span>Driver Forecast</div>
+    <div class="ni" onclick="sw('macro',this)"><span class="ni-icon">🌐</span>Macro Assumptions</div>
+    <div class="ni" onclick="sw('adjlog',this)"><span class="ni-icon">📋</span>Adjustment Log</div>
     <div class="nav-lbl" style="margin-top:8px">Intelligence</div>
     <div class="ni" onclick="sw('es',this)"><span class="ni-icon">📰</span>Exec Summary</div>
     <div class="ni" onclick="sw('vb',this)"><span class="ni-icon">🌊</span>Variance Bridge</div>
@@ -2288,6 +2291,69 @@ order by ordinal_position;</pre>
       </div>
     </div>
 
+    <!-- === DRIVER FORECAST === -->
+    <div id="dfc" class="sec">
+      <div class="card">
+        <div class="ch">Driver Forecast
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <select id="dfc_group" class="psel" onchange="renderDriverForecast()">
+              <option value="customer">Group by Customer</option>
+              <option value="rate_class">Group by Rate Class</option>
+              <option value="parish">Group by Parish</option>
+              <option value="industry">Group by Industry</option>
+            </select>
+            <input class="psel" id="dfc_search" placeholder="Search customer or account #" oninput="renderDriverForecast()" style="width:200px">
+            <button class="btn btn-t" onclick="openAddCustomerModal()">+ Add Customer</button>
+          </div>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:10px;display:flex;gap:14px;flex-wrap:wrap">
+          <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--green);margin-right:4px"></span>Actual (locked)</span>
+          <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--teal);margin-right:4px"></span>Editable — operational adj.</span>
+          <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--text3);margin-right:4px"></span>Pulled from Macro Assumptions</span>
+        </div>
+        <div id="dfc_table" style="overflow-x:auto"></div>
+      </div>
+    </div>
+
+    <!-- === MACRO ASSUMPTIONS === -->
+    <div id="macro" class="sec">
+      <div class="card">
+        <div class="ch">Macro Assumptions
+          <div style="display:flex;gap:6px;align-items:center">
+            <select id="macro_year" class="psel" onchange="renderMacroAssumptions()"></select>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
+          Feeds the read-only Macro / Weather / Seasonality / Industry rows on the Driver Forecast tab. Changes save automatically as you edit — no save button.
+        </div>
+        <div id="macro_table" style="overflow-x:auto"></div>
+      </div>
+    </div>
+
+    <!-- === ADJUSTMENT LOG === -->
+    <div id="adjlog" class="sec">
+      <div class="card">
+        <div class="ch">Adjustment Log
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <select id="adjlog_reason" class="psel" onchange="renderAdjustmentLog()">
+              <option value="">All reason codes</option>
+              <option>Renewal</option><option>Expansion</option><option>Confirmed defection</option>
+              <option>Possible defection</option><option>Win-back</option><option>Other</option>
+            </select>
+            <select id="adjlog_group" class="psel" onchange="renderAdjustmentLog()">
+              <option value="reason_code">Group by Reason Code</option>
+              <option value="rate_class">Group by Rate Class</option>
+              <option value="kam">Group by KAM</option>
+              <option value="month">Group by Month</option>
+            </select>
+            <input class="psel" id="adjlog_search" placeholder="Search account or note" oninput="renderAdjustmentLog()" style="width:190px">
+            <button class="btn btn-o" onclick="exportAdjustmentLogCSV()">⬇ Export Report</button>
+          </div>
+        </div>
+        <div id="adjlog_table" style="overflow-x:auto"></div>
+      </div>
+    </div>
+
     <!-- === NET GENERATION === -->
     <div id="ng" class="sec">
       <div style="background:rgba(55,138,221,.07);border-left:3px solid var(--blue);border-radius:4px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:var(--text2);line-height:1.7">
@@ -2971,7 +3037,7 @@ function sw(id,el){
   }
   const _swSections=['ov','cm','df','ro','fc','rb_res'];
   // Lazy-load commercial detail rows when commercial or forecast sections open
-  const _commSections=['cm','df','ro','fc','le'];
+  const _commSections=['cm','df','ro','fc','le','dfc','adjlog'];
   if(_commSections.includes(id)&&!_commDetailLoaded){
     loadCommercialDetail().catch(e=>console.warn('loadCommercialDetail:',e));
   }
@@ -3548,6 +3614,9 @@ function renderSection(id){
   else if(id==='rpt'){renderReportBuilder();}
   else if(id==='ng'){renderNetGen();}
   else if(id==='le'){renderLE();}
+  else if(id==='dfc'){renderDriverForecast();}
+  else if(id==='macro'){renderMacroAssumptions();}
+  else if(id==='adjlog'){renderAdjustmentLog();}
 }
 
 /* ==========================================
@@ -8667,6 +8736,9 @@ var _sbClient=null, // var (not let) — hoisted as undefined, avoids TDZ when J
     sbFcEntries=[],     // jps_forecast_entries  — 6-month customer forecast entries (server-persisted)
     sbFcNotes=[],       // jps_forecast_notes    — off-trend explanation notes
     sbLE=[],            // jps_le               — latest estimate at account/parish/bucket level
+    sbMacroAssum=[],    // jps_macro_assumptions — segment/industry driver % inputs, monthly
+    sbOpAdj=[],         // jps_operational_adjustments_current — latest op adj + manual kwh per account/month
+    sbNewCustomers=[],  // jps_forecast_new_customers — added-but-not-yet-real accounts
     sbSystemStats=[],   // jps_system_stats      — net gen + losses for budget/le/actuals
     sbLossesForecast=[], // jps_losses_forecast  — rolling 12-month losses forecast
     sbConnected=false, sbLastSync=null,
@@ -9011,7 +9083,8 @@ async function syncSupabase(silent=false){
       fcvData,fcData,tariffData,
       rcAggData,parAggData,indAggData,
       custSummData,
-      fcEntriesData,fcNotesData
+      fcEntriesData,fcNotesData,
+      macroAssumData,opAdjData,newCustData
     ] = await Promise.all([
       sbTable('jps_industries',{}),
       sbTable('jps_kam',{}),
@@ -9055,7 +9128,10 @@ async function syncSupabase(silent=false){
       // Customer summary — 974 rows (one per commercial customer) — replaces 41k CUSTOMERS scan
       (async()=>{try{const{data,error}=await getSB().rpc('get_customers_summary',{year_cutoff:_actYearCutoff});if(error)throw error;return data||[];}catch(e){console.warn('[sync] get_customers_summary failed:',e.message);return [];}})(),
       sbTable('jps_forecast_entries',{limit:50000}),
-      sbTable('jps_forecast_notes',{limit:20000})
+      sbTable('jps_forecast_notes',{limit:20000}),
+      sbTable('jps_macro_assumptions',{limit:20000}),
+      sbTable('jps_operational_adjustments_current',{limit:50000}),
+      sbTable('jps_forecast_new_customers',{limit:5000})
     ]);
 
     // ── Process results ────────────────────────────────────
@@ -9107,6 +9183,15 @@ async function syncSupabase(silent=false){
       const labels=[...new Set(sbLE.map(r=>r.le_label).filter(Boolean))];
       log.push(`LE: jps_le (${sbLE.length} rows — ${labels.length} version(s): ${labels.join(', ')})`);
     } else log.push('LE: jps_le (0 rows)');
+
+    sbMacroAssum=macroAssumData||[];
+    log.push(macroAssumData?`Macro Assumptions: jps_macro_assumptions (${sbMacroAssum.length} rows)`:'Macro Assumptions: ⚠ jps_macro_assumptions not found — run schema SQL');
+
+    sbOpAdj=opAdjData||[];
+    log.push(opAdjData?`Operational Adjustments: jps_operational_adjustments (${sbOpAdj.length} current rows)`:'Operational Adjustments: ⚠ jps_operational_adjustments not found — run schema SQL');
+
+    sbNewCustomers=newCustData||[];
+    log.push(newCustData?`New Customers: jps_forecast_new_customers (${sbNewCustomers.length} rows)`:'New Customers: ⚠ jps_forecast_new_customers not found — run schema SQL');
 
     sbSystemStats=sysStatsData||[];
     if(sbSystemStats.length) log.push(`System Stats: jps_system_stats (${sbSystemStats.length} rows)`);
@@ -9872,6 +9957,489 @@ async function _runGenerateSeasonalLE(){
   }catch(e){toast('Generate failed: '+e.message,'err');}
   finally{if(btn){btn.disabled=false;btn.textContent='🌤 Generate Seasonal LE Base';}}
 }
+
+/* ==========================================
+   DRIVER FORECAST — automatic rolling-base engine
+   Base(month) = avg of the prior 3 months' Total (actual where closed,
+   adjusted forecast where open) — a chain, not a lookup. Macro/Weather/
+   Seasonality/Industry are read-only, pulled from jps_macro_assumptions.
+   Only Operational adj. (+Manual kWh) is editable here, and only on
+   accounts with a real KAM assigned — everyone else is cohort grain.
+   Recomputes on every render; there is no separate "calculate" step.
+========================================== */
+const REASON_CODES=['Renewal','Expansion','Confirmed defection','Possible defection','Win-back','Other'];
+let _dfcPendingEdit=null; // {ac,year,month,newPct,oldPct,name}
+let _dfcCohortReg=[];     // per-render registry for lazy cohort member drill-down
+const DFC_MEMBER_CAP=50;  // cap on how many cohort members render at once
+
+function _dfcSegment(rc){ return _isComm({rate_class:rc}) ? 'commercial' : 'residential'; }
+
+function _dfcMacroLookup(driverType,segment,year,month){
+  const seg=segment||null;
+  const row=sbMacroAssum.find(r=>r.driver_type===driverType&&(r.segment||null)===seg&&Number(r.year)===year&&Number(r.month)===month);
+  return row?Number(row.value_pct)||0:0;
+}
+function _dfcOpAdjLookup(ac,year,month){
+  const row=sbOpAdj.find(r=>{
+    const rac=String(r.jps_ac||'');
+    return (rac===ac||rac===String(ac).split('-')[0]||String(ac)===rac.split('-')[0])&&Number(r.year)===year&&Number(r.month)===month;
+  });
+  return row?{pct:Number(row.operational_pct)||0,kwh:Number(row.manual_kwh)||0}:{pct:0,kwh:0};
+}
+function _dfcDriverPcts(rc,industry,year,month){
+  const seg=_dfcSegment(rc);
+  const macro=_dfcMacroLookup('macro',seg,year,month);
+  const weather=_dfcMacroLookup('weather',null,year,month);
+  const seasInd=seg==='residential'
+    ?_dfcMacroLookup('seasonality_residential',null,year,month)
+    :(industry?_dfcMacroLookup('industry',industry,year,month):0);
+  return{seg,macro,weather,seasInd};
+}
+
+function _dfcBuildCommAccounts(year){
+  const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
+  const indMap={};sbIndustries.forEach(i=>indMap[String(i.jps_ac||'').trim()]=i.industry||'');
+  const seen={};
+  _sbAllActuals().forEach(r=>{
+    if(!_isComm(r))return;
+    if(Number(r.year)!==year&&Number(r.year)!==year-1)return;
+    const ac=r.jps_ac;if(!ac||seen[ac])return;
+    seen[ac]={ac,name:r.name||ac,rate_class:r.rate_class,parish:r.parish,consumption_bucket:r.consumption_bucket};
+  });
+  sbBudget.forEach(r=>{
+    if(!_isComm(r))return;
+    if(Number(r.year)!==year)return;
+    const ac=r.jps_ac;if(!ac||seen[ac])return;
+    seen[ac]={ac,name:r.name||ac,rate_class:r.rate_class,parish:r.parish,consumption_bucket:r.consumption_bucket};
+  });
+  return Object.values(seen).map(a=>({
+    ...a,kam:_kl(kamMap,a.ac)||'',industry:_kl(indMap,a.ac)||'',isNew:false
+  }));
+}
+function _dfcBuildResCohorts(year){
+  const cohorts={};
+  const add=(r,isAct)=>{
+    if(_isComm(r))return;
+    if(isAct&&Number(r.year)!==year&&Number(r.year)!==year-1)return;
+    if(!isAct&&Number(r.year)!==year)return;
+    const key=`${r.rate_class}|${r.parish}|${r.consumption_bucket}`;
+    if(!cohorts[key])cohorts[key]={key,rate_class:r.rate_class,parish:r.parish,consumption_bucket:r.consumption_bucket,label:`${r.rate_class} · ${r.parish} · ${r.consumption_bucket}`};
+  };
+  _sbAllActuals().forEach(r=>add(r,true));
+  sbBudget.forEach(r=>add(r,false));
+  return Object.values(cohorts);
+}
+function _dfcCommCohortsForNonKam(accounts){
+  const cohorts={};
+  accounts.filter(a=>!a.kam&&!a.isNew).forEach(a=>{
+    const key=`${a.rate_class}|${a.parish}|${a.consumption_bucket}`;
+    if(!cohorts[key])cohorts[key]={key,rate_class:a.rate_class,parish:a.parish,consumption_bucket:a.consumption_bucket,label:`${a.rate_class} · ${a.parish} · ${a.consumption_bucket}`,members:[]};
+    cohorts[key].members.push(a);
+  });
+  return Object.values(cohorts);
+}
+
+// Pre-indexed O(1) lookups, built once per render — replaces per-(account,month)
+// full-array scans, which would be ~9,000 accounts x 6 months x tens of thousands
+// of rows and freeze the browser against real production data.
+function _dfcBuildIndices(){
+  const actByAc={},actByCohort={},budByAc={},budByCohort={};
+  _sbAllActuals().forEach(r=>{
+    const ym=`${r.year}_${r.month}`;
+    if(_isComm(r)&&r.jps_ac){
+      const m=(actByAc[r.jps_ac]=actByAc[r.jps_ac]||{});
+      m[ym]=(m[ym]||0)+(Number(r.kwh)||0);
+    }
+    const ck=`${r.rate_class}|${r.parish}|${r.consumption_bucket}`;
+    const cm=(actByCohort[ck]=actByCohort[ck]||{});
+    cm[ym]=(cm[ym]||0)+(Number(r.kwh)||0);
+  });
+  sbBudget.forEach(r=>{
+    const ym=`${r.year}_${r.month}`;
+    if(_isComm(r)&&r.jps_ac){
+      const m=(budByAc[r.jps_ac]=budByAc[r.jps_ac]||{});
+      m[ym]=(m[ym]||0)+(Number(r.kwh_budget)||0);
+    }
+    const ck=`${r.rate_class}|${r.parish}|${r.consumption_bucket}`;
+    const cm=(budByCohort[ck]=budByCohort[ck]||{});
+    cm[ym]=(cm[ym]||0)+(Number(r.kwh_budget)||0);
+  });
+  return{actByAc,actByCohort,budByAc,budByCohort};
+}
+
+// Computes the full Jan-Dec chain for one account (isAccount=true, key=jps_ac) or
+// one cohort (isAccount=false, key='rate_class|parish|consumption_bucket'). opAc
+// (if set) enables the operational/manual adjustment lookup — only individual KAM
+// accounts and new customers pass one; cohorts pass null (their total is the sum
+// of their members' chains, computed by the caller).
+function _dfcComputeChain(idx,key,isAccount,driverCtx,opAc,year,asof,newCustCtx){
+  const actMap=(isAccount?idx.actByAc:idx.actByCohort)[key];
+  const budMap=(isAccount?idx.budByAc:idx.budByCohort)[key];
+  const totals={};
+  for(let m=1;m<=asof;m++){
+    const act=actMap?actMap[`${year}_${m}`]:undefined;
+    totals[m]={total:act||0,isActual:true};
+  }
+  for(let m=asof+1;m<=12;m++){
+    let base;
+    if(newCustCtx&&(year<newCustCtx.startYear||(year===newCustCtx.startYear&&m<newCustCtx.startMonth))){
+      base=0;
+    }else if(newCustCtx){
+      base=newCustCtx.expectedKwh;
+    }else{
+      const terms=[];
+      for(let k=1;k<=3;k++){const mm=m-k;if(mm>=1&&totals[mm])terms.push(totals[mm].total);}
+      const budFallback=budMap?budMap[`${year}_${m}`]:undefined;
+      base=terms.length?terms.reduce((s,v)=>s+v,0)/terms.length:(budFallback||0);
+    }
+    const{macro,weather,seasInd}=_dfcDriverPcts(driverCtx.rate_class,driverCtx.industry,year,m);
+    const op=opAc?_dfcOpAdjLookup(opAc,year,m):{pct:0,kwh:0};
+    const total=base*(1+(macro+weather+seasInd+op.pct)/100)+op.kwh;
+    totals[m]={total,isActual:false,base,macro,weather,seasInd,oper:op.pct,manual:op.kwh};
+  }
+  return totals;
+}
+
+function _dfcFmtPct(v){return(v>=0?'+':'')+v.toFixed(1)+'%';}
+function _dfcFmtGwh(v){return(v/1e6).toFixed(2);}
+function _dfcFyTotal(chain,months){let t=0;months.forEach(m=>t+=chain[m]?chain[m].total:0);return t;}
+
+// Lazy cohort member drill-down — computes and renders only when clicked, capped
+// at DFC_MEMBER_CAP, so opening a 700-account cohort doesn't compute or paint
+// 700 rows into the DOM at once.
+function dfcLoadCohortMembers(ri){
+  const reg=_dfcCohortReg[ri];if(!reg)return;
+  const bodyEl=document.getElementById('dfc_mem_body_'+ri);if(!bodyEl)return;
+  if(bodyEl.dataset.loaded){
+    bodyEl.style.display=bodyEl.style.display==='none'?'block':'none';
+    return;
+  }
+  const{co,idx,year,asof,months}=reg;
+  const shown=co.members.slice(0,DFC_MEMBER_CAP);
+  let html='<table style="width:100%;margin-top:4px;border-collapse:collapse"><tbody>';
+  shown.forEach(a=>{
+    const mc=_dfcComputeChain(idx,a.ac,true,{rate_class:a.rate_class,industry:a.industry},null,year,asof,null);
+    const cells=months.map(m=>`<td style="text-align:right;padding:2px 6px;color:var(--text3);font-size:11px">${_dfcFmtGwh(mc[m]?mc[m].total:0)}</td>`).join('');
+    html+=`<tr><td style="padding:2px 8px 2px 0;color:var(--text3);font-size:11px;width:200px">↳ ${esc(a.name)}</td>${cells}<td style="text-align:right;padding:2px 8px;color:var(--text3);font-size:11px;border-left:0.5px solid var(--border)">${_dfcFmtGwh(_dfcFyTotal(mc,months))}</td></tr>`;
+  });
+  html+='</tbody></table>';
+  bodyEl.innerHTML=html;
+  bodyEl.dataset.loaded='1';
+}
+
+function _dfcDriverRowHtml(label,pctByMonth,gwhByMonth,months,muted){
+  const cells=months.map((m,i)=>`<td style="text-align:right;padding:4px;color:${muted?'var(--text3)':'var(--text2)'};border-left:0.5px solid var(--border)">${_dfcFmtPct(pctByMonth[i])}</td><td style="text-align:right;padding:4px;color:${muted?'var(--text3)':'var(--text)'}">${_dfcFmtGwh(gwhByMonth[i])}</td>`).join('');
+  return`<tr><td style="padding:4px 8px 4px 26px;color:var(--text3)">${label}</td>${cells}<td style="border-left:0.5px solid var(--border)"></td></tr>`;
+}
+
+function renderDriverForecast(){
+  const wrap=document.getElementById('dfc_table');if(!wrap)return;
+  _dfcCohortReg=[];
+  const year=FC_BUD_YEAR,asof=curMonth;
+  const months=[];for(let m=asof+1;m<=12;m++)months.push(m);
+  if(!months.length){wrap.innerHTML='<div style="padding:16px;color:var(--text3);font-size:12px">All 12 months are closed for '+year+' — nothing left to forecast.</div>';return;}
+  const grp=document.getElementById('dfc_group')?.value||'customer';
+  const q=(document.getElementById('dfc_search')?.value||'').toLowerCase();
+
+  const commAccounts=_dfcBuildCommAccounts(year).filter(a=>!q||a.name.toLowerCase().includes(q)||a.ac.toLowerCase().includes(q));
+  const keyAccounts=commAccounts.filter(a=>a.kam);
+  const newCusts=sbNewCustomers.filter(c=>Number(c.start_year)<=year&&(!q||c.name.toLowerCase().includes(q)));
+  const resCohorts=q?[]:_dfcBuildResCohorts(year);
+  const commCohorts=q?[]:_dfcCommCohortsForNonKam(commAccounts);
+
+  const idx=_dfcBuildIndices();
+  const entities=[]; // {type:'account'|'newcust'|'rescohort'|'commcohort', ...}
+  keyAccounts.forEach(a=>{
+    const chain=_dfcComputeChain(idx,a.ac,true,{rate_class:a.rate_class,industry:a.industry},a.ac,year,asof,null);
+    entities.push({type:'account',ref:a,chain,label:a.name,sub:`${a.rate_class} · ${a.parish} · key account`});
+  });
+  newCusts.forEach(c=>{
+    const ctx={rate_class:c.rate_class,industry:c.industry,startYear:Number(c.start_year),startMonth:Number(c.start_month),expectedKwh:Number(c.expected_kwh)||0};
+    const chain=_dfcComputeChain(idx,c.jps_ac,true,{rate_class:c.rate_class,industry:c.industry},c.jps_ac,year,asof,ctx);
+    entities.push({type:'newcust',ref:c,chain,label:c.name,sub:`${c.rate_class} · ${c.parish||''} · new, from ${MONTHS_SHORT[ctx.startMonth-1]} ${ctx.startYear}`});
+  });
+  resCohorts.forEach(co=>{
+    const chain=_dfcComputeChain(idx,co.key,false,{rate_class:co.rate_class,industry:null},null,year,asof,null);
+    entities.push({type:'rescohort',ref:co,chain,label:co.label,sub:'residential cohort'});
+  });
+  commCohorts.forEach(co=>{
+    // Total comes straight from the cohort-level index — O(1) per month, no
+    // per-member computation needed just to show a total. Member chains (for
+    // the drill-down list) are computed lazily, on click, capped at 50 — a
+    // cohort can hold hundreds of accounts and eagerly rendering all of them
+    // is what caused the original freeze against real data.
+    const chain=_dfcComputeChain(idx,co.key,false,{rate_class:co.rate_class,industry:null},null,year,asof,null);
+    entities.push({type:'commcohort',ref:co,chain,label:co.label,sub:`${co.members.length} accounts, no KAM assigned`});
+  });
+
+  let bodyHtml='';
+  const colgroup=`<colgroup><col style="width:210px">${months.map(()=>'<col style="width:60px"><col style="width:64px">').join('')}<col style="width:76px"></colgroup>`;
+  const headMonths=months.map(m=>`<th colspan="2" style="text-align:center;padding:4px;font-weight:500;color:var(--text3);border-left:0.5px solid var(--border)">${MONTHS_SHORT[m-1]}</th>`).join('');
+  const headSub=months.map(()=>`<th style="text-align:right;padding:4px;font-weight:500;color:var(--text3);border-left:0.5px solid var(--border)">%</th><th style="text-align:right;padding:4px;font-weight:500;color:var(--text3)">GWh</th>`).join('');
+
+  function fyTotal(chain){let t=0;months.forEach(m=>t+=chain[m]?chain[m].total:0);return t;}
+  function totalRowCells(chain,bold){
+    return months.map(m=>`<td colspan="2" style="text-align:right;padding:5px;border-left:0.5px solid var(--border);font-weight:${bold?500:400}">${_dfcFmtGwh(chain[m]?chain[m].total:0)}</td>`).join('');
+  }
+
+  if(grp==='customer'){
+    entities.forEach((e,entIdx)=>{
+      const gid=`dfc_e${entIdx}`;
+      bodyHtml+=`<tbody><tr style="border-bottom:0.5px solid var(--border);cursor:pointer" onclick="const g=document.getElementById('${gid}');g.style.display=g.style.display==='none'?'table-row-group':'none'">
+        <td style="padding:7px 8px;font-weight:500" colspan="${2+months.length*2}">
+          ▾ ${esc(e.label)} <span style="color:var(--text3);font-weight:400">· ${esc(e.sub)}</span>
+        </td></tr></tbody><tbody id="${gid}">`;
+      if(e.type==='account'||e.type==='newcust'){
+        const a=e.ref;
+        const baseCells=months.map(m=>`<td style="text-align:right;padding:4px;color:var(--text3);border-left:0.5px solid var(--border)">—</td><td style="text-align:right;padding:4px;background:rgba(39,196,133,.08);color:var(--green)">${_dfcFmtGwh(e.chain[m]?e.chain[m].base||0:0)}</td>`).join('');
+        bodyHtml+=`<tr><td style="padding:4px 8px 4px 26px;color:var(--text3)">Base${e.type==='newcust'?' (expected kWh)':' (rolling 3-mo)'}</td>${baseCells}<td style="border-left:0.5px solid var(--border)"></td></tr>`;
+        bodyHtml+=_dfcDriverRowHtml('Macro — '+_dfcSegment(a.rate_class),months.map(m=>e.chain[m]?e.chain[m].macro:0),months.map((m)=>e.chain[m]?((e.chain[m].base||0)*(e.chain[m].macro||0)/100):0),months,true);
+        bodyHtml+=_dfcDriverRowHtml('Weather',months.map(m=>e.chain[m]?e.chain[m].weather:0),months.map(m=>e.chain[m]?((e.chain[m].base||0)*(e.chain[m].weather||0)/100):0),months,true);
+        bodyHtml+=_dfcDriverRowHtml(_dfcSegment(a.rate_class)==='residential'?'Seasonality — residential':'Industry — '+(a.industry||'unassigned'),months.map(m=>e.chain[m]?e.chain[m].seasInd:0),months.map(m=>e.chain[m]?((e.chain[m].base||0)*(e.chain[m].seasInd||0)/100):0),months,true);
+        const opCells=months.map(m=>{
+          const c=e.chain[m]||{};const pct=c.oper||0,kwh=(c.base||0)*pct/100;
+          return`<td style="padding:3px;border-left:0.5px solid var(--border)"><input value="${pct}" onchange="dfcEditOperational('${a.ac||a.jps_ac}',${year},${m},this.value,'${esc(e.label).replace(/'/g,"\\'")}')" style="width:38px;height:20px;padding:0 3px;text-align:right;font-size:10px;color:${pct>0?'var(--green)':pct<0?'var(--red)':'var(--text)'}"></td><td style="text-align:right;padding:4px;background:rgba(0,194,168,.08);color:var(--teal)">${_dfcFmtGwh(kwh)}</td>`;
+        }).join('');
+        bodyHtml+=`<tr style="border-bottom:0.5px solid var(--border)"><td style="padding:4px 8px 4px 26px;color:var(--text2)">Operational adj.</td>${opCells}<td style="border-left:0.5px solid var(--border)"></td></tr>`;
+        bodyHtml+=`<tr style="border-bottom:0.5px solid var(--border-strong)"><td style="padding:5px 8px 5px 26px;font-weight:700">Total</td>${totalRowCells(e.chain,true)}<td style="text-align:right;padding:5px 8px;font-weight:700;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(e.chain))}</td></tr>`;
+      }else if(e.type==='rescohort'){
+        bodyHtml+=`<tr style="border-bottom:0.5px solid var(--border-strong)"><td style="padding:5px 8px 5px 26px;color:var(--text2)">Cohort total</td>${totalRowCells(e.chain,false)}<td style="text-align:right;padding:5px 8px;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(e.chain))}</td></tr>`;
+      }else if(e.type==='commcohort'){
+        bodyHtml+=`<tr style="border-bottom:0.5px solid var(--border)"><td style="padding:5px 8px 5px 26px;color:var(--text2)">Cohort total</td>${totalRowCells(e.chain,false)}<td style="text-align:right;padding:5px 8px;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(e.chain))}</td></tr>`;
+        const ri=_dfcCohortReg.length;
+        _dfcCohortReg.push({co:e.ref,idx,year,asof,months});
+        bodyHtml+=`<tr id="dfc_mem_row_${ri}"><td colspan="${2+months.length*2}" style="padding:4px 8px 4px 40px">
+          <a href="#" onclick="event.preventDefault();dfcLoadCohortMembers(${ri})" style="font-size:11px;color:var(--teal)">Show accounts (${e.ref.members.length}${e.ref.members.length>DFC_MEMBER_CAP?', first '+DFC_MEMBER_CAP+' — search above to find one':''})</a>
+          <div id="dfc_mem_body_${ri}"></div>
+        </td></tr>`;
+      }
+      bodyHtml+='</tbody>';
+    });
+    const grand={};months.forEach(m=>{grand[m]={total:entities.reduce((s,e)=>s+(e.chain[m]?e.chain[m].total:0),0)};});
+    bodyHtml+=`<tbody><tr style="border-top:0.5px solid var(--border-strong)"><td style="padding:8px 8px;font-weight:700">Grand total</td>${totalRowCells(grand,true)}<td style="text-align:right;padding:8px 8px;font-weight:700;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(grand))}</td></tr></tbody>`;
+  }else{
+    const keyFn=grp==='rate_class'?e=>e.ref.rate_class:grp==='parish'?e=>e.ref.parish||'—':e=>e.ref.industry||'Residential / unassigned';
+    const groups={};
+    entities.forEach(e=>{
+      const k=keyFn(e)||'—';
+      if(!groups[k])groups[k]={key:k,chain:{}};
+      months.forEach(m=>{groups[k].chain[m]=groups[k].chain[m]||{total:0};groups[k].chain[m].total+=e.chain[m]?e.chain[m].total:0;});
+    });
+    let groupRows='';
+    Object.values(groups).sort((a,b)=>fyTotal(b.chain)-fyTotal(a.chain)).forEach(g=>{
+      groupRows+=`<tr style="border-bottom:0.5px solid var(--border)"><td style="padding:6px 8px;font-weight:500">${esc(g.key)}</td>${totalRowCells(g.chain,false)}<td style="text-align:right;padding:6px 8px;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(g.chain))}</td></tr>`;
+    });
+    const grand={};months.forEach(m=>{grand[m]={total:entities.reduce((s,e)=>s+(e.chain[m]?e.chain[m].total:0),0)};});
+    groupRows+=`<tr style="border-top:0.5px solid var(--border-strong)"><td style="padding:8px 8px;font-weight:700">Grand total</td>${totalRowCells(grand,true)}<td style="text-align:right;padding:8px 8px;font-weight:700;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(grand))}</td></tr>`;
+    bodyHtml+=`<tbody>${groupRows}</tbody>`;
+  }
+
+  const warnHtml=(!sbMacroAssum.length&&!sbOpAdj.length)
+    ?'<div style="padding:10px 0;color:var(--amber);font-size:11px">⚠ jps_macro_assumptions / jps_operational_adjustments not found yet — run the schema migration, then Sync. Base and totals still compute; Macro/Weather/Seasonality/Industry will read 0% until then.</div>'
+    :'';
+  wrap.innerHTML=warnHtml+`<table id="dfc_tbl_el" style="width:100%;min-width:${260+months.length*130}px;border-collapse:collapse;font-size:11px;table-layout:fixed">
+    ${colgroup}
+    <thead>
+      <tr style="border-bottom:0.5px solid var(--border)"><th></th>${headMonths}<th style="border-left:0.5px solid var(--border)"></th></tr>
+      <tr style="border-bottom:0.5px solid var(--border-strong)"><th style="text-align:left;padding:4px 8px;font-weight:500;color:var(--text3)">${grp==='customer'?'Line':'Group by '+grp.replace('_',' ')}</th>${headSub}<th style="text-align:right;padding:4px 8px;font-weight:500;color:var(--text3);border-left:0.5px solid var(--border)">FY total</th></tr>
+    </thead>
+    ${bodyHtml}
+  </table>`;
+}
+
+async function dfcEditOperational(ac,year,month,newVal,accountLabel){
+  const pct=parseFloat(newVal)||0;
+  if(pct===0){
+    await _dfcSaveAdjustment(ac,year,month,0,0,null,null);
+    renderDriverForecast();
+    return;
+  }
+  _dfcPendingEdit={ac,year,month,pct,accountLabel};
+  openModal(
+    'Why the change?',
+    `<div style="font-size:12px;color:var(--text2);margin-bottom:12px">
+      Operational adj. for <strong>${esc(accountLabel)}</strong>, ${MONTHS_SHORT[month-1]} ${year}, is changing to <strong>${pct>0?'+':''}${pct}%</strong>. Every non-zero change needs a reason before it saves.
+    </div>
+    <label style="font-size:10px;color:var(--text3);text-transform:uppercase">Reason code</label>
+    <select id="dfc_reason_code" class="psel" style="width:100%;margin:4px 0 10px">
+      ${REASON_CODES.map(r=>`<option value="${r}">${r}</option>`).join('')}
+    </select>
+    <label style="font-size:10px;color:var(--text3);text-transform:uppercase">Justification</label>
+    <textarea id="dfc_reason_text" class="psel" rows="3" style="width:100%;margin-top:4px;box-sizing:border-box" placeholder="What changed and why"></textarea>`,
+    _dfcConfirmReasonedEdit,
+    '💾 Save adjustment',
+    'var(--teal)'
+  );
+  renderDriverForecast();
+}
+async function _dfcConfirmReasonedEdit(){
+  if(!_dfcPendingEdit)return;
+  const reason=document.getElementById('dfc_reason_code')?.value;
+  const just=(document.getElementById('dfc_reason_text')?.value||'').trim();
+  if(!just){toast('Justification is required','err');return;}
+  const{ac,year,month,pct}=_dfcPendingEdit;
+  closeModal();
+  await _dfcSaveAdjustment(ac,year,month,pct,0,reason,just);
+  _dfcPendingEdit=null;
+  renderDriverForecast();
+}
+async function _dfcSaveAdjustment(ac,year,month,pct,kwh,reason,just){
+  const sb=getSB();if(!sb)return;
+  const cu=(typeof CU!=='undefined'&&CU&&CU.name)?CU.name:'';
+  const{error}=await sb.from('jps_operational_adjustments').insert({
+    jps_ac:ac,year,month,operational_pct:pct,manual_kwh:kwh,reason_code:reason,justification:just,created_by:cu
+  });
+  if(error){toast('Save failed: '+error.message,'err');return;}
+  toast('Adjustment saved','ok');
+  await syncSupabase(true);
+}
+
+function openAddCustomerModal(){
+  const rcOpts=['RT40','RT50','RT60-ST','RT70'].map(r=>`<option>${r}</option>`).join('');
+  openModal(
+    'Add customer',
+    `<div style="display:flex;flex-direction:column;gap:10px">
+      <div><label style="font-size:10px;color:var(--text3)">Customer name</label><input id="dfc_new_name" class="psel" style="width:100%" placeholder="Windalco Bauxite Ltd"></div>
+      <div style="display:flex;gap:8px">
+        <div style="flex:1"><label style="font-size:10px;color:var(--text3)">Rate class</label><select id="dfc_new_rc" class="psel" style="width:100%">${rcOpts}</select></div>
+        <div style="flex:1"><label style="font-size:10px;color:var(--text3)">Parish</label><input id="dfc_new_parish" class="psel" style="width:100%" placeholder="Clarendon"></div>
+      </div>
+      <div><label style="font-size:10px;color:var(--text3)">Industry</label><input id="dfc_new_industry" class="psel" style="width:100%" placeholder="Metal ore mining"></div>
+      <div><label style="font-size:10px;color:var(--text3)">KAM</label><input id="dfc_new_kam" class="psel" style="width:100%" placeholder="Assigned account manager"></div>
+      <div><label style="font-size:10px;color:var(--text3)">Expected monthly kWh — becomes its Base until real actuals exist</label><input id="dfc_new_kwh" type="number" class="psel" style="width:100%" placeholder="450000"></div>
+      <div style="display:flex;gap:8px">
+        <div style="flex:1"><label style="font-size:10px;color:var(--text3)">Start year</label><input id="dfc_new_yr" type="number" class="psel" style="width:100%" value="${FC_BUD_YEAR}"></div>
+        <div style="flex:1"><label style="font-size:10px;color:var(--text3)">Start month</label><select id="dfc_new_mo" class="psel" style="width:100%">${MONTHS_SHORT.map((m,i)=>`<option value="${i+1}" ${i+1===curMonth+1?'selected':''}>${m}</option>`).join('')}</select></div>
+      </div>
+    </div>`,
+    _dfcSubmitNewCustomer,
+    '+ Add customer',
+    'var(--teal)'
+  );
+}
+async function _dfcSubmitNewCustomer(){
+  const sb=getSB();if(!sb)return;
+  const name=(document.getElementById('dfc_new_name')?.value||'').trim();
+  if(!name){toast('Customer name is required','err');return;}
+  const rc=document.getElementById('dfc_new_rc')?.value;
+  const parish=(document.getElementById('dfc_new_parish')?.value||'').trim();
+  const industry=(document.getElementById('dfc_new_industry')?.value||'').trim();
+  const kam=(document.getElementById('dfc_new_kam')?.value||'').trim();
+  const kwh=parseFloat(document.getElementById('dfc_new_kwh')?.value)||0;
+  const yr=parseInt(document.getElementById('dfc_new_yr')?.value)||FC_BUD_YEAR;
+  const mo=parseInt(document.getElementById('dfc_new_mo')?.value)||1;
+  const jps_ac='NEW-'+Date.now();
+  const{error}=await sb.from('jps_forecast_new_customers').insert({
+    jps_ac,name,rate_class:rc,parish,industry,kam,expected_kwh:kwh,start_year:yr,start_month:mo,
+    created_by:(typeof CU!=='undefined'&&CU&&CU.name)?CU.name:''
+  });
+  if(error){toast('Add customer failed: '+error.message,'err');return;}
+  closeModal();
+  toast(`${name} added`,'ok');
+  await syncSupabase(true);
+  renderDriverForecast();
+}
+
+/* ==========================================
+   MACRO ASSUMPTIONS — segment/industry driver inputs, 5-year monthly
+========================================== */
+function renderMacroAssumptions(){
+  const yrSel=document.getElementById('macro_year');
+  if(yrSel&&!yrSel.options.length){
+    for(let y=FC_BUD_YEAR;y<=FC_BUD_YEAR+4;y++)yrSel.innerHTML+=`<option value="${y}">${y}</option>`;
+  }
+  const year=parseInt(yrSel?.value)||FC_BUD_YEAR;
+  const wrap=document.getElementById('macro_table');if(!wrap)return;
+  const months=[1,2,3,4,5,6,7,8,9,10,11,12];
+  const industries=[...new Set(sbIndustries.map(i=>i.industry).filter(Boolean))].sort();
+  const rows=[
+    {label:'Macro — commercial',type:'macro',seg:'commercial'},
+    {label:'Macro — residential',type:'macro',seg:'residential'},
+    {label:'Weather',type:'weather',seg:null},
+    {label:'Seasonality — residential',type:'seasonality_residential',seg:null},
+    ...industries.map(ind=>({label:'Industry — '+ind,type:'industry',seg:ind}))
+  ];
+  const head=months.map(m=>`<th style="text-align:right;padding:4px;font-weight:500;color:var(--text3)">${MONTHS_SHORT[m-1]}</th>`).join('');
+  let body='';
+  rows.forEach(r=>{
+    const cells=months.map(m=>{
+      const v=_dfcMacroLookup(r.type,r.seg,year,m);
+      return`<td style="padding:3px"><input value="${v}" onchange="macroSaveCell('${r.type}',${r.seg?`'${esc(r.seg).replace(/'/g,"\\'")}'`:'null'},${year},${m},this.value)" style="width:44px;height:22px;padding:0 4px;text-align:right;font-size:10px"></td>`;
+    }).join('');
+    body+=`<tr><td style="padding:5px 8px${r.type==='industry'?' 5px 20px':''};color:${r.type==='industry'?'var(--text3)':'var(--text)'}">${esc(r.label)}</td>${cells}</tr>`;
+  });
+  wrap.innerHTML=`<table style="width:100%;min-width:640px;border-collapse:collapse;font-size:12px;table-layout:fixed">
+    <colgroup><col style="width:200px">${months.map(()=>'<col style="width:52px">').join('')}</colgroup>
+    <thead><tr style="border-bottom:0.5px solid var(--border-strong)"><th style="text-align:left;padding:6px 8px;font-weight:500;color:var(--text3)">Driver</th>${head}</tr></thead>
+    <tbody>${body}</tbody>
+  </table>`;
+}
+async function macroSaveCell(type,seg,year,month,val){
+  const sb=getSB();if(!sb)return;
+  const pct=parseFloat(val)||0;
+  const cu=(typeof CU!=='undefined'&&CU&&CU.name)?CU.name:'';
+  const{error}=await sb.from('jps_macro_assumptions').upsert(
+    {driver_type:type,segment:seg,year,month,value_pct:pct,updated_by:cu,updated_at:new Date().toISOString()},
+    {onConflict:'driver_type,segment,year,month'}
+  );
+  if(error){toast('Save failed: '+error.message,'err');return;}
+  await syncSupabase(true);
+}
+
+/* ==========================================
+   ADJUSTMENT LOG — reason-coded audit trail + report
+========================================== */
+async function renderAdjustmentLog(){
+  const wrap=document.getElementById('adjlog_table');if(!wrap)return;
+  const sb=getSB();if(!sb){wrap.innerHTML='<div style="padding:16px;color:var(--text3);font-size:12px">Not connected.</div>';return;}
+  const{data,error}=await sb.from('jps_operational_adjustments').select('*').order('created_at',{ascending:false}).limit(5000);
+  if(error){wrap.innerHTML=`<div style="padding:16px;color:var(--amber);font-size:12px">⚠ jps_operational_adjustments not found yet — run the schema migration, then Sync.</div>`;return;}
+  const reasonFilter=document.getElementById('adjlog_reason')?.value||'';
+  const groupBy=document.getElementById('adjlog_group')?.value||'reason_code';
+  const q=(document.getElementById('adjlog_search')?.value||'').toLowerCase();
+  const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
+  const nameMap={};_sbAllActuals().forEach(r=>{if(r.jps_ac&&!nameMap[r.jps_ac])nameMap[r.jps_ac]=r.name;});
+  const rcMap={};_sbAllActuals().forEach(r=>{if(r.jps_ac&&!rcMap[r.jps_ac])rcMap[r.jps_ac]=r.rate_class;});
+  let rows=data.filter(r=>r.operational_pct||r.manual_kwh);
+  if(reasonFilter)rows=rows.filter(r=>r.reason_code===reasonFilter);
+  if(q)rows=rows.filter(r=>(nameMap[r.jps_ac]||r.jps_ac||'').toLowerCase().includes(q)||(r.justification||'').toLowerCase().includes(q));
+  const groups={};
+  rows.forEach(r=>{
+    const k=groupBy==='reason_code'?(r.reason_code||'—')
+      :groupBy==='rate_class'?(rcMap[r.jps_ac]||'—')
+      :groupBy==='kam'?(_kl(kamMap,r.jps_ac)||'Unassigned')
+      :`${MONTHS_SHORT[Number(r.month)-1]} ${r.year}`;
+    if(!groups[k])groups[k]={key:k,rows:[],accounts:new Set()};
+    groups[k].rows.push(r);groups[k].accounts.add(r.jps_ac);
+  });
+  let body='';
+  Object.values(groups).sort((a,b)=>b.rows.length-a.rows.length).forEach((g,gi)=>{
+    const gid=`adjlog_g${gi}`;
+    body+=`<tr style="border-bottom:0.5px solid var(--border);cursor:pointer" onclick="document.getElementById('${gid}').style.display=document.getElementById('${gid}').style.display==='none'?'table-row-group':'none'">
+      <td style="padding:6px 8px;font-weight:500">▾ ${esc(g.key)}</td>
+      <td style="text-align:right;padding:6px 4px">${g.accounts.size}</td>
+      <td style="text-align:right;padding:6px 4px">${g.rows.length}</td>
+      <td style="padding:6px 8px;color:var(--text3)"></td>
+    </tr>`;
+    body+=`<tbody id="${gid}">`+g.rows.map(r=>`<tr>
+      <td style="padding:4px 8px 4px 26px;color:var(--text3)">${esc(nameMap[r.jps_ac]||r.jps_ac)}</td>
+      <td style="text-align:right;padding:4px">${MONTHS_SHORT[Number(r.month)-1]} ${r.year}</td>
+      <td style="text-align:right;padding:4px">${r.operational_pct?_dfcFmtPct(Number(r.operational_pct)):''}${r.manual_kwh?' / '+Number(r.manual_kwh).toLocaleString()+' kWh':''}</td>
+      <td style="padding:4px 8px;color:var(--text3);font-size:11px">${esc(r.justification||'')} <span style="color:var(--text3)">— ${esc(r.created_by||'')}</span></td>
+    </tr>`).join('')+`</tbody>`;
+  });
+  wrap.innerHTML=`<table id="adjlog_tbl_el" style="width:100%;min-width:600px;border-collapse:collapse;font-size:12px;table-layout:fixed">
+    <colgroup><col style="width:180px"><col style="width:90px"><col style="width:110px"><col></colgroup>
+    <thead><tr style="border-bottom:0.5px solid var(--border-strong)">
+      <th style="text-align:left;padding:6px 8px;font-weight:500;color:var(--text3)">${groupBy.replace('_',' ')}</th>
+      <th style="text-align:right;padding:6px 4px;font-weight:500;color:var(--text3)">Accounts</th>
+      <th style="text-align:right;padding:6px 4px;font-weight:500;color:var(--text3)">Edits</th>
+      <th style="text-align:left;padding:6px 8px;font-weight:500;color:var(--text3)">Detail</th>
+    </tr></thead>
+    ${body||'<tbody><tr><td colspan="4" style="padding:16px;color:var(--text3)">No operational adjustments logged yet.</td></tr></tbody>'}
+  </table>`;
+}
+function exportAdjustmentLogCSV(){exportTableCSV('adjlog_tbl_el','adjustment_log');}
 
 // ─── Finance COMMIT ─────────────────────────────────────────────────────────────
 let _leCommitVersionId = null;
