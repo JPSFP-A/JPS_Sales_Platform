@@ -11510,19 +11510,33 @@ const APP_VERSION = '1.0.96';
 // Session restore — starts data sync immediately once session is confirmed,
 // then fetches profile in parallel so UI is never stuck waiting on sequential calls
 (async function restoreSession(){
+  const sb=getSB(); if(!sb){ updateSbStatus('offline'); return; }
   try{
-    const sb=getSB(); if(!sb){ updateSbStatus('offline'); return; }
     const {data:{session}}=await sb.auth.getSession();
     if(!session?.user){ updateSbStatus('offline'); return; }
     const userId=session.user.id;
-    // Kick off data sync AND profile fetch at the same time — no waiting in line
+    const withTimeout=(p,ms,label)=>Promise.race([
+      p,
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error(label+' timed out after '+(ms/1000)+'s')),ms))
+    ]);
+    // Kick off data sync AND profile fetch at the same time — no waiting in line.
+    // Profile lookup gets a hard timeout: a hung DB used to leave restoreSession()
+    // waiting forever with no feedback, so the login screen just sat there blank
+    // with no indication anything was wrong — even though auth itself was fine.
     const [syncResult, profileResult] = await Promise.allSettled([
       syncSupabase(true),
-      sb.from('profiles').select('*').eq('id',userId).single()
+      withTimeout(sb.from('profiles').select('*').eq('id',userId).single(),15000,'Profile lookup')
     ]);
+    if(profileResult.status==='rejected'){
+      showErr('Signed in as '+session.user.email+', but the database is slow to respond right now ('+profileResult.reason.message+'). Click Sign In to retry once it recovers.');
+      return;
+    }
     const {data:profile,error}=profileResult.value||{};
     // Only apply login if we got a real profile with a real role
-    if(error||!profile||!profile.sales_role) return;
+    if(error||!profile||!profile.sales_role){
+      showErr(error?('Could not load your profile: '+error.message):'Your account has no sales role assigned yet — contact an admin.');
+      return;
+    }
     // _applyLogin → initAll → syncSupabase, but mutex prevents double-sync
     _applyLogin({
       id:userId, email:session.user.email,
@@ -11531,7 +11545,11 @@ const APP_VERSION = '1.0.96';
       fpa_role:profile.role||'viewer',
       territory:profile.territory||'All',
     });
-  }catch(e){ console.warn('Session restore:',e.message); updateSbStatus('offline'); }
+  }catch(e){
+    console.warn('Session restore:',e.message);
+    updateSbStatus('offline');
+    showErr('Could not restore your session: '+e.message+'. Click Sign In to retry.');
+  }
 })();
 
 // CSP-safe arithmetic evaluator — replaces Function()/eval (blocked by CSP 'unsafe-eval').
