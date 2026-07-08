@@ -9868,12 +9868,19 @@ function _dfcCommCohortsForNonKam(accounts,year){
 // full-array scans, which would be ~9,000 accounts x 6 months x tens of thousands
 // of rows and freeze the browser against real production data.
 function _dfcBuildIndices(){
+  // KAM-assigned commercial accounts get their own 'account' entity (via actByAc,
+  // added in renderDriverForecast's keyAccounts loop). actByCohort must exclude
+  // those same rows, or a KAM account's kwh is counted twice: once as its own
+  // entity, again folded into its rate_class|parish|bucket cohort total.
+  const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
+  const hasKam=ac=>!!_kl(kamMap,ac);
   const actByAc={},actByCohort={},budByAc={},budByCohort={};
   _sbAllActuals().forEach(r=>{
     const ym=`${r.year}_${r.month}`;
     if(_isComm(r)&&r.jps_ac&&!_DFC_PLACEHOLDER_ACS.has(r.jps_ac)){
       const m=(actByAc[r.jps_ac]=actByAc[r.jps_ac]||{});
       m[ym]=(m[ym]||0)+(Number(r.kwh)||0);
+      if(hasKam(r.jps_ac))return; // counted via actByAc above — don't also fold into its cohort
     }
     const ck=`${r.rate_class}|${r.parish}|${r.consumption_bucket}`;
     const cm=(actByCohort[ck]=actByCohort[ck]||{});
@@ -9884,6 +9891,7 @@ function _dfcBuildIndices(){
     if(_isComm(r)&&r.jps_ac&&!_DFC_PLACEHOLDER_ACS.has(r.jps_ac)){
       const m=(budByAc[r.jps_ac]=budByAc[r.jps_ac]||{});
       m[ym]=(m[ym]||0)+(Number(r.kwh_budget)||0);
+      if(hasKam(r.jps_ac))return;
     }
     const ck=`${r.rate_class}|${r.parish}|${r.consumption_bucket}`;
     const cm=(budByCohort[ck]=budByCohort[ck]||{});
@@ -10162,7 +10170,11 @@ function renderDriverForecast(){
       months.forEach(m=>{groups[k].chain[m]=groups[k].chain[m]||{total:0};groups[k].chain[m].total+=e.chain[m]?e.chain[m].total:0;});
     });
     let groupRows='';
-    Object.values(groups).sort((a,b)=>fyTotal(b.chain)-fyTotal(a.chain)).forEach(g=>{
+    // Rate class rows follow the canonical RC_DISPLAY_ORDER (RT10,RT20,RT40,...) used
+    // everywhere else rate classes are listed; parish/industry have no such canon, so
+    // those stay sorted by FY total, largest first.
+    const groupSort=grp==='rate_class'?(a,b)=>_rcSort(a.key,b.key):(a,b)=>fyTotal(b.chain)-fyTotal(a.chain);
+    Object.values(groups).sort(groupSort).forEach(g=>{
       groupRows+=`<tr style="border-bottom:0.5px solid var(--border)"><td style="padding:6px 8px;font-weight:500">${esc(g.key)}</td>${totalRowCells(g.chain,false)}<td style="text-align:right;padding:6px 8px;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(g.chain))}</td></tr>`;
     });
     const grand={};months.forEach(m=>{grand[m]={total:entities.reduce((s,e)=>s+(e.chain[m]?e.chain[m].total:0),0)};});
