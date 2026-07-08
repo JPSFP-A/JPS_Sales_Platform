@@ -10712,8 +10712,8 @@ function renderRcForecastReport(){
       <td style="text-align:right;padding:6px 4px">${_dfcFmtGwh(fy)}</td>
       <td style="text-align:right;padding:6px 4px">${bud>0?_dfcFmtGwh(bud):'—'}</td>
       <td style="text-align:right;padding:6px 4px;color:${delta==null?'var(--text3)':delta>=0?'var(--green)':'var(--red)'}">${delta==null?'—':_dfcFmtPct(delta)}</td>
-      <td style="text-align:right;padding:6px 4px;color:var(--text3)">${_dfcFmtGwh(r.actual)}</td>
-      <td style="text-align:right;padding:6px 4px;color:var(--text3)">${_dfcFmtGwh(r.base)}</td>
+      <td style="text-align:right;padding:6px 4px;color:var(--text3);border-left:0.5px solid var(--border)">${_dfcFmtGwh(r.actual)}</td>
+      <td style="text-align:right;padding:6px 4px;color:var(--text3);border-left:0.5px solid var(--border)">${_dfcFmtGwh(r.base)}</td>
       <td style="text-align:right;padding:6px 4px;color:${r.macro>=0?'var(--green)':'var(--red)'}">${r.macro>=0?'+':''}${_dfcFmtGwh(r.macro)}</td>
       <td style="text-align:right;padding:6px 4px;color:${r.weather>=0?'var(--green)':'var(--red)'}">${r.weather>=0?'+':''}${_dfcFmtGwh(r.weather)}</td>
       <td style="text-align:right;padding:6px 8px;color:${r.oper>=0?'var(--green)':'var(--red)'}">${r.oper>=0?'+':''}${_dfcFmtGwh(r.oper)}</td>
@@ -10731,13 +10731,19 @@ function renderRcForecastReport(){
 
   wrap.innerHTML=`<table id="rcfr_tbl_el" style="width:100%;min-width:820px;border-collapse:collapse;font-size:12px;table-layout:fixed">
     <colgroup><col style="width:110px"><col style="width:90px"><col style="width:90px"><col style="width:90px"><col style="width:90px"><col style="width:90px"><col style="width:90px"><col style="width:90px"><col style="width:90px"></colgroup>
-    <thead><tr style="border-bottom:0.5px solid var(--border-strong)">
+    <thead>
+      <tr>
+        <th colspan="4"></th>
+        <th style="text-align:center;padding:3px 4px;font-weight:600;color:var(--text3);font-size:10px;text-transform:uppercase;border-left:0.5px solid var(--border)">Actual</th>
+        <th colspan="4" style="text-align:center;padding:3px 4px;font-weight:600;color:var(--text3);font-size:10px;text-transform:uppercase;border-left:0.5px solid var(--border)">Forecast drivers — remaining months only, never applied to actual months</th>
+      </tr>
+      <tr style="border-bottom:0.5px solid var(--border-strong)">
       <th style="text-align:left;padding:6px 8px;font-weight:500;color:var(--text3)">Rate Class</th>
       <th style="text-align:right;padding:6px 4px;font-weight:500;color:var(--text3)">FY Forecast</th>
       <th style="text-align:right;padding:6px 4px;font-weight:500;color:var(--text3)">Budget</th>
       <th style="text-align:right;padding:6px 4px;font-weight:500;color:var(--text3)">vs Budget</th>
-      <th style="text-align:right;padding:6px 4px;font-weight:500;color:var(--text3)">Actual YTD</th>
-      <th style="text-align:right;padding:6px 4px;font-weight:500;color:var(--text3)">Base</th>
+      <th style="text-align:right;padding:6px 4px;font-weight:500;color:var(--text3);border-left:0.5px solid var(--border)">Actual YTD</th>
+      <th style="text-align:right;padding:6px 4px;font-weight:500;color:var(--text3);border-left:0.5px solid var(--border)">Base (3-mo avg)</th>
       <th style="text-align:right;padding:6px 4px;font-weight:500;color:var(--text3)">Macro</th>
       <th style="text-align:right;padding:6px 4px;font-weight:500;color:var(--text3)">Weather</th>
       <th style="text-align:right;padding:6px 8px;font-weight:500;color:var(--text3)">Operational</th>
