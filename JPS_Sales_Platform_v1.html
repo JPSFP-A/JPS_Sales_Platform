@@ -2082,13 +2082,13 @@ order by ordinal_position;</pre>
           <option value="MTD">MTD</option>
         </select>
         <label>RC:</label>
-        <select class="psel" id="le_frc"  onchange="leEngine=null;renderLEActive()"><option value="">All</option></select>
+        <select class="psel" id="le_frc"  onchange="renderLEActive()"><option value="">All</option></select>
         <label>Industry:</label>
-        <select class="psel" id="le_find" onchange="leEngine=null;renderLEActive()"><option value="">All</option></select>
+        <select class="psel" id="le_find" onchange="renderLEActive()"><option value="">All</option></select>
         <label>Parish:</label>
-        <select class="psel" id="le_fpar" onchange="leEngine=null;renderLEActive()"><option value="">All</option></select>
+        <select class="psel" id="le_fpar" onchange="renderLEActive()"><option value="">All</option></select>
         <label>Customer:</label>
-        <input class="psel" id="le_fcust" placeholder="Search…" oninput="leEngine=null;debounce(renderLEActive,'le_fcust')()" style="width:120px">
+        <input class="psel" id="le_fcust" placeholder="Search…" oninput="debounce(renderLEActive,'le_fcust')()" style="width:120px">
       </div>
 
       <!-- ── OVERVIEW ─────────────────────────────────────── -->
@@ -2438,7 +2438,7 @@ let curPeriod='MTD', curYear=_initDate.getFullYear(), curMonth=_initDate.getMont
 let YEAR_COL='year'; // auto-detected at sync — set to 'cal_year' on Finance-seeded databases
 let _schemaFixApplied=false; // jps_normalize_schema RPC called once per session
 let mrPeriod=`${_initDate.getFullYear()}-${String(_initDate.getMonth()+1).padStart(2,'0')}`, mrRepName='', mrActiveSec='mr_ov';
-let cmDim='industry', cmDrillRC='', _modalFn=null;
+let cmDrillRC='', _modalFn=null;
 let chartInstances={};
 const MONTHS_SHORT=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONTHS_LONG=['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -2821,12 +2821,6 @@ async function loadBridgeDriversFromDB(){
   }
 }
 
-/* ── Pivot commentary ── */
-async function loadPivotCommentary(){
-  const rows=await dbSelect('jps_pivot_commentary');
-  rows.forEach(r=>{if(r.note_text)S.set(`pv|${r.period}|${r.acct_num}`,r.note_text);});
-}
-
 /* ── Defection actions ── */
 async function saveDefActionToDB(acctNum,data){
   await dbUpsert('jps_def_actions',{acct_num:acctNum,...data,updated_at:new Date().toISOString()});
@@ -2848,7 +2842,6 @@ async function loadRORegisterFromDB(){
   const rows=await dbSelect('jps_ro_register');
   if(rows.length){
     const items=rows.map(r=>({num:r.num,name:r.name,acct:r.acct_num,type:r.type,level:r.level,rate:r.rate_class,parish:r.parish,sector:r.sector,kwh:Number(r.kwh)||0,owner:r.owner,status:r.status,source:r.source,cmt:r.cmt,opened_at:r.opened_at||null}));
-    S.set('ro_items',items);
     // Merge into RISK_OPP in-memory array preserving defaults
     items.forEach(item=>{const idx=RISK_OPP.findIndex(r=>r.num===item.num);if(idx>=0)RISK_OPP[idx]={...RISK_OPP[idx],...item};else RISK_OPP.push(item);});
   }
@@ -2856,7 +2849,7 @@ async function loadRORegisterFromDB(){
 
 /* ── Load all user data from DB after sync ── */
 async function loadAllUserData(){
-  await Promise.allSettled([loadNotes(),loadNarratives(),loadBridgeDriversFromDB(),loadPivotCommentary(),loadDefActionsFromDB(),loadRORegisterFromDB()]);
+  await Promise.allSettled([loadNotes(),loadNarratives(),loadBridgeDriversFromDB(),loadDefActionsFromDB(),loadRORegisterFromDB()]);
 }
 
 /* ==========================================
@@ -4942,8 +4935,8 @@ function renderFcKPIs(){
     months.forEach(m=>{
       const fc=_fcVal(`${m.key}_${c.num}`);
       if(fc==null)return;
-      // Find matching actual row
-      const actRow=sbActuals.find(r=>_custNum(String(r.jps_ac||''))===c.num&&Number(r[YEAR_COL])===m.year&&Number(r.month)===m.month);
+      // Find matching actual row — O(1) via sbActualsIdx (was a full sbActuals.find() scan per customer per month)
+      const actRow=sbActualsIdx[`${c.num}_${m.year}_${m.month}`];
       const actual=actRow?Number(actRow.kwh||0):c.m[m.month-1]||0;
       if(actual>0){mapeTotal+=Math.abs(fc-actual)/actual;mapeCount++;}
     });
@@ -8733,6 +8726,7 @@ const SB_KEY = window.APP_CONFIG?.supabaseAnonKey || '';
 
 var _sbClient=null, // var (not let) — hoisted as undefined, avoids TDZ when JpsMonitor calls getSB() before this line executes
     sbActuals=[],       // jps_actuals          — commercial account-level monthly consumption
+    sbActualsIdx={},    // O(1) lookup index: 'custNum_year_month' → row (built after each sync)
     sbBudget=[],        // jps_budget — unified budget: commercial rows (jps_ac filled) + residential rows (consumption_bucket filled)
     sbBudgetIdx={},     // O(1) lookup index: 'year_month' → row array (built after each sync)
     sbAccountMaster=[], // jps_account_master    — master account list (JPS A/c PK)
@@ -9044,6 +9038,7 @@ async function syncSupabase(silent=false){
   if(_sbSyncing){return;} // already in progress — skip
   _sbSyncing=true;
   updateSbStatus('syncing');
+  _adjLogCache=null; // other users may have added adjustments since the last sync
   const sb=getSB();
   if(!sb){
     updateSbStatus('offline');
@@ -9149,6 +9144,13 @@ async function syncSupabase(silent=false){
       if(sbActuals.length>0){_yearColConfirmed=true;}
     }
     if(!actOk)log.push('Actuals: ⚠ jps_actuals not accessible — check RLS policies');
+    // Build O(1) lookup: 'custNum_year_month' → row — eliminates a full sbActuals.find() scan
+    // per customer per month (was O(customers × months × sbActuals.length) in renderFcKPIs)
+    sbActualsIdx={};
+    for(const r of sbActuals){
+      const k=`${_custNum(String(r.jps_ac||''))}_${Number(r[YEAR_COL])}_${Number(r.month)}`;
+      if(!(k in sbActualsIdx))sbActualsIdx[k]=r;
+    }
 
     sbBudget=budData||[];
     // Build O(1) lookup: 'year_month' → row array — eliminates O(111k) .filter() scans per render
@@ -9280,7 +9282,6 @@ async function syncSupabase(silent=false){
     try{await loadAllUserData();}catch(ue){console.warn('loadAllUserData error:',ue);}
 
     // Defer chart rendering — yield to browser so UI paints first, then render charts
-    leEngine=null;
     const activeId=document.querySelector('.sec.on')?.id;
     setTimeout(()=>{
       try{
@@ -9409,8 +9410,7 @@ function fcNormBudget(rows){
    LE ENGINE — Single-version LE with adjustments,
    versioning, comparison, and system losses
 ========================================== */
-let leEngine        = null,
-    leActiveTab     = 'ov',
+let leActiveTab     = 'ov',
     leAdjustments   = {rc:{}, parish:{}, industry:{}, customer:{}, bucket:{}},
     leMonthToggles  = {act25:true, bud26:true, act26:true, le_cur:true},
     leCmpToggles    = {},
@@ -9514,7 +9514,6 @@ function swLE(tab,btn){
 }
 
 function renderLEActive(){
-  leEngine=null;
   switch(leActiveTab){
     case 'ov':      renderLEOverview();  break;
     case 'mt':      renderLEMonthly();   break;
@@ -9879,7 +9878,6 @@ async function saveKeyAccountNote(btn){
 
 function leResetAdjustments(){
   leAdjustments={rc:{},parish:{},industry:{},customer:{},bucket:{}};
-  leEngine=null;
   renderLEAdjust();
 }
 
@@ -10374,6 +10372,7 @@ async function _dfcSaveAdjustment(ac,year,month,pct,kwh,reason,just){
   });
   if(error){toast('Save failed: '+error.message,'err');return;}
   toast('Adjustment saved','ok');
+  _adjLogCache=null; // force a fresh fetch next time the Adjustment Log renders
   await syncSupabase(true);
 }
 
@@ -10472,11 +10471,16 @@ async function macroSaveCell(type,seg,year,month,val){
 /* ==========================================
    ADJUSTMENT LOG — reason-coded audit trail + report
 ========================================== */
+let _adjLogCache=null; // jps_operational_adjustments rows — cached until the next write (see _dfcSaveAdjustment)
 async function renderAdjustmentLog(){
   const wrap=document.getElementById('adjlog_table');if(!wrap)return;
-  const sb=getSB();if(!sb){wrap.innerHTML='<div style="padding:16px;color:var(--text3);font-size:12px">Not connected.</div>';return;}
-  const{data,error}=await sb.from('jps_operational_adjustments').select('*').order('created_at',{ascending:false}).limit(5000);
-  if(error){wrap.innerHTML=`<div style="padding:16px;color:var(--amber);font-size:12px">⚠ jps_operational_adjustments not found yet — run the schema migration, then Sync.</div>`;return;}
+  if(!_adjLogCache){
+    const sb=getSB();if(!sb){wrap.innerHTML='<div style="padding:16px;color:var(--text3);font-size:12px">Not connected.</div>';return;}
+    const{data,error}=await sb.from('jps_operational_adjustments').select('*').order('created_at',{ascending:false}).limit(5000);
+    if(error){wrap.innerHTML=`<div style="padding:16px;color:var(--amber);font-size:12px">⚠ jps_operational_adjustments not found yet — run the schema migration, then Sync.</div>`;return;}
+    _adjLogCache=data;
+  }
+  const data=_adjLogCache;
   const reasonFilter=document.getElementById('adjlog_reason')?.value||'';
   const kamFilter=document.getElementById('adjlog_kam')?.value||'';
   const groupBy=document.getElementById('adjlog_group')?.value||'reason_code';
@@ -10484,8 +10488,8 @@ async function renderAdjustmentLog(){
   const q=(document.getElementById('adjlog_search')?.value||'').toLowerCase();
   const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
   const indMap={};sbIndustries.forEach(i=>indMap[String(i.jps_ac||'').trim()]=i.industry||'');
-  const nameMap={};_sbAllActuals().forEach(r=>{if(r.jps_ac&&!nameMap[r.jps_ac])nameMap[r.jps_ac]=r.name;});
-  const rcMap={};_sbAllActuals().forEach(r=>{if(r.jps_ac&&!rcMap[r.jps_ac])rcMap[r.jps_ac]=r.rate_class;});
+  const nameMap={},rcMap={};
+  _sbAllActuals().forEach(r=>{if(r.jps_ac){if(!nameMap[r.jps_ac])nameMap[r.jps_ac]=r.name;if(!rcMap[r.jps_ac])rcMap[r.jps_ac]=r.rate_class;}});
 
   const kamSel=document.getElementById('adjlog_kam');
   if(kamSel&&!kamSel.dataset.populated){
