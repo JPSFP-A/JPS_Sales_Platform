@@ -10207,9 +10207,11 @@ async function _dfcConfirmReasonedEdit(){
 async function _dfcSaveAdjustment(ac,year,month,pct,kwh,reason,just){
   const sb=getSB();if(!sb)return;
   const cu=(typeof CU!=='undefined'&&CU&&CU.name)?CU.name:'';
-  const{error}=await sb.from('jps_operational_adjustments').insert({
+  // One row of record per (account, year, month) — editing an existing adjustment
+  // updates it in place rather than stacking a new row for the same period.
+  const{error}=await sb.from('jps_operational_adjustments').upsert({
     jps_ac:ac,year,month,operational_pct:pct,manual_kwh:kwh,reason_code:reason,justification:just,created_by:cu
-  });
+  },{onConflict:'jps_ac,year,month'});
   if(error){toast('Save failed: '+error.message,'err');return;}
   toast('Adjustment saved','ok');
   _adjLogCache=null; // force a fresh fetch next time the Adjustment Log renders
