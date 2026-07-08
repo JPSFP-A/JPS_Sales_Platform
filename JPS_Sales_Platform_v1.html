@@ -9037,7 +9037,11 @@ async function syncSupabase(silent=false){
           return data||null;
         }catch(e){
           console.warn('[sync] get_res_actuals RPC failed, fallback to full table:',e.message);
-          return sbTable('jps_actuals',{gte:[_yearFilterCol,_actYearCutoff],cols:_actCols});
+          // get_res_actuals only returns rows WHERE jps_ac IS NULL OR jps_ac=''  (residential buckets).
+          // The raw-table fallback must mirror that scope, or commercial rows get double-counted once
+          // here and again via sbActualsComm/get_comm_actuals in _sbAllActuals()'s concatenation.
+          const _resFallback=await sbTable('jps_actuals',{gte:[_yearFilterCol,_actYearCutoff],cols:_actCols});
+          return (_resFallback||[]).filter(r=>!r.jps_ac||!String(r.jps_ac).trim());
         }
       })(),
       (async()=>{
