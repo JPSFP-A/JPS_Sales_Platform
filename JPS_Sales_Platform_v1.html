@@ -10658,11 +10658,14 @@ function renderRcForecastReport(){
   const year=parseInt(yrSel?.value)||FC_BUD_YEAR;
 
   const idx=_dfcBuildIndices();
-  const commAccounts=_dfcBuildCommAccounts(year);
+  // EV excluded — it's JPS's own EV-charging infrastructure (account holder is
+  // "Jamaica Public Service" itself), not customer sales, so it doesn't belong
+  // in a customer-facing forecast-by-rate-class report.
+  const commAccounts=_dfcBuildCommAccounts(year).filter(a=>a.rate_class!=='EV');
   const keyAccounts=commAccounts.filter(a=>a.kam);
   const commCohorts=_dfcCommCohortsForNonKam(commAccounts);
-  const resCohorts=_dfcBuildResCohorts(year);
-  const newCusts=sbNewCustomers.filter(c=>Number(c.start_year)<=year);
+  const resCohorts=_dfcBuildResCohorts(year).filter(co=>co.rate_class!=='EV');
+  const newCusts=sbNewCustomers.filter(c=>Number(c.start_year)<=year&&c.rate_class!=='EV');
 
   const rc={};
   const bump=(rateClass)=>{
