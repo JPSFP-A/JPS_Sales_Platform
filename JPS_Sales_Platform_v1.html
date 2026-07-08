@@ -10002,6 +10002,14 @@ function _dfcDriverPcts(rc,industry,year,month){
   return{seg,macro,weather,seasInd};
 }
 
+// Bulk-billed rows use a shared placeholder jps_ac instead of a real account number
+// (e.g. all "Postpaid" residential-tier rows for a month share jps_ac='Postpaid').
+// Treating that as one real account would collapse every rate_class/parish sharing
+// the placeholder into a single fake blended "customer" — excluded from the
+// per-account paths below; their kwh still rolls up correctly via cohort totals
+// (_dfcBuildPlaceholderCohorts / actByCohort), which key on rate_class+parish+bucket,
+// not jps_ac.
+const _DFC_PLACEHOLDER_ACS=new Set(['Postpaid','Zero-Postpaid']);
 function _dfcBuildCommAccounts(year){
   const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
   const indMap={};sbIndustries.forEach(i=>indMap[String(i.jps_ac||'').trim()]=i.industry||'');
@@ -10009,13 +10017,13 @@ function _dfcBuildCommAccounts(year){
   _sbAllActuals().forEach(r=>{
     if(!_isComm(r))return;
     if(Number(r.year)!==year&&Number(r.year)!==year-1)return;
-    const ac=r.jps_ac;if(!ac||seen[ac])return;
+    const ac=r.jps_ac;if(!ac||seen[ac]||_DFC_PLACEHOLDER_ACS.has(ac))return;
     seen[ac]={ac,name:r.name||ac,rate_class:r.rate_class,parish:r.parish,consumption_bucket:r.consumption_bucket};
   });
   sbBudget.forEach(r=>{
     if(!_isComm(r))return;
     if(Number(r.year)!==year)return;
-    const ac=r.jps_ac;if(!ac||seen[ac])return;
+    const ac=r.jps_ac;if(!ac||seen[ac]||_DFC_PLACEHOLDER_ACS.has(ac))return;
     seen[ac]={ac,name:r.name||ac,rate_class:r.rate_class,parish:r.parish,consumption_bucket:r.consumption_bucket};
   });
   return Object.values(seen).map(a=>({
@@ -10030,6 +10038,22 @@ function _dfcBuildResCohorts(year){
     if(!isAct&&Number(r.year)!==year)return;
     const key=`${r.rate_class}|${r.parish}|${r.consumption_bucket}`;
     if(!cohorts[key])cohorts[key]={key,rate_class:r.rate_class,parish:r.parish,consumption_bucket:r.consumption_bucket,label:`${r.rate_class} · ${r.parish} · ${r.consumption_bucket}`};
+  };
+  _sbAllActuals().forEach(r=>add(r,true));
+  sbBudget.forEach(r=>add(r,false));
+  return Object.values(cohorts);
+}
+// Rolls up bulk-billed placeholder-account rows (see _DFC_PLACEHOLDER_ACS) by
+// rate_class+parish+bucket so their kwh is visible and correctly attributed
+// instead of being dropped or blended into a fake account.
+function _dfcBuildPlaceholderCohorts(year){
+  const cohorts={};
+  const add=(r,isAct)=>{
+    if(!_isComm(r)||!_DFC_PLACEHOLDER_ACS.has(r.jps_ac))return;
+    if(isAct&&Number(r.year)!==year&&Number(r.year)!==year-1)return;
+    if(!isAct&&Number(r.year)!==year)return;
+    const key=`${r.rate_class}|${r.parish}|${r.consumption_bucket}`;
+    if(!cohorts[key])cohorts[key]={key,rate_class:r.rate_class,parish:r.parish,consumption_bucket:r.consumption_bucket,label:`${r.rate_class} · ${r.parish||'unassigned'} · bulk-billed (no individual account records)`};
   };
   _sbAllActuals().forEach(r=>add(r,true));
   sbBudget.forEach(r=>add(r,false));
@@ -10052,7 +10076,7 @@ function _dfcBuildIndices(){
   const actByAc={},actByCohort={},budByAc={},budByCohort={};
   _sbAllActuals().forEach(r=>{
     const ym=`${r.year}_${r.month}`;
-    if(_isComm(r)&&r.jps_ac){
+    if(_isComm(r)&&r.jps_ac&&!_DFC_PLACEHOLDER_ACS.has(r.jps_ac)){
       const m=(actByAc[r.jps_ac]=actByAc[r.jps_ac]||{});
       m[ym]=(m[ym]||0)+(Number(r.kwh)||0);
     }
@@ -10062,7 +10086,7 @@ function _dfcBuildIndices(){
   });
   sbBudget.forEach(r=>{
     const ym=`${r.year}_${r.month}`;
-    if(_isComm(r)&&r.jps_ac){
+    if(_isComm(r)&&r.jps_ac&&!_DFC_PLACEHOLDER_ACS.has(r.jps_ac)){
       const m=(budByAc[r.jps_ac]=budByAc[r.jps_ac]||{});
       m[ym]=(m[ym]||0)+(Number(r.kwh_budget)||0);
     }
@@ -10204,6 +10228,7 @@ function renderDriverForecast(){
   // cohorts don't belong to any KAM, so they're excluded once a specific KAM is selected.
   const resCohorts=(q||kamFilter)?[]:_dfcBuildResCohorts(year);
   const commCohorts=(q||kamFilter)?[]:_dfcCommCohortsForNonKam(commAccounts);
+  const placeholderCohorts=(q||kamFilter)?[]:_dfcBuildPlaceholderCohorts(year);
 
   const idx=_dfcBuildIndices();
   const entities=[]; // {type:'account'|'newcust'|'rescohort'|'commcohort', ...}
@@ -10228,6 +10253,10 @@ function renderDriverForecast(){
     // is what caused the original freeze against real data.
     const chain=_dfcGetChain(idx,co.key,false,{rate_class:co.rate_class,industry:null},null,year,null);
     entities.push({type:'commcohort',ref:co,chain,label:co.label,sub:`${co.members.length} accounts, no KAM assigned`});
+  });
+  placeholderCohorts.forEach(co=>{
+    const chain=_dfcGetChain(idx,co.key,false,{rate_class:co.rate_class,industry:null},null,year,null);
+    entities.push({type:'rescohort',ref:co,chain,label:co.label,sub:'bulk-billed, no individual account records'});
   });
 
   const krow=document.getElementById('dfc_krow');
@@ -10664,6 +10693,7 @@ function renderRcForecastReport(){
   const commAccounts=_dfcBuildCommAccounts(year).filter(a=>a.rate_class!=='EV');
   const keyAccounts=commAccounts.filter(a=>a.kam);
   const commCohorts=_dfcCommCohortsForNonKam(commAccounts);
+  const placeholderCohorts=_dfcBuildPlaceholderCohorts(year).filter(co=>co.rate_class!=='EV');
   const resCohorts=_dfcBuildResCohorts(year).filter(co=>co.rate_class!=='EV');
   const newCusts=sbNewCustomers.filter(c=>Number(c.start_year)<=year&&c.rate_class!=='EV');
 
@@ -10686,6 +10716,10 @@ function renderRcForecastReport(){
     const chain=_dfcGetChain(idx,co.key,false,{rate_class:co.rate_class,industry:null},null,year,null);
     _rcfrAccumulate(bump(co.rate_class),chain);
   });
+  placeholderCohorts.forEach(co=>{
+    const chain=_dfcGetChain(idx,co.key,false,{rate_class:co.rate_class,industry:null},null,year,null);
+    _rcfrAccumulate(bump(co.rate_class),chain);
+  });
   resCohorts.forEach(co=>{
     const chain=_dfcGetChain(idx,co.key,false,{rate_class:co.rate_class,industry:null},null,year,null);
     _rcfrAccumulate(bump(co.rate_class),chain);
@@ -10698,7 +10732,14 @@ function renderRcForecastReport(){
     budByRc[k]=(budByRc[k]||0)+Number(b.kwh_budget||0);
   });
 
-  const rcs=Object.keys(rc).sort();
+  const RC_ORDER=['RT10','RT20','RT40','RT50','RT60-ST','RT70'];
+  const rcs=Object.keys(rc).sort((a,b)=>{
+    const ia=RC_ORDER.indexOf(a),ib=RC_ORDER.indexOf(b);
+    if(ia===-1&&ib===-1)return a.localeCompare(b);
+    if(ia===-1)return 1;
+    if(ib===-1)return -1;
+    return ia-ib;
+  });
   let body='',totFy=0,totBud=0;
   const insights=[];
   rcs.forEach(rateClass=>{
