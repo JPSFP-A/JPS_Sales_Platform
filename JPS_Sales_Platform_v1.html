@@ -2343,7 +2343,7 @@ order by ordinal_position;</pre>
             <select id="adjlog_reason" class="psel" onchange="renderAdjustmentLog()">
               <option value="">All reason codes</option>
               <option>Renewal</option><option>Expansion</option><option>Confirmed defection</option>
-              <option>Possible defection</option><option>Win-back</option><option>Other</option>
+              <option>Possible defection</option><option>Win-back</option><option>Operational disruption</option><option>Other</option>
             </select>
             <select id="adjlog_kam" class="psel" onchange="renderAdjustmentLog()"></select>
             <select id="adjlog_group" class="psel" onchange="renderAdjustmentLog()">
@@ -9954,7 +9954,7 @@ async function _runGenerateSeasonalLE(){
    accounts with a real KAM assigned — everyone else is cohort grain.
    Recomputes on every render; there is no separate "calculate" step.
 ========================================== */
-const REASON_CODES=['Renewal','Expansion','Confirmed defection','Possible defection','Win-back','Other'];
+const REASON_CODES=['Renewal','Expansion','Confirmed defection','Possible defection','Win-back','Operational disruption','Other'];
 let _dfcPendingEdit=null; // {ac,year,month,newPct,oldPct,name}
 let _dfcCohortReg=[];     // per-render registry for lazy cohort member drill-down
 const DFC_MEMBER_CAP=50;  // cap on how many cohort members render at once

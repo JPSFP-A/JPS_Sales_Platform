@@ -44,7 +44,7 @@ create table if not exists public.jps_operational_adjustments (
   month smallint not null check (month between 1 and 12),
   operational_pct numeric not null default 0,
   manual_kwh numeric not null default 0,
-  reason_code text check (reason_code in ('Renewal','Expansion','Confirmed defection','Possible defection','Win-back','Other')),
+  reason_code text check (reason_code in ('Renewal','Expansion','Confirmed defection','Possible defection','Win-back','Operational disruption','Other')),
   justification text,
   created_by text,
   created_at timestamptz not null default now(),
