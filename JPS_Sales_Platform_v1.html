@@ -9968,8 +9968,10 @@ function _dfcDriverPcts(rc,industry,year,month){
 // Treating that as one real account would collapse every rate_class/parish sharing
 // the placeholder into a single fake blended "customer" — excluded from the
 // per-account paths below; their kwh still rolls up correctly via cohort totals
-// (_dfcBuildPlaceholderCohorts / actByCohort), which key on rate_class+parish+bucket,
-// not jps_ac.
+// (_dfcCommCohortsForNonKam / actByCohort), which key on rate_class+parish+bucket,
+// not jps_ac. actByCohort already sums ALL rows for a key regardless of jps_ac, so
+// a real cohort's total already includes any placeholder rows sharing its key —
+// never add a second entity for the same key or it double-counts.
 const _DFC_PLACEHOLDER_ACS=new Set(['Postpaid','Zero-Postpaid']);
 function _dfcBuildCommAccounts(year){
   const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
@@ -10004,29 +10006,30 @@ function _dfcBuildResCohorts(year){
   sbBudget.forEach(r=>add(r,false));
   return Object.values(cohorts);
 }
-// Rolls up bulk-billed placeholder-account rows (see _DFC_PLACEHOLDER_ACS) by
-// rate_class+parish+bucket so their kwh is visible and correctly attributed
-// instead of being dropped or blended into a fake account.
-function _dfcBuildPlaceholderCohorts(year){
-  const cohorts={};
-  const add=(r,isAct)=>{
-    if(!_isComm(r)||!_DFC_PLACEHOLDER_ACS.has(r.jps_ac))return;
-    if(isAct&&Number(r.year)!==year&&Number(r.year)!==year-1)return;
-    if(!isAct&&Number(r.year)!==year)return;
-    const key=`${r.rate_class}|${r.parish}|${r.consumption_bucket}`;
-    if(!cohorts[key])cohorts[key]={key,rate_class:r.rate_class,parish:r.parish,consumption_bucket:r.consumption_bucket,label:`${r.rate_class} · ${r.parish||'unassigned'} · bulk-billed (no individual account records)`};
-  };
-  _sbAllActuals().forEach(r=>add(r,true));
-  sbBudget.forEach(r=>add(r,false));
-  return Object.values(cohorts);
-}
-function _dfcCommCohortsForNonKam(accounts){
+// Builds no-KAM commercial cohorts from real accounts, PLUS a cohort entity for any
+// (rate_class,parish,bucket) key that only has bulk-billed placeholder rows
+// (_DFC_PLACEHOLDER_ACS) and no real account at all — otherwise that key's kwh would
+// never get an entity and would silently vanish from the rendered total. Keys that
+// already have a real-account cohort must NOT get a second entity for the same key:
+// actByCohort sums ALL rows sharing that key regardless of jps_ac, so the real
+// cohort's total already includes any placeholder rows at that same key — adding a
+// second entity for it would double-count that kwh.
+function _dfcCommCohortsForNonKam(accounts,year){
   const cohorts={};
   accounts.filter(a=>!a.kam&&!a.isNew).forEach(a=>{
     const key=`${a.rate_class}|${a.parish}|${a.consumption_bucket}`;
     if(!cohorts[key])cohorts[key]={key,rate_class:a.rate_class,parish:a.parish,consumption_bucket:a.consumption_bucket,label:`${a.rate_class} · ${a.parish} · ${a.consumption_bucket}`,members:[]};
     cohorts[key].members.push(a);
   });
+  const addPlaceholder=(r,isAct)=>{
+    if(!_isComm(r)||!_DFC_PLACEHOLDER_ACS.has(r.jps_ac))return;
+    if(isAct&&Number(r.year)!==year&&Number(r.year)!==year-1)return;
+    if(!isAct&&Number(r.year)!==year)return;
+    const key=`${r.rate_class}|${r.parish}|${r.consumption_bucket}`;
+    if(!cohorts[key])cohorts[key]={key,rate_class:r.rate_class,parish:r.parish,consumption_bucket:r.consumption_bucket,label:`${r.rate_class} · ${r.parish||'unassigned'} · bulk-billed (no individual account records)`,members:[]};
+  };
+  _sbAllActuals().forEach(r=>addPlaceholder(r,true));
+  sbBudget.forEach(r=>addPlaceholder(r,false));
   return Object.values(cohorts);
 }
 
@@ -10188,8 +10191,7 @@ function renderDriverForecast(){
   // KAM-filtered view shows only that KAM's accounts — residential and no-KAM commercial
   // cohorts don't belong to any KAM, so they're excluded once a specific KAM is selected.
   const resCohorts=(q||kamFilter)?[]:_dfcBuildResCohorts(year);
-  const commCohorts=(q||kamFilter)?[]:_dfcCommCohortsForNonKam(commAccounts);
-  const placeholderCohorts=(q||kamFilter)?[]:_dfcBuildPlaceholderCohorts(year);
+  const commCohorts=(q||kamFilter)?[]:_dfcCommCohortsForNonKam(commAccounts,year);
 
   const idx=_dfcBuildIndices();
   const entities=[]; // {type:'account'|'newcust'|'rescohort'|'commcohort', ...}
@@ -10213,11 +10215,13 @@ function renderDriverForecast(){
     // cohort can hold hundreds of accounts and eagerly rendering all of them
     // is what caused the original freeze against real data.
     const chain=_dfcGetChain(idx,co.key,false,{rate_class:co.rate_class,industry:null},null,year,null);
-    entities.push({type:'commcohort',ref:co,chain,label:co.label,sub:`${co.members.length} accounts, no KAM assigned`});
-  });
-  placeholderCohorts.forEach(co=>{
-    const chain=_dfcGetChain(idx,co.key,false,{rate_class:co.rate_class,industry:null},null,year,null);
-    entities.push({type:'rescohort',ref:co,chain,label:co.label,sub:'bulk-billed, no individual account records'});
+    // Placeholder-only cohorts (bulk-billed, no real account at this key) have no
+    // members to drill into — render as a plain cohort total, not a fake "0 accounts".
+    if(co.members.length===0){
+      entities.push({type:'rescohort',ref:co,chain,label:co.label,sub:'bulk-billed, no individual account records'});
+    }else{
+      entities.push({type:'commcohort',ref:co,chain,label:co.label,sub:`${co.members.length} accounts, no KAM assigned`});
+    }
   });
 
   const krow=document.getElementById('dfc_krow');
@@ -10653,8 +10657,7 @@ function renderRcForecastReport(){
   // in a customer-facing forecast-by-rate-class report.
   const commAccounts=_dfcBuildCommAccounts(year).filter(a=>a.rate_class!=='EV');
   const keyAccounts=commAccounts.filter(a=>a.kam);
-  const commCohorts=_dfcCommCohortsForNonKam(commAccounts);
-  const placeholderCohorts=_dfcBuildPlaceholderCohorts(year).filter(co=>co.rate_class!=='EV');
+  const commCohorts=_dfcCommCohortsForNonKam(commAccounts,year).filter(co=>co.rate_class!=='EV');
   const resCohorts=_dfcBuildResCohorts(year).filter(co=>co.rate_class!=='EV');
   const newCusts=sbNewCustomers.filter(c=>Number(c.start_year)<=year&&c.rate_class!=='EV');
 
@@ -10674,10 +10677,6 @@ function renderRcForecastReport(){
     _rcfrAccumulate(bump(c.rate_class),chain);
   });
   commCohorts.forEach(co=>{
-    const chain=_dfcGetChain(idx,co.key,false,{rate_class:co.rate_class,industry:null},null,year,null);
-    _rcfrAccumulate(bump(co.rate_class),chain);
-  });
-  placeholderCohorts.forEach(co=>{
     const chain=_dfcGetChain(idx,co.key,false,{rate_class:co.rate_class,industry:null},null,year,null);
     _rcfrAccumulate(bump(co.rate_class),chain);
   });
