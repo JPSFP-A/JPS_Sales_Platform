@@ -429,6 +429,7 @@ document.getElementById('schema_stale_banner').style.display='none';
     <div class="ni" onclick="sw('dfc',this)"><span class="ni-icon">🌲</span>Driver Forecast</div>
     <div class="ni" onclick="sw('macro',this)"><span class="ni-icon">🌐</span>Macro Assumptions</div>
     <div class="ni" onclick="sw('adjlog',this)"><span class="ni-icon">📋</span>Adjustment Log</div>
+    <div class="ni" onclick="sw('rcfr',this)"><span class="ni-icon">📐</span>RC Forecast Report</div>
     <div class="nav-lbl" style="margin-top:8px">Intelligence</div>
     <div class="ni" onclick="sw('es',this)"><span class="ni-icon">📰</span>Exec Summary</div>
     <div class="ni" onclick="sw('vb',this)"><span class="ni-icon">🌊</span>Variance Bridge</div>
@@ -2366,6 +2367,23 @@ order by ordinal_position;</pre>
       </div>
     </div>
 
+    <!-- === RC FORECAST REPORT === -->
+    <div id="rcfr" class="sec">
+      <div class="card">
+        <div class="ch">Forecast Report by Rate Class
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <select id="rcfr_year" class="psel" onchange="renderRcForecastReport()"></select>
+            <button class="btn btn-o" onclick="exportTableCSV('rcfr_tbl_el','rc_forecast_report')">⬇ Export Report</button>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:10px">
+          Full-year forecast by rate class, decomposed into drivers (base roll-forward, macro assumptions, weather/seasonality, operational adjustments) and compared to budget.
+        </div>
+        <div id="rcfr_table" style="overflow-x:auto"></div>
+        <div id="rcfr_insights" style="margin-top:16px"></div>
+      </div>
+    </div>
+
     <!-- === NET GENERATION === -->
     <div id="ng" class="sec">
       <div style="background:rgba(55,138,221,.07);border-left:3px solid var(--blue);border-radius:4px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:var(--text2);line-height:1.7">
@@ -3044,7 +3062,7 @@ function sw(id,el){
   }
   const _swSections=['ov','cm','df','ro','fc','rb_res'];
   // Lazy-load commercial detail rows when commercial or forecast sections open
-  const _commSections=['cm','df','ro','fc','le','dfc','adjlog'];
+  const _commSections=['cm','df','ro','fc','le','dfc','adjlog','rcfr'];
   if(_commSections.includes(id)&&!_commDetailLoaded){
     loadCommercialDetail().catch(e=>console.warn('loadCommercialDetail:',e));
   }
@@ -3624,6 +3642,7 @@ function renderSection(id){
   else if(id==='dfc'){renderDriverForecast();}
   else if(id==='macro'){renderMacroAssumptions();}
   else if(id==='adjlog'){renderAdjustmentLog();}
+  else if(id==='rcfr'){renderRcForecastReport();}
 }
 
 /* ==========================================
@@ -10622,6 +10641,141 @@ async function _adjLogConfirmDelete(id){
   toast('Adjustment deleted','ok');
   _adjLogCache=null;
   renderAdjustmentLog();
+}
+
+// ── RC Forecast Report — full-year forecast by rate class, decomposed into
+// drivers (base roll-forward, macro, weather/seasonality, operational) vs budget.
+// Reuses the Driver Forecast engine's per-entity chains (_dfcGetChain already
+// computes base/macro/weather/oper per month) — just aggregated by rate_class
+// instead of by account/cohort.
+function renderRcForecastReport(){
+  const wrap=document.getElementById('rcfr_table');if(!wrap)return;
+  const yrSel=document.getElementById('rcfr_year');
+  if(yrSel&&!yrSel.options.length){
+    for(let y=FC_BUD_YEAR;y<=FC_BUD_YEAR+4;y++)yrSel.innerHTML+=`<option value="${y}">${y}</option>`;
+  }
+  const year=parseInt(yrSel?.value)||FC_BUD_YEAR;
+
+  const idx=_dfcBuildIndices();
+  const commAccounts=_dfcBuildCommAccounts(year);
+  const keyAccounts=commAccounts.filter(a=>a.kam);
+  const commCohorts=_dfcCommCohortsForNonKam(commAccounts);
+  const resCohorts=_dfcBuildResCohorts(year);
+  const newCusts=sbNewCustomers.filter(c=>Number(c.start_year)<=year);
+
+  const rc={};
+  const bump=(rateClass)=>{
+    const k=rateClass||'Unassigned';
+    if(!rc[k])rc[k]={actual:0,base:0,macro:0,weather:0,oper:0,total:0};
+    return rc[k];
+  };
+  keyAccounts.forEach(a=>{
+    const chain=_dfcGetChain(idx,a.ac,true,{rate_class:a.rate_class,industry:a.industry},a.ac,year,null);
+    _rcfrAccumulate(bump(a.rate_class),chain);
+  });
+  newCusts.forEach(c=>{
+    const ctx={rate_class:c.rate_class,industry:c.industry,startYear:Number(c.start_year),startMonth:Number(c.start_month),expectedKwh:Number(c.expected_kwh)||0};
+    const chain=_dfcGetChain(idx,c.jps_ac,true,{rate_class:c.rate_class,industry:c.industry},c.jps_ac,year,ctx);
+    _rcfrAccumulate(bump(c.rate_class),chain);
+  });
+  commCohorts.forEach(co=>{
+    const chain=_dfcGetChain(idx,co.key,false,{rate_class:co.rate_class,industry:null},null,year,null);
+    _rcfrAccumulate(bump(co.rate_class),chain);
+  });
+  resCohorts.forEach(co=>{
+    const chain=_dfcGetChain(idx,co.key,false,{rate_class:co.rate_class,industry:null},null,year,null);
+    _rcfrAccumulate(bump(co.rate_class),chain);
+  });
+
+  const budByRc={};
+  _budAll(year).forEach(b=>{
+    const k=b.rate_class||b['Rate category']||'';
+    if(!k)return;
+    budByRc[k]=(budByRc[k]||0)+Number(b.kwh_budget||0);
+  });
+
+  const rcs=Object.keys(rc).sort();
+  let body='',totFy=0,totBud=0;
+  const insights=[];
+  rcs.forEach(rateClass=>{
+    const r=rc[rateClass];
+    const fy=r.total;
+    const bud=budByRc[rateClass]||0;
+    const delta=bud>0?(fy-bud)/bud*100:null;
+    totFy+=fy;totBud+=bud;
+    body+=`<tr>
+      <td style="padding:6px 8px;font-weight:500">${esc(rateClass)}</td>
+      <td style="text-align:right;padding:6px 4px">${_dfcFmtGwh(fy)}</td>
+      <td style="text-align:right;padding:6px 4px">${bud>0?_dfcFmtGwh(bud):'—'}</td>
+      <td style="text-align:right;padding:6px 4px;color:${delta==null?'var(--text3)':delta>=0?'var(--green)':'var(--red)'}">${delta==null?'—':_dfcFmtPct(delta)}</td>
+      <td style="text-align:right;padding:6px 4px;color:var(--text3)">${_dfcFmtGwh(r.actual)}</td>
+      <td style="text-align:right;padding:6px 4px;color:var(--text3)">${_dfcFmtGwh(r.base)}</td>
+      <td style="text-align:right;padding:6px 4px;color:${r.macro>=0?'var(--green)':'var(--red)'}">${r.macro>=0?'+':''}${_dfcFmtGwh(r.macro)}</td>
+      <td style="text-align:right;padding:6px 4px;color:${r.weather>=0?'var(--green)':'var(--red)'}">${r.weather>=0?'+':''}${_dfcFmtGwh(r.weather)}</td>
+      <td style="text-align:right;padding:6px 8px;color:${r.oper>=0?'var(--green)':'var(--red)'}">${r.oper>=0?'+':''}${_dfcFmtGwh(r.oper)}</td>
+    </tr>`;
+    insights.push(_rcfrInsight(rateClass,fy,bud,r.macro,r.weather,r.oper));
+  });
+  const totDelta=totBud>0?(totFy-totBud)/totBud*100:null;
+  body+=`<tr style="border-top:1px solid var(--border-strong);font-weight:600">
+    <td style="padding:6px 8px">Total</td>
+    <td style="text-align:right;padding:6px 4px">${_dfcFmtGwh(totFy)}</td>
+    <td style="text-align:right;padding:6px 4px">${totBud>0?_dfcFmtGwh(totBud):'—'}</td>
+    <td style="text-align:right;padding:6px 4px">${totDelta==null?'—':_dfcFmtPct(totDelta)}</td>
+    <td colspan="5"></td>
+  </tr>`;
+
+  wrap.innerHTML=`<table id="rcfr_tbl_el" style="width:100%;min-width:820px;border-collapse:collapse;font-size:12px;table-layout:fixed">
+    <colgroup><col style="width:110px"><col style="width:90px"><col style="width:90px"><col style="width:90px"><col style="width:90px"><col style="width:90px"><col style="width:90px"><col style="width:90px"><col style="width:90px"></colgroup>
+    <thead><tr style="border-bottom:0.5px solid var(--border-strong)">
+      <th style="text-align:left;padding:6px 8px;font-weight:500;color:var(--text3)">Rate Class</th>
+      <th style="text-align:right;padding:6px 4px;font-weight:500;color:var(--text3)">FY Forecast</th>
+      <th style="text-align:right;padding:6px 4px;font-weight:500;color:var(--text3)">Budget</th>
+      <th style="text-align:right;padding:6px 4px;font-weight:500;color:var(--text3)">vs Budget</th>
+      <th style="text-align:right;padding:6px 4px;font-weight:500;color:var(--text3)">Actual YTD</th>
+      <th style="text-align:right;padding:6px 4px;font-weight:500;color:var(--text3)">Base</th>
+      <th style="text-align:right;padding:6px 4px;font-weight:500;color:var(--text3)">Macro</th>
+      <th style="text-align:right;padding:6px 4px;font-weight:500;color:var(--text3)">Weather</th>
+      <th style="text-align:right;padding:6px 8px;font-weight:500;color:var(--text3)">Operational</th>
+    </tr></thead>
+    <tbody>${body}</tbody>
+  </table>`;
+
+  const iw=document.getElementById('rcfr_insights');
+  if(iw){
+    iw.innerHTML=`<div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">Key Insights</div>
+      <ul style="margin:0;padding-left:18px;font-size:12px;color:var(--text2);line-height:1.9">
+        ${insights.map(s=>`<li>${esc(s)}</li>`).join('')}
+      </ul>`;
+  }
+}
+function _rcfrAccumulate(acc,chain){
+  for(let m=1;m<=12;m++){
+    const c=chain[m];if(!c)continue;
+    if(c.isActual){acc.actual+=c.total;acc.total+=c.total;continue;}
+    const base=c.base||0;
+    const macroImpact=base*(c.macro||0)/100;
+    const weatherImpact=base*((c.weather||0)+(c.seasInd||0))/100;
+    const operImpact=base*(c.oper||0)/100+(c.manual||0);
+    acc.base+=base;acc.macro+=macroImpact;acc.weather+=weatherImpact;acc.oper+=operImpact;
+    acc.total+=base+macroImpact+weatherImpact+operImpact;
+  }
+}
+function _rcfrInsight(rateClass,fy,bud,macro,weather,oper){
+  const delta=bud>0?(fy-bud)/bud*100:null;
+  const drivers=[
+    {label:'macro assumptions',v:macro},
+    {label:'weather/seasonality',v:weather},
+    {label:'operational adjustments',v:oper},
+  ].sort((a,b)=>Math.abs(b.v)-Math.abs(a.v));
+  const top=drivers[0];
+  let s=bud>0
+    ?`${rateClass}: forecast ${_dfcFmtGwh(fy)} GWh, ${Math.abs(delta).toFixed(1)}% ${delta>=0?'above':'below'} budget (${_dfcFmtGwh(bud)} GWh).`
+    :`${rateClass}: forecast ${_dfcFmtGwh(fy)} GWh — no budget loaded for comparison.`;
+  if(Math.abs(top.v)>0.01){
+    s+=` Largest driver: ${top.label} (${top.v>=0?'+':''}${_dfcFmtGwh(top.v)} GWh).`;
+  }
+  return s;
 }
 
 // ─── Finance COMMIT ─────────────────────────────────────────────────────────────
