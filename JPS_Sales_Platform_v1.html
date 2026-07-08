@@ -10020,7 +10020,10 @@ function renderDriverForecast(){
   if(kamSel&&!kamSel.dataset.populated){
     const kams=[...new Set(sbKAM.map(k=>k.kam).filter(Boolean))].sort();
     kamSel.innerHTML='<option value="">All KAMs</option>'+kams.map(k=>`<option>${esc(k)}</option>`).join('');
-    kamSel.dataset.populated='1';
+    // Only lock the populate-once guard once sbKAM has actually arrived — if this
+    // render fired before the initial sync finished, sbKAM is still empty here and
+    // the dropdown would otherwise be stuck on "All KAMs" forever once locked.
+    if(kams.length)kamSel.dataset.populated='1';
   }
   const kamFilter=kamSel?.value||'';
 
@@ -10370,7 +10373,7 @@ async function renderAdjustmentLog(){
   if(kamSel&&!kamSel.dataset.populated){
     const kams=[...new Set(sbKAM.map(k=>k.kam).filter(Boolean))].sort();
     kamSel.innerHTML='<option value="">All KAMs</option>'+kams.map(k=>`<option>${esc(k)}</option>`).join('');
-    kamSel.dataset.populated='1';
+    if(kams.length)kamSel.dataset.populated='1';
   }
 
   let rows=data.filter(r=>r.operational_pct||r.manual_kwh);
