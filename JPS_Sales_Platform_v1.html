@@ -2297,6 +2297,7 @@ order by ordinal_position;</pre>
         <div class="ch">Driver Forecast
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             <select id="dfc_year" class="psel" onchange="renderDriverForecast()"></select>
+            <select id="dfc_kam" class="psel" onchange="renderDriverForecast()"></select>
             <select id="dfc_group" class="psel" onchange="renderDriverForecast()">
               <option value="customer">Group by Customer</option>
               <option value="top_bottom">Top 10 / Bottom 10</option>
@@ -10169,12 +10170,21 @@ function renderDriverForecast(){
   const months=[1,2,3,4,5,6,7,8,9,10,11,12];
   const grp=document.getElementById('dfc_group')?.value||'customer';
   const q=(document.getElementById('dfc_search')?.value||'').toLowerCase();
+  const kamSel=document.getElementById('dfc_kam');
+  if(kamSel&&!kamSel.dataset.populated){
+    const kams=[...new Set(sbKAM.map(k=>k.kam).filter(Boolean))].sort();
+    kamSel.innerHTML='<option value="">All KAMs</option>'+kams.map(k=>`<option>${esc(k)}</option>`).join('');
+    kamSel.dataset.populated='1';
+  }
+  const kamFilter=kamSel?.value||'';
 
   const commAccounts=_dfcBuildCommAccounts(year).filter(a=>!q||a.name.toLowerCase().includes(q)||a.ac.toLowerCase().includes(q));
-  const keyAccounts=commAccounts.filter(a=>a.kam);
-  const newCusts=sbNewCustomers.filter(c=>Number(c.start_year)<=year&&(!q||c.name.toLowerCase().includes(q)));
-  const resCohorts=q?[]:_dfcBuildResCohorts(year);
-  const commCohorts=q?[]:_dfcCommCohortsForNonKam(commAccounts);
+  const keyAccounts=commAccounts.filter(a=>a.kam&&(!kamFilter||a.kam===kamFilter));
+  const newCusts=sbNewCustomers.filter(c=>Number(c.start_year)<=year&&(!q||c.name.toLowerCase().includes(q))&&(!kamFilter||(c.kam||'')===kamFilter));
+  // KAM-filtered view shows only that KAM's accounts — residential and no-KAM commercial
+  // cohorts don't belong to any KAM, so they're excluded once a specific KAM is selected.
+  const resCohorts=(q||kamFilter)?[]:_dfcBuildResCohorts(year);
+  const commCohorts=(q||kamFilter)?[]:_dfcCommCohortsForNonKam(commAccounts);
 
   const idx=_dfcBuildIndices();
   const entities=[]; // {type:'account'|'newcust'|'rescohort'|'commcohort', ...}
