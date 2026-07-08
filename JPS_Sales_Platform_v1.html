@@ -10268,6 +10268,7 @@ function renderDriverForecast(){
     let h=`<tbody><tr style="border-bottom:0.5px solid var(--border);cursor:pointer" onclick="const g=document.getElementById('${gid}'),h=document.getElementById('${hid}');const open=g.style.display==='table-row-group';g.style.display=open?'none':'table-row-group';h.textContent=open?'▸':'▾';">
         <td style="padding:7px 8px;font-weight:500" colspan="${1+months.length*2}">
           <span id="${hid}">${defaultExpanded?'▾':'▸'}</span> ${esc(e.label)} <span style="color:var(--text3);font-weight:400">· ${esc(e.sub)}</span>
+          <strong style="margin-left:10px">${_dfcFmtGwh(fyTotal(e.chain))} GWh</strong>
         </td>
         <td style="text-align:right;padding:7px 8px;font-weight:500;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(e.chain))} GWh</td>
       </tr></tbody><tbody id="${gid}" style="display:${defaultExpanded?'table-row-group':'none'}">`;
