@@ -371,14 +371,6 @@ body{background:var(--navy);color:var(--text);font-family:'IBM Plex Sans',system
 </head>
 <body>
 
-<!-- SUITE NAV -->
-<div class="suite-nav">
-  <span class="sn-brand">JPS Analytics Suite</span>
-  <a class="sn-link sn-active" href="#">&#x2B21; Sales Platform</a>
-  <a class="sn-link" id="sn-fpa-link" href="https://jmfinancelab.com" target="_blank">&#x1F4CA; Finance Platform</a>
-  <a class="sn-back" href="javascript:history.back()">&#x21A9; Back</a>
-</div>
-
 <div class="app-wrap">
 
 <!-- SCHEMA FIX BANNER — shown automatically when PostgREST cache is stale -->
@@ -448,11 +440,7 @@ document.getElementById('schema_stale_banner').style.display='none';
     <div class="ni" onclick="sw('adm',this)"><span class="ni-icon">🔐</span>Admin</div>
   </div>
   <div class="sb-bottom">
-    <div class="fl">Segment</div>
-    <div class="chips" id="segChips"><span style="font-size:9px;color:var(--text3)">No data</span></div>
-    <div class="fl">Year</div>
-    <div class="chips" id="yearChips"><span style="font-size:9px;color:var(--text3)">No data</span></div>
-    <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+    <div style="padding-top:8px">
       <div class="fl">Theme</div>
       <div style="display:flex;gap:4px">
         <button class="chip theme-btn on" data-theme="dark" onclick="setTheme('dark')" title="Dark theme">🌙 Dark</button>
@@ -474,8 +462,6 @@ document.getElementById('schema_stale_banner').style.display='none';
     <div class="tb-right">
       <span class="tbadge tba" id="periodLabel">-- · MTD</span>
       <span class="tbadge tbr" id="kpi_ytd_yoy">-- YoY</span>
-      <span class="tbadge tbt" id="dataStatus">⚡ Sample Data</span>
-<span class="sb-badge sb-syncing" id="sbStatus" onclick="syncSupabase()" title="Click to sync from database">↻ Connecting…</span>
       <!-- Theme quick-switch -->
       <div style="display:flex;gap:2px;border:1px solid var(--border);border-radius:7px;padding:2px;background:var(--navy3)" title="Switch theme">
         <button onclick="setTheme('dark')"  data-theme="dark"  class="theme-btn on"  style="width:22px;height:22px;border:none;border-radius:5px;cursor:pointer;font-size:12px;background:transparent;line-height:1" title="Dark">🌙</button>
@@ -3524,30 +3510,6 @@ function rebuildYearDropdowns(){
   }
 }
 
-// Populate sidebar segment + year chips from actual DB data
-function renderSidebarFilters(){
-  const segs = sbActuals.length
-    ? [...new Set(sbActuals.map(r=>String(r.rate_class||r.rc||'').trim()).filter(Boolean))].sort()
-    : [];
-  const years = sbActuals.length
-    ? [...new Set(sbActuals.map(r=>Number(r.year||r.cal_year||0)).filter(Boolean))].sort()
-    : [];
-
-  const segEl = document.getElementById('segChips');
-  const yrEl  = document.getElementById('yearChips');
-  if(segEl){
-    segEl.innerHTML = segs.length
-      ? segs.map(s=>`<span class="chip on" data-seg="${s}">${s}</span>`).join('')
-      : '<span style="font-size:9px;color:var(--text3)">No data</span>';
-    segEl.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{c.classList.toggle('on');try{renderSection(document.querySelector('.sec.on')?.id);}catch(e){}});
-  }
-  if(yrEl){
-    yrEl.innerHTML = years.length
-      ? years.map(y=>`<span class="chip on" data-year="${y}">${y}</span>`).join('')
-      : '<span style="font-size:9px;color:var(--text3)">No data</span>';
-    yrEl.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{c.classList.toggle('on');try{renderSection(document.querySelector('.sec.on')?.id);}catch(e){}});
-  }
-}
 function fmtPeriodLabel(){
   const _MNL=MONTHS_SHORT;
   if(curPeriod==='MTD')    return _MNL[curMonth-1]+'-'+curYear;
@@ -9294,7 +9256,6 @@ async function syncSupabase(silent=false){
 
     // Build dashboard data synchronously (now fast with index-based SCORECARD computation)
     try{buildDashboardData();}catch(be){console.error('buildDashboardData error:',be);}
-    renderSidebarFilters();
     rebuildYearDropdowns();
     populateKamDropdowns();
 
