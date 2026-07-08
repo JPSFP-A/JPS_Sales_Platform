@@ -2529,6 +2529,18 @@ function _kl(map, ac){
 // Commercial rows are identified by rate class, NOT by empty consumption_bucket.
 // Uploaded data has consumption_bucket="Commercial" on all RT40/RT50 rows.
 const _COMM_RCS=new Set(['RT40','RT50','RT60-ST','RT70','BU']);
+
+// Canonical rate-class display order — used everywhere a rate-class list is
+// shown (charts, tables, scorecards), instead of ad hoc hardcoded orderings.
+const RC_DISPLAY_ORDER=['RT10','RT20','RT40','RT50','RT60-ST','RT70'];
+const RC_COMM_ORDER=RC_DISPLAY_ORDER.filter(rc=>rc!=='RT10'&&rc!=='RT20');
+function _rcSort(a,b){
+  const ia=RC_DISPLAY_ORDER.indexOf(a),ib=RC_DISPLAY_ORDER.indexOf(b);
+  if(ia===-1&&ib===-1)return a.localeCompare(b);
+  if(ia===-1)return 1;
+  if(ib===-1)return -1;
+  return ia-ib;
+}
 function _isComm(r){ return _COMM_RCS.has(String(r.rate_class||'').trim()); }
 
 // O(1) budget row lookups via sbBudgetIdx (built after each sync)
@@ -4114,7 +4126,7 @@ function buildCharts(){
   if(_dnutLbl) _dnutLbl.textContent=`${getPH()} ${curYear}`;
 
   const _dnutPM=getPM(),_dnutPMSet=new Set(_dnutPM);
-  const donutRCs=['RT10','RT20','RT40','RT50','RT70','RT60-ST'];
+  const donutRCs=RC_DISPLAY_ORDER;
   // Period-filtered donut: sum period months from .m[] for commercial; from sbActuals for residential
   const donutData=donutRCs.map(rc=>{
     if(rc==='RT10'||rc==='RT20'){
@@ -4124,7 +4136,7 @@ function buildCharts(){
   });
   mkChart('c_donut',{type:'doughnut',data:{labels:donutRCs,datasets:[{data:donutData,backgroundColor:['#00c2a8','#00957f','#378ADD','#185FA5','#f5a623','#5a7a96'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},cutout:'60%'}});
 
-  const cm1RCs=['RT40','RT50','RT70','RT60-ST'];
+  const cm1RCs=RC_COMM_ORDER;
   const _cm1PM=getPM(),_cm1PMSet=new Set(_cm1PM),_cm1PH=getPH();
   // Period comparison — sum period months for BOTH years
   const _cm1P=(yr)=>cm1RCs.map(rc=>_cm1PM.reduce((s,m)=>s+(_rcIdx[rc]&&_rcIdx[rc][yr*100+m]||0),0)/1e6);
@@ -4140,8 +4152,7 @@ function buildCharts(){
       {label:`${curYear} ${_cm1PH}`,data:cm1_26,backgroundColor:'rgba(0,194,168,0.5)',borderColor:'#00c2a8',borderWidth:1,borderRadius:2},
     ]},options:{...co(),onClick:(e,el)=>{
       if(el.length){
-        const rcs=['RT40','RT50','RT70'];
-        const rc=rcs[el[0].index];
+        const rc=cm1RCs[el[0].index];
         cmDrillRC=rc;
         document.getElementById('cm_rc').value=rc;
         document.getElementById('cm_drill_title').textContent=rc+' Customers';
@@ -4335,7 +4346,7 @@ function renderPfInd(){
 }
 function renderPfRC(){
   const rcDefs={RT10:'Low-use Residential','RT20':'Gen. Service / SME',RT40:'LV Commercial',RT50:'MV Commercial',RT70:'Large Industrial',ST:'Street Lights',EV:'Electric Vehicle'};
-  const rcList=['RT10','RT20','RT40','RT50','RT70','RT60-ST'];
+  const rcList=RC_DISPLAY_ORDER;
   const py=curYear-1, cy=curYear;
   const pm=getPM(),pmSet=new Set(pm),ph=getPH();
   // Use module-level _rcSum (O(period-months) index lookups, not O(53k) scans)
@@ -4401,7 +4412,7 @@ function renderPfPar(){
   makeSortable('pfp_dt');
 }
 function renderVariance(){
-  const segs=['RT10','RT20','RT40','RT50','RT70','RT60-ST'];
+  const segs=RC_DISPLAY_ORDER;
   // Use module-level _rcSum (O(12) index lookups) instead of 24 full sbActuals scans.
   // Budget still scanned from sbBudget (small) via _budM/_budYtd helpers.
   const rows=segs.map(seg=>{
@@ -5370,7 +5381,7 @@ function renderOverviewKPIs(){
   if(!CUSTOMERS.length)return;
   const pm=getPM(),pmSet=new Set(pm),ph=getPH();
   const resRCs=['RT10','RT20'];
-  const comRCs=['RT40','RT50','RT70','RT60-ST'];
+  const comRCs=RC_COMM_ORDER;
   // Period-filtered sums via _rcIdx (all rate classes — residential + commercial)
   const _pmSrt=[...pmSet].sort((a,b)=>a-b);
   const _pfm=_pmSrt[0]||1,_pto=_pmSrt[_pmSrt.length-1]||12;
@@ -5431,7 +5442,7 @@ function renderOverviewKPIs(){
 function renderCommercialKPIs(){
   if(!CUSTOMERS.length)return;
   const pm=getPM(),pmSet=new Set(pm),ph=getPH();
-  const comRCs=['RT40','RT50','RT70','RT60-ST'];
+  const comRCs=RC_COMM_ORDER;
   const comCusts=CUSTOMERS.filter(c=>comRCs.includes(c.rate));
   // Period sums from CUSTOMERS.m[] (current year) and sbBudget (budget)
   const _periSum=custs=>custs.reduce((s,c)=>s+pm.reduce((a,m)=>a+(c.m[m-1]||0),0),0);
@@ -5743,7 +5754,7 @@ function renderExecSummary() {
   const esGap0  = esAct0 - esBud0;
   const esYoY0  = esLY0>0?((esAct0-esLY0)/esLY0*100):null;
   const esYtdYoY= esYtdLY0>0?((esYtd0-esYtdLY0)/esYtdLY0*100):null;
-  const esComRCs= ['RT40','RT50','RT70','RT60-ST'];
+  const esComRCs=RC_COMM_ORDER;
   // Use _rcIdx (O(1) lookup) — sbActuals is now residential-only, commercial data in _rcIdx via sbRcAgg
   const esCmMtd = esComRCs.reduce((s,rc)=>s+_rcSum(rc,curYear,_pmFrom,_pmTo),0)/1e6;
   const esCmBud = _budPM(curYear,[...pmSet]).filter(r=>esComRCs.includes(String(r.rate_class||''))).reduce((s,r)=>s+Number(r.kwh_budget||0),0)/1e6;
@@ -9466,7 +9477,7 @@ function lePopulateFilters(){
     el.innerHTML='<option value="">All</option>'+vals.map(v=>`<option value="${v}">${v}</option>`).join('');
     if(vals.includes(cur))el.value=cur;
   };
-  fill('le_frc',[...new Set(sbLE.map(d=>d.rate_class).filter(Boolean))].sort());
+  fill('le_frc',[...new Set(sbLE.map(d=>d.rate_class).filter(Boolean))].sort(_rcSort));
   fill('le_fpar',[...new Set(sbLE.map(d=>d.parish).filter(Boolean))].sort());
   fill('le_find',[...new Set([...sbIndustries.map(d=>d.industry||d.name||''),...sbActuals.map(d=>d.industry||d['Industry']||'')].filter(Boolean))].sort());
 }
@@ -9542,7 +9553,7 @@ function renderLEOverview(){
     scales:{y:{ticks:{color:'#5a7a96',font:{size:10},callback:v=>fmtE(v,0)},grid:{color:'rgba(255,255,255,0.05)'}}}}
   )});
 
-  const rcs=[...new Set([...curRows.map(d=>d.rate_class),...sbLE.map(d=>d.rate_class)].filter(Boolean))].sort();
+  const rcs=[...new Set([...curRows.map(d=>d.rate_class),...sbLE.map(d=>d.rate_class)].filter(Boolean))].sort(_rcSort);
   const leByRC =rcs.map(rc=>leSum(curRows.filter(d=>d.rate_class===rc),mos));
   const budByRC=rcs.map(rc=>budSum(budCur.filter(d=>(d.rate_class||d['Rate category']||'')===rc),mos));
   mkChart('c_le_rc_bar',{type:'bar',data:{labels:rcs,datasets:[
@@ -10274,6 +10285,9 @@ function renderMacroAssumptions(){
   }
   const year=parseInt(yrSel?.value)||FC_BUD_YEAR;
   const wrap=document.getElementById('macro_table');if(!wrap)return;
+  // Actual/locked months use the real actual value, not the driver math — a macro
+  // % entered there would never be read, so don't offer it as editable.
+  const lockedThru=year===FC_BUD_YEAR?curMonth:0;
   const months=[1,2,3,4,5,6,7,8,9,10,11,12];
   const industries=[...new Set(sbIndustries.map(i=>i.industry).filter(Boolean))].sort();
   const rows=[
@@ -10288,6 +10302,9 @@ function renderMacroAssumptions(){
   rows.forEach(r=>{
     const cells=months.map(m=>{
       const v=_dfcMacroLookup(r.type,r.seg,year,m);
+      if(lockedThru&&m<=lockedThru){
+        return`<td style="padding:3px;text-align:center;border-left:0.5px solid var(--border);color:var(--text3)" title="Actual month — driver % isn't applied">—</td>`;
+      }
       return`<td style="padding:3px;text-align:center;border-left:0.5px solid var(--border)"><input value="${v}" onchange="macroSaveCell('${r.type}',${r.seg?`'${esc(r.seg).replace(/'/g,"\\'")}'`:'null'},${year},${m},this.value)" style="width:48px;height:24px;padding:0 4px;text-align:right;font-size:10px"></td>`;
     }).join('');
     body+=`<tr><td style="padding:5px 8px${r.type==='industry'?' 5px 20px':''};color:${r.type==='industry'?'var(--text3)':'var(--text)'}">${esc(r.label)}</td>${cells}</tr>`;
@@ -10510,14 +10527,7 @@ function renderRcForecastReport(){
     budByRc[k]=(budByRc[k]||0)+Number(b.kwh_budget||0);
   });
 
-  const RC_ORDER=['RT10','RT20','RT40','RT50','RT60-ST','RT70'];
-  const rcs=Object.keys(rc).sort((a,b)=>{
-    const ia=RC_ORDER.indexOf(a),ib=RC_ORDER.indexOf(b);
-    if(ia===-1&&ib===-1)return a.localeCompare(b);
-    if(ia===-1)return 1;
-    if(ib===-1)return -1;
-    return ia-ib;
-  });
+  const rcs=Object.keys(rc).sort(_rcSort);
   let body='',totFy=0,totBud=0;
   const insights=[];
   rcs.forEach(rateClass=>{
@@ -10827,7 +10837,7 @@ function renderLECompare(){
     scales:{y:{ticks:{color:'#5a7a96',font:{size:10},callback:v=>fmtE(v,0)},grid:{color:'rgba(255,255,255,0.05)'}}}}
   )});
 
-  const rcs=[...new Set([...leGetCurrentRows().map(d=>d.rate_class),...sbLE.map(d=>d.rate_class)].filter(Boolean))].sort();
+  const rcs=[...new Set([...leGetCurrentRows().map(d=>d.rate_class),...sbLE.map(d=>d.rate_class)].filter(Boolean))].sort(_rcSort);
   const vis=allLabels.filter(l=>leCmpToggles[l]!==false);
   const allMos=[1,2,3,4,5,6,7,8,9,10,11,12];
   const cmpTbl=document.getElementById('le_cmp_tbl');
