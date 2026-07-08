@@ -605,7 +605,7 @@ document.getElementById('schema_stale_banner').style.display='none';
         </div>
         <div id="pf_cust" class="ssec on">
           <div class="tbl-controls">
-            <input class="si" placeholder="🔍 Customer name or account #" id="pfc_q" oninput="renderPfCust()"/>
+            <input class="si" placeholder="🔍 Customer name or account #" id="pfc_q" oninput="debounce(renderPfCust,'pfc_q')()"/>
             <select class="sel" id="pfc_rc" onchange="renderPfCust()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
             <select class="sel" id="pfc_view" onchange="renderPfCust()"><option value="top">Top performers</option><option value="bot">Bottom performers</option></select>
             <span class="row-count" id="pfc_count"></span>
@@ -703,7 +703,7 @@ document.getElementById('schema_stale_banner').style.display='none';
             </div>
           </div>
           <div class="tbl-controls">
-            <input class="si" placeholder="🔍 Name or account #" id="cm_q" oninput="renderCmCust()"/>
+            <input class="si" placeholder="🔍 Name or account #" id="cm_q" oninput="debounce(renderCmCust,'cm_q')()"/>
             <select class="sel" id="cm_rc" onchange="renderCmCust()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
             <select class="sel" id="cm_kam_f" onchange="renderCmCust()"><option value="">All KAMs</option></select>
             <select class="sel" id="cm_trend_f" onchange="renderCmCust()"><option value="">All trends</option><option value="up">Increasing ↑</option><option value="dn">Declining ↓</option></select>
@@ -750,7 +750,7 @@ document.getElementById('schema_stale_banner').style.display='none';
                 <option value="ytd">YTD</option><option value="mtd">MTD</option><option value="r12">Rolling 12M</option>
               </select>
               <select class="sel" id="pv_rc_cm" onchange="renderCmPivot()"><option value="">All RC</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT60-ST">RT60-ST</option><option value="RT70">RT70</option></select>
-              <input class="si" id="pv_q_cm" placeholder="Search customer..." style="max-width:180px" oninput="renderCmPivot()">
+              <input class="si" id="pv_q_cm" placeholder="Search customer..." style="max-width:180px" oninput="debounce(renderCmPivot,'pv_q_cm')()">
               <select class="sel" id="pv_dir_cm" onchange="renderCmPivot()"><option value="">All movement</option><option value="up">Gaining ↑</option><option value="dn">Declining ↓</option></select>
               <span class="row-count" id="pv_count_cm"></span>
             </div>
@@ -775,7 +775,7 @@ document.getElementById('schema_stale_banner').style.display='none';
         <div class="card">
           <div class="ch">📉 Defection Register
             <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-              <input class="si" placeholder="🔍 Customer name or account #" id="cm_df_q" oninput="renderCmDefection()"/>
+              <input class="si" placeholder="🔍 Customer name or account #" id="cm_df_q" oninput="debounce(renderCmDefection,'cm_df_q')()"/>
               <select class="sel" id="cm_df_sev" onchange="renderCmDefection()"><option value="">All severity</option><option value="Critical">Critical</option><option value="Severe">Severe</option><option value="Moderate">Moderate</option></select>
               <select class="sel" id="cm_df_rc" onchange="renderCmDefection()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
               <select class="sel" id="cm_df_cause" onchange="renderCmDefection()"><option value="">All causes</option><option value="CHP">CHP/Self-gen</option><option value="Hurricane">Hurricane damage</option><option value="Closure">Business closure</option><option value="Unknown">Unknown</option></select>
@@ -832,7 +832,7 @@ document.getElementById('schema_stale_banner').style.display='none';
           <div style="display:flex;gap:6px"><button class="btn btn-o" onclick="exportTableCSV('rs_par_tbl','residential_parish')">⬇ CSV</button></div>
         </div>
         <div class="tbl-controls">
-          <input class="si" placeholder="🔍 Search parish..." id="rs_q" oninput="renderRsPar()"/>
+          <input class="si" placeholder="🔍 Search parish..." id="rs_q" oninput="debounce(renderRsPar,'rs_q')()"/>
           <select class="sel" id="rs_bracket" onchange="renderRsPar()">
             <option value="">All brackets</option>
           </select>
@@ -864,7 +864,7 @@ document.getElementById('schema_stale_banner').style.display='none';
           <button class="btn btn-o" onclick="exportTableCSV('df_tbl','defection_register')">⬇ CSV</button>
         </div>
         <div class="tbl-controls">
-          <input class="si" placeholder="🔍 Customer name or account #" id="df_q" oninput="renderDefectors()"/>
+          <input class="si" placeholder="🔍 Customer name or account #" id="df_q" oninput="debounce(renderDefectors,'df_q')()"/>
           <select class="sel" id="df_sev" onchange="renderDefectors()"><option value="">All severity</option><option value="Critical">Critical</option><option value="Severe">Severe</option><option value="Moderate">Moderate</option></select>
           <select class="sel" id="df_rc" onchange="renderDefectors()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
           <select class="sel" id="df_cause" onchange="renderDefectors()"><option value="">All causes</option><option value="CHP">CHP/Self-gen</option><option value="Hurricane">Hurricane damage</option><option value="Closure">Business closure</option><option value="Unknown">Unknown</option></select>
@@ -898,7 +898,7 @@ document.getElementById('schema_stale_banner').style.display='none';
       <div class="card">
         <div class="ch">6-Month Forecast Entry -- by Customer
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-            <input class="si" style="max-width:200px" placeholder="🔍 Search customer..." id="fc_q" oninput="renderFcEntry()"/>
+            <input class="si" style="max-width:200px" placeholder="🔍 Search customer..." id="fc_q" oninput="debounce(renderFcEntry,'fc_q')()"/>
             <select class="sel" id="fc_rc" onchange="renderFcEntry()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
             <select class="sel" id="fc_kam" onchange="clearTimeout(this._t);this._t=setTimeout(()=>renderFcEntry(),250)"><option value="">All KAMs</option></select>
             <button class="btn btn-t" onclick="saveFcAll()">💾 Save All Forecasts</button>
@@ -946,7 +946,7 @@ document.getElementById('schema_stale_banner').style.display='none';
           </div>
         </div>
         <div class="tbl-controls">
-          <input class="si" placeholder="🔍 Customer name or account #" id="ro_q" oninput="filterRO()"/>
+          <input class="si" placeholder="🔍 Customer name or account #" id="ro_q" oninput="debounce(filterRO,'ro_q')()"/>
           <select class="sel" id="ro_type" onchange="filterRO()"><option value="">All types</option><option value="Risk">Risk</option><option value="Opportunity">Opportunity</option></select>
           <select class="sel" id="ro_rc" onchange="filterRO()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option><option value="RT10">RT10</option><option value="RT20">RT20</option></select>
           <select class="sel" id="ro_src" onchange="filterRO()"><option value="">All sources</option><option value="Manual">Manual</option><option value="Defection">Defection signal</option><option value="Forecast">Forecast signal</option></select>
@@ -971,7 +971,7 @@ document.getElementById('schema_stale_banner').style.display='none';
       <div class="card">
         <div class="ch">Discrepancy Register <span>Review and resolve each flag</span></div>
         <div class="tbl-controls">
-          <input class="si" placeholder="🔍 Search account or name..." id="ar_q" oninput="renderRecon()"/>
+          <input class="si" placeholder="🔍 Search account or name..." id="ar_q" oninput="debounce(renderRecon,'ar_q')()"/>
           <select class="sel" id="ar_type_f" onchange="renderRecon()"><option value="">All types</option><option value="Name mismatch">Name mismatch</option><option value="Possible duplicate">Possible duplicate</option></select>
           <select class="sel" id="ar_status_f" onchange="renderRecon()"><option value="">All statuses</option><option value="Pending">Pending</option><option value="Resolved">Resolved</option></select>
         </div>
@@ -983,7 +983,7 @@ document.getElementById('schema_stale_banner').style.display='none';
     <div id="gl" class="sec">
       <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap">
         <h2 style="font-size:14px;font-weight:700;color:var(--text)">📖 Glossary</h2>
-        <input class="si" style="max-width:240px" placeholder="🔍 Search terms..." id="gl_q" oninput="renderGloss()"/>
+        <input class="si" style="max-width:240px" placeholder="🔍 Search terms..." id="gl_q" oninput="debounce(renderGloss,'gl_q')()"/>
         <select class="sel" id="gl_cat" onchange="renderGloss()"><option value="">All categories</option><option value="Rate Class">Rate Classes</option><option value="Metric">Metrics</option><option value="Process">Processes</option><option value="Market">Market</option><option value="Financial">Financial</option><option value="Operational">Operational</option><option value="Analytics">Analytics</option></select>
       </div>
       <div class="gloss-grid" id="gloss_wrap"></div>
@@ -993,7 +993,7 @@ document.getElementById('schema_stale_banner').style.display='none';
     <div id="help" class="sec">
       <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
         <h2 style="font-size:14px;font-weight:700;color:var(--text)">📚 JPS Sales Analytics — User Guide</h2>
-        <input class="si" style="max-width:240px" placeholder="🔍 Search guide..." id="help_q" oninput="filterHelp()"/>
+        <input class="si" style="max-width:240px" placeholder="🔍 Search guide..." id="help_q" oninput="debounce(filterHelp,'help_q')()"/>
       </div>
       <div id="help_sections" style="display:flex;flex-direction:column;gap:14px">
 
@@ -1206,7 +1206,7 @@ document.getElementById('schema_stale_banner').style.display='none';
           <strong style="color:var(--red)">Defection Register</strong> — accounts whose 3-month rolling average kWh fell below 80% of same period prior year. Type and cause are editable and saved to local storage (DB sync optional). Click ✉ to email the KAM.
         </div>
         <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-          <input class="si" placeholder="🔍 Customer name or account #" id="vld_def_reg_q" oninput="renderVldDefReg()"/>
+          <input class="si" placeholder="🔍 Customer name or account #" id="vld_def_reg_q" oninput="debounce(renderVldDefReg,'vld_def_reg_q')()"/>
           <select class="sel" id="vld_def_reg_sev" onchange="renderVldDefReg()"><option value="">All severity</option><option value="Critical">Critical</option><option value="Severe">Severe</option><option value="Moderate">Moderate</option></select>
           <select class="sel" id="vld_def_reg_rc" onchange="renderVldDefReg()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
           <span class="row-count" id="vld_def_reg_count"></span>
@@ -1226,7 +1226,7 @@ document.getElementById('schema_stale_banner').style.display='none';
           These accounts had billed kWh in <span id="vld_py_lbl">prior year</span> but have zero rows in <span id="vld_cy_lbl">current year</span>. Each could represent a business closure, transfer, or data gap.
         </div>
         <div class="tbl-controls">
-          <input class="si" placeholder="🔍 Account # or name..." id="vld_drop_q" oninput="renderVldDropped()"/>
+          <input class="si" placeholder="🔍 Account # or name..." id="vld_drop_q" oninput="debounce(renderVldDropped,'vld_drop_q')()"/>
           <select class="sel" id="vld_drop_rc" onchange="renderVldDropped()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
           <span class="row-count" id="vld_drop_count_lbl"></span>
         </div>
@@ -1241,7 +1241,7 @@ document.getElementById('schema_stale_banner').style.display='none';
           <span style="font-size:10px;color:var(--text3);font-weight:400">Accounts where current YTD kWh is less than 80% of same-period prior year</span>
         </div>
         <div class="tbl-controls">
-          <input class="si" placeholder="🔍 Account # or name..." id="vld_def_q" oninput="renderVldDeflections()"/>
+          <input class="si" placeholder="🔍 Account # or name..." id="vld_def_q" oninput="debounce(renderVldDeflections,'vld_def_q')()"/>
           <select class="sel" id="vld_def_rc" onchange="renderVldDeflections()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
           <select class="sel" id="vld_def_sev" onchange="renderVldDeflections()">
             <option value="">All severity</option>
@@ -1261,7 +1261,7 @@ document.getElementById('schema_stale_banner').style.display='none';
           <span style="font-size:10px;color:var(--text3);font-weight:400">Accounts with consecutive-month kWh changes exceeding 25%</span>
         </div>
         <div class="tbl-controls">
-          <input class="si" placeholder="🔍 Account # or name..." id="vld_anom_q" oninput="renderVldAnomalies()"/>
+          <input class="si" placeholder="🔍 Account # or name..." id="vld_anom_q" oninput="debounce(renderVldAnomalies,'vld_anom_q')()"/>
           <select class="sel" id="vld_anom_rc" onchange="renderVldAnomalies()"><option value="">All rate classes</option><option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option></select>
           <select class="sel" id="vld_anom_yr" onchange="renderVldAnomalies()">
             <option value="">All years</option><option id="vld_anom_yr_cy" value="2026">2026</option><option id="vld_anom_yr_py" value="2025">2025</option>
@@ -1497,7 +1497,7 @@ document.getElementById('schema_stale_banner').style.display='none';
             Assign Key Account Managers to accounts individually below, or use the CSV import above. Changes save immediately to the database.
           </div>
           <div class="tbl-controls" style="margin-bottom:10px">
-            <input class="si" placeholder="🔍 Account # or name..." id="adm_kam_q" oninput="renderAdmKam()"/>
+            <input class="si" placeholder="🔍 Account # or name..." id="adm_kam_q" oninput="debounce(renderAdmKam,'adm_kam_q')()"/>
             <select class="sel" id="adm_kam_rc" onchange="renderAdmKam()">
               <option value="">All rate classes</option>
               <option value="RT40">RT40</option><option value="RT50">RT50</option><option value="RT70">RT70</option>
@@ -2088,7 +2088,7 @@ order by ordinal_position;</pre>
         <label>Parish:</label>
         <select class="psel" id="le_fpar" onchange="leEngine=null;renderLEActive()"><option value="">All</option></select>
         <label>Customer:</label>
-        <input class="psel" id="le_fcust" placeholder="Search…" oninput="leEngine=null;renderLEActive()" style="width:120px">
+        <input class="psel" id="le_fcust" placeholder="Search…" oninput="leEngine=null;debounce(renderLEActive,'le_fcust')()" style="width:120px">
       </div>
 
       <!-- ── OVERVIEW ─────────────────────────────────────── -->
@@ -2176,7 +2176,7 @@ order by ordinal_position;</pre>
             <div style="grid-column:span 2">
               <div style="font-size:10px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">By Customer (search &amp; override)</div>
               <div style="display:flex;gap:6px;margin-bottom:8px">
-                <input class="psel" id="le_adj_cust_search" placeholder="Search customer…" oninput="leAdjSearchCust()" style="width:220px">
+                <input class="psel" id="le_adj_cust_search" placeholder="Search customer…" oninput="debounce(leAdjSearchCust,'le_adj_cust_search')()" style="width:220px">
               </div>
               <div id="le_adj_cust_results"></div>
             </div>
@@ -2304,7 +2304,7 @@ order by ordinal_position;</pre>
               <option value="parish">Group by Parish</option>
               <option value="industry">Group by Industry</option>
             </select>
-            <input class="psel" id="dfc_search" placeholder="Search customer or account #" oninput="renderDriverForecast()" style="width:200px">
+            <input class="psel" id="dfc_search" placeholder="Search customer or account #" oninput="debounce(renderDriverForecast,'dfc_search')()" style="width:200px">
             <button class="btn btn-o" onclick="dfcExpandCollapseAll(true)">⊞ Expand all</button>
             <button class="btn btn-o" onclick="dfcExpandCollapseAll(false)">⊟ Collapse all</button>
             <button class="btn btn-t" onclick="openAddCustomerModal()">+ Add Customer</button>
@@ -2357,7 +2357,7 @@ order by ordinal_position;</pre>
               <option value="magnitude">Sort: Total % impact</option>
               <option value="alpha">Sort: A–Z</option>
             </select>
-            <input class="psel" id="adjlog_search" placeholder="Search account or note" oninput="renderAdjustmentLog()" style="width:190px">
+            <input class="psel" id="adjlog_search" placeholder="Search account or note" oninput="debounce(renderAdjustmentLog,'adjlog_search')()" style="width:190px">
             <button class="btn btn-o" onclick="exportAdjustmentLogCSV()">⬇ Export Report</button>
           </div>
         </div>
@@ -2442,6 +2442,17 @@ let cmDim='industry', cmDrillRC='', _modalFn=null;
 let chartInstances={};
 const MONTHS_SHORT=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONTHS_LONG=['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+/* ── Debounce — delays a re-render until typing pauses, so search inputs over
+   large datasets (1,600+ accounts x months of actuals) don't re-filter on
+   every keystroke. Returns a stable per-key wrapper so oninput="debounce(fn,'key')()" works. */
+const _debounceTimers={};
+function debounce(fn,key,ms){
+  return function(){
+    clearTimeout(_debounceTimers[key]);
+    _debounceTimers[key]=setTimeout(fn,ms||250);
+  };
+}
 
 /* ── Toast notifications ── */
 function toast(msg, type){
@@ -2811,15 +2822,6 @@ async function loadBridgeDriversFromDB(){
 }
 
 /* ── Pivot commentary ── */
-async function savePivotNote(period,acctNum,customer,text){
-  const key=`pv|${period}|${acctNum}`;
-  if(text){S.set(key,text);}else{S.del(key);}
-  if(text){
-    await dbUpsert('jps_pivot_commentary',{period,acct_num:acctNum,customer,note_text:text,author:CU.name,updated_at:new Date().toISOString()});
-  } else {
-    await dbDelete('jps_pivot_commentary',{period,acct_num:acctNum});
-  }
-}
 async function loadPivotCommentary(){
   const rows=await dbSelect('jps_pivot_commentary');
   rows.forEach(r=>{if(r.note_text)S.set(`pv|${r.period}|${r.acct_num}`,r.note_text);});
@@ -4708,12 +4710,6 @@ function renderCmIndTbl(){
     </tr>`;}).join('')}</tbody></table>`;
   makeSortable('cmind_dt');
 }
-let cmDimActive='industry';
-function renderCmComment(){
-  const w=document.getElementById('cm_cmt_wrap');if(!w)return;
-  w.innerHTML=buildCmt(`cm_${cmDimActive}`,`Monthly ${cmDimActive} commentary -- analyse variance, identify drivers, note key customer movements...`,'cm_cmt_wrap');
-}
-
 /* ==========================================
    RESIDENTIAL
 ========================================== */
@@ -5196,7 +5192,6 @@ function initMrMonths(){
   let h='';for(let y=minY;y<=maxY;y++)for(let m=0;m<12;m++)h+=`<option value="${y}-${String(m+1).padStart(2,'0')}">${ms[m]} ${y}</option>`;
   sel.innerHTML=h;sel.value=mrPeriod;
 }
-function mrSetPeriod(){mrPeriod=document.getElementById('mr_month')?.value||mrPeriod;mrRepName=document.getElementById('mr_rep')?.value.trim()||'';renderMrSection();}
 function renderMrSection(){
   if(mrActiveSec==='mr_ov')renderMrOv();
   else if(mrActiveSec==='mr_cust')mrRenderCust();
@@ -8845,24 +8840,6 @@ function updateSbStatus(state){
   el.className=c.cls; el.textContent=c.txt;
 }
 
-function parseCSVText(txt){
-  const lines=txt.trim().split('\n');
-  if(lines.length<2)return[];
-  const hdrs=lines[0].split(',').map(h=>h.replace(/^"|"$/g,'').trim());
-  return lines.slice(1).map(line=>{
-    const vals=[]; let cur='',inQ=false;
-    for(const ch of line){
-      if(ch==='"'){inQ=!inQ;}
-      else if(ch===','&&!inQ){vals.push(cur.trim());cur='';}
-      else cur+=ch;
-    }
-    vals.push(cur.trim());
-    const obj={};
-    hdrs.forEach((h,i)=>obj[h]=(vals[i]||'').replace(/^"|"$/g,''));
-    return obj;
-  });
-}
-
 async function sbTable(tbl,opts={}){
   const sb=getSB(); if(!sb)return null;
   // If caller set a small explicit limit, honour it (small lookup tables)
@@ -8892,14 +8869,6 @@ async function sbTable(tbl,opts={}){
   // tell "not found" from "found, just empty" — a genuinely empty table must
   // still return [], not null, or every "0 rows yet" table looks missing).
   return hadError?null:all;
-}
-
-async function sbStorage(bucket,file){
-  const sb=getSB(); if(!sb)return null;
-  const{data,error}=await sb.storage.from(bucket).download(file);
-  if(error||!data)return null;
-  const txt=await data.text();
-  return txt.includes(',')?parseCSVText(txt):null;
 }
 
 function buildDashboardData(){
