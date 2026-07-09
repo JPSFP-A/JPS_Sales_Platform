@@ -9240,7 +9240,14 @@ async function syncSupabase(silent=false){
       sbCustSummary=custSummData;
       log.push(`Customer summary: ${custSummData.length} commercial customers`);
     } else sbCustSummary=[];
-    // Reset lazy flags — commercial detail and LE data must be re-fetched after a full sync
+    // Reset lazy flags — commercial detail and LE data must be re-fetched after a full sync.
+    // If they were already loaded before this sync (the common case — e.g. saving a macro
+    // assumption or operational adjustment triggers syncSupabase(true) while the user is
+    // still looking at Driver Forecast), immediately re-fetch them once the sync finishes
+    // instead of leaving the current view silently showing zeroed-out commercial data until
+    // the user happens to switch tabs away and back (or reloads the page) to re-trigger the
+    // lazy load — that's what "commercial values disappear until I refresh" was.
+    const _wasCommLoaded=_commDetailLoaded, _wasLeLoaded=_leDetailLoaded;
     _commDetailLoaded=false;
     sbActualsComm=[];
     _leDetailLoaded=false;
@@ -9310,6 +9317,13 @@ async function syncSupabase(silent=false){
         if(activeId==='ng')renderNetGen();
       }catch(re){console.error('Re-render error after sync:',re);}
     },0);
+    // The reset above just wiped sbActualsComm/sbLE — the render above ran with them
+    // empty. If they were already loaded before this sync (i.e. actually in use —
+    // saving a macro assumption or operational adjustment calls syncSupabase(true)
+    // while the user is still looking at a commercial/LE view), re-fetch them now;
+    // both re-render the current section again themselves once they complete.
+    if(_wasCommLoaded)loadCommercialDetail().catch(e=>console.warn('loadCommercialDetail (post-sync):',e));
+    if(_wasLeLoaded)loadLEDetail().catch(e=>console.warn('loadLEDetail (post-sync):',e));
 
     const el=document.getElementById('adm_upload_status');
     if(el&&sbActuals.length)el.textContent=`Live · ${sbActuals.length.toLocaleString()} actuals rows`;
