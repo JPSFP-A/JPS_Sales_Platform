@@ -4907,6 +4907,10 @@ function validateDefector(num,name){
 // Per-customer Driver Forecast chain — one _dfcBuildIndices()/_dfcBuildCommAccounts()
 // call per render (not per row), then a memoized _dfcGetChain() per customer.
 function _fcDriverChains(){
+  // See _dfcToLERows for why this matters — without it, this can get stuck on
+  // chains cached from an earlier, incomplete render and silently diverge from
+  // what Driver Forecast itself currently shows.
+  _dfcResetYearChainCache();
   const idx=_dfcBuildIndices();
   const commAccounts=_dfcBuildCommAccounts(curYear).filter(a=>a.rate_class!=='EV');
   const byAc={};
@@ -9476,6 +9480,12 @@ function leFilterRows(rows){
 // RC Forecast Report: JPS's own EV-charging infra, not customer sales.
 const LE_LIVE_LABEL='Live (Driver Forecast)';
 function _dfcToLERows(year){
+  // Driver Forecast's own render resets this cache on every call (line ~10067),
+  // so it always reflects current data. This path never did, so LE could get
+  // permanently stuck on stale chains cached from an earlier, incomplete render
+  // (e.g. before commercial detail finished its lazy load) — LE would silently
+  // diverge from Driver Forecast until something else happened to reset it.
+  _dfcResetYearChainCache();
   const idx=_dfcBuildIndices();
   const commAccounts=_dfcBuildCommAccounts(year).filter(a=>a.rate_class!=='EV');
   const keyAccounts=commAccounts.filter(a=>a.kam);
@@ -10566,6 +10576,10 @@ function renderRcForecastReport(){
     for(let y=FC_BUD_YEAR;y<=FC_BUD_YEAR+4;y++)yrSel.innerHTML+=`<option value="${y}">${y}</option>`;
   }
   const year=parseInt(yrSel?.value)||FC_BUD_YEAR;
+  // See _dfcToLERows for why this matters — without it, this can get stuck on
+  // chains cached from an earlier, incomplete render and silently diverge from
+  // what Driver Forecast itself currently shows.
+  _dfcResetYearChainCache();
 
   const idx=_dfcBuildIndices();
   // EV excluded — it's JPS's own EV-charging infrastructure (account holder is
