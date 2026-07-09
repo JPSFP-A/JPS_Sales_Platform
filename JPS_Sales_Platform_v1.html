@@ -3014,6 +3014,27 @@ async function loadCommercialDetail(){
   try{renderSection(document.querySelector('.sec.on')?.id);}catch(e){console.warn('re-render after commercial load:',e);}
 }
 
+// jps_le is 128k+ rows — was fetched on every single login as part of the main
+// sync, even though only the LE Forecast tab uses it. Loaded lazily instead, on
+// first LE tab open, same pattern as loadCommercialDetail() above.
+async function loadLEDetail(){
+  if(_leDetailLoaded)return;
+  const sb=getSB();if(!sb)return;
+  const _cutoff=new Date().getFullYear()-1;
+  const wrap=document.getElementById('le_table')||document.getElementById('le_krow');
+  if(wrap)wrap.innerHTML='<div style="padding:20px;color:var(--text2);font-size:12px">Loading LE data…</div>';
+  try{
+    const d=await sbTable('jps_le',{limit:100000,cols:'year,month,jps_ac,name,rate_class,parish,consumption_bucket,kwh_le,revenue_le,demand_le,customer_count,le_label',gte:['year',_cutoff]});
+    sbLE=d||[];
+  }catch(e){
+    console.warn('[le] loadLEDetail failed:',e.message);
+    sbLE=[];
+  }
+  _leDetailLoaded=true;
+  console.log('[le] loaded',sbLE.length,'LE rows');
+  renderLE();
+}
+
 // Returns all actuals rows (residential + commercial if loaded)
 function _sbAllActuals(){return sbActualsComm.length?[...sbActuals,...sbActualsComm]:sbActuals;}
 
@@ -8721,6 +8742,7 @@ var _sbClient=null, // var (not let) — hoisted as undefined, avoids TDZ when J
     sbActualsComm=[];   // get_comm_actuals — 41k rows — lazy-loaded when Commercial tab opens
 
 var _commDetailLoaded=false; // true after sbActualsComm is populated (lazy, on Commercial tab open)
+var _leDetailLoaded=false; // true after sbLE is populated (lazy, on LE Forecast tab open — 128k+ rows, was blocking every login)
 
 // Module-level RC index — populated in buildDashboardData(), read by renderVariance/renderPfRC/etc.
 // _rcIdx[rc][year*100+month] = total kWh (module-level so all render fns share it)
@@ -9028,7 +9050,7 @@ async function syncSupabase(silent=false){
     const _actCols='id,year,month,jps_ac,name,rate_class,parish,consumption_bucket,kwh,revenue_jmd,demand_kva,customer_count';
     const [
       indData,kamData,amData,actData,
-      budData,leData,sysStatsData,lossesFcData,
+      budData,sysStatsData,lossesFcData,
       ng,ev,pl,
       fcvData,fcData,tariffData,
       rcAggData,parAggData,indAggData,
@@ -9066,7 +9088,6 @@ async function syncSupabase(silent=false){
           return sbTable('jps_budget',{gte:['year',_actYearCutoff],cols:_budCols,limit:10000});
         }
       })(),
-      sbTable('jps_le',{limit:100000,cols:'year,month,jps_ac,name,rate_class,parish,consumption_bucket,kwh_le,revenue_le,demand_le,customer_count,le_label',gte:['year',_actYearCutoff]}),
       sbTable('jps_system_stats',{order:'year,month'}),
       sbTable('jps_losses_forecast',{order:'forecast_date,year,month'}),
       sbTable('net_gen_historical',{order:'year'}),
@@ -9139,11 +9160,10 @@ async function syncSupabase(silent=false){
       log.push(`Budget: jps_budget (${sbBudget.length} rows — ${commRows} commercial, ${resRows} residential)`);
     } else log.push('Budget: jps_budget (0 rows — no data uploaded yet)');
 
-    sbLE=leData||[];
-    if(sbLE.length){
-      const labels=[...new Set(sbLE.map(r=>r.le_label).filter(Boolean))];
-      log.push(`LE: jps_le (${sbLE.length} rows — ${labels.length} version(s): ${labels.join(', ')})`);
-    } else log.push('LE: jps_le (0 rows)');
+    // jps_le (128k+ rows) is loaded lazily on first LE tab open, not on every
+    // sync — see loadLEDetail(). Matches the commercial-detail lazy pattern below:
+    // reset on every full sync so the next LE tab open re-fetches fresh.
+    log.push('LE: jps_le (loads when you open the LE Forecast tab)');
 
     sbMacroAssum=macroAssumData||[];
     sbMacroAssumExists=!!macroAssumData;
@@ -9194,9 +9214,11 @@ async function syncSupabase(silent=false){
       sbCustSummary=custSummData;
       log.push(`Customer summary: ${custSummData.length} commercial customers`);
     } else sbCustSummary=[];
-    // Reset lazy flag — commercial detail must be re-fetched after a full sync
+    // Reset lazy flags — commercial detail and LE data must be re-fetched after a full sync
     _commDetailLoaded=false;
     sbActualsComm=[];
+    _leDetailLoaded=false;
+    sbLE=[];
 
     const anyOk=actOk||budOk||!!ng;
     sbConnected=anyOk;
@@ -9391,6 +9413,10 @@ const LE_COLORS = ['#f5a623','#e74c3c','#9b59b6','#1abc9c','#3498db','#e67e22','
 
 // ─── entry point called by renderSection and syncSupabase ─────────────────────
 function renderLE(){
+  if(!_leDetailLoaded){
+    loadLEDetail().catch(e=>console.warn('loadLEDetail:',e));
+    return; // loadLEDetail() re-renders once sbLE is populated
+  }
   lePopulateFilters();
   renderLEActive();
   const el=document.getElementById('le_last_sync');
