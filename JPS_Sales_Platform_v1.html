@@ -386,7 +386,7 @@ document.getElementById('schema_stale_banner').style.display='none';
 
 <!-- LOGIN -->
 <div class="login-screen" id="loginScreen">
-  <div class="login-card">
+  <div class="login-card" id="loginCard">
     <div style="font-size:28px;margin-bottom:10px">⚡</div>
     <h2>JPS Sales Analytics</h2>
     <p>Sign in with your JPS email address</p>
@@ -402,6 +402,16 @@ document.getElementById('schema_stale_banner').style.display='none';
     <div class="lerr" id="lErr">Invalid email or password.</div>
     <div style="margin-top:14px;font-size:9px;color:var(--text3)">Contact Admin to create an account.</div>
   </div>
+  <!-- Shown instead of the login form while an existing session is being restored and
+       data synced — without this the form just sits there looking frozen for however
+       long the initial sync takes, with zero feedback that anything is happening. -->
+  <div class="login-card" id="restoreLoading" style="display:none;text-align:center">
+    <div style="font-size:28px;margin-bottom:14px">⚡</div>
+    <div class="spinner" style="width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--teal);border-radius:50%;margin:0 auto 16px;animation:spin .8s linear infinite"></div>
+    <div style="font-size:13px;color:var(--text)">Loading your workspace…</div>
+    <div style="font-size:11px;color:var(--text3);margin-top:6px" id="restoreLoadingSub">Signing in and syncing data</div>
+  </div>
+  <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 </div>
 
 <div class="sb-overlay" id="sbOverlay" onclick="toggleSidebar()"></div>
@@ -11567,12 +11577,21 @@ const APP_VERSION = '1.0.96';
 
 // Session restore — starts data sync immediately once session is confirmed,
 // then fetches profile in parallel so UI is never stuck waiting on sequential calls
+function _showRestoreLoading(show){
+  const card=document.getElementById('loginCard'), load=document.getElementById('restoreLoading');
+  if(card)card.style.display=show?'none':'';
+  if(load)load.style.display=show?'':'none';
+}
 (async function restoreSession(){
   const sb=getSB(); if(!sb){ updateSbStatus('offline'); return; }
   try{
     const {data:{session}}=await sb.auth.getSession();
     if(!session?.user){ updateSbStatus('offline'); return; }
     const userId=session.user.id;
+    // Existing session found — swap the static login form for a visible loading
+    // state instead of leaving it sitting there looking frozen for however long
+    // the initial sync takes (previously zero feedback during this whole wait).
+    _showRestoreLoading(true);
     const withTimeout=(p,ms,label)=>Promise.race([
       p,
       new Promise((_,rej)=>setTimeout(()=>rej(new Error(label+' timed out after '+(ms/1000)+'s')),ms))
@@ -11586,12 +11605,14 @@ const APP_VERSION = '1.0.96';
       withTimeout(sb.from('profiles').select('*').eq('id',userId).single(),15000,'Profile lookup')
     ]);
     if(profileResult.status==='rejected'){
+      _showRestoreLoading(false);
       showErr('Signed in as '+session.user.email+', but the database is slow to respond right now ('+profileResult.reason.message+'). Click Sign In to retry once it recovers.');
       return;
     }
     const {data:profile,error}=profileResult.value||{};
     // Only apply login if we got a real profile with a real role
     if(error||!profile||!profile.sales_role){
+      _showRestoreLoading(false);
       showErr(error?('Could not load your profile: '+error.message):'Your account has no sales role assigned yet — contact an admin.');
       return;
     }
@@ -11606,6 +11627,7 @@ const APP_VERSION = '1.0.96';
   }catch(e){
     console.warn('Session restore:',e.message);
     updateSbStatus('offline');
+    _showRestoreLoading(false);
     showErr('Could not restore your session: '+e.message+'. Click Sign In to retry.');
   }
 })();
