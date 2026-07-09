@@ -426,8 +426,6 @@ document.getElementById('schema_stale_banner').style.display='none';
     <div class="ni on" onclick="sw('ov',this)"><span class="ni-icon">⬡</span>Overview</div>
     <div class="ni" onclick="sw('cm',this)"><span class="ni-icon">🏢</span>Commercial</div>
     <div class="ni" onclick="sw('rs',this)"><span class="ni-icon">🏠</span>Residential</div>
-    <div class="ni" onclick="sw('fc',this)"><span class="ni-icon">🎯</span>Forecast Accuracy</div>
-    <div class="ni" onclick="sw('le',this)"><span class="ni-icon">📈</span>LE Forecast</div>
     <div class="ni" onclick="sw('dfc',this)"><span class="ni-icon">🌲</span>Driver Forecast</div>
     <div class="ni" onclick="sw('macro',this)"><span class="ni-icon">🌐</span>Macro Assumptions</div>
     <div class="ni" onclick="sw('adjlog',this)"><span class="ni-icon">📋</span>Adjustment Log</div>
@@ -3041,11 +3039,20 @@ function _sbAllActuals(){return sbActualsComm.length?[...sbActuals,...sbActualsC
 /* ==========================================
    NAV & PERIOD
 ========================================== */
+// Submit-to-Finance is only meaningful on the Driver Forecast tab (the engine
+// that replaced the old Forecast Accuracy / LE Forecast tabs) — the button is
+// mounted once (fixed position, shared/jps-submit.js) and otherwise stays
+// visible everywhere, including read-only report tabs.
+function _jpsSubmitSyncVisibility(id){
+  const btn=document.getElementById('_jpsSubmitBtn');
+  if(btn)btn.style.display=(id==='dfc')?'':'none';
+}
 function sw(id,el){
   document.querySelectorAll('.sec').forEach(s=>s.classList.remove('on'));
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
   const sec=document.getElementById(id);
   if(sec)sec.classList.add('on');
+  _jpsSubmitSyncVisibility(id);
   const contentEl=document.querySelector('.content');
   if(contentEl)contentEl.scrollTop=0;
   // For df/ro, highlight the Commercial nav item in sidebar
@@ -8791,7 +8798,7 @@ function getSB(){
         }
       });
     try { if (window.JpsNav) JpsNav.bind(_sbClient); } catch(e){ console.warn('JpsNav bind failed', e); }
-    (function(){ function _m(){ try { if (window.JpsSubmit) JpsSubmit.mount(_sbClient, { sourceApp: 'sales' }); } catch(e){ console.error('[submit] mount', e); } }
+    (function(){ function _m(){ try { if (window.JpsSubmit) { JpsSubmit.mount(_sbClient, { sourceApp: 'sales' }); _jpsSubmitSyncVisibility(document.querySelector('.sec.on')?.id); } } catch(e){ console.error('[submit] mount', e); } }
       _sbClient.auth.getSession().then(function(r){ if (r && r.data && r.data.session) _m(); }).catch(function(e){ console.error('[submit] getSession', e); });
       _sbClient.auth.onAuthStateChange(function(_e, s){ if (s) _m(); }); })();
   }
@@ -10442,12 +10449,22 @@ async function macroSaveCell(type,seg,year,month,val){
   const sb=getSB();if(!sb)return;
   const pct=parseFloat(val)||0;
   const cu=(typeof CU!=='undefined'&&CU&&CU.name)?CU.name:'';
+  const row={driver_type:type,segment:seg,year,month,value_pct:pct,updated_by:cu,updated_at:new Date().toISOString()};
   const{error}=await sb.from('jps_macro_assumptions').upsert(
-    {driver_type:type,segment:seg,year,month,value_pct:pct,updated_by:cu,updated_at:new Date().toISOString()},
-    {onConflict:'driver_type,segment,year,month'}
+    row,{onConflict:'driver_type,segment,year,month'}
   );
   if(error){toast('Save failed: '+error.message,'err');return;}
-  await syncSupabase(true);
+  // Update the in-memory cache directly instead of a full syncSupabase(true) — a full
+  // resync re-fetches ~20 tables (some up to 50k rows) and then force-replaces this
+  // table's innerHTML, which was destroying any other cell the user had mid-edit if
+  // they tabbed to it before the resync finished ("edits sometimes get rejected").
+  // We already know the write succeeded, so just reflect it locally.
+  const existing=sbMacroAssum.find(r=>r.driver_type===type&&(r.segment||null)===(seg||null)&&Number(r.year)===year&&Number(r.month)===month);
+  if(existing)Object.assign(existing,row);
+  else sbMacroAssum.push(row);
+  sbMacroAssumExists=true;
+  _dfcResetYearChainCache();
+  renderMacroAssumptions();
 }
 
 /* ==========================================
