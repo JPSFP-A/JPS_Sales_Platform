@@ -10063,12 +10063,16 @@ function renderDriverForecast(){
   }
   const kamFilter=kamSel?.value||'';
 
-  const commAccounts=_dfcBuildCommAccounts(year).filter(a=>!q||a.name.toLowerCase().includes(q)||a.ac.toLowerCase().includes(q));
+  // EV excluded — it's JPS's own EV-charging infrastructure (account holder is
+  // "Jamaica Public Service" itself), not customer sales. _COMM_RCS doesn't
+  // include 'EV', so without this filter it fell through _isComm()==false and
+  // got miscategorized as a residential cohort by _dfcBuildResCohorts.
+  const commAccounts=_dfcBuildCommAccounts(year).filter(a=>a.rate_class!=='EV'&&(!q||a.name.toLowerCase().includes(q)||a.ac.toLowerCase().includes(q)));
   const keyAccounts=commAccounts.filter(a=>a.kam&&(!kamFilter||a.kam===kamFilter));
-  const newCusts=sbNewCustomers.filter(c=>Number(c.start_year)<=year&&(!q||c.name.toLowerCase().includes(q))&&(!kamFilter||(c.kam||'')===kamFilter));
+  const newCusts=sbNewCustomers.filter(c=>Number(c.start_year)<=year&&c.rate_class!=='EV'&&(!q||c.name.toLowerCase().includes(q))&&(!kamFilter||(c.kam||'')===kamFilter));
   // KAM-filtered view shows only that KAM's accounts — residential and no-KAM commercial
   // cohorts don't belong to any KAM, so they're excluded once a specific KAM is selected.
-  const resCohorts=(q||kamFilter)?[]:_dfcBuildResCohorts(year);
+  const resCohorts=(q||kamFilter)?[]:_dfcBuildResCohorts(year).filter(co=>co.rate_class!=='EV');
   const commCohorts=(q||kamFilter)?[]:_dfcCommCohortsForNonKam(commAccounts,year);
 
   const idx=_dfcBuildIndices();
