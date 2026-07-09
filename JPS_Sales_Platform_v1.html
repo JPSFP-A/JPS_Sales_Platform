@@ -9914,21 +9914,39 @@ function _dfcBuildResCohorts(year){
 // cohort's total already includes any placeholder rows at that same key — adding a
 // second entity for it would double-count that kwh.
 function _dfcCommCohortsForNonKam(accounts,year){
+  // Cohort keys must come from each ROW's own rate_class|parish|consumption_bucket,
+  // not a single cached snapshot per account (accounts.consumption_bucket is
+  // whichever row _dfcBuildCommAccounts happened to see first across the whole
+  // fetched year range). Real accounts can and do change bucket tag between
+  // months (e.g. 'Streetlight' Jan-Apr, then '' May-Jun after an upload format
+  // change) — actByCohort is keyed per-row, so a cohort built from a stale
+  // account-level snapshot looks up the WRONG key for any month whose bucket
+  // differs from that snapshot, and its kwh silently never shows up anywhere.
+  const nonKamAcs=new Set(accounts.filter(a=>!a.kam&&!a.isNew).map(a=>a.ac));
   const cohorts={};
-  accounts.filter(a=>!a.kam&&!a.isNew).forEach(a=>{
-    const key=`${a.rate_class}|${a.parish}|${a.consumption_bucket}`;
-    if(!cohorts[key])cohorts[key]={key,rate_class:a.rate_class,parish:a.parish,consumption_bucket:a.consumption_bucket,label:`${a.rate_class} · ${a.parish} · ${a.consumption_bucket}`,members:[]};
-    cohorts[key].members.push(a);
-  });
-  const addPlaceholder=(r,isAct)=>{
-    if(!_isComm(r)||!_DFC_PLACEHOLDER_ACS.has(r.jps_ac))return;
+  const memberSets={};
+  const addRow=(r,isAct)=>{
+    if(!_isComm(r))return;
     if(isAct&&Number(r.year)!==year&&Number(r.year)!==year-1)return;
     if(!isAct&&Number(r.year)!==year)return;
+    const isPlaceholder=_DFC_PLACEHOLDER_ACS.has(r.jps_ac);
+    if(!isPlaceholder&&!nonKamAcs.has(r.jps_ac))return; // KAM-assigned — counted via actByAc/keyAccounts instead
     const key=`${r.rate_class}|${r.parish}|${r.consumption_bucket}`;
-    if(!cohorts[key])cohorts[key]={key,rate_class:r.rate_class,parish:r.parish,consumption_bucket:r.consumption_bucket,label:`${r.rate_class} · ${r.parish||'unassigned'} · bulk-billed (no individual account records)`,members:[]};
+    if(!cohorts[key]){
+      const label=isPlaceholder
+        ?`${r.rate_class} · ${r.parish||'unassigned'} · bulk-billed (no individual account records)`
+        :`${r.rate_class} · ${r.parish} · ${r.consumption_bucket}`;
+      cohorts[key]={key,rate_class:r.rate_class,parish:r.parish,consumption_bucket:r.consumption_bucket,label,members:[]};
+      memberSets[key]=new Set();
+    }
+    if(!isPlaceholder)memberSets[key].add(r.jps_ac);
   };
-  _sbAllActuals().forEach(r=>addPlaceholder(r,true));
-  sbBudget.forEach(r=>addPlaceholder(r,false));
+  _sbAllActuals().forEach(r=>addRow(r,true));
+  sbBudget.forEach(r=>addRow(r,false));
+  const acByNum={};accounts.forEach(a=>{acByNum[a.ac]=a;});
+  Object.keys(cohorts).forEach(key=>{
+    cohorts[key].members=[...memberSets[key]].map(ac=>acByNum[ac]).filter(Boolean);
+  });
   return Object.values(cohorts);
 }
 
