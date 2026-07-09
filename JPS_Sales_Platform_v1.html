@@ -2982,7 +2982,7 @@ function getFcMonths(){
   for(let i=1;i<=6;i++){
     const m=(curMonth-1+i)%12;
     const y=curYear+Math.floor((curMonth-1+i)/12);
-    result.push({label:`${ms[m]} ${y}`,key:`fc_${y}_${m+1}`});
+    result.push({label:`${ms[m]} ${y}`,key:`fc_${y}_${m+1}`,year:y,month:m+1});
   }
   return result;
 }
@@ -4899,36 +4899,52 @@ function validateDefector(num,name){
 }
 
 /* ==========================================
-   FORECAST ACCURACY
+   FORECAST ACCURACY — graded against Driver Forecast, not a naive 3-month average.
+   Wires the same engine used everywhere else (base + macro + weather + operational
+   driver decomposition) as the reference forecast and the actual-value source, so
+   the "off trend" flag and the MAPE calc are both checked against the real thing.
 ========================================== */
+// Per-customer Driver Forecast chain — one _dfcBuildIndices()/_dfcBuildCommAccounts()
+// call per render (not per row), then a memoized _dfcGetChain() per customer.
+function _fcDriverChains(){
+  const idx=_dfcBuildIndices();
+  const commAccounts=_dfcBuildCommAccounts(curYear).filter(a=>a.rate_class!=='EV');
+  const byAc={};
+  commAccounts.forEach(a=>{byAc[a.ac]=a;});
+  return{idx,byAc};
+}
+function _fcDriverVal(driver,c,year,month){
+  const meta=driver.byAc[c.num];
+  const rateClass=meta?meta.rate_class:c.rate;
+  const industry=meta?meta.industry:null;
+  const chain=_dfcGetChain(driver.idx,c.num,true,{rate_class:rateClass,industry},c.num,year,null);
+  return chain[month]||null; // {total,isActual,base,macro,weather,seasInd,oper,manual}
+}
 function renderFcKPIs(){
   const months=getFcMonths();
+  const driver=_fcDriverChains();
   // DB-backed entries win over localStorage — localStorage is just the pre-sync cache
   const _fcIdx={};
   sbFcEntries.forEach(r=>{_fcIdx[`fc_${r.year}_${r.month}_${r.acct_num}`]=r.forecast_gwh;});
   const _fcVal=(key)=>{const v=_fcIdx[key];return(v!=null)?v:S.get(key,null);};
+  const custs=CUSTOMERS.filter(c=>c.rate!=='RT10'&&c.rate!=='RT20');
   let entered=0,onTrend=0,offTrend=0;
-  CUSTOMERS.filter(c=>c.rate!=='RT10'&&c.rate!=='RT20').forEach(c=>{
+  let mapeTotal=0,mapeCount=0;
+  custs.forEach(c=>{
     months.forEach(m=>{
       const v=_fcVal(`${m.key}_${c.num}`);
-      if(v){entered++;
-        const hist3=c.m.slice(0,curMonth).filter(x=>x>0).slice(-3);
-        const avg3=hist3.length?hist3.reduce((s,x)=>s+x,0)/hist3.length:0;
-        const ratio=avg3>0?v/avg3:1;
+      const dc=_fcDriverVal(driver,c,m.year,m.month);
+      const dfcGwh=dc?(dc.total||0)/1e6:0;
+      if(v){
+        entered++;
+        const ratio=dfcGwh>0?v/dfcGwh:1;
         if(ratio>=0.85&&ratio<=1.15)onTrend++;else offTrend++;
       }
-    });
-  });
-  // Compute MAPE from saved forecast entries vs actual sbActuals rows
-  let mapeTotal=0, mapeCount=0;
-  CUSTOMERS.filter(c=>c.rate!=='RT10'&&c.rate!=='RT20').forEach(c=>{
-    months.forEach(m=>{
-      const fc=_fcVal(`${m.key}_${c.num}`);
-      if(fc==null)return;
-      // Find matching actual row — O(1) via sbActualsIdx (was a full sbActuals.find() scan per customer per month)
-      const actRow=sbActualsIdx[`${c.num}_${m.year}_${m.month}`];
-      const actual=actRow?Number(actRow.kwh||0):c.m[m.month-1]||0;
-      if(actual>0){mapeTotal+=Math.abs(fc-actual)/actual;mapeCount++;}
+      // MAPE: only meaningful once this month has actually closed (dc.isActual) —
+      // compares the manually-entered forecast against the real realized actual.
+      if(v!=null&&dc&&dc.isActual&&dfcGwh>0){
+        mapeTotal+=Math.abs(v-dfcGwh)/dfcGwh; mapeCount++;
+      }
     });
   });
   const mapeVal=mapeCount>0?(mapeTotal/mapeCount*100).toFixed(1)+'%':'--';
@@ -4937,7 +4953,7 @@ function renderFcKPIs(){
   document.getElementById('fc_on').textContent=onTrend;
   document.getElementById('fc_off').textContent=offTrend;
   document.getElementById('fc_mape').textContent=mapeVal;
-  document.getElementById('fc_pending').textContent=Math.max(0,CUSTOMERS.filter(c=>c.rate!=='RT10'&&c.rate!=='RT20').length*months.length-entered);
+  document.getElementById('fc_pending').textContent=Math.max(0,custs.length*months.length-entered);
   document.getElementById('kpi_accuracy').textContent=accuracyVal;
   document.getElementById('fc_period_kpi').textContent=`${MONTHS_SHORT[curMonth-1]} ${curYear}`;
 }
@@ -4972,6 +4988,7 @@ function renderFcEntry(){
   sbFcEntries.forEach(r=>{_fcEntryIdx[`fc_${r.year}_${r.month}_${r.acct_num}`]=r.forecast_gwh;});
   const _fcNoteIdx={};
   sbFcNotes.forEach(r=>{_fcNoteIdx[r.acct_num]=r.note_text||'';});
+  const driver=_fcDriverChains();
 
   const rows=custData.map(c=>{
     // Use last 3 months up to curMonth (not slice(-3) which grabs Oct-Dec when most are 0)
@@ -4985,8 +5002,13 @@ function renderFcEntry(){
       const dbVal=_fcEntryIdx[key];
       const saved=(dbVal!=null)?dbVal:S.get(key,null);
       const val=saved||'';
-      const trend=saved?getTrendStatus(saved,avg3,pyAvg):'';
-      return`<td style="padding:3px"><input class="fc-inp" type="number" step="0.001" value="${val}" placeholder="${avg3.toFixed(3)}" id="fci_${m.key}_${c.num}" onchange="saveFcVal('${m.key}','${c.num}',this.value,'${avg3}','${pyAvg}')"/> ${trend?`<span class="fc-trend ${trend.cls}" title="${trend.tip}">${trend.icon}</span>`:''}</td>`;
+      // Suggested value is now Driver Forecast's own computed number for this
+      // customer+month (base + macro + weather + operational), not a flat 3-month
+      // average applied uniformly across all 6 months.
+      const dc=_fcDriverVal(driver,c,m.year,m.month);
+      const dfcGwh=dc?(dc.total||0)/1e6:0;
+      const trend=saved?getTrendStatus(saved,dfcGwh,pyAvg):'';
+      return`<td style="padding:3px"><input class="fc-inp" type="number" step="0.001" value="${val}" placeholder="${dfcGwh.toFixed(3)}" title="Driver Forecast: ${dfcGwh.toFixed(3)} GWh" id="fci_${m.key}_${c.num}" onchange="saveFcVal('${m.key}','${c.num}',this.value,'${dfcGwh}','${pyAvg}')"/> ${trend?`<span class="fc-trend ${trend.cls}" title="${trend.tip}">${trend.icon}</span>`:''}</td>`;
     }).join('');
     const note=(_fcNoteIdx[c.num]!=null)?_fcNoteIdx[c.num]:S.get(`fc_note_${c.num}`,'');
     return`<tr>
@@ -5000,7 +5022,7 @@ function renderFcEntry(){
     </tr>`;
   }).join('');
   document.getElementById('fc_tbl').innerHTML=`<table class="dt" id="fce_dt">
-    <thead><tr><th>Acct #</th><th>Customer</th><th>Rate</th><th>KAM</th><th>3m Avg</th>${months.map(m=>`<th>${m.label}</th>`).join('')}<th>Note</th></tr></thead>
+    <thead><tr><th>Acct #</th><th>Customer</th><th>Rate</th><th>KAM</th><th>3m Avg</th>${months.map(m=>`<th>${m.label} (Driver Fcst)</th>`).join('')}<th>Note</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
   makeSortable('fce_dt');
