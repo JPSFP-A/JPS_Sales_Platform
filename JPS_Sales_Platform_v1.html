@@ -2335,10 +2335,12 @@ order by ordinal_position;</pre>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             <select id="rcfr_year" class="psel" onchange="renderRcForecastReport()"></select>
             <button class="btn btn-o" onclick="exportTableCSV('rcfr_tbl_el','rc_forecast_report')">⬇ Export Report</button>
+            <button class="btn btn-o" id="rcfr_pdf_btn" onclick="generateForecastReportPDF()">📄 Regenerate PDF</button>
           </div>
         </div>
         <div style="font-size:11px;color:var(--text2);margin-bottom:10px">
           Full-year forecast by rate class, decomposed into drivers (base roll-forward, macro assumptions, weather/seasonality, operational adjustments) and compared to budget.
+          "Regenerate PDF" builds the full formal report (exec summary, assumptions with live sourcing, industry breakdown, rate class detail, top/bottom customers) directly from this data — no external script.
         </div>
         <div id="rcfr_table" style="overflow-x:auto"></div>
         <div id="rcfr_insights" style="margin-top:16px"></div>
@@ -10784,6 +10786,379 @@ function _rcfrInsight(rateClass,fy,bud,macro,weather,oper){
     s+=` Largest driver: ${top.label} (${top.v>=0?'+':''}${_dfcFmtGwh(top.v)} GWh).`;
   }
   return s;
+}
+
+/* ==========================================
+   FORECAST REPORT PDF — regenerates the full formal report client-side, straight
+   from the live Driver Forecast engine (same _dfcGetChain chains as the table
+   above). Replaces the old manual process (external Python script + hand data
+   pull + manual SQL upload) — this button IS the live app, so it can't drift
+   from what Driver Forecast itself shows the way the external script once did.
+
+   Scope note: driver/industry sourcing is read LIVE from
+   jps_macro_assumptions.source_note (edit sourcing there — Macro Assumptions tab
+   — and it flows straight into the next PDF). Ad-hoc customer-level commentary
+   from a specific month's internal PPTX deck (e.g. "Windalco's turbine
+   maintenance...") is NOT reproduced here — that's manual, point-in-time color
+   from a document this app has no access to, not something derivable from live
+   data. Add that by hand if you want it for a specific report.
+========================================== */
+function loadJSPDF(){
+  return new Promise((resolve,reject)=>{
+    const ready=()=>typeof window.jspdf!=='undefined'&&window.jspdf.jsPDF&&window.jspdf.jsPDF.API&&window.jspdf.jsPDF.API.autoTable;
+    if(ready()){resolve();return;}
+    const coreUrls=[
+      'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js',
+      'https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js',
+    ];
+    const tableUrls=[
+      'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js',
+      'https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js',
+    ];
+    const loadScript=(urls,idx)=>new Promise((res,rej)=>{
+      if(idx>=urls.length){rej(new Error('script unavailable'));return;}
+      const s=document.createElement('script');
+      s.src=urls[idx];
+      s.onload=()=>res();
+      s.onerror=()=>loadScript(urls,idx+1).then(res,rej);
+      document.head.appendChild(s);
+    });
+    loadScript(coreUrls,0)
+      .then(()=>loadScript(tableUrls,0))
+      .then(()=>{if(ready())resolve();else reject(new Error('PDF library failed to initialize'));})
+      .catch(()=>reject(new Error('PDF library unavailable — check your internet connection')));
+  });
+}
+
+function _frFmt(v,d=1){return (Number(v)||0).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});}
+function _frPct(v,d=1){if(v==null||!isFinite(v))return '—';return (v>=0?'+':'')+v.toFixed(d)+'%';}
+const _FR_RC_ORDER=['RT10','RT20','RT40','RT50','RT60-ST','RT70'];
+
+// Gathers every number the report needs in one pass over the SAME engine chains
+// renderRcForecastReport() uses — so the PDF can never disagree with the tab
+// it's a button on.
+function _frCollectData(){
+  const year=FC_BUD_YEAR;
+  _dfcResetYearChainCache();
+  const idx=_dfcBuildIndices();
+  const commAccounts=_dfcBuildCommAccounts(year).filter(a=>a.rate_class!=='EV');
+  const keyAccounts=commAccounts.filter(a=>a.kam);
+  const commCohorts=_dfcCommCohortsForNonKam(commAccounts,year).filter(co=>co.rate_class!=='EV');
+  const resCohorts=_dfcBuildResCohorts(year).filter(co=>co.rate_class!=='EV');
+  const newCusts=sbNewCustomers.filter(c=>Number(c.start_year)<=year&&c.rate_class!=='EV');
+
+  const modeledIndustries=new Set(sbMacroAssum.filter(r=>r.driver_type==='industry').map(r=>r.segment));
+  const rcMonth={};              // rc -> {1..12: kwh_le}
+  const custFy={}, custRcKwh={}; // customer name -> FY kwh, and -> {rc:kwh} for rate-class labeling
+  const indH2Fc={};              // industry -> H2 2026 forecast kwh (KAM/new-cust only)
+
+  const bumpMonth=(rc,m,v)=>{rcMonth[rc]=rcMonth[rc]||{};rcMonth[rc][m]=(rcMonth[rc][m]||0)+v;};
+  const walkChain=(chain,rc,custName,industry)=>{
+    let fyTotal=0;
+    for(let m=1;m<=12;m++){
+      const c=chain[m];if(!c)continue;
+      bumpMonth(rc,m,c.total);
+      fyTotal+=c.total;
+      if(m>=7&&industry&&modeledIndustries.has(industry))indH2Fc[industry]=(indH2Fc[industry]||0)+c.total;
+    }
+    if(custName){
+      custFy[custName]=(custFy[custName]||0)+fyTotal;
+      custRcKwh[custName]=custRcKwh[custName]||{};
+      custRcKwh[custName][rc]=(custRcKwh[custName][rc]||0)+fyTotal;
+    }
+  };
+
+  const acToName={};
+  keyAccounts.forEach(a=>{
+    const chain=_dfcGetChain(idx,a.ac,true,{rate_class:a.rate_class,industry:a.industry},a.ac,year,null);
+    walkChain(chain,a.rate_class,a.name,a.industry);
+    acToName[a.ac]=a.name;
+  });
+  newCusts.forEach(c=>{
+    const ctx={rate_class:c.rate_class,industry:c.industry,startYear:Number(c.start_year),startMonth:Number(c.start_month),expectedKwh:Number(c.expected_kwh)||0};
+    const chain=_dfcGetChain(idx,c.jps_ac,true,{rate_class:c.rate_class,industry:c.industry},c.jps_ac,year,ctx);
+    const nm=c.name||c.jps_ac;
+    walkChain(chain,c.rate_class,nm,c.industry);
+    acToName[c.jps_ac]=nm;
+  });
+  commCohorts.forEach(co=>{
+    const chain=_dfcGetChain(idx,co.key,false,{rate_class:co.rate_class,industry:null},null,year,null);
+    walkChain(chain,co.rate_class,null,null);
+  });
+  resCohorts.forEach(co=>{
+    const chain=_dfcGetChain(idx,co.key,false,{rate_class:co.rate_class,industry:null},null,year,null);
+    walkChain(chain,co.rate_class,null,null);
+  });
+
+  // FY2025 actuals — by rate class (raw, ex-EV) and by customer name (same
+  // account population as custFy, via acToName) and by industry H2 (KAM only).
+  const fy25Rc={}, fy25Cust={}, indH2Actual25={};
+  const kamAcSet=new Set(keyAccounts.map(a=>a.ac));
+  const indMap={};sbIndustries.forEach(i=>{indMap[String(i.jps_ac||'').trim()]=i.industry||'';});
+  _sbAllActuals().forEach(r=>{
+    if(r.rate_class==='EV')return;
+    const kwh=Number(r.kwh)||0;
+    if(Number(r.year)===2025){
+      fy25Rc[r.rate_class]=(fy25Rc[r.rate_class]||0)+kwh;
+      const nm=acToName[r.jps_ac];
+      if(nm)fy25Cust[nm]=(fy25Cust[nm]||0)+kwh;
+    }
+    if(Number(r.year)===2025&&Number(r.month)>=7&&Number(r.month)<=12&&kamAcSet.has(r.jps_ac)){
+      const ind=_kl(indMap,r.jps_ac);
+      if(ind&&modeledIndustries.has(ind))indH2Actual25[ind]=(indH2Actual25[ind]||0)+kwh;
+    }
+  });
+
+  // Budget — full year + H1/H2 split, by rate class.
+  const budRc={},budH1={},budH2={};
+  _budAll(year).forEach(b=>{
+    const rc=b.rate_class||b['Rate category']||'';if(!rc||rc==='EV')return;
+    const kwh=Number(b.kwh_budget)||0,m=Number(b.month);
+    budRc[rc]=(budRc[rc]||0)+kwh;
+    if(m<=curMonth)budH1[rc]=(budH1[rc]||0)+kwh;else budH2[rc]=(budH2[rc]||0)+kwh;
+  });
+
+  return {year,curMonth,rcMonth,custFy,custRcKwh,fy25Rc,fy25Cust,indH2Fc,indH2Actual25,budRc,budH1,budH2,modeledIndustries};
+}
+
+function _frRcLabel(custRcKwh,name){
+  const ranked=Object.entries(custRcKwh[name]||{}).sort((a,b)=>b[1]-a[1]);
+  if(!ranked.length)return '';
+  if(ranked.length===1||ranked[1][1]<0.15*ranked[0][1])return ranked[0][0];
+  return ranked[0][0]+'/'+ranked[1][0];
+}
+
+// Source_note text per industry, deduped, read live from jps_macro_assumptions —
+// this is the mechanism that lets sourcing added on the Macro Assumptions tab
+// flow straight into the next PDF without touching this code.
+function _frSourceNotes(driverType,segment){
+  const notes=sbMacroAssum.filter(r=>r.driver_type===driverType&&(r.segment||null)===(segment||null)&&r.source_note&&String(r.source_note).trim())
+    .map(r=>String(r.source_note).trim());
+  return [...new Set(notes)];
+}
+
+async function generateForecastReportPDF(){
+  const btn=document.getElementById('rcfr_pdf_btn');
+  const origLabel=btn?btn.innerHTML:'';
+  try{
+    if(btn){btn.disabled=true;btn.innerHTML='⏳ Generating…';}
+    await loadJSPDF();
+    const data=_frCollectData();
+    _frRenderPDF(data);
+  }catch(e){
+    console.error('PDF generation failed',e);
+    alert('PDF generation failed: '+(e.message||e));
+  }finally{
+    if(btn){btn.disabled=false;btn.innerHTML=origLabel;}
+  }
+}
+
+function _frRenderPDF(d){
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({unit:'pt',format:'letter'});
+  const PW=doc.internal.pageSize.getWidth(), MARGIN=48;
+  const NAVY=[11,37,69], STEEL=[27,73,101], GREY=[90,100,114], RED=[179,38,30], GREEN=[30,122,70];
+  let y=54;
+
+  const title=(t)=>{doc.setFont('helvetica','bold');doc.setFontSize(20);doc.setTextColor(...NAVY);doc.text(t,MARGIN,y);y+=22;};
+  const sub=(t)=>{doc.setFont('helvetica','normal');doc.setFontSize(10.5);doc.setTextColor(...GREY);
+    doc.splitTextToSize(t,PW-2*MARGIN).forEach(line=>{doc.text(line,MARGIN,y);y+=13;});};
+  const h1=(t)=>{y+=8;doc.setFont('helvetica','bold');doc.setFontSize(14);doc.setTextColor(...NAVY);doc.text(t,MARGIN,y);y+=18;};
+  const h2=(t)=>{y+=4;doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(...STEEL);doc.text(t,MARGIN,y);y+=14;};
+  const body=(t,opts={})=>{
+    doc.setFont('helvetica',opts.bold?'bold':'normal');doc.setFontSize(opts.size||9.5);doc.setTextColor(...(opts.color||[34,34,34]));
+    doc.splitTextToSize(t,PW-2*MARGIN).forEach(line=>{
+      if(y>740){doc.addPage();y=54;}
+      doc.text(line,MARGIN,y);y+=opts.leading||12.5;
+    });
+  };
+  const caveat=(t)=>{
+    const lines=doc.splitTextToSize(t,PW-2*MARGIN-16);
+    const boxH=lines.length*11.5+12;
+    if(y+boxH>760){doc.addPage();y=54;}
+    doc.setFillColor(251,234,234);doc.rect(MARGIN,y-10,PW-2*MARGIN,boxH,'F');
+    doc.setFont('helvetica','italic');doc.setFontSize(8.6);doc.setTextColor(...RED);
+    let yy=y+2;lines.forEach(line=>{doc.text(line,MARGIN+8,yy);yy+=11.5;});
+    y+=boxH+8;
+  };
+  const ensure=(need)=>{if(y+need>770){doc.addPage();y=54;}};
+
+  const fy26=rc=>{let t=0;for(let m=1;m<=12;m++)t+=(d.rcMonth[rc]&&d.rcMonth[rc][m])||0;return t;};
+  const h1Tot=rc=>{let t=0;for(let m=1;m<=(d.curMonth||6);m++)t+=(d.rcMonth[rc]&&d.rcMonth[rc][m])||0;return t;};
+  const h2Tot=rc=>{let t=0;for(let m=(d.curMonth||6)+1;m<=12;m++)t+=(d.rcMonth[rc]&&d.rcMonth[rc][m])||0;return t;};
+  const rcs=_FR_RC_ORDER.filter(rc=>d.rcMonth[rc]);
+
+  // ---- PAGE 1: EXEC SUMMARY ----
+  title('JPS Sales & Load Forecast');
+  sub('Formal Summary Report — Fiscal Year '+d.year+' Full-Year Outlook');
+  sub(`Actuals through month ${d.curMonth} · Forecast remainder of ${d.year} (Driver Forecast engine) · Generated live from the app · ${new Date().toDateString?new Date().toDateString():''}`);
+  doc.setDrawColor(...STEEL);doc.line(MARGIN,y,PW-MARGIN,y);y+=16;
+
+  h1('Executive Summary');
+  const totFy=rcs.reduce((s,rc)=>s+fy26(rc)/1e6,0);
+  const totBud=rcs.reduce((s,rc)=>s+(d.budRc[rc]||0)/1e6,0);
+  const totFy25=rcs.reduce((s,rc)=>s+(d.fy25Rc[rc]||0)/1e6,0);
+  doc.autoTable({startY:y,margin:{left:MARGIN,right:MARGIN},
+    head:[['Total (ex-EV)',`FY${d.year-1} Actual`,`FY${d.year} Budget`,`FY${d.year} Forecast`,'Var vs Budget','Var vs Prior Year']],
+    body:[['All Rate Classes',_frFmt(totFy25),_frFmt(totBud),_frFmt(totFy),_frPct((totFy/totBud-1)*100),_frPct((totFy/totFy25-1)*100)]],
+    headStyles:{fillColor:NAVY,fontSize:8.6},bodyStyles:{fontSize:9,fontStyle:'bold'},styles:{cellPadding:5}});
+  y=doc.lastAutoTable.finalY+14;
+
+  const rcVsBud=rc=>d.budRc[rc]>0?(fy26(rc)/d.budRc[rc]-1)*100:null;
+  const sortedByVsBud=rcs.slice().sort((a,b)=>Math.abs(rcVsBud(b)||0)-Math.abs(rcVsBud(a)||0));
+  const mover1=sortedByVsBud[0],mover2=sortedByVsBud[1];
+  body(`Full-year ${d.year} load is forecast at ${_frFmt(totFy)} GWh, ${_frPct((totFy/totBud-1)*100)} vs budget and ${_frPct((totFy/totFy25-1)*100)} vs FY${d.year-1} actual. `+
+    (mover1?`${mover1} is the largest mover vs budget (${_frPct(rcVsBud(mover1))}).`:'')+
+    (mover2?` ${mover2} is the next largest (${_frPct(rcVsBud(mover2))}).`:''));
+  y+=4;
+  body('Methodology: forecast is computed live by the Driver Forecast engine — each KAM account or non-KAM cohort (rate_class|parish|consumption_bucket) '+
+    'projects each remaining month as its own rolling 3-month trailing average × (1 + macro% + weather% + industry-or-seasonality% + operational%) + manual kWh override. '+
+    'Industry % applies only to KAM-assigned key accounts. All figures exclude the EV rate class; bulk-billed placeholder accounts (Postpaid/Zero-Postpaid) are excluded '+
+    'from individual-account attribution and still roll up into their rate-class cohort totals. This PDF and the table above it read the exact same computed chains — '+
+    'they cannot disagree.',{size:8.2,color:GREY,leading:11});
+
+  // ---- PAGE 2: ASSUMPTIONS ----
+  doc.addPage();y=54;
+  h1('Forecast Assumptions by Driver');
+  body('Segment-level macro drivers (commercial/residential), applied to every rate class based on its segment (RT10, RT20 = Residential; RT40, RT50, RT60-ST, RT70 = Commercial).');
+  const monthsLbl=[];for(let m=(d.curMonth||6)+1;m<=12;m++)monthsLbl.push(new Date(2000,m-1,1).toLocaleString('en-US',{month:'short'}));
+  const monthNums=[];for(let m=(d.curMonth||6)+1;m<=12;m++)monthNums.push(m);
+  const macroLookup=(dt,seg,m)=>{const r=sbMacroAssum.find(r=>r.driver_type===dt&&(r.segment||null)===(seg||null)&&Number(r.year)===d.year&&Number(r.month)===m);return r?Number(r.value_pct)||0:0;};
+  doc.autoTable({startY:y,margin:{left:MARGIN,right:MARGIN},
+    head:[['Driver',...monthsLbl]],
+    body:[
+      ['Commercial (%)',...monthNums.map(m=>_frPct(macroLookup('macro','commercial',m),2))],
+      ['Residential (%)',...monthNums.map(m=>_frPct(macroLookup('macro','residential',m),2))],
+    ],
+    headStyles:{fillColor:STEEL,fontSize:8},bodyStyles:{fontSize:8.4},styles:{cellPadding:4}});
+  y=doc.lastAutoTable.finalY+10;
+
+  const weatherNotes=_frSourceNotes('weather',null);
+  caveat('Weather driver — applied '+monthNums.filter(m=>macroLookup('weather',null,m)!==0||sbMacroAssum.some(r=>r.driver_type==='weather'&&Number(r.month)===m)).map(m=>_frPct(macroLookup('weather',null,m))+' ('+new Date(2000,m-1,1).toLocaleString('en-US',{month:'short'})+')').join(', ')+
+    (monthNums.some(m=>!sbMacroAssum.some(r=>r.driver_type==='weather'&&Number(r.month)===m))?'; months with no row here default to 0% — a coverage gap, not a verified "no effect" finding.':'.')+
+    (weatherNotes.length?' Source: '+weatherNotes.join(' / '):' No source note on file for this driver.'));
+
+  h2('Industry-Level Drivers (KAM-assigned key accounts only)');
+  const indList=[...d.modeledIndustries].filter(ind=>monthNums.some(m=>sbMacroAssum.some(r=>r.driver_type==='industry'&&r.segment===ind&&Number(r.year)===d.year&&Number(r.month)===m)))
+    .sort((a,b)=>macroLookup('industry',b,monthNums[0])-macroLookup('industry',a,monthNums[0]));
+  ensure(30);
+  doc.autoTable({startY:y,margin:{left:MARGIN,right:MARGIN},
+    head:[['Industry',...monthsLbl]],
+    body:indList.map(ind=>[ind,...monthNums.map(m=>sbMacroAssum.some(r=>r.driver_type==='industry'&&r.segment===ind&&Number(r.year)===d.year&&Number(r.month)===m)?_frPct(macroLookup('industry',ind,m),1):'—')]),
+    headStyles:{fillColor:STEEL,fontSize:7.6},bodyStyles:{fontSize:7.6},styles:{cellPadding:3.5},
+    columnStyles:{0:{cellWidth:170}}});
+  y=doc.lastAutoTable.finalY+10;
+
+  let sourced=0,unsourced=[];
+  indList.forEach(ind=>{const notes=_frSourceNotes('industry',ind);if(notes.length)sourced++;else unsourced.push(ind);});
+  ensure(40);
+  body(`Sourced (${sourced} of ${indList.length}):`,{bold:true,size:8.2});
+  indList.forEach(ind=>{
+    const notes=_frSourceNotes('industry',ind);
+    if(notes.length)body(ind+' — '+notes.join(' / '),{size:8,color:GREY,leading:10.5});
+  });
+  if(unsourced.length)body('Unsourced: '+unsourced.join(', ')+' — no source_note on file (add one on the Macro Assumptions tab).',{size:8,color:GREY,leading:10.5});
+
+  // ---- PAGE: RATE CLASS PERFORMANCE ----
+  doc.addPage();y=54;
+  h1('Rate Class Performance: Forecast vs Budget vs Prior Year');
+  const rcRows=rcs.map(rc=>{
+    const f=fy26(rc)/1e6,b=(d.budRc[rc]||0)/1e6,p=(d.fy25Rc[rc]||0)/1e6;
+    return [rc,_frFmt(p),_frFmt(b),_frFmt(f),b>0?_frPct((f/b-1)*100):'—',p>0?_frPct((f/p-1)*100):'—'];
+  });
+  const totP=totFy25,totB=totBud,totF=totFy;
+  rcRows.push(['TOTAL',_frFmt(totP),_frFmt(totB),_frFmt(totF),_frPct((totF/totB-1)*100),_frPct((totF/totP-1)*100)]);
+  doc.autoTable({startY:y,margin:{left:MARGIN,right:MARGIN},
+    head:[['Rate Class','FY'+(d.year-1)+' Actual','FY'+d.year+' Budget','FY'+d.year+' Forecast','Var vs Budget','Var vs Prior Year']],
+    body:rcRows,headStyles:{fillColor:NAVY,fontSize:8.6},bodyStyles:{fontSize:9},styles:{cellPadding:5},
+    didParseCell:(hook)=>{if(hook.row.index===rcRows.length-1&&hook.section==='body'){hook.cell.styles.fontStyle='bold';hook.cell.styles.fillColor=[238,243,248];}}});
+  y=doc.lastAutoTable.finalY+8;
+  body('Figures rounded to 1 decimal for display; TOTAL is calculated from unrounded values.',{size:7.6,color:GREY});
+
+  // ---- PAGE: H1/H2 DETAIL ----
+  doc.addPage();y=54;
+  h1('First-Half & Second-Half Detail');
+  h2(`H1 (through month ${d.curMonth}) Actual vs Budget`);
+  const h1Rows=rcs.map(rc=>{
+    const f=h1Tot(rc)/1e6,b=(d.budH1[rc]||0)/1e6;
+    return [rc,_frFmt(f),_frFmt(b),b>0?_frPct((f/b-1)*100):'—'];
+  });
+  const tH1F=rcs.reduce((s,rc)=>s+h1Tot(rc)/1e6,0),tH1B=rcs.reduce((s,rc)=>s+(d.budH1[rc]||0)/1e6,0);
+  h1Rows.push(['TOTAL',_frFmt(tH1F),_frFmt(tH1B),tH1B>0?_frPct((tH1F/tH1B-1)*100):'—']);
+  doc.autoTable({startY:y,margin:{left:MARGIN,right:MARGIN},
+    head:[['Rate Class','H1 Actual (GWh)','H1 Budget (GWh)','Var vs Budget']],
+    body:h1Rows,headStyles:{fillColor:STEEL,fontSize:8.6},bodyStyles:{fontSize:9},styles:{cellPadding:5},
+    didParseCell:(hook)=>{if(hook.row.index===h1Rows.length-1&&hook.section==='body')hook.cell.styles.fontStyle='bold';}});
+  y=doc.lastAutoTable.finalY+14;
+
+  ensure(120);
+  h2(`H2 (remainder of ${d.year}) Forecast vs Budget`);
+  const h2Rows=rcs.map(rc=>{
+    const f=h2Tot(rc)/1e6,b=(d.budH2[rc]||0)/1e6;
+    return [rc,_frFmt(f),_frFmt(b),b>0?_frPct((f/b-1)*100):'—'];
+  });
+  const tH2F=rcs.reduce((s,rc)=>s+h2Tot(rc)/1e6,0),tH2B=rcs.reduce((s,rc)=>s+(d.budH2[rc]||0)/1e6,0);
+  h2Rows.push(['TOTAL',_frFmt(tH2F),_frFmt(tH2B),tH2B>0?_frPct((tH2F/tH2B-1)*100):'—']);
+  doc.autoTable({startY:y,margin:{left:MARGIN,right:MARGIN},
+    head:[['Rate Class','H2 Forecast (GWh)','H2 Budget (GWh)','Var vs Budget']],
+    body:h2Rows,headStyles:{fillColor:STEEL,fontSize:8.6},bodyStyles:{fontSize:9},styles:{cellPadding:5},
+    didParseCell:(hook)=>{if(hook.row.index===h2Rows.length-1&&hook.section==='body')hook.cell.styles.fontStyle='bold';}});
+  y=doc.lastAutoTable.finalY+8;
+
+  // ---- PAGE: INDUSTRY H2 ACTUAL VS FORECAST ----
+  doc.addPage();y=54;
+  h1('Industry H2 Actual vs. Forecast (GWh)');
+  body('H2 prior-year actual vs H2 current-year forecast, KAM-assigned accounts tagged to each modeled industry only — not the full rate-class total.',{size:8.6,color:GREY});
+  const indOrder=[...new Set([...Object.keys(d.indH2Actual25),...Object.keys(d.indH2Fc)])].sort((a,b)=>(d.indH2Fc[b]||0)-(d.indH2Fc[a]||0));
+  doc.autoTable({startY:y,margin:{left:MARGIN,right:MARGIN},
+    head:[['Industry','H2 Prior-Year Actual (GWh)','H2 Forecast (GWh)','Δ %']],
+    body:indOrder.map(ind=>{
+      const a=(d.indH2Actual25[ind]||0)/1e6,f=(d.indH2Fc[ind]||0)/1e6;
+      return [ind,_frFmt(a),_frFmt(f),a>0?_frPct((f/a-1)*100):'—'];
+    }),headStyles:{fillColor:STEEL,fontSize:8.6},bodyStyles:{fontSize:8.8},styles:{cellPadding:5},
+    columnStyles:{0:{cellWidth:220}}});
+  y=doc.lastAutoTable.finalY+8;
+
+  // ---- PAGE: TOP 10 ----
+  doc.addPage();y=54;
+  h1('Top 10 Customers by Volume (FY'+d.year+')');
+  body('Ranked by FY'+d.year+' kWh (H1 actual + H2 forecast), aggregated by customer name across all billing accounts. Excludes EV rate class and bulk-billed placeholder accounts.');
+  const custRecs=Object.keys(d.custFy).map(n=>{
+    const f=d.custFy[n]/1e6,p=(d.fy25Cust[n]||0)/1e6;
+    return {n,rc:_frRcLabel(d.custRcKwh,n),f,p,chg:p>1e-6?(f/p-1)*100:null};
+  }).filter(r=>r.f>1e-6||r.p>1e-6);
+  const top10=custRecs.slice().sort((a,b)=>b.f-a.f).slice(0,10);
+  doc.autoTable({startY:y,margin:{left:MARGIN,right:MARGIN},
+    head:[['#','Customer','Rate Class','FY'+d.year+' (GWh)','FY'+(d.year-1)+' (GWh)','YoY %']],
+    body:top10.map((r,i)=>[i+1,r.n,r.rc,_frFmt(r.f),_frFmt(r.p),r.chg==null?'new':_frPct(r.chg)]),
+    headStyles:{fillColor:NAVY,fontSize:8.6},bodyStyles:{fontSize:8.8},styles:{cellPadding:5},
+    columnStyles:{1:{cellWidth:180}}});
+  y=doc.lastAutoTable.finalY+8;
+  if(top10.length>=2)body(`${top10[0].n} (${_frFmt(top10[0].f)} GWh) and ${top10[1].n} (${_frFmt(top10[1].f)} GWh, ${top10[1].chg==null?'new':_frPct(top10[1].chg)} YoY) are the two largest metered customers by this measure. Rolled up to customer (not individual account) level.`,{size:8.2,color:GREY});
+
+  // ---- PAGE: BOTTOM 10 ----
+  doc.addPage();y=54;
+  h1('Bottom 10 Customers — Largest YoY Declines');
+  body('Among material accounts (FY'+(d.year-1)+' volume > 0.3 GWh), ranked by steepest YoY decline, aggregated by customer name.');
+  const declines=custRecs.filter(r=>r.p>0.3&&r.chg!=null).sort((a,b)=>a.chg-b.chg).slice(0,10);
+  doc.autoTable({startY:y,margin:{left:MARGIN,right:MARGIN},
+    head:[['#','Customer','Rate Class','FY'+d.year+' (GWh)','FY'+(d.year-1)+' (GWh)','YoY %','Status']],
+    body:declines.map((r,i)=>[i+1,r.n,r.rc,_frFmt(r.f),_frFmt(r.p),_frPct(r.chg),r.f<=0.005?'NEEDS VERIFICATION':'Confirmed decline']),
+    headStyles:{fillColor:RED,fontSize:8.2},bodyStyles:{fontSize:8},styles:{cellPadding:4.5},
+    columnStyles:{1:{cellWidth:150},6:{cellWidth:100}}});
+  y=doc.lastAutoTable.finalY+10;
+  const nVerify=declines.filter(r=>r.f<=0.005).length;
+  if(nVerify)caveat(`${nVerify} accounts flagged "NEEDS VERIFICATION": FY${d.year} forecast is essentially zero because the engine's rolling 3-month base found no recent billed kWh under that account. Consistent with either a genuine closure/wind-down or an account renumbering — the engine output alone cannot distinguish the two. Recommend Sales/KAM confirm status before reporting these as lost load.`);
+
+  // footer on every page
+  const pages=doc.internal.getNumberOfPages();
+  for(let p=1;p<=pages;p++){
+    doc.setPage(p);
+    doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(...GREY);
+    doc.text(`Generated live from JPS Sales Analytics Platform — Driver Forecast engine — page ${p} of ${pages}`,MARGIN,doc.internal.pageSize.getHeight()-24);
+  }
+
+  doc.save(`JPS_Sales_Forecast_Summary_${d.year}.pdf`);
 }
 
 /* ==========================================
