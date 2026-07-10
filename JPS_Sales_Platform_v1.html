@@ -2336,6 +2336,7 @@ order by ordinal_position;</pre>
             <select id="rcfr_year" class="psel" onchange="renderRcForecastReport()"></select>
             <button class="btn btn-o" onclick="exportTableCSV('rcfr_tbl_el','rc_forecast_report')">⬇ Export Report</button>
             <button class="btn btn-o" id="rcfr_pdf_btn" onclick="generateForecastReportPDF()">📄 Regenerate PDF</button>
+            <button class="btn btn-o" id="rcfr_docx_btn" onclick="generateForecastReportDOCX()">📝 Regenerate Word</button>
           </div>
         </div>
         <div style="font-size:11px;color:var(--text2);margin-bottom:10px">
@@ -11159,6 +11160,270 @@ function _frRenderPDF(d){
   }
 
   doc.save(`JPS_Sales_Forecast_Summary_${d.year}.pdf`);
+}
+
+/* ==========================================
+   FORECAST REPORT WORD EXPORT — same engine data as the PDF (_frCollectData),
+   rendered via the browser-IIFE build of the "docx" library. Charts are drawn
+   on a detached Chart.js canvas (Chart.js is already loaded for the rest of the
+   app) and embedded as PNGs — docx has no native charting API.
+========================================== */
+function loadDocxJS(){
+  return new Promise((resolve,reject)=>{
+    if(typeof window.docx!=='undefined'){resolve();return;}
+    const urls=[
+      'https://cdn.jsdelivr.net/npm/docx@9.7.1/dist/index.iife.js',
+      'https://unpkg.com/docx@9.7.1/dist/index.iife.js',
+    ];
+    const tryNext=(idx)=>{
+      if(idx>=urls.length){reject(new Error('Word library unavailable — check your internet connection'));return;}
+      const s=document.createElement('script');
+      s.src=urls[idx];
+      s.onload=()=>{if(typeof window.docx!=='undefined')resolve();else tryNext(idx+1);};
+      s.onerror=()=>tryNext(idx+1);
+      document.head.appendChild(s);
+    };
+    tryNext(0);
+  });
+}
+
+// Renders one rate-class trend chart (solid actual Jan-curMonth, dashed forecast
+// curMonth-Dec, sharing the curMonth point so the two segments join visually —
+// same convention as the PDF's mini charts) to a PNG on a detached canvas.
+function _frChartPNG(rc, hist, fc){
+  return new Promise((resolve)=>{
+    const canvas=document.createElement('canvas');
+    canvas.width=440;canvas.height=300;
+    const full=hist.concat(fc);
+    const n=hist.length;
+    const actualData=full.slice(0,n).concat(Array(fc.length).fill(null));
+    const fcData=Array(n-1).fill(null).concat(full.slice(n-1,n+fc.length));
+    const chart=new Chart(canvas.getContext('2d'),{
+      type:'line',
+      data:{labels:['J','F','M','A','M','J','J','A','S','O','N','D'],
+        datasets:[
+          {data:actualData,borderColor:'#1B4965',borderWidth:2.5,pointRadius:0,spanGaps:false,tension:0.1},
+          {data:fcData,borderColor:'#C97A1A',borderWidth:2.5,borderDash:[6,4],pointRadius:0,spanGaps:false,tension:0.1},
+        ]},
+      options:{responsive:false,animation:false,
+        plugins:{legend:{display:false},title:{display:true,text:rc,color:'#0B2545',font:{weight:'bold',size:18}}},
+        scales:{y:{ticks:{font:{size:11}}},x:{ticks:{font:{size:11}},grid:{display:false}}}}
+    });
+    // setTimeout, not requestAnimationFrame — rAF can stall indefinitely in a
+    // backgrounded/inactive tab (browsers throttle it to save power), which would
+    // hang report generation if the user alt-tabs away mid-export. Chart.js
+    // renders synchronously with animation:false, so this is just a macrotask
+    // tick to let that paint settle before reading the canvas.
+    setTimeout(()=>{
+      canvas.toBlob(blob=>{
+        blob.arrayBuffer().then(buf=>{chart.destroy();resolve(new Uint8Array(buf));});
+      },'image/png');
+    },0);
+  });
+}
+
+async function generateForecastReportDOCX(){
+  const btn=document.getElementById('rcfr_docx_btn');
+  const origLabel=btn?btn.innerHTML:'';
+  try{
+    if(btn){btn.disabled=true;btn.innerHTML='⏳ Generating…';}
+    await loadDocxJS();
+    const data=_frCollectData();
+    await _frRenderDOCX(data);
+  }catch(e){
+    console.error('Word generation failed',e);
+    alert('Word generation failed: '+(e.message||e));
+  }finally{
+    if(btn){btn.disabled=false;btn.innerHTML=origLabel;}
+  }
+}
+
+async function _frRenderDOCX(d){
+  const {Document,Packer,Paragraph,TextRun,Table,TableRow,TableCell,ImageRun,Header,Footer,
+    AlignmentType,HeadingLevel,BorderStyle,WidthType,ShadingType,VerticalAlign,PageNumber,PageBreak}=window.docx;
+
+  const NAVY="0B2545",STEEL="1B4965",LIGHT="EEF3F8",RED="B3261E",GREY="5A6472";
+  const CONTENT_W=9360;
+  const border={style:BorderStyle.SINGLE,size:1,color:"C9D2DC"};
+  const borders={top:border,bottom:border,left:border,right:border};
+
+  const headerCell=(text,width,left)=>new TableCell({borders,width:{size:width,type:WidthType.DXA},
+    shading:{fill:NAVY,type:ShadingType.CLEAR},margins:{top:60,bottom:60,left:90,right:90},verticalAlign:VerticalAlign.CENTER,
+    children:[new Paragraph({alignment:left?AlignmentType.LEFT:AlignmentType.RIGHT,children:[new TextRun({text,bold:true,color:"FFFFFF",size:16})]})]});
+  const bodyCell=(text,width,opts={})=>new TableCell({borders,width:{size:width,type:WidthType.DXA},
+    shading:{fill:opts.shade||"FFFFFF",type:ShadingType.CLEAR},margins:{top:50,bottom:50,left:90,right:90},verticalAlign:VerticalAlign.CENTER,
+    children:[new Paragraph({alignment:opts.left?AlignmentType.LEFT:AlignmentType.RIGHT,children:[new TextRun({text:String(text),bold:!!opts.bold,size:17,color:opts.color||"222222"})]})]});
+  const mkTable=(headers,rows,widths,opts={})=>{
+    const w=widths||headers.map(()=>Math.floor(CONTENT_W/headers.length));
+    const headRow=new TableRow({children:headers.map((hh,i)=>headerCell(hh,w[i],i===0&&!opts.rightFirst))});
+    const bodyRows=rows.map((r,ri)=>new TableRow({children:r.map((cell,ci)=>bodyCell(cell,w[ci],{
+      left:ci===0&&!opts.rightFirst,bold:opts.boldLastRow&&ri===rows.length-1,
+      shade:opts.boldLastRow&&ri===rows.length-1?LIGHT:(ri%2===1?"FAFBFC":"FFFFFF")}))}));
+    return new Table({width:{size:CONTENT_W,type:WidthType.DXA},columnWidths:w,rows:[headRow,...bodyRows]});
+  };
+  const h1=(text)=>new Paragraph({heading:HeadingLevel.HEADING_1,spacing:{before:280,after:160},children:[new TextRun({text,bold:true,size:30,color:NAVY})]});
+  const h2=(text)=>new Paragraph({spacing:{before:200,after:100},children:[new TextRun({text,bold:true,size:22,color:STEEL})]});
+  const body=(text,opts={})=>new Paragraph({spacing:{before:80,after:120},children:[new TextRun({text,size:opts.size||19,color:opts.color||"222222",bold:!!opts.bold})]});
+  const caveatBox=(text)=>new Table({width:{size:CONTENT_W,type:WidthType.DXA},columnWidths:[CONTENT_W],
+    rows:[new TableRow({children:[new TableCell({width:{size:CONTENT_W,type:WidthType.DXA},
+      shading:{fill:"FBEAEA",type:ShadingType.CLEAR},margins:{top:140,bottom:140,left:160,right:160},borders,
+      children:[new Paragraph({children:[new TextRun({text,italics:true,size:17,color:RED})]})]})]})]});
+  const spacer=()=>new Paragraph({text:""});
+  const pageBreak=()=>new Paragraph({children:[new PageBreak()]});
+
+  const fy26=rc=>{let t=0;for(let m=1;m<=12;m++)t+=(d.rcMonth[rc]&&d.rcMonth[rc][m])||0;return t;};
+  const h1Tot=rc=>{let t=0;for(let m=1;m<=(d.curMonth||6);m++)t+=(d.rcMonth[rc]&&d.rcMonth[rc][m])||0;return t;};
+  const h2Tot=rc=>{let t=0;for(let m=(d.curMonth||6)+1;m<=12;m++)t+=(d.rcMonth[rc]&&d.rcMonth[rc][m])||0;return t;};
+  const rcs=_FR_RC_ORDER.filter(rc=>d.rcMonth[rc]);
+  const monthsLbl=[];const monthNums=[];
+  for(let m=(d.curMonth||6)+1;m<=12;m++){monthsLbl.push(new Date(2000,m-1,1).toLocaleString('en-US',{month:'short'}));monthNums.push(m);}
+  const macroLookup=(dt,seg,m)=>{const r=sbMacroAssum.find(r=>r.driver_type===dt&&(r.segment||null)===(seg||null)&&Number(r.year)===d.year&&Number(r.month)===m);return r?Number(r.value_pct)||0:0;};
+
+  const children=[];
+  children.push(new Paragraph({heading:HeadingLevel.TITLE,children:[new TextRun({text:"JPS Sales & Load Forecast",bold:true,size:44,color:NAVY})]}));
+  children.push(body('Formal Summary Report — Fiscal Year '+d.year+' Full-Year Outlook',{color:GREY}));
+  children.push(body(`Actuals through month ${d.curMonth} · Forecast remainder of ${d.year} (Driver Forecast engine) · Generated live from the app`,{color:GREY}));
+  children.push(spacer());
+
+  children.push(h1('Executive Summary'));
+  const totFy=rcs.reduce((s,rc)=>s+fy26(rc)/1e6,0),totBud=rcs.reduce((s,rc)=>s+(d.budRc[rc]||0)/1e6,0),totFy25=rcs.reduce((s,rc)=>s+(d.fy25Rc[rc]||0)/1e6,0);
+  children.push(mkTable(['Total (ex-EV)',`FY${d.year-1} Actual`,`FY${d.year} Budget`,`FY${d.year} Forecast`,'Var vs Budget','Var vs Prior Year'],
+    [['All Rate Classes',_frFmt(totFy25),_frFmt(totBud),_frFmt(totFy),_frPct((totFy/totBud-1)*100),_frPct((totFy/totFy25-1)*100)]],
+    [1600,1550,1550,1600,1530,1530],{boldLastRow:true}));
+  children.push(spacer());
+  const rcVsBud=rc=>d.budRc[rc]>0?(fy26(rc)/d.budRc[rc]-1)*100:null;
+  const sortedByVsBud=rcs.slice().sort((a,b)=>Math.abs(rcVsBud(b)||0)-Math.abs(rcVsBud(a)||0));
+  const mover1=sortedByVsBud[0],mover2=sortedByVsBud[1];
+  children.push(body(`Full-year ${d.year} load is forecast at ${_frFmt(totFy)} GWh, ${_frPct((totFy/totBud-1)*100)} vs budget and ${_frPct((totFy/totFy25-1)*100)} vs FY${d.year-1} actual. `+
+    (mover1?`${mover1} is the largest mover vs budget (${_frPct(rcVsBud(mover1))}).`:'')+
+    (mover2?` ${mover2} is the next largest (${_frPct(rcVsBud(mover2))}).`:'')));
+  children.push(body('Methodology: forecast is computed live by the Driver Forecast engine — each KAM account or non-KAM cohort '+
+    '(rate_class|parish|consumption_bucket) projects each remaining month as its own rolling 3-month trailing average × '+
+    '(1 + macro% + weather% + industry-or-seasonality% + operational%) + manual kWh override. Industry % applies only to '+
+    'KAM-assigned key accounts. All figures exclude the EV rate class; bulk-billed placeholder accounts (Postpaid/'+
+    'Zero-Postpaid) are excluded from individual-account attribution and still roll up into their rate-class cohort totals. '+
+    'This Word document and the PDF export read the exact same computed chains as the table above — they cannot disagree.',
+    {size:16,color:GREY}));
+
+  children.push(pageBreak());
+  children.push(h1('Forecast Assumptions by Driver'));
+  children.push(body('Segment-level macro drivers (commercial/residential), applied to every rate class based on its segment (RT10, RT20 = Residential; RT40, RT50, RT60-ST, RT70 = Commercial).'));
+  children.push(mkTable(['Driver',...monthsLbl],[
+    ['Commercial (%)',...monthNums.map(m=>_frPct(macroLookup('macro','commercial',m),2))],
+    ['Residential (%)',...monthNums.map(m=>_frPct(macroLookup('macro','residential',m),2))],
+  ],[2160,1200,1200,1200,1200,1200,1200],{}));
+  children.push(spacer());
+  const weatherNotes=_frSourceNotes('weather',null);
+  children.push(caveatBox('Weather driver — applied '+monthNums.filter(m=>sbMacroAssum.some(r=>r.driver_type==='weather'&&Number(r.year)===d.year&&Number(r.month)===m)).map(m=>_frPct(macroLookup('weather',null,m))+' ('+new Date(2000,m-1,1).toLocaleString('en-US',{month:'short'})+')').join(', ')+
+    (monthNums.some(m=>!sbMacroAssum.some(r=>r.driver_type==='weather'&&Number(r.year)===d.year&&Number(r.month)===m))?'; months with no row here default to 0% — a coverage gap, not a verified "no effect" finding.':'.')+
+    (weatherNotes.length?' Source: '+weatherNotes.join(' / '):' No source note on file for this driver.')));
+  children.push(spacer());
+  children.push(h2('Industry-Level Drivers (KAM-assigned key accounts only)'));
+  const indList=[...d.modeledIndustries].filter(ind=>monthNums.some(m=>sbMacroAssum.some(r=>r.driver_type==='industry'&&r.segment===ind&&Number(r.year)===d.year&&Number(r.month)===m)))
+    .sort((a,b)=>macroLookup('industry',b,monthNums[0])-macroLookup('industry',a,monthNums[0]));
+  children.push(mkTable(['Industry',...monthsLbl],
+    indList.map(ind=>[ind,...monthNums.map(m=>sbMacroAssum.some(r=>r.driver_type==='industry'&&r.segment===ind&&Number(r.year)===d.year&&Number(r.month)===m)?_frPct(macroLookup('industry',ind,m),1):'—')]),
+    [3300,1010,1010,1010,1010,1010,1010],{}));
+  children.push(spacer());
+  let sourced=0,unsourced=[];
+  indList.forEach(ind=>{const notes=_frSourceNotes('industry',ind);if(notes.length)sourced++;else unsourced.push(ind);});
+  children.push(body(`Sourced (${sourced} of ${indList.length}):`,{bold:true,size:17}));
+  indList.forEach(ind=>{const notes=_frSourceNotes('industry',ind);if(notes.length)children.push(body(ind+' — '+notes.join(' / '),{size:16,color:GREY}));});
+  if(unsourced.length)children.push(body('Unsourced: '+unsourced.join(', ')+' — no source_note on file.',{size:16,color:GREY}));
+
+  children.push(pageBreak());
+  children.push(h1('Industry H2 Actual vs. Forecast (GWh)'));
+  children.push(body('H2 prior-year actual vs H2 current-year forecast, KAM-assigned accounts tagged to each modeled industry only.',{size:16,color:GREY}));
+  const indOrder=[...new Set([...Object.keys(d.indH2Actual25),...Object.keys(d.indH2Fc)])].sort((a,b)=>(d.indH2Fc[b]||0)-(d.indH2Fc[a]||0));
+  children.push(mkTable(['Industry','H2 Prior-Year Actual (GWh)','H2 Forecast (GWh)','Δ %'],
+    indOrder.map(ind=>{const a=(d.indH2Actual25[ind]||0)/1e6,f=(d.indH2Fc[ind]||0)/1e6;return [ind,_frFmt(a),_frFmt(f),a>0?_frPct((f/a-1)*100):'—'];}),
+    [4200,1720,1720,1720],{}));
+
+  children.push(pageBreak());
+  children.push(h1('Rate Class Performance: Forecast vs Budget vs Prior Year'));
+  const rcRows=rcs.map(rc=>{const f=fy26(rc)/1e6,b=(d.budRc[rc]||0)/1e6,p=(d.fy25Rc[rc]||0)/1e6;
+    return [rc,_frFmt(p),_frFmt(b),_frFmt(f),b>0?_frPct((f/b-1)*100):'—',p>0?_frPct((f/p-1)*100):'—'];});
+  rcRows.push(['TOTAL',_frFmt(totFy25),_frFmt(totBud),_frFmt(totFy),_frPct((totFy/totBud-1)*100),_frPct((totFy/totFy25-1)*100)]);
+  children.push(mkTable(['Rate Class','FY'+(d.year-1)+' Actual (GWh)','FY'+d.year+' Budget (GWh)','FY'+d.year+' Forecast (GWh)','Var vs Budget','Var vs Prior Year'],
+    rcRows,[1560,1560,1560,1560,1560,1560],{boldLastRow:true}));
+  children.push(spacer());
+  children.push(body('Figures rounded to 1 decimal for display; TOTAL is calculated from unrounded values.',{size:14,color:GREY}));
+  children.push(spacer());
+  children.push(h2('Monthly Trend — Actual vs Forecast '+d.year));
+  children.push(body('Solid line = actual; dashed line = forecast.',{size:14,color:GREY}));
+
+  const chartPngs={};
+  for(const rc of rcs){
+    const hist=[];for(let m=1;m<=(d.curMonth||6);m++)hist.push(((d.rcMonth[rc]&&d.rcMonth[rc][m])||0)/1e6);
+    const fc=[];for(let m=(d.curMonth||6)+1;m<=12;m++)fc.push(((d.rcMonth[rc]&&d.rcMonth[rc][m])||0)/1e6);
+    chartPngs[rc]=await _frChartPNG(rc,hist,fc);
+  }
+  const chartRows=[];
+  for(let i=0;i<rcs.length;i+=2){
+    const pair=rcs.slice(i,i+2);
+    chartRows.push(new TableRow({children:pair.map(rc=>new TableCell({
+      width:{size:CONTENT_W/2,type:WidthType.DXA},
+      borders:{top:{style:BorderStyle.NONE},bottom:{style:BorderStyle.NONE},left:{style:BorderStyle.NONE},right:{style:BorderStyle.NONE}},
+      children:[new Paragraph({alignment:AlignmentType.CENTER,children:[new ImageRun({type:"png",data:chartPngs[rc],
+        transformation:{width:220,height:150},altText:{title:rc,description:rc+' trend chart',name:rc}})]})]
+    }))}));
+  }
+  children.push(new Table({width:{size:CONTENT_W,type:WidthType.DXA},columnWidths:[CONTENT_W/2,CONTENT_W/2],rows:chartRows}));
+
+  children.push(pageBreak());
+  children.push(h1('First-Half & Second-Half Detail'));
+  children.push(h2('H1 (through month '+d.curMonth+') Actual vs Budget'));
+  const h1Rows=rcs.map(rc=>{const f=h1Tot(rc)/1e6,b=(d.budH1[rc]||0)/1e6;return [rc,_frFmt(f),_frFmt(b),b>0?_frPct((f/b-1)*100):'—'];});
+  const tH1F=rcs.reduce((s,rc)=>s+h1Tot(rc)/1e6,0),tH1B=rcs.reduce((s,rc)=>s+(d.budH1[rc]||0)/1e6,0);
+  h1Rows.push(['TOTAL',_frFmt(tH1F),_frFmt(tH1B),tH1B>0?_frPct((tH1F/tH1B-1)*100):'—']);
+  children.push(mkTable(['Rate Class','H1 Actual (GWh)','H1 Budget (GWh)','Var vs Budget'],h1Rows,[2340,2340,2340,2340],{boldLastRow:true}));
+  children.push(spacer());
+  children.push(h2('H2 (remainder of '+d.year+') Forecast vs Budget'));
+  const h2Rows=rcs.map(rc=>{const f=h2Tot(rc)/1e6,b=(d.budH2[rc]||0)/1e6;return [rc,_frFmt(f),_frFmt(b),b>0?_frPct((f/b-1)*100):'—'];});
+  const tH2F=rcs.reduce((s,rc)=>s+h2Tot(rc)/1e6,0),tH2B=rcs.reduce((s,rc)=>s+(d.budH2[rc]||0)/1e6,0);
+  h2Rows.push(['TOTAL',_frFmt(tH2F),_frFmt(tH2B),tH2B>0?_frPct((tH2F/tH2B-1)*100):'—']);
+  children.push(mkTable(['Rate Class','H2 Forecast (GWh)','H2 Budget (GWh)','Var vs Budget'],h2Rows,[2340,2340,2340,2340],{boldLastRow:true}));
+
+  children.push(pageBreak());
+  children.push(h1('Top 10 Customers by Volume (FY'+d.year+')'));
+  children.push(body('Ranked by FY'+d.year+' kWh (H1 actual + H2 forecast), aggregated by customer name across all billing accounts. Excludes EV rate class and bulk-billed placeholder accounts.'));
+  const custRecs=Object.keys(d.custFy).map(n=>{const f=d.custFy[n]/1e6,p=(d.fy25Cust[n]||0)/1e6;return {n,rc:_frRcLabel(d.custRcKwh,n),f,p,chg:p>1e-6?(f/p-1)*100:null};}).filter(r=>r.f>1e-6||r.p>1e-6);
+  const top10=custRecs.slice().sort((a,b)=>b.f-a.f).slice(0,10);
+  children.push(mkTable(['#','Customer','Rate Class','FY'+d.year+' (GWh)','FY'+(d.year-1)+' (GWh)','YoY %'],
+    top10.map((r,i)=>[String(i+1),r.n,r.rc,_frFmt(r.f),_frFmt(r.p),r.chg==null?'new':_frPct(r.chg)]),
+    [500,3560,1500,1300,1300,1200],{}));
+  if(top10.length>=2){children.push(spacer());children.push(body(`${top10[0].n} (${_frFmt(top10[0].f)} GWh) and ${top10[1].n} (${_frFmt(top10[1].f)} GWh, ${top10[1].chg==null?'new':_frPct(top10[1].chg)} YoY) are the two largest metered customers by this measure.`,{size:16,color:GREY}));}
+
+  children.push(pageBreak());
+  children.push(h1('Bottom 10 Customers — Largest YoY Declines'));
+  children.push(body('Among material accounts (FY'+(d.year-1)+' volume > 0.3 GWh), ranked by steepest YoY decline, aggregated by customer name.'));
+  const declines=custRecs.filter(r=>r.p>0.3&&r.chg!=null).sort((a,b)=>a.chg-b.chg).slice(0,10);
+  children.push(mkTable(['#','Customer','Rate Class','FY'+d.year+' (GWh)','FY'+(d.year-1)+' (GWh)','YoY %','Status'],
+    declines.map((r,i)=>[String(i+1),r.n,r.rc,_frFmt(r.f),_frFmt(r.p),_frPct(r.chg),r.f<=0.005?'NEEDS VERIFICATION':'Confirmed decline']),
+    [430,2500,1100,1150,1150,1030,2000],{}));
+  const nVerify=declines.filter(r=>r.f<=0.005).length;
+  if(nVerify){children.push(spacer());children.push(caveatBox(`${nVerify} accounts flagged "NEEDS VERIFICATION": FY${d.year} forecast is essentially zero because the engine's rolling 3-month base found no recent billed kWh under that account. Recommend Sales/KAM confirm status before reporting these as lost load.`));}
+
+  const doc=new Document({
+    styles:{default:{document:{run:{font:"Calibri",size:19}}}},
+    sections:[{
+      properties:{page:{size:{width:12240,height:15840},margin:{top:1000,right:1440,bottom:1000,left:1440}}},
+      headers:{default:new Header({children:[]})},
+      footers:{default:new Footer({children:[new Paragraph({alignment:AlignmentType.CENTER,children:[
+        new TextRun({text:'JPS Sales & Load Forecast — FY'+d.year+' — Page ',size:14,color:GREY}),
+        new TextRun({children:[PageNumber.CURRENT],size:14,color:GREY}),
+        new TextRun({text:' of ',size:14,color:GREY}),
+        new TextRun({children:[PageNumber.TOTAL_PAGES],size:14,color:GREY}),
+      ]})]})},
+      children
+    }]
+  });
+  const blob=await Packer.toBlob(doc);
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=`JPS_Sales_Forecast_Summary_${d.year}.docx`;
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 
 /* ==========================================
