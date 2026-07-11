@@ -5,7 +5,14 @@
 .env.local
 
 # --- excluded from commit (raw customer data + scratch + backups) ---
-analysis/
+# analysis/* ignores CONTENTS (not the dir itself) so the code allowlist below
+# can re-include scripts. Data files (billing extracts, *.json datasets, built
+# HTML with the embedded data blob, the loader exe) stay untracked.
+analysis/*
+!analysis/*.py
+!analysis/*.bat
+!analysis/*.js
+!analysis/app2_template.html
 salesanalysis_deploy/
 *.pre-submit.bak.html
 

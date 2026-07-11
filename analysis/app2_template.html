@@ -1,0 +1,1740 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JPS Sales Explorer — multi-month</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./jps-auth.js"></script>
+<style>
+:root{--dark:#F4F6FA;--dark2:#FFFFFF;--yel:#E8A000;--mut:#6B7A99;--blu:#1B4F8A;--org:#c8772f;--pos:#16A34A;--neg:#DC2626;--card:#FFFFFF;--line:#E2E8F0}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--dark);color:#1E293B;font-family:Calibri,'Segoe UI',system-ui,sans-serif;min-height:100vh}
+.topbar{background:#0C3547;display:flex;align-items:center;gap:14px;padding:11px 24px;border-bottom:3px solid #E8A000}
+.topbar .tbrand{color:#E8A000;font-family:Georgia,serif;font-weight:700;font-size:17px;letter-spacing:0.5px}
+.topbar .tsep{color:#3A5568;font-size:15px}
+.topbar .ttitle{color:#B8CDE0;font-size:12.5px}
+.topbar .tbadge{margin-left:auto;background:#E8A000;color:#0C3547;font-size:9.5px;font-weight:700;letter-spacing:1.5px;padding:3px 10px;border-radius:4px}
+.wrap{max-width:1200px;margin:0 auto;padding:20px 20px 40px}
+.kick{color:#0C3547;font-weight:700;letter-spacing:3px;font-size:11px;opacity:0.5;margin-bottom:2px}
+h1{font-family:Georgia,serif;font-size:27px;margin:2px 0 2px;color:#0C3547}
+.sub{color:var(--mut);font-size:14px;margin-bottom:14px}
+.toggle{display:flex;flex-wrap:wrap;background:var(--dark2);border:1px solid var(--line);border-radius:10px;padding:4px;gap:4px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.toggle button{background:none;border:0;color:#4A5568;font:inherit;font-weight:600;font-size:13.5px;padding:8px 14px;border-radius:7px;cursor:pointer;transition:background .15s}
+.tgroup{display:flex;align-items:center;gap:2px;padding:2px 10px 2px 4px;border-right:1px solid var(--line)}
+.tgroup:last-child{border-right:0}
+.tglbl{font-size:9.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--mut);margin:0 6px 0 8px;white-space:nowrap}
+.toggle button:hover{background:#F0F4F8}
+.toggle button.on{background:var(--yel);color:#0C1A2E}
+.ctrl{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.seg{display:inline-flex;background:var(--dark2);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{background:none;border:0;color:#4A5568;font:inherit;font-size:12.5px;font-weight:600;padding:7px 11px;cursor:pointer}
+.seg button.on{background:var(--blu);color:#fff}
+select,input.search{background:var(--dark2);border:1px solid var(--line);border-radius:8px;color:#1E293B;font:inherit;font-size:13px;padding:8px 10px}
+input.search{min-width:180px;flex:1}
+.lbl{color:var(--mut);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-right:2px}
+.mchips{display:flex;gap:5px;flex-wrap:wrap;margin:2px 0 10px}
+.mchip{background:var(--dark2);border:1px solid var(--line);border-radius:16px;color:var(--mut);font-size:11.5px;font-weight:600;padding:4px 10px;cursor:pointer}
+.mchip.on{background:#DBEAFE;border-color:var(--blu);color:var(--blu)}
+.mchip.allbtn{border-color:var(--yel);color:#B87800}
+.grid{display:grid;grid-template-columns:1fr 250px;gap:16px}
+@media(max-width:840px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.chartttl{font-family:Georgia,serif;font-size:16px;margin-bottom:10px;color:#0C3547}
+.chartwrap{position:relative;height:430px}
+.kpis{display:flex;flex-direction:column;gap:10px}
+.kpi{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--yel);border-radius:12px;padding:12px 14px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+.kpi .l{color:var(--mut);font-size:10.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase}
+.kpi .v{font-family:Georgia,serif;font-size:22px;font-weight:700;margin-top:2px;color:#0C3547}
+.kpi .d{font-size:12px;margin-top:2px;color:var(--mut)}
+.up{color:var(--pos)!important}.dn{color:var(--neg)!important}
+.tbl{max-height:430px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{position:sticky;top:0;background:#F8FAFC;color:#475569;text-align:right;font-weight:700;padding:9px 9px;font-size:10.5px;text-transform:uppercase;cursor:pointer;white-space:nowrap;border-bottom:2px solid var(--line)}
+th.l,td.l{text-align:left}
+td{padding:7px 9px;text-align:right;border-top:1px solid var(--line);white-space:nowrap}
+tr.sel td{background:#EFF6FF}tr:hover td{background:#F8FAFC;cursor:pointer}
+.badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 6px;border-radius:5px;background:#EFF6FF;color:#1B4F8A}
+.flag{color:#B87800}.note{color:var(--mut);font-size:12.5px;margin-top:14px;line-height:1.5}.note b{color:#1E293B}
+.chip{background:#F0F4F8;border:1px solid var(--line);border-radius:20px;color:#4A5568;font-size:11.5px;font-weight:600;padding:4px 10px;cursor:pointer}.chip:hover{border-color:var(--yel);color:#B87800}
+.muted{color:var(--mut)}
+#acct-modal-bg{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:200;justify-content:center;align-items:center}
+#acct-modal-bg.open{display:flex}
+#acct-modal{background:var(--card);border:1px solid var(--line);border-radius:14px;width:820px;max-width:94vw;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+#acct-modal-hdr{background:#F8FAFC;border-bottom:1px solid var(--line);padding:14px 20px;display:flex;align-items:center;gap:10px}
+#acct-modal-title{flex:1;font-family:Georgia,serif;font-size:17px;font-weight:700;color:#0C3547}
+#acct-modal-title .sub{display:block;font-family:Calibri,sans-serif;font-size:11px;font-weight:400;color:var(--mut);margin-top:2px}
+#acct-modal-close{background:none;border:1px solid var(--line);border-radius:8px;color:var(--mut);font-size:14px;width:30px;height:30px;cursor:pointer}
+#acct-modal-close:hover{border-color:var(--yel);color:#B87800}
+#acct-modal-body{overflow:auto;padding:16px 20px}
+</style></head><body>
+<div class="topbar"><span class="tbrand">JPS</span><span class="tsep">·</span><span class="ttitle">FP&amp;A · Sales &amp; Demand Explorer</span><span class="tbadge" id="topbarBadge">&nbsp;</span></div>
+<div class="wrap">
+<div class="kick">JPS · FP&amp;A · SALES &amp; DEMAND EXPLORER</div>
+<h1>Revenue analysis &amp; explorer</h1>
+<div class="sub">Why volume rose but revenue per kWh fell — the deck, made interactive. Meter-level billing detail. <span id="dataStamp" style="color:var(--org);font-weight:600"></span></div>
+<div class="toggle">
+  <div class="tgroup"><span class="tglbl">Overview</span>
+    <button data-v="digest" class="on">This month</button>
+  </div>
+  <div class="tgroup"><span class="tglbl">Revenue story</span>
+    <button data-v="answer">The answer</button>
+    <button data-v="bridge">YoY bridge</button>
+    <button data-v="mix">Revenue mix</button>
+    <button data-v="trends">Trends</button>
+  </div>
+  <div class="tgroup"><span class="tglbl">Movers</span>
+    <button data-v="cases">Big customers</button>
+    <button data-v="giants">With / without</button>
+    <button data-v="movers">Movers</button>
+    <button data-v="topmovers">Top var movers</button>
+    <button data-v="compare">Compare</button>
+    <button data-v="customers">Customers</button>
+  </div>
+  <div class="tgroup"><span class="tglbl">Data quality</span>
+    <button data-v="adjustments">Adjustments</button>
+    <button data-v="custcharge">Customer Charge</button>
+    <button data-v="anomalies">Anomalies</button>
+  </div>
+  <div class="tgroup"><span class="tglbl">Reference</span>
+    <button data-v="demand">Demand charges</button>
+  </div>
+</div>
+<div id="app"></div>
+<div class="note" id="note"></div>
+</div>
+<div id="acct-modal-bg" onclick="if(event.target===this)closeAcctModal()">
+  <div id="acct-modal">
+    <div id="acct-modal-hdr"><div id="acct-modal-title"></div><button id="acct-modal-close" onclick="closeAcctModal()">✕</button></div>
+    <div id="acct-modal-body"></div>
+  </div>
+</div>
+<script>
+// D used to be a build-time snapshot embedded here as a placeholder token
+// baked into the HTML by build_full.py. It's now populated live by bootstrapExplorerData()
+// at the bottom of this script, from jps_billing_components (+ jps_kam /
+// jps_industries for KAM & industry context) — the same live-query pattern
+// the Adjustments tab already used. Starts empty so nothing throws before the
+// bootstrap resolves; render() is gated behind it.
+let D={months:[],mlabels:[],classes:['RT10','RT20','RT40','RT50','RT60','RT70','Other'],cls:{},total:{},accts:[],parishes:[],parish:{},movers:null};
+const COL={RT10:'#D98900',RT20:'#2563EB',RT40:'#0D9488',RT50:'#7C3AED',RT60:'#EA6C1E',RT70:'#475569',Other:'#94A3B8',Total:'#1E293B'};
+const PCOL=['#D98900','#2563EB','#0D9488','#7C3AED','#EA6C1E','#475569','#DC2626','#16A34A','#c8772f','#94A3B8','#475569','#2563EB','#7C3AED','#0D9488','#EA6C1E','#D98900','#16A34A','#c8772f'];
+Chart.defaults.color='#475569';Chart.defaults.font.family='Calibri,Segoe UI,sans-serif';Chart.defaults.font.size=12.5;
+if(window.ChartDataLabels){Chart.register(ChartDataLabels);Chart.defaults.set('plugins.datalabels',{display:false});}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const sp=v=>(v>=0?'+':'')+v.toFixed(1);
+// ── Supabase account drill-down ──────────────────────────────────
+const _SB=supabase.createClient('https://bhrswnbenkvflpdjhfpa.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJocnN3bmJlbmt2ZmxwZGpoZnBhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMTc0OTcsImV4cCI6MjA5MTg5MzQ5N30.JupFs0tnMn3k282PqFOSMi2ch-wtB7Ewv7O8fN16-94',
+  window.JpsAuth?JpsAuth.clientOptions():undefined);
+
+/* ── Login gate — platform SSO (shared jps_sso_v1 cookie) or manual sign-in.
+   This page embeds 1,100+ customers' billing detail in the HTML itself, so it
+   must never render for an anonymous visitor. Gates on ANY valid platform
+   session (no per-app access row exists for the Explorer yet — if one is added
+   to admin.app_access later, tighten the check accordingly).
+   KNOWN LIMIT: the gate blocks the rendered UI, but the embedded data blob is
+   still present in view-source for anyone who fetches the HTML. Full fix =
+   move the embedded blob out of the page into an authenticated fetch (private
+   Supabase Storage object) — a build-pipeline change, tracked separately.
+   (Do not write the literal placeholder token in comments here — the build
+   replaces every occurrence of it with the 800KB data blob.)
+   localhost/127.0.0.1 bypasses the gate so local dev previews keep working. */
+const _GATE_DEV_BYPASS=['localhost','127.0.0.1'].includes(location.hostname);
+function _gateShow(){
+  if(document.getElementById('loginGate'))return;
+  const g=document.createElement('div');
+  g.id='loginGate';
+  g.innerHTML='<div style="position:fixed;inset:0;background:#0C3547;z-index:999;display:flex;align-items:center;justify-content:center">'+
+    '<div style="background:#fff;border-radius:14px;padding:34px 38px;width:340px;box-shadow:0 20px 60px rgba(0,0,0,.4)">'+
+    '<div style="font-family:Georgia,serif;font-size:20px;font-weight:700;color:#0C3547;margin-bottom:4px">JPS Sales Explorer</div>'+
+    '<div style="font-size:12px;color:#64748B;margin-bottom:18px">Sign in with your JPS platform account</div>'+
+    '<input id="lgEmail" type="email" placeholder="you@jpsco.com" autocomplete="username" style="width:100%;box-sizing:border-box;padding:9px 12px;margin-bottom:8px;border:1px solid #CBD5E1;border-radius:8px;font-size:13px">'+
+    '<input id="lgPwd" type="password" placeholder="Password" autocomplete="current-password" style="width:100%;box-sizing:border-box;padding:9px 12px;margin-bottom:8px;border:1px solid #CBD5E1;border-radius:8px;font-size:13px">'+
+    '<div id="lgErr" style="display:none;color:#B3261E;font-size:12px;margin-bottom:8px"></div>'+
+    '<button id="lgBtn" style="width:100%;padding:10px;border:0;border-radius:8px;background:#0C3547;color:#fff;font-weight:600;font-size:13px;cursor:pointer">Sign In &rarr;</button>'+
+    '<div style="font-size:11px;color:#94A3B8;margin-top:12px">Same login as sales.jmfinancelab.com &middot; one sign-in covers all platform apps.</div>'+
+    '</div></div>';
+  document.body.appendChild(g);
+  document.getElementById('lgBtn').addEventListener('click',_gateLogin);
+  document.getElementById('lgPwd').addEventListener('keydown',e=>{if(e.key==='Enter')_gateLogin();});
+}
+async function _gateLogin(){
+  const errEl=document.getElementById('lgErr'),btn=document.getElementById('lgBtn');
+  errEl.style.display='none';
+  const email=document.getElementById('lgEmail').value.trim(),pwd=document.getElementById('lgPwd').value;
+  if(!email||!pwd){errEl.textContent='Email and password required.';errEl.style.display='block';return;}
+  btn.disabled=true;btn.textContent='Signing in…';
+  try{
+    const{error}=await _SB.auth.signInWithPassword({email,password:pwd});
+    if(error)throw error;
+    const gate=document.getElementById('loginGate');if(gate)gate.remove();
+  }catch(e){
+    errEl.textContent=e.message||'Sign-in failed.';errEl.style.display='block';
+  }finally{btn.disabled=false;btn.textContent='Sign In →';}
+}
+async function _gateInit(){
+  if(_GATE_DEV_BYPASS)return;
+  _gateShow(); // gate up immediately; removed only on a confirmed session
+  try{
+    const{data:{session}}=await _SB.auth.getSession();
+    if(session){const gate=document.getElementById('loginGate');if(gate)gate.remove();}
+  }catch(e){/* gate stays up */}
+}
+if(document.body)_gateInit();else document.addEventListener('DOMContentLoaded',_gateInit);
+const _acctCache={};
+// Peak-demand kVA (physical volume, RT40/50/70 only) — live from jps_demand_actuals.
+// Not part of the static embedded D blob (which only carries $ revenue components),
+// so this is fetched live via the same Supabase client used for account drill-down.
+let _demandKva=null;
+const DEM_TYPE_ORDER=['standard','on_peak','partial_peak','off_peak'];
+const DEM_TYPE_LABEL={standard:'Standard',on_peak:'On-Peak',partial_peak:'Partial-Peak',off_peak:'Off-Peak'};
+const DEM_TYPE_COLOR={standard:'#5a7a96',on_peak:'#e25c4b',partial_peak:'#f0ad4e',off_peak:'#00c2a8'};
+async function _fetchDemandKva(){
+  if(_demandKva)return _demandKva;
+  const{data,error}=await _SB.from('jps_demand_actuals').select('year,month,rate_class,demand_type,demand_kva').limit(2000);
+  _demandKva=error?[]:(data||[]);
+  return _demandKva;
+}
+// Billing-correction line items on the 40 Special Accounts, cross-referenced with
+// who/dept from the Special Accounts Directory. See analysis/load_special_adjustments.py.
+let _specialAdj=null;
+async function _fetchSpecialAdj(){
+  if(_specialAdj)return _specialAdj;
+  const{data,error}=await _SB.from('jps_special_account_adjustments')
+    .select('year,month,rate_class,scat_code,adj_value,who,dept,account_name,jps_ac').limit(2000);
+  _specialAdj=error?[]:(data||[]);
+  return _specialAdj;
+}
+function _parseYM(m){const r=String(m).match(/^(\d{4})-(\d{1,2})$/);return r?{y:+r[1],mo:+r[2]}:null;}
+const _budgetCache={};
+async function _fetchBudgetAgg(name,rc,m){
+  const k=name+'|'+(rc||'')+'|'+m;
+  if(_budgetCache[k])return _budgetCache[k];
+  const ym=_parseYM(m);
+  if(!ym)return null;
+  let q=_SB.from('jps_budget').select('kwh_budget,revenue_budget,demand_budget')
+    .eq('year',ym.y).eq('month',ym.mo).ilike('name',name);
+  if(rc)q=q.ilike('rate_class',rc+'%');
+  const {data,error}=await q.limit(500);
+  if(error||!data||!data.length){_budgetCache[k]=null;return null;}
+  const agg=data.reduce((s,r)=>({kwh:s.kwh+(+r.kwh_budget||0),rev:s.rev+(+r.revenue_budget||0),dem:s.dem+(+r.demand_budget||0)}),{kwh:0,rev:0,dem:0});
+  _budgetCache[k]=agg;
+  return agg;
+}
+async function _fetchAccts(name,mB,mC,rc){
+  const k=name+'|'+mB+'|'+mC+'|'+(rc||'');
+  if(_acctCache[k])return _acctCache[k];
+  const bym=_parseYM(mB),cym=_parseYM(mC);
+  if(!bym||!cym)return {rows:[],err:`bad month format: ${mB} / ${mC}`};
+  // Scope each lookup to its exact year+month first (avoids a full-table ILIKE scan).
+  const oneMonth=(y,mo)=>{
+    let q=_SB.from('jps_actuals')
+      .select('jps_ac,parish,rate_class,kwh,revenue_jmd,demand_jmd')
+      .eq('year',y).eq('month',mo)
+      .ilike('name',name);
+    if(rc)q=q.ilike('rate_class',rc+'%');
+    return q.limit(500);
+  };
+  const budgetForC=(y,mo)=>{
+    let q=_SB.from('jps_budget').select('jps_ac,kwh_budget,revenue_budget,demand_budget')
+      .eq('year',y).eq('month',mo).ilike('name',name);
+    if(rc)q=q.ilike('rate_class',rc+'%');
+    return q.limit(500);
+  };
+  const [resB,resC,resBud]=await Promise.all([oneMonth(bym.y,bym.mo),oneMonth(cym.y,cym.mo),budgetForC(cym.y,cym.mo)]);
+  const error=resB.error||resC.error;
+  if(error)return {rows:[],err:error.message||error.details||'query error'};
+  const byAc={};
+  for(const r of (resB.data||[])){
+    if(!byAc[r.jps_ac])byAc[r.jps_ac]={ac:r.jps_ac,parish:r.parish,rc:r.rate_class,base:null,cur:null,budget:null};
+    byAc[r.jps_ac].base={kwh:+r.kwh,rev:+r.revenue_jmd,dem:r.demand_jmd!=null?+r.demand_jmd:null};
+  }
+  for(const r of (resC.data||[])){
+    if(!byAc[r.jps_ac])byAc[r.jps_ac]={ac:r.jps_ac,parish:r.parish,rc:r.rate_class,base:null,cur:null,budget:null};
+    byAc[r.jps_ac].cur={kwh:+r.kwh,rev:+r.revenue_jmd,dem:r.demand_jmd!=null?+r.demand_jmd:null};
+  }
+  if(!resBud.error) for(const r of (resBud.data||[])){
+    if(byAc[r.jps_ac]) byAc[r.jps_ac].budget={kwh:+r.kwh_budget||0,rev:+r.revenue_budget||0,dem:+r.demand_budget||0};
+  }
+  const res=Object.values(byAc).sort((a,b)=>((b.cur?.kwh||0)+(b.base?.kwh||0))-((a.cur?.kwh||0)+(a.base?.kwh||0)));
+  const out={rows:res,err:res.length===0?`no rows matched for "${name}" in ${mB}/${mC}`:null};
+  _acctCache[k]=out;
+  return out;
+}
+function _renderAcctTable(rows,lB,lC,err){
+  if(err)return '<div style="color:#e25c4b;font-size:11px;padding:6px 0">⚠ '+esc(err)+'</div>';
+  if(!rows||!rows.length)return '<div style="color:var(--mut);font-size:12px;padding:6px 0">No account data found.</div>';
+  const pc=(a,b)=>a?+((b/a-1)*100).toFixed(1):0;
+  const fk=v=>v!=null?(v/1000).toFixed(1):'—';
+  const fr=v=>v!=null?(v/1e6).toFixed(2):'—';
+  const cls=(a,b)=>a==null||b==null?'':b>=a?'up':'dn';
+  let h='<div style="font-size:10px;font-weight:700;color:var(--mut);letter-spacing:1px;margin:8px 0 4px;border-top:1px solid var(--line);padding-top:8px">ACCOUNTS ('+rows.length+') — kWh MWh · Rev J$M</div>';
+  h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">';
+  h+='<thead><tr style="color:var(--mut);text-align:left">'
+    +'<th style="padding:2px 4px">A/c No.</th>'
+    +'<th style="padding:2px 4px">Parish</th>'
+    +'<th style="padding:2px 4px;text-align:right">kWh '+lB+'</th>'
+    +'<th style="padding:2px 4px;text-align:right">kWh '+lC+'</th>'
+    +'<th style="padding:2px 4px;text-align:right">Δ kWh%</th>'
+    +'<th style="padding:2px 4px;text-align:right">Rev '+lB+'</th>'
+    +'<th style="padding:2px 4px;text-align:right">Rev '+lC+'</th>'
+    +'<th style="padding:2px 4px;text-align:right">Δ Rev%</th>'
+    +'</tr></thead><tbody>';
+  for(const r of rows){
+    const bk=r.base?.kwh,ck=r.cur?.kwh,br=r.base?.rev,cr=r.cur?.rev;
+    const dk=pc(bk,ck),dr=pc(br,cr);
+    h+='<tr style="border-top:1px solid #1e2d40">'
+      +'<td style="padding:3px 4px;font-family:monospace;font-size:10.5px;color:var(--yel)">'+esc(r.ac)+'</td>'
+      +'<td style="padding:3px 4px;color:var(--mut)">'+esc(r.parish||'')+'</td>'
+      +'<td style="padding:3px 4px;text-align:right">'+fk(bk)+'</td>'
+      +'<td style="padding:3px 4px;text-align:right">'+fk(ck)+'</td>'
+      +'<td style="padding:3px 4px;text-align:right" class="'+cls(bk,ck)+'">'+(bk!=null&&ck!=null?sp(dk)+'%':'—')+'</td>'
+      +'<td style="padding:3px 4px;text-align:right">'+fr(br)+'</td>'
+      +'<td style="padding:3px 4px;text-align:right">'+fr(cr)+'</td>'
+      +'<td style="padding:3px 4px;text-align:right" class="'+cls(br,cr)+'">'+(br!=null&&cr!=null?sp(dr)+'%':'—')+'</td>'
+      +'</tr>';
+  }
+  h+='</tbody></table></div>';
+  return h;
+}
+const pctV=(a,b)=>a?((b/a-1)*100):0;
+function kpi(l,v,d,cls){return '<div class="kpi"><div class="l">'+l+'</div><div class="v">'+v+'</div>'+(d?'<div class="d '+(cls||'')+'">'+d+'</div>':'')+'</div>';}
+// metric defs: f(series-obj, monthIndex)
+const MET={
+ rev:{l:'Revenue (J$B)',f:(c,i)=>c.rev[i]/1e9,d:2,u:'B'},
+ kwh:{l:'Sales (GWh)',f:(c,i)=>c.kwh[i]/1e6,d:1,u:' GWh'},
+ dem:{l:'Demand charge (J$M)',f:(c,i)=>c.demand[i]/1e6,d:0,u:'M'},
+ real:{l:'Realization (J$/kWh)',f:(c,i)=>c.kwh[i]?c.rev[i]/c.kwh[i]:0,d:2,u:''},
+ nonfuel:{l:'Non-fuel (J$/kWh)',f:(c,i)=>c.kwh[i]?(c.rev[i]-c.fuel[i])/c.kwh[i]:0,d:2,u:''},
+ fuel:{l:'Fuel (J$/kWh)',f:(c,i)=>c.kwh[i]?c.fuel[i]/c.kwh[i]:0,d:2,u:''},
+ demsh:{l:'Demand share (%)',f:(c,i)=>c.rev[i]?c.demand[i]/c.rev[i]*100:0,d:1,u:'%'},
+};
+let chart=null, view='digest';
+let tMet='rev', tGroup='class', sel=new Set(D.months);
+let cGroup='customer', cMet='rev', cClass='ALL', cSearch='', cSel=null;
+let cBase=null, cCur=null, cSort='dDem', cDir=0;  // cDir: 0=magnitude, 1=asc, -1=desc
+function setSort(k){ if(cSort===k){ cDir = cDir<=0 ? 1 : -1; } else { cSort=k; cDir=-1; } renderCustomers(); }
+window.setSort=setSort;
+let mScope='Total', mMode='abs';
+const COMPS=['Fuel','IPP','Energy','Demand','Customer','Other'];
+const COMPCOL={Fuel:'#c8772f',IPP:'#9b59b6',Energy:'#3b6ea5',Demand:'#e25c4b',Customer:'#1f9d8b',Other:'#5d6d7e'};
+function comps(o,i){const f=o.fuel[i],ip=o.ipp[i],en=o.energy[i],dm=o.demand[i],cc=o.cust_chg[i];return {Fuel:f,IPP:ip,Energy:en,Demand:dm,Customer:cc,Other:o.rev[i]-(f+ip+en+dm+cc)};}
+function selIdx(){return D.months.map((m,i)=>i).filter(i=>sel.has(D.months[i]));}
+function monthChips(){
+  return '<div class="mchips"><span class="lbl" style="align-self:center">Periods</span>'+
+    D.months.map((m,i)=>'<span class="mchip '+(sel.has(m)?'on':'')+'" data-mo="'+m+'">'+D.mlabels[i]+'</span>').join('')+
+    '<span class="mchip allbtn" data-mo="__all">All</span><span class="mchip allbtn" data-mo="__none">Clear</span></div>';
+}
+function bindMonths(rerender){
+  document.querySelectorAll('[data-mo]').forEach(c=>c.onclick=()=>{
+    const m=c.dataset.mo;
+    if(m==='__all') sel=new Set(D.months); else if(m==='__none') sel=new Set();
+    else { if(sel.has(m))sel.delete(m); else sel.add(m); }
+    rerender();
+  });
+}
+function mkChart(ctx,labels,datasets,fmt){
+  if(chart)chart.destroy();
+  chart=new Chart(ctx,{type:'line',data:{labels,datasets:datasets.map(d=>({label:d.name,data:d.data,
+    borderColor:d.col,backgroundColor:d.col,tension:.3,borderWidth:2.5,pointRadius:2.5,pointHoverRadius:5,fill:false}))},
+    options:{maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:datasets.length>1,position:'bottom',labels:{boxWidth:12,padding:10}},
+        tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt(c.raw)}}},
+      scales:{x:{grid:{color:'#E2E8F0'}},y:{grid:{color:'#E2E8F0'},ticks:{callback:fmt}}}}});
+}
+function renderTrends(){
+  const m=MET[tMet];
+  let h='<div class="ctrl"><span class="lbl">Metric</span><select id="tmet">'+
+    Object.keys(MET).map(k=>'<option value="'+k+'"'+(tMet===k?' selected':'')+'>'+MET[k].l+'</option>').join('')+'</select>'+
+    '<div class="seg"><button data-tg="class" class="'+(tGroup==='class'?'on':'')+'">By rate class</button><button data-tg="parish" class="'+(tGroup==='parish'?'on':'')+'">By parish</button><button data-tg="total" class="'+(tGroup==='total'?'on':'')+'">Total</button></div></div>';
+  h+=monthChips();
+  h+='<div class="grid"><div class="card"><div class="chartttl">'+m.l+' — '+(tGroup==='total'?'total':tGroup==='parish'?'by parish':'by rate class')+'</div><div class="chartwrap"><canvas id="c"></canvas></div></div><div class="kpis" id="kp"></div></div>';
+  document.getElementById('app').innerHTML=h;
+  const idx=selIdx(), labels=idx.map(i=>D.mlabels[i]);
+  const fmt=v=>(v==null?'':(tMet==='rev'?'J$':'')+(+v).toFixed(m.d)+m.u);
+  let ds;
+  if(tGroup==='total') ds=[{name:'Total',col:COL.Total,data:idx.map(i=>m.f(D.total,i))}];
+  else if(tGroup==='parish') ds=(D.parishes||[]).map((p,k)=>({name:p,col:PCOL[k%PCOL.length],data:idx.map(i=>m.f(D.parish[p],i))}));
+  else ds=D.classes.map(c=>({name:c,col:COL[c],data:idx.map(i=>m.f(D.cls[c],i))}));
+  mkChart(document.getElementById('c'),labels,ds,fmt);
+  // KPIs: latest, peak, MoM, range (on total or sum)
+  const tot=idx.map(i=>m.f(D.total,i));
+  const last=tot[tot.length-1], prev=tot[tot.length-2];
+  document.getElementById('kp').innerHTML=
+    kpi('Latest · '+labels[labels.length-1],(tMet==='rev'?'J$':'')+last.toFixed(m.d)+m.u, prev!=null?sp(pctV(prev,last))+'% MoM':'', last>=prev?'up':'dn')+
+    kpi('Peak',(tMet==='rev'?'J$':'')+Math.max(...tot).toFixed(m.d)+m.u, labels[tot.indexOf(Math.max(...tot))])+
+    kpi('Low',(tMet==='rev'?'J$':'')+Math.min(...tot).toFixed(m.d)+m.u, labels[tot.indexOf(Math.min(...tot))])+
+    kpi('Periods shown',idx.length+' of '+D.months.length,'toggle chips above');
+  document.getElementById('tmet').onchange=e=>{tMet=e.target.value;renderTrends();};
+  document.querySelectorAll('[data-tg]').forEach(b=>b.onclick=()=>{tGroup=b.dataset.tg;renderTrends();});
+  bindMonths(renderTrends);
+}
+// ---- customers ----
+const AM={rev:a=>a.rev.map(v=>v/1e6),kwh:a=>a.kwh.map(v=>v/1e6),dem:a=>a.dem.map(v=>v/1e6),
+  real:a=>a.rev.map((r,i)=>a.kwh[i]?r/a.kwh[i]:0),demsh:a=>a.rev.map((r,i)=>r?a.dem[i]/r*100:0)};
+const AMU={rev:{l:'Revenue (J$M)',d:1},kwh:{l:'Sales (MWh)',d:1},dem:{l:'Demand (J$M)',d:1},real:{l:'Realization (J$/kWh)',d:2},demsh:{l:'Demand share %',d:1}};
+const CMfn={rev:c=>c.rev.map(v=>v/1e6),kwh:c=>c.kwh.map(v=>v/1e6),dem:c=>c.demand.map(v=>v/1e6),real:c=>c.rev.map((r,i)=>c.kwh[i]?r/c.kwh[i]:0),demsh:c=>c.rev.map((r,i)=>r?c.demand[i]/r*100:0)};
+function exportCustomers(iB,iC){
+  const lb=D.months[iB], lc=D.months[iC], q=cSearch.toLowerCase();
+  const rows=D.accts.filter(a=>(cClass==='ALL'||a.c===cClass)&&a.n.toLowerCase().includes(q));
+  const g=(a,k,i)=>(a[k]&&a[k][i]!=null?a[k][i]:0), M=v=>+(v/1e6).toFixed(3), pc=(x,y)=>x?+((y/x-1)*100).toFixed(1):0;
+  const hdr=['Customer','Class','Parish','kWh '+lb+' (M)','kWh '+lc+' (M)','dKWh%','Revenue '+lb+' (J$M)','Revenue '+lc+' (J$M)','dRev%','Demand '+lb+' (J$M)','Demand '+lc+' (J$M)','dDemand%','Energy '+lb+' (J$M)','Energy '+lc+' (J$M)','Fuel '+lb+' (J$M)','Fuel '+lc+' (J$M)','IPP '+lb+' (J$M)','IPP '+lc+' (J$M)'];
+  const body=rows.map(a=>[a.n,a.c,a.pg||'',M(g(a,'kwh',iB)),M(g(a,'kwh',iC)),pc(g(a,'kwh',iB),g(a,'kwh',iC)),M(g(a,'rev',iB)),M(g(a,'rev',iC)),pc(g(a,'rev',iB),g(a,'rev',iC)),M(g(a,'dem',iB)),M(g(a,'dem',iC)),pc(g(a,'dem',iB),g(a,'dem',iC)),M(g(a,'energy',iB)),M(g(a,'energy',iC)),M(g(a,'fuel',iB)),M(g(a,'fuel',iC)),M(g(a,'ipp',iB)),M(g(a,'ipp',iC))]);
+  const sc=i=>body.reduce((s,r)=>s+(typeof r[i]==='number'?r[i]:0),0);
+  const ov=(b,c)=>b?+(((c/b-1)*100)).toFixed(1):0;
+  const tot=hdr.map((h,i)=> i===0?'TOTAL ('+rows.length+')' : i<3?'' : (i===5||i===8||i===11)?'' : +sc(i).toFixed(3));
+  tot[5]=ov(sc(3),sc(4)); tot[8]=ov(sc(6),sc(7)); tot[11]=ov(sc(9),sc(10));
+  const aoa=[hdr].concat(body).concat([tot]);
+  const fname='JPS_Customers_'+D.months[iB]+'_to_'+D.months[iC];
+  if(window.XLSX){
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Customers'); XLSX.writeFile(wb,fname+'.xlsx');
+  } else {
+    const csv=aoa.map(r=>r.map(c=>typeof c==='string'&&/[",\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c).join(',')).join('\n');
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download=fname+'.csv'; a.click();
+  }
+}
+window.exportCustomers=exportCustomers;
+function renderCustomers(){
+  if(cBase==null)cBase=D.months[0]; if(cCur==null)cCur=D.months[D.months.length-1];
+  const iB=D.months.indexOf(cBase), iC=D.months.indexOf(cCur);
+  let h='<div class="ctrl">'+
+    '<div class="seg">'+['ALL','RT40','RT50','RT70'].map(x=>'<button data-cf="'+x+'" class="'+(cClass===x?'on':'')+'">'+(x==='ALL'?'All':x)+'</button>').join('')+'</div>'+
+    '<span class="lbl">Compare</span><select id="cB">'+D.months.map((m,i)=>'<option value="'+m+'"'+(cBase===m?' selected':'')+'>'+D.mlabels[i]+'</option>').join('')+'</select>'+
+    '<span class="lbl">→</span><select id="cC">'+D.months.map((m,i)=>'<option value="'+m+'"'+(cCur===m?' selected':'')+'>'+D.mlabels[i]+'</option>').join('')+'</select>'+
+    '<select id="csort">'+[['dDem','Sort: Δ Demand'],['dRev','Sort: Δ Revenue'],['dKwh','Sort: Δ kWh'],['demC','Sort: Demand J$']].map(o=>'<option value="'+o[0]+'"'+(cSort===o[0]?' selected':'')+'>'+o[1]+'</option>').join('')+'</select>'+
+    '<input class="search" id="csearch" placeholder="Search customer…" value="'+esc(cSearch)+'">'+
+    '<button class="chip" id="cexport" style="border-color:var(--yel);color:var(--yel);font-weight:700">⬇ Excel</button></div>';
+  const q=cSearch.toLowerCase();
+  const rows=D.accts.filter(a=>(cClass==='ALL'||a.c===cClass)&&a.n.toLowerCase().includes(q))
+    .map(a=>({id:a.id,name:a.n,cls:a.c,kB:a.kwh[iB],kC:a.kwh[iC],rB:a.rev[iB],rC:a.rev[iC],dB:a.dem[iB],dC:a.dem[iC],
+      dRev:a.rev[iC]-a.rev[iB],dKwh:a.kwh[iC]-a.kwh[iB],dDem:a.dem[iC]-a.dem[iB],demC:a.dem[iC],
+      dilut:(a.kwh[iC]>a.kwh[iB]&&a.dem[iC]<a.dem[iB])}))
+    .sort((x,y)=>{const a=x[cSort],b=y[cSort];
+      if(cDir===0) return Math.abs(b||0)-Math.abs(a||0);
+      if(cSort==='name'||cSort==='cls') return cDir>0?String(a).localeCompare(String(b)):String(b).localeCompare(String(a));
+      return cDir>0?((a||0)-(b||0)):((b||0)-(a||0));});
+  h+='<div style="margin:0 2px 8px;color:var(--mut);font-size:12px">'+rows.length+' accounts · '+D.mlabels[iB]+' → '+D.mlabels[iC]+' · <span class="flag">⚑</span> = kWh up but demand down (dilution)</div>';
+  const arr=k=>cSort===k?(cDir===0?' ⇅':cDir>0?' ▲':' ▼'):'';
+  const TH=(k,lab,cl)=>'<th'+(cl?' class="'+cl+'"':'')+' onclick="setSort(\''+k+'\')" title="click to sort">'+lab+arr(k)+'</th>';
+  h+='<div class="grid"><div class="card" style="padding:10px"><div class="tbl"><table><thead><tr>'+
+     TH('name','Customer','l')+TH('cls','Cls')+TH('kC','kWh M')+TH('dC','Demand J$M')+TH('dDem','Δ Dem')+TH('dKwh','Δ kWh')+TH('dRev','Δ Rev')+
+     '</tr></thead><tbody id="tb"></tbody></table></div></div><div class="kpis" id="kp"></div></div>';
+  document.getElementById('app').innerHTML=h;
+  const T=k=>rows.reduce((s,r)=>s+r[k],0);
+  const tkB=T('kB'),tkC=T('kC'),tdB=T('dB'),tdC=T('dC'),trB=T('rB'),trC=T('rC');
+  const totRow='<tr style="background:#E8F4FF;font-weight:700;position:sticky;top:0;color:#0C3547"><td class="l">TOTAL · '+rows.length+' accounts</td><td></td>'+
+    '<td>'+(tkB/1e6).toFixed(1)+'→'+(tkC/1e6).toFixed(1)+'</td>'+
+    '<td>'+(tdB/1e6).toFixed(1)+'→'+(tdC/1e6).toFixed(1)+'</td>'+
+    '<td class="'+(pctV(tdB,tdC)>=0?'up':'dn')+'">'+sp(pctV(tdB,tdC))+'%</td>'+
+    '<td class="'+(pctV(tkB,tkC)>=0?'up':'dn')+'">'+sp(pctV(tkB,tkC))+'%</td>'+
+    '<td class="'+(pctV(trB,trC)>=0?'up':'dn')+'">'+sp(pctV(trB,trC))+'%</td></tr>';
+  document.getElementById('tb').innerHTML=totRow+rows.slice(0,400).map(r=>{
+    const dp=pctV(r.dB,r.dC),kp=pctV(r.kB,r.kC),rp=pctV(r.rB,r.rC);
+    return '<tr class="'+(cSel===r.id?'sel':'')+'" onclick="pickRow(\''+r.id+'\')">'+
+      '<td class="l">'+(r.dilut?'<span class="flag">⚑ </span>':'')+esc(r.name).slice(0,28)+'</td>'+
+      '<td><span class="badge">'+r.cls+'</span></td>'+
+      '<td>'+(r.kB/1e6).toFixed(1)+'→'+(r.kC/1e6).toFixed(1)+'</td>'+
+      '<td>'+(r.dB/1e6).toFixed(1)+'→'+(r.dC/1e6).toFixed(1)+'</td>'+
+      '<td class="'+(dp>=0?'up':'dn')+'">'+sp(dp)+'%</td>'+
+      '<td class="'+(kp>=0?'up':'dn')+'">'+sp(kp)+'%</td>'+
+      '<td class="'+(rp>=0?'up':'dn')+'">'+sp(rp)+'%</td></tr>';
+  }).join('');
+  renderAccKpis(iB,iC);
+  document.getElementById('cB').onchange=e=>{cBase=e.target.value;renderCustomers();};
+  document.getElementById('cC').onchange=e=>{cCur=e.target.value;renderCustomers();};
+  document.getElementById('csort').onchange=e=>{cSort=e.target.value;cDir=0;renderCustomers();};
+  document.querySelectorAll('[data-cf]').forEach(x=>x.onclick=()=>{cClass=x.dataset.cf;cSel=null;renderCustomers();});
+  document.getElementById('csearch').oninput=e=>{cSearch=e.target.value;renderCustomers();const el=document.getElementById('csearch');el.focus();el.setSelectionRange(el.value.length,el.value.length);};
+  document.getElementById('cexport').onclick=()=>exportCustomers(iB,iC);
+}
+function renderAccKpis(iB,iC){
+  const k=document.getElementById('kp');
+  const chips='<div class="kpi"><div class="l">Jump to</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">'+
+    ['Alcoa','Caribbean Cement','Windalco','Jamaica Broilers','National Water'].map(n=>'<span class="chip" onclick="anchor(\''+n+'\')">'+n+'</span>').join('')+'</div></div>';
+  const grp=D.accts.filter(a=>cClass==='ALL'||a.c===cClass);
+  const sum=f=>grp.reduce((t,a)=>t+f(a),0);
+  const dR=sum(a=>a.rev[iC]-a.rev[iB]);
+  const dil=grp.filter(a=>a.kwh[iC]>a.kwh[iB]&&a.dem[iC]<a.dem[iB]).length;
+  const lbl=cClass==='ALL'?'Industrial':cClass;
+  const sBd=sum(a=>a.dem[iB]),sCd=sum(a=>a.dem[iC]),sBr=sum(a=>a.rev[iB]),sCr=sum(a=>a.rev[iC]);
+  let summ=kpi(lbl+' demand','J$'+(sCd/1e6).toFixed(0)+'M',sp(pctV(sBd,sCd))+'% vs '+D.mlabels[iB],sCd<sBd?'dn':'up')+
+    kpi(lbl+' revenue',sp(pctV(sBr,sCr))+'%','Δ J$'+(dR/1e6).toFixed(0)+'M',dR<0?'dn':'up')+
+    kpi('Dilution accounts',dil+' of '+grp.length,'kWh ↑ but demand ↓','dn');
+  let det='';
+  if(cSel){const a=D.accts.find(x=>x.id===cSel);
+    if(a) det='<div class="kpi" style="border-left-color:var(--blu);cursor:pointer" onclick="pickRow(\''+a.id+'\')"><div class="l">Selected · '+a.c+(a.pg&&a.pg!=='UNMAPPED'?' · '+a.pg:'')+'</div>'+
+      '<div style="font-family:Georgia,serif;font-size:15px;font-weight:700;margin:2px 0 4px">'+esc(a.n).slice(0,26)+'</div>'+
+      '<div style="font-size:11px;color:var(--blu);font-weight:700">&#8599; View account detail</div></div>';
+  }
+  k.innerHTML=summ+chips+det;
+}
+function buildAcctBreakdown(a,iB,iC){
+  const dpk=j=>a.kwh[j]?a.dem[j]/a.kwh[j]:0, G=(kk,j)=>(a[kk]&&a[kk][j]!=null?a[kk][j]:0);
+  const sub='color:var(--mut);font-size:10px;font-weight:700;letter-spacing:1px;border-top:1px solid var(--line);margin:6px 0 3px;padding-top:5px';
+  return '<div style="font-size:12.5px;line-height:1.7">'+
+    row2('kWh (M)',a.kwh[iB]/1e6,a.kwh[iC]/1e6,'',1)+
+    '<div style="'+sub+'">REVENUE LINES — J$M</div>'+
+    row2('Energy',G('energy',iB)/1e6,G('energy',iC)/1e6,'',1)+
+    row2('Demand',a.dem[iB]/1e6,a.dem[iC]/1e6,'',1)+
+    row2('Fuel',G('fuel',iB)/1e6,G('fuel',iC)/1e6,'',1)+
+    row2('IPP',G('ipp',iB)/1e6,G('ipp',iC)/1e6,'',1)+
+    row2('Customer',G('cust',iB)/1e6,G('cust',iC)/1e6,'',1)+
+    '<div style="border-top:1px solid var(--line);margin:4px 0 3px;padding-top:4px"></div>'+
+    row2('Total revenue',a.rev[iB]/1e6,a.rev[iC]/1e6,'',1)+
+    row2('Demand/kWh',dpk(iB),dpk(iC),' J$',2)+
+    '</div>';
+}
+function buildTrend6mo(a,iC){
+  const start=Math.max(0,iC-5);
+  const idxs=[];
+  for(let i=start;i<=iC;i++) idxs.push(i);
+  const rows=idxs.map(i=>'<tr style="border-top:1px solid #1e2d40"><td class="l" style="padding:3px 4px;color:var(--mut)">'+D.mlabels[i]+'</td>'+
+    '<td style="padding:3px 4px;text-align:right">'+(a.kwh[i]/1e6).toFixed(1)+'</td>'+
+    '<td style="padding:3px 4px;text-align:right">'+(a.dem[i]/1e6).toFixed(1)+'</td>'+
+    '<td style="padding:3px 4px;text-align:right">'+(a.rev[i]/1e6).toFixed(1)+'</td></tr>').join('');
+  return '<div style="font-size:10px;font-weight:700;color:var(--mut);letter-spacing:1px;margin:10px 0 4px;border-top:1px solid var(--line);padding-top:8px">LAST '+idxs.length+' MONTHS</div>'+
+    '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">'+
+    '<thead><tr style="color:var(--mut);text-align:left"><th style="padding:2px 4px">Month</th><th style="padding:2px 4px;text-align:right">kWh (M)</th><th style="padding:2px 4px;text-align:right">Demand (J$M)</th><th style="padding:2px 4px;text-align:right">Revenue (J$M)</th></tr></thead>'+
+    '<tbody>'+rows+'</tbody></table></div>';
+}
+function row2(l,a,b,u,dec){const p=pctV(a,b);return '<div style="display:flex;justify-content:space-between"><span class="muted">'+l+'</span><span>'+a.toFixed(dec)+'→<b>'+b.toFixed(dec)+'</b>'+u+' <span class="'+(p>=0?'up':'dn')+'">'+sp(p)+'%</span></span></div>';}
+function anchor(n){cSearch=n;cClass='ALL';const r=D.accts.filter(a=>a.n.toLowerCase().includes(n.toLowerCase()));if(r.length)cSel=r.sort((x,y)=>y.rev[y.rev.length-1]-x.rev[x.rev.length-1])[0].id;renderCustomers();}
+window.anchor=anchor;
+async function pickRow(id){
+  cSel=id;renderCustomers();
+  const a=D.accts.find(x=>x.id===id);if(!a)return;
+  const iB=D.months.indexOf(cBase||D.months[0]),iC=D.months.indexOf(cCur||D.months[D.months.length-1]);
+  openAcctModal(a,iB,iC);
+}
+window.pickRow=pickRow;
+function pickAt(id,iA,iB){
+  const a=D.accts.find(x=>x.id===id);if(!a)return;
+  cSel=id;
+  openAcctModal(a,iA,iB);
+}
+window.pickAt=pickAt;
+function openAcctModal(a,iB,iC){
+  document.getElementById('acct-modal-title').innerHTML=esc(a.n)+'<span class="sub">'+a.c+(a.pg&&a.pg!=='UNMAPPED'?' · '+a.pg:'')+'</span>';
+  document.getElementById('acct-modal-body').innerHTML=buildAcctBreakdown(a,iB,iC)+buildTrend6mo(a,iC)+
+    '<div id="acct-detail"><div style="color:var(--mut);font-size:11px;padding:6px 0">Loading accounts…</div></div>';
+  document.getElementById('acct-modal-bg').classList.add('open');
+  _fetchAccts(a.n,D.months[iB],D.months[iC],a.c).then(({rows,err})=>{
+    if(cSel!==a.id)return;
+    const el=document.getElementById('acct-detail');if(!el)return;
+    el.innerHTML=_renderAcctTable(rows,D.mlabels[iB],D.mlabels[iC],err);
+  });
+}
+function closeAcctModal(){document.getElementById('acct-modal-bg').classList.remove('open');}
+window.closeAcctModal=closeAcctModal;
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeAcctModal();});
+window.pickRow=pickRow;
+let pA=null,pB=null,cmGroup='class',cmMet='rev',dMode='abs';
+function renderDemand(){
+  let h='<div class="ctrl"><span class="lbl">Demand as</span><div class="seg">'+
+    [['abs','J$ charge'],['share','% of revenue'],['perkwh','J$ / kWh']].map(o=>'<button data-dm="'+o[0]+'" class="'+(dMode===o[0]?'on':'')+'">'+o[1]+'</button>').join('')+'</div></div>';
+  h+=monthChips();
+  h+='<div class="grid"><div class="card"><div class="chartttl">Demand charge — by rate class ('+(dMode==='abs'?'J$M':dMode==='share'?'% of class revenue':'J$ per kWh')+')</div><div class="chartwrap"><canvas id="c"></canvas></div></div><div class="kpis" id="kp"></div></div>';
+  h+='<div class="card" style="margin-top:14px"><div class="chartttl">Peak Demand Volume — billed kVA (RT40/RT50/RT70), standard vs on/partial/off-peak</div><div id="kvaPanel" style="font-size:12px;color:var(--mut);padding:8px 0">Loading…</div></div>';
+  document.getElementById('app').innerHTML=h;
+  renderDemandKva();
+  const idx=selIdx(), labels=idx.map(i=>D.mlabels[i]);
+  const DEMCLS=['RT40','RT50','RT70'];
+  const fn=dMode==='abs'?(c,i)=>c.demand[i]/1e6 : dMode==='share'?(c,i)=>c.rev[i]?c.demand[i]/c.rev[i]*100:0 : (c,i)=>c.kwh[i]?c.demand[i]/c.kwh[i]:0;
+  const ds=DEMCLS.map(c=>({name:c,col:COL[c],data:idx.map(i=>fn(D.cls[c],i))}));
+  mkChart(document.getElementById('c'),labels,ds,v=>v==null?'':(dMode==='share'?(+v).toFixed(1)+'%':dMode==='abs'?'J$'+(+v).toFixed(0)+'M':'J$'+(+v).toFixed(2)));
+  const totDem=idx.map(i=>D.classes.reduce((s,c)=>s+D.cls[c].demand[i],0)/1e6);
+  const last=totDem[totDem.length-1], prev=totDem.length>1?totDem[totDem.length-2]:null;
+  const i0=idx[0], i1=idx[idx.length-1];
+  const movers=D.accts.map(a=>({n:a.n,c:a.c,d:(a.dem[i1]-a.dem[i0])/1e6})).filter(m=>isFinite(m.d)).sort((x,y)=>x.d-y.d);
+  const dilut=D.accts.filter(a=>a.kwh[i1]>a.kwh[i0]&&a.dem[i1]<a.dem[i0]).length;
+  let kp=kpi('Total demand · '+labels[labels.length-1],'J$'+last.toFixed(0)+'M',prev!=null?sp(pctV(prev,last))+'% vs prev':'',last>=(prev||last)?'up':'dn')+
+    kpi('Dilution accounts',dilut+' of '+D.accts.length,'kWh ↑ but demand ↓','dn');
+  kp+='<div class="kpi" style="border-left-color:'+COL.RT70+'"><div class="l">Biggest demand drops · '+labels[0]+'→'+labels[labels.length-1]+'</div><div style="font-size:12px;line-height:1.7;margin-top:4px">'+
+    movers.slice(0,5).map(m=>'<div style="display:flex;justify-content:space-between;gap:8px"><span class="muted" style="overflow:hidden;text-overflow:ellipsis">'+esc(m.n).slice(0,22)+'</span><span class="'+(m.d<0?'dn':'up')+'">'+(m.d>=0?'+':'')+m.d.toFixed(1)+'M</span></div>').join('')+'</div></div>';
+  document.getElementById('kp').innerHTML=kp;
+  document.querySelectorAll('[data-dm]').forEach(b=>b.onclick=()=>{dMode=b.dataset.dm;renderDemand();});
+  bindMonths(renderDemand);
+}
+let chartKva=null;
+async function renderDemandKva(){
+  const panel=document.getElementById('kvaPanel');
+  if(!panel)return;
+  const rows=await _fetchDemandKva();
+  if(!rows.length){panel.innerHTML='<span style="color:var(--mut)">No kVA demand data loaded yet.</span>';return;}
+  const ymKey=r=>r.year+'-'+String(r.month).padStart(2,'0');
+  const months=[...new Set(rows.map(ymKey))].sort().slice(-6);
+  const sumFor=(ym,type)=>rows.filter(r=>ymKey(r)===ym&&(!type||r.demand_type===type)).reduce((s,r)=>s+(+r.demand_kva||0),0);
+  const fmtKva=v=>Math.round(v).toLocaleString();
+  const latest=months[months.length-1],prev=months.length>1?months[months.length-2]:null;
+  const latestTotal=sumFor(latest,null),prevTotal=prev?sumFor(prev,null):null;
+  const peakShare=latestTotal?sumFor(latest,'on_peak')/latestTotal*100:0;
+  let h='<div class="kpis" style="margin-bottom:10px">'+
+    kpi('Total kVA · '+latest,fmtKva(latestTotal),prevTotal?sp(pctV(prevTotal,latestTotal))+'% vs prior month':'',latestTotal>=(prevTotal||latestTotal)?'up':'dn')+
+    kpi('On-Peak Share',peakShare.toFixed(1)+'%','of total billed kVA','')+
+    '</div><div class="chartwrap" style="height:220px"><canvas id="cKva"></canvas></div>';
+  panel.innerHTML=h;
+  const ctx=document.getElementById('cKva');
+  if(!ctx)return;
+  if(chartKva)chartKva.destroy();
+  const dsets=DEM_TYPE_ORDER.map(t=>({label:DEM_TYPE_LABEL[t],data:months.map(m=>Math.round(sumFor(m,t))),backgroundColor:DEM_TYPE_COLOR[t]}));
+  chartKva=new Chart(ctx,{type:'bar',data:{labels:months,datasets:dsets},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'bottom',labels:{boxWidth:10,padding:8}}},
+      scales:{x:{stacked:true},y:{stacked:true}}}});
+}
+// SCAT_CODE -> adjustment type. The 12 codes present in jps_special_account_adjustments
+// are 3 magnitude bases (KVA=demand kVA, KW=demand kW, KWH=energy kWh) each with 3
+// time-of-use suffixes (P=on-peak, O=off-peak, L=partial-peak) plus the unsuffixed
+// standard code. No fuel/IPP/customer-charge SCAT_CODE appears in this table at all —
+// this loader only captures demand+energy corrections from the Consumption Detail
+// files; fuel and IPP pass-through adjustments (if any) live in a different billing
+// process this table was never built to see. Shown explicitly below, not hidden.
+const SCAT_TYPE={
+  KVA:'Demand (kVA)',KVAP:'Demand (kVA)',KVAO:'Demand (kVA)',KVAL:'Demand (kVA)',
+  KW:'Demand (kW)',KWP:'Demand (kW)',KWO:'Demand (kW)',KWL:'Demand (kW)',
+  KWH:'Energy (kWh)',KWHP:'Energy (kWh)',KWHO:'Energy (kWh)',KWHL:'Energy (kWh)',
+};
+const SCAT_TYPE_ORDER=['Demand (kVA)','Demand (kW)','Energy (kWh)'];
+const SCAT_TYPE_COLOR={'Demand (kVA)':'#BA7517','Demand (kW)':'#8B5CF6','Energy (kWh)':'#1D9E75'};
+function typeFor(scat){return SCAT_TYPE[scat]||('Other ('+(scat||'—')+')');}
+
+let chartAdj=null;
+let adjMonthFilter=null; // set by clicking a bar in the monthly chart; null = all months
+let adjMetric='dollar'; // 'dollar' | 'energy' | 'demand' | 'volumes' — what the "Net ___" columns show
+const ADJ_DEMAND_CODES=new Set(['KVA','KVAP','KVAO','KVAL','KW','KWP','KWO','KWL']);
+const ADJ_ENERGY_CODES=new Set(['KWH','KWHP','KWHO','KWHL']);
+function adjMetricVal(r){
+  if(adjMetric==='volumes')return 1;
+  if(adjMetric==='dollar'){const v=adjDollarVal(r);return v==null?0:v;}
+  if(adjMetric==='demand')return ADJ_DEMAND_CODES.has(r.scat_code)?(+r.adj_value||0):0;
+  return ADJ_ENERGY_CODES.has(r.scat_code)?(+r.adj_value||0):0;
+}
+function adjMetricLabel(){
+  if(adjMetric==='volumes')return '# Adjustments';
+  if(adjMetric==='dollar')return 'Net Value (J$)';
+  return adjMetric==='demand'?'Net Demand (kVA+kW)':'Net Energy (kWh)';
+}
+async function renderAdjustments(){
+  let h='<div class="card"><div class="chartttl">Special-account billing adjustments — monthly count, by who <span style="font-weight:400;color:var(--mut);font-size:11px">(click a bar to filter everything below to that month)</span></div><div id="adjFilterBar"></div><div class="chartwrap" style="height:280px"><canvas id="cAdj"></canvas></div></div>';
+  h+='<div class="card" style="margin-top:14px;padding:10px 14px"><span style="font-size:11px;color:var(--mut);margin-right:8px">Metric for tables below:</span><div class="seg" id="adjMetricSeg">'+
+    [['dollar','$ Value (J$)'],['energy','Energy (kWh)'],['demand','Demand (kVA/kW)'],['volumes','Volumes (# adjustments)']].map(o=>'<button data-am="'+o[0]+'" class="'+(adjMetric===o[0]?'on':'')+'">'+o[1]+'</button>').join('')+'</div>'+
+    '<div id="adjDollarNote" style="margin-top:8px"></div></div>';
+  h+='<div class="card" style="margin-top:14px;padding:10px 14px"><span style="font-size:12px">Looking for customer charge specifically? That has its own tab — </span><button onclick="_navTo(\'custcharge\')" style="border:1px solid var(--line);background:none;border-radius:6px;padding:4px 10px;font-size:11.5px;color:var(--blu);cursor:pointer;font-weight:600">Customer Charge &rarr;</button><span style="font-size:11px;color:var(--mut);margin-left:8px">(customer charge is a flat tariff fee, not a correctable SCAT_CODE — it can&rsquo;t appear in the tables below)</span></div>';
+  h+='<div class="grid" style="margin-top:14px"><div class="card" id="adjByWho"></div><div class="card" id="adjByRc"></div></div>';
+  h+='<div class="grid" style="margin-top:14px"><div class="card" id="adjByType"></div></div>';
+  h+='<div class="card" style="margin-top:14px" id="adjTypeByWho"></div>';
+  h+='<div class="card" style="margin-top:14px" id="adjByAccount"></div>';
+  h+='<div class="card" style="margin-top:14px" id="adjMonthlyByAccount"></div>';
+  document.getElementById('app').innerHTML=h;
+  await _fetchTariffs(); // needed for the $ Value metric (energy_rate_jmd_kwh / demand_rate_*)
+  const rows=await _fetchSpecialAdj();
+  if(!rows.length){document.getElementById('cAdj').parentElement.innerHTML='<span style="color:var(--mut)">No adjustment data loaded yet.</span>';return;}
+  if(adjMetric==='dollar'){
+    const priced=rows.filter(r=>ADJ_DOLLAR_FIELD[r.scat_code]);
+    const unpriced=rows.length-priced.length;
+    const noteEl=document.getElementById('adjDollarNote');
+    if(noteEl)noteEl.innerHTML='<span style="font-size:11px;color:var(--mut)">$ computed from jps_tariff_rates (energy_rate_jmd_kwh, demand_rate_standard/on/off/partial-peak) at each row\'s own year.'+
+      (unpriced?' <b style="color:'+(unpriced>0?'#BA7517':'inherit')+'">'+unpriced+' of '+rows.length+' rows excluded</b> — kW-family codes have no distinct kW tariff line in this system (demand is billed in kVA; converting kW via the kVA rate would silently assume unity power factor, so those rows show as J$0 here rather than a guessed number). Switch to Demand (kVA/kW) to see them in physical units.':'')+
+      '</span>';
+  }
+  const ymKey=r=>r.year+'-'+String(r.month).padStart(2,'0');
+  const months=[...new Set(rows.map(ymKey))].sort();
+  const whos=[...new Set(rows.map(r=>r.who||'Unidentified'))];
+  const WHO_COLOR={'Karlease Brown':'#3b6ea5','Taneece Treasure':'#e25c4b','Norman Titus':'#1D9E75'};
+  const colorFor=w=>WHO_COLOR[w]||'#BA7517';
+  const countFor=(ym,who)=>rows.filter(r=>ymKey(r)===ym&&(r.who||'Unidentified')===who).length;
+
+  document.querySelectorAll('#adjMetricSeg [data-am]').forEach(b=>b.onclick=()=>{adjMetric=b.dataset.am;renderAdjustments();});
+
+  const filterBar=document.getElementById('adjFilterBar');
+  filterBar.innerHTML=adjMonthFilter
+    ?'<div style="margin:6px 0 10px;font-size:12px"><span style="background:#BA7517;color:#fff;padding:3px 10px;border-radius:12px;font-weight:600">Filtered to '+esc(adjMonthFilter)+'</span> <a href="javascript:void(0)" id="adjClearFilter" style="margin-left:8px;color:var(--mut);text-decoration:underline">clear</a></div>'
+    :'';
+  const clearBtn=document.getElementById('adjClearFilter');
+  if(clearBtn)clearBtn.onclick=()=>{adjMonthFilter=null;renderAdjustments();};
+
+  // The top chart always shows every month (it's the click target for the filter);
+  // everything below uses `activeRows`, which respects adjMonthFilter.
+  if(chartAdj)chartAdj.destroy();
+  const dsets=whos.map(w=>({label:w,data:months.map(m=>countFor(m,w)),backgroundColor:colorFor(w)}));
+  chartAdj=new Chart(document.getElementById('cAdj'),{type:'bar',
+    data:{labels:months,datasets:dsets},
+    options:{responsive:true,maintainAspectRatio:false,
+      onClick:(evt,elements)=>{
+        if(!elements.length)return;
+        const ym=months[elements[0].index];
+        adjMonthFilter=(adjMonthFilter===ym)?null:ym;
+        renderAdjustments();
+      },
+      onHover:(evt,elements)=>{evt.native.target.style.cursor=elements.length?'pointer':'default';},
+      plugins:{legend:{display:true,position:'bottom',labels:{boxWidth:10,padding:8}}},
+      scales:{x:{stacked:true},y:{stacked:true,title:{display:true,text:'# adjustment line-items'}}}}});
+
+  const activeRows=adjMonthFilter?rows.filter(r=>ymKey(r)===adjMonthFilter):rows;
+
+  if(!activeRows.length){
+    ['adjByWho','adjByRc','adjByType','adjTypeByWho','adjByAccount'].forEach(id=>{document.getElementById(id).innerHTML='<span style="color:var(--mut);font-size:12px">No adjustments in '+esc(adjMonthFilter)+'.</span>';});
+  }else{
+
+  const byWho={};
+  activeRows.forEach(r=>{
+    const w=r.who||'Unidentified';
+    if(!byWho[w])byWho[w]={n:0,val:0,accts:new Set()};
+    byWho[w].n++; byWho[w].accts.add(r.account_name);
+    byWho[w].val+=adjMetricVal(r);
+  });
+  let whoHtml='<div class="chartttl">By who</div><table style="width:100%;font-size:12px;border-collapse:collapse">'+
+    '<thead><tr style="color:var(--mut);text-align:left"><th style="padding:4px">Who</th><th style="padding:4px;text-align:right"># Adjustments</th><th style="padding:4px;text-align:right">Accounts</th><th style="padding:4px;text-align:right">'+esc(adjMetricLabel())+'</th></tr></thead><tbody>';
+  Object.entries(byWho).sort((a,b)=>b[1].n-a[1].n).forEach(([w,v])=>{
+    whoHtml+='<tr style="border-top:1px solid #1e2d40"><td style="padding:4px">'+esc(w)+'</td><td style="padding:4px;text-align:right">'+v.n+'</td><td style="padding:4px;text-align:right">'+v.accts.size+'</td><td style="padding:4px;text-align:right">'+Math.round(v.val).toLocaleString()+'</td></tr>';
+  });
+  whoHtml+='</tbody></table>';
+  document.getElementById('adjByWho').innerHTML=whoHtml;
+
+  const byRc={};
+  activeRows.forEach(r=>{
+    const rc=r.rate_class||'—';
+    if(!byRc[rc])byRc[rc]={n:0,val:0};
+    byRc[rc].n++;
+    byRc[rc].val+=adjMetricVal(r);
+  });
+  let rcHtml='<div class="chartttl">By rate class</div><table style="width:100%;font-size:12px;border-collapse:collapse">'+
+    '<thead><tr style="color:var(--mut);text-align:left"><th style="padding:4px">Rate Class</th><th style="padding:4px;text-align:right"># Adjustments</th><th style="padding:4px;text-align:right">'+esc(adjMetricLabel())+'</th></tr></thead><tbody>';
+  Object.entries(byRc).sort((a,b)=>b[1].n-a[1].n).forEach(([rc,v])=>{
+    rcHtml+='<tr style="border-top:1px solid #1e2d40"><td style="padding:4px">'+esc(rc)+'</td><td style="padding:4px;text-align:right">'+v.n+'</td><td style="padding:4px;text-align:right">'+Math.round(v.val).toLocaleString()+'</td></tr>';
+  });
+  rcHtml+='</tbody></table>';
+  document.getElementById('adjByRc').innerHTML=rcHtml;
+
+  // Breakdown by adjustment TYPE (demand kVA / demand kW / energy kWh — see SCAT_TYPE
+  // note above for why fuel/IPP/customer-charge never appear here).
+  const byType={};
+  activeRows.forEach(r=>{
+    const t=typeFor(r.scat_code);
+    if(!byType[t])byType[t]={n:0,val:0,accts:new Set()};
+    byType[t].n++; byType[t].val+=(+r.adj_value||0); byType[t].accts.add(r.account_name);
+  });
+  const typeOrder=[...SCAT_TYPE_ORDER,...Object.keys(byType).filter(t=>!SCAT_TYPE_ORDER.includes(t))];
+  let typeHtml='<div class="chartttl">By adjustment type</div><table style="width:100%;font-size:12px;border-collapse:collapse">'+
+    '<thead><tr style="color:var(--mut);text-align:left"><th style="padding:4px">Type</th><th style="padding:4px;text-align:right"># Adjustments</th><th style="padding:4px;text-align:right">Accounts</th><th style="padding:4px;text-align:right">Net Value</th></tr></thead><tbody>';
+  typeOrder.forEach(t=>{
+    const v=byType[t]; if(!v)return;
+    typeHtml+='<tr style="border-top:1px solid #1e2d40"><td style="padding:4px"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:'+(SCAT_TYPE_COLOR[t]||'#666')+';margin-right:6px"></span>'+esc(t)+'</td><td style="padding:4px;text-align:right">'+v.n+'</td><td style="padding:4px;text-align:right">'+v.accts.size+'</td><td style="padding:4px;text-align:right">'+Math.round(v.val).toLocaleString()+'</td></tr>';
+  });
+  typeHtml+='</tbody></table><div style="font-size:10.5px;color:var(--mut);padding:8px 4px 0">No fuel, IPP, or customer-charge SCAT_CODE appears in this table — this loader only captures demand/energy corrections from the Consumption Detail files. Fuel and IPP pass-through adjustments, if any, are billed through a separate process this data does not cover.</div>';
+  document.getElementById('adjByType').innerHTML=typeHtml;
+
+  // Cross-tab: who processed which type — this is the actual "who did what" answer.
+  const byWhoType={};
+  activeRows.forEach(r=>{
+    const w=r.who||'Unidentified', t=typeFor(r.scat_code);
+    if(!byWhoType[w])byWhoType[w]={};
+    byWhoType[w][t]=(byWhoType[w][t]||0)+1;
+  });
+  let wtHtml='<div class="chartttl">Who did which type</div><table style="width:100%;font-size:12px;border-collapse:collapse">'+
+    '<thead><tr style="color:var(--mut);text-align:left"><th style="padding:4px">Who</th>'+typeOrder.filter(t=>byType[t]).map(t=>'<th style="padding:4px;text-align:right">'+esc(t)+'</th>').join('')+'<th style="padding:4px;text-align:right">Total</th></tr></thead><tbody>';
+  Object.entries(byWhoType).sort((a,b)=>Object.values(b[1]).reduce((s,v)=>s+v,0)-Object.values(a[1]).reduce((s,v)=>s+v,0)).forEach(([w,tv])=>{
+    const total=Object.values(tv).reduce((s,v)=>s+v,0);
+    wtHtml+='<tr style="border-top:1px solid #1e2d40"><td style="padding:4px">'+esc(w)+'</td>'+typeOrder.filter(t=>byType[t]).map(t=>'<td style="padding:4px;text-align:right">'+(tv[t]||0)+'</td>').join('')+'<td style="padding:4px;text-align:right;font-weight:600">'+total+'</td></tr>';
+  });
+  wtHtml+='</tbody></table>';
+  document.getElementById('adjTypeByWho').innerHTML=wtHtml;
+
+  // By customer account — the individual special account each adjustment landed on.
+  const byAcct={};
+  activeRows.forEach(r=>{
+    const nm=r.account_name||'(unnamed account)';
+    if(!byAcct[nm])byAcct[nm]={n:0,val:0,rc:r.rate_class||'—',who:new Set(),dept:new Set(),types:new Set(),jps_ac:r.jps_ac||''};
+    byAcct[nm].n++; byAcct[nm].who.add(r.who||'Unidentified');
+    if(r.dept)byAcct[nm].dept.add(r.dept);
+    byAcct[nm].types.add(typeFor(r.scat_code));
+    byAcct[nm].val+=adjMetricVal(r);
+  });
+  let acctHtml='<div class="chartttl">By customer account'+(adjMonthFilter?'':' <span style="font-weight:400;color:var(--mut);font-size:11px">(click a row for the monthly breakdown below)</span>')+'</div><table style="width:100%;font-size:12px;border-collapse:collapse">'+
+    '<thead><tr style="color:var(--mut);text-align:left"><th style="padding:4px">Account</th><th style="padding:4px">Rate Class</th><th style="padding:4px">Who</th><th style="padding:4px">Type(s)</th><th style="padding:4px;text-align:right"># Adjustments</th><th style="padding:4px;text-align:right">'+esc(adjMetricLabel())+'</th></tr></thead><tbody>';
+  const acctRows=Object.entries(byAcct).sort((a,b)=>b[1].n-a[1].n);
+  acctRows.forEach(([nm,v])=>{
+    acctHtml+='<tr class="adjAcctRow" data-acct="'+esc(nm)+'" style="border-top:1px solid #1e2d40;cursor:pointer" onmouseover="this.style.background=\'#16222f\'" onmouseout="this.style.background=\'\'">'+
+      '<td style="padding:4px;font-weight:500">'+esc(nm)+'</td>'+
+      '<td style="padding:4px">'+esc(v.rc)+'</td>'+
+      '<td style="padding:4px">'+esc([...v.who].join(', '))+'</td>'+
+      '<td style="padding:4px;font-size:11px;color:var(--mut)">'+esc([...v.types].join(', '))+'</td>'+
+      '<td style="padding:4px;text-align:right">'+v.n+'</td>'+
+      '<td style="padding:4px;text-align:right">'+Math.round(v.val).toLocaleString()+'</td></tr>';
+  });
+  acctHtml+='</tbody></table>';
+  document.getElementById('adjByAccount').innerHTML=acctHtml;
+
+  // Monthly detail by customer — the supporting month-by-month breakdown. Always
+  // spans the FULL month range (that's the point of this table) regardless of the
+  // chart's month filter; the filtered month's column is highlighted instead so the
+  // two views of the data stay visually linked. Click an account row above to focus
+  // this table on just that one customer (click again, or "show all", to reset).
+  renderAdjMonthlyByAccount(rows, months, ymKey);
+  document.querySelectorAll('.adjAcctRow').forEach(tr=>{
+    tr.onclick=()=>{
+      adjAccountFocus=(adjAccountFocus===tr.dataset.acct)?null:tr.dataset.acct;
+      renderAdjMonthlyByAccount(rows, months, ymKey);
+    };
+  });
+  }
+}
+
+let adjAccountFocus=null; // account_name to focus the monthly table on; null = all accounts
+function renderAdjMonthlyByAccount(rows, months, ymKey){
+  const wrap=document.getElementById('adjMonthlyByAccount');
+  if(!wrap)return;
+  const accts=[...new Set(rows.map(r=>r.account_name||'(unnamed account)'))].sort();
+  const shown=adjAccountFocus?accts.filter(a=>a===adjAccountFocus):accts;
+  let html='<div class="chartttl">Monthly detail by customer'+(adjAccountFocus?' — '+esc(adjAccountFocus)+' <a href="javascript:void(0)" id="adjAcctReset" style="font-weight:400;color:var(--mut);text-decoration:underline;font-size:11px;margin-left:8px">show all accounts</a>':' <span style="font-weight:400;color:var(--mut);font-size:11px">('+esc(adjMetricLabel())+' per month; click a customer above to focus)</span>')+'</div>';
+  html+='<div style="overflow-x:auto"><table style="width:100%;font-size:11.5px;border-collapse:collapse;min-width:'+(700+months.length*70)+'px">'+
+    '<thead><tr style="color:var(--mut);text-align:left"><th style="padding:4px;position:sticky;left:0;background:var(--card)">Account</th>'+
+    months.map(m=>'<th style="padding:4px;text-align:right'+(m===adjMonthFilter?';background:#3a2c0f;color:#e8b866':'')+'">'+esc(m)+'</th>').join('')+
+    '<th style="padding:4px;text-align:right;font-weight:700">Total</th></tr></thead><tbody>';
+  shown.forEach(acct=>{
+    const acctRows=rows.filter(r=>(r.account_name||'(unnamed account)')===acct);
+    if(!acctRows.length)return;
+    const byMonth={};
+    let total=0;
+    acctRows.forEach(r=>{
+      const ym=ymKey(r);
+      if(!byMonth[ym])byMonth[ym]={n:0,val:0};
+      byMonth[ym].n++;
+      const v=adjMetricVal(r);
+      byMonth[ym].val+=v; total+=v;
+    });
+    html+='<tr style="border-top:1px solid #1e2d40"><td style="padding:4px;font-weight:500;position:sticky;left:0;background:var(--card)">'+esc(acct)+'</td>'+
+      months.map(m=>{
+        const v=byMonth[m];
+        const hl=m===adjMonthFilter?'background:#2a2010;':'';
+        if(!v)return '<td style="padding:4px;text-align:right;color:#3a4557;'+hl+'">·</td>';
+        const txt=adjMetric==='volumes'?String(v.n):(v.val?Math.round(v.val).toLocaleString():'0');
+        return '<td style="padding:4px;text-align:right;'+hl+'" title="'+v.n+' adjustment(s)">'+txt+'</td>';
+      }).join('')+
+      '<td style="padding:4px;text-align:right;font-weight:700">'+Math.round(total).toLocaleString()+'</td></tr>';
+  });
+  html+='</tbody></table></div>';
+  wrap.innerHTML=html;
+  const resetBtn=document.getElementById('adjAcctReset');
+  if(resetBtn)resetBtn.onclick=()=>{adjAccountFocus=null;renderAdjMonthlyByAccount(rows,months,ymKey);};
+}
+
+/* ==========================================
+   CUSTOMER CHARGE ANOMALY VIEW — customer charge is a flat monthly fee set per
+   rate class (jps_tariff_rates.customer_charge_jmd), billed the same every month
+   to every account on that class. It is NOT itemized as a correctable SCAT_CODE
+   anywhere in the raw billing extracts (verified: the full SCAT_CODE universe in
+   the Consumption Detail files is only KVA/KW/KWH families — no customer-charge,
+   fuel, or IPP code exists at the meter-reading level), so it can't be analyzed
+   via jps_special_account_adjustments. It IS already present per account per
+   month in this page's own embedded data (D.accts[i].cust, in J$) — built for the
+   revenue-mix breakdown elsewhere in this app — so this view reuses that directly,
+   no new data pull. Because the charge should be flat, ANY month-to-month move is
+   inherently suspicious (unlike kWh/demand, which are supposed to vary).
+========================================== */
+let ccThreshold=0.05; // flag if a month deviates from the account's own median by more than this
+let ccSearch='';
+function _ccAnomalies(){
+  const out=[];
+  D.accts.forEach(a=>{
+    const c=a.cust||[];
+    const vals=c.filter(v=>v!=null);
+    if(vals.length<2)return;
+    const sorted=[...vals].sort((x,y)=>x-y);
+    const med=sorted.length%2?sorted[(sorted.length-1)/2]:(sorted[sorted.length/2-1]+sorted[sorted.length/2])/2;
+    if(!med)return; // median 0 — can't compute a meaningful % deviation
+    c.forEach((v,i)=>{
+      if(v==null)return;
+      const dev=(v-med)/med;
+      if(Math.abs(dev)>ccThreshold){
+        out.push({name:a.n,rc:a.c,parish:a.pg,month:D.months[i],mlabel:D.mlabels[i],normal:med,actual:v,dev:dev*100});
+      }
+    });
+  });
+  return out.sort((x,y)=>Math.abs(y.dev)-Math.abs(x.dev));
+}
+async function renderCustCharge(){
+  await _fetchTariffs(); // needed for the persistent (tariff-expected) section
+  const anomalies=_ccAnomalies();
+  const flaggedAccts=new Set(anomalies.map(x=>x.name));
+  // Net J$ impact: sum of (actual − account's own normal) across flagged months —
+  // the number that turns "251 flags" into a revenue-variance headline.
+  const ccImpact=anomalies.reduce((s,x)=>s+(x.actual-x.normal),0);
+  let h='<div class="grid" style="grid-template-columns:repeat(4,1fr)"><div class="card"><div class="chartttl">Accounts analyzed</div><div style="font-size:26px;font-weight:700;margin-top:4px">'+D.accts.filter(a=>(a.cust||[]).filter(v=>v!=null).length>=2).length+'</div></div>'+
+    '<div class="card"><div class="chartttl">Accounts with an anomaly</div><div style="font-size:26px;font-weight:700;margin-top:4px;color:#e25c4b">'+flaggedAccts.size+'</div></div>'+
+    '<div class="card"><div class="chartttl">Anomalous account-months</div><div style="font-size:26px;font-weight:700;margin-top:4px;color:#e25c4b">'+anomalies.length+'</div></div>'+
+    '<div class="card"><div class="chartttl">Net J$ variance (flagged)</div><div style="font-size:26px;font-weight:700;margin-top:4px;color:'+(ccImpact<0?'#e25c4b':'#1D9E75')+'">'+_digestMoney(ccImpact)+'</div></div></div>';
+
+  h+='<div class="card" style="margin-top:14px;padding:10px 14px;display:flex;gap:16px;align-items:center;flex-wrap:wrap">'+
+    '<div><span style="font-size:11px;color:var(--mut);margin-right:8px">Flag threshold:</span><div class="seg" id="ccThreshSeg">'+
+    [[0.02,'>2%'],[0.05,'>5%'],[0.10,'>10%']].map(o=>'<button data-th="'+o[0]+'" class="'+(ccThreshold===o[0]?'on':'')+'">'+o[1]+' vs own median</button>').join('')+'</div></div>'+
+    '<div style="flex:1;min-width:220px"><input id="ccSearchBox" type="text" placeholder="Search any customer (regardless of flag)…" value="'+esc(ccSearch)+'" style="width:100%;padding:6px 10px;border-radius:6px;border:1px solid #2a3a4d;background:#0e1826;color:var(--fg);font-size:12px"></div></div>';
+
+  h+='<div class="card" style="margin-top:14px" id="ccSearchResult"></div>';
+  h+='<div class="card" style="margin-top:14px" id="ccPersistent"></div>';
+  h+='<div class="card" style="margin-top:14px" id="ccAnomalyTable"></div>';
+  document.getElementById('app').innerHTML=h;
+
+  // ── Persistent billing anomalies: tariff cross-check. The own-median detector
+  // above is blind to an account that has been billed WRONG EVERY MONTH — its own
+  // history looks stable. Cross-check: an account's median charge should be an
+  // integer multiple of its rate class tariff (charge × #services). A fractional
+  // MEDIAN multiple across the whole window is structural, not proration (a
+  // mid-cycle start prorates ONE month, not the median). Aggregate/bulk rows
+  // (implied > 200 meters) are skipped — integer drift there is rounding noise.
+  const persistent=[];
+  const tariffYear=+D.months[D.months.length-1].slice(0,4);
+  D.accts.forEach(a=>{
+    const vals=(a.cust||[]).filter(v=>v!=null&&v>0);
+    if(vals.length<4)return;
+    const t=_ccTariffFor(a.c,tariffYear);
+    if(!t)return;
+    const sorted=[...vals].sort((x,y)=>x-y);
+    const med=sorted.length%2?sorted[(sorted.length-1)/2]:(sorted[sorted.length/2-1]+sorted[sorted.length/2])/2;
+    const implied=med/t;
+    if(implied>200)return;
+    const nearest=Math.round(implied);
+    if(nearest>=1&&Math.abs(implied-nearest)<=0.02)return;
+    persistent.push({n:a.n,rc:a.c,med,t,implied,gap:Math.abs(implied-Math.max(nearest,1))*t});
+  });
+  persistent.sort((x,y)=>y.gap-x.gap);
+  let pHtml='<div class="chartttl">Persistent billing anomalies &mdash; tariff cross-check <span style="font-weight:400;color:var(--mut);font-size:11px">(accounts whose NORMAL charge is not a clean multiple of their rate-class tariff &mdash; the own-history detector above cannot see these)</span></div>';
+  if(!Object.keys(_tariffs||{}).length){
+    // Never report "clean" when the reference data simply failed to load.
+    pHtml+='<div style="color:#e25c4b;font-size:12px;padding:6px 0">Tariff reference data unavailable (jps_tariff_rates fetch returned nothing) &mdash; cross-check NOT performed. Sign in and reload, or check the table&rsquo;s RLS.</div>';
+  }else if(!persistent.length){
+    pHtml+='<div style="color:var(--mut);font-size:12px;padding:6px 0">Every analyzed account&rsquo;s median charge is a clean integer multiple of its tariff &mdash; no structural billing errors detected.</div>';
+  }else{
+    pHtml+='<table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr style="color:var(--mut);text-align:left">'+
+      '<th style="padding:4px">Customer</th><th style="padding:4px">Rate Class</th><th style="padding:4px;text-align:right">Median charge (J$)</th><th style="padding:4px;text-align:right">Tariff (J$)</th><th style="padding:4px;text-align:right">Implied services</th><th style="padding:4px;text-align:right">Structural gap (J$/mo)</th></tr></thead><tbody>';
+    persistent.slice(0,50).forEach(x=>{
+      pHtml+='<tr class="ccAnomRow" data-nm="'+esc(x.n)+'" style="border-top:1px solid var(--line);cursor:pointer" onmouseover="this.style.background=\'#F0F4F8\'" onmouseout="this.style.background=\'\'">'+
+        '<td style="padding:4px;font-weight:500">'+esc(x.n)+'</td><td style="padding:4px">'+esc(x.rc)+'</td>'+
+        '<td style="padding:4px;text-align:right">'+Math.round(x.med).toLocaleString()+'</td>'+
+        '<td style="padding:4px;text-align:right">'+Math.round(x.t).toLocaleString()+'</td>'+
+        '<td style="padding:4px;text-align:right;font-weight:600;color:#BA7517">'+x.implied.toFixed(2)+'&times;</td>'+
+        '<td style="padding:4px;text-align:right">'+Math.round(x.gap).toLocaleString()+'</td></tr>';
+    });
+    pHtml+='</tbody></table>';
+    if(persistent.length>50)pHtml+='<div style="font-size:10.5px;color:var(--mut);padding:6px 4px 0">Showing worst 50 of '+persistent.length+' by structural J$ gap.</div>';
+  }
+  pHtml+='<div style="font-size:10.5px;color:var(--mut);padding:8px 4px 0">Tariffs read live from jps_tariff_rates ('+tariffYear+'). A fractional multiple in a single month is usually proration; a fractional MEDIAN is a standing billing setup issue worth a ticket.</div>';
+  document.getElementById('ccPersistent').innerHTML=pHtml;
+
+  document.querySelectorAll('#ccThreshSeg [data-th]').forEach(b=>b.onclick=()=>{ccThreshold=+b.dataset.th;renderCustCharge();});
+  const searchBox=document.getElementById('ccSearchBox');
+  searchBox.oninput=e=>{ccSearch=e.target.value;_ccRenderSearch();};
+  searchBox.focus(); searchBox.setSelectionRange(ccSearch.length,ccSearch.length);
+  _ccRenderSearch();
+
+  const cap=100;
+  let tblHtml='<div class="chartttl">Anomalies — customers not following their own normal trend'+(anomalies.length>cap?' <span style="font-weight:400;color:var(--mut);font-size:11px">(showing worst '+cap+' of '+anomalies.length+')</span>':'')+'</div>';
+  if(!anomalies.length){
+    tblHtml+='<div style="color:var(--mut);font-size:12px;padding:6px 0">No account exceeds the '+(ccThreshold*100)+'% threshold — customer charge billing looks clean at this sensitivity.</div>';
+  }else{
+    tblHtml+='<table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr style="color:var(--mut);text-align:left">'+
+      '<th style="padding:4px">Customer</th><th style="padding:4px">Rate Class</th><th style="padding:4px">Month</th><th style="padding:4px;text-align:right">Normal (J$)</th><th style="padding:4px;text-align:right">Actual (J$)</th><th style="padding:4px;text-align:right">Deviation</th></tr></thead><tbody>';
+    anomalies.slice(0,cap).forEach(x=>{
+      tblHtml+='<tr class="ccAnomRow" data-nm="'+esc(x.name)+'" style="border-top:1px solid #1e2d40;cursor:pointer" onmouseover="this.style.background=\'#16222f\'" onmouseout="this.style.background=\'\'">'+
+        '<td style="padding:4px;font-weight:500">'+esc(x.name)+'</td>'+
+        '<td style="padding:4px">'+esc(x.rc)+'</td>'+
+        '<td style="padding:4px">'+esc(x.mlabel)+'</td>'+
+        '<td style="padding:4px;text-align:right">'+Math.round(x.normal).toLocaleString()+'</td>'+
+        '<td style="padding:4px;text-align:right;font-weight:600;color:'+(x.actual<0?'#e25c4b':'inherit')+'">'+Math.round(x.actual).toLocaleString()+'</td>'+
+        '<td style="padding:4px;text-align:right;color:'+(x.dev<0?'#e25c4b':'#BA7517')+'">'+(x.dev>=0?'+':'')+x.dev.toFixed(1)+'%</td></tr>';
+    });
+    tblHtml+='</tbody></table>';
+  }
+  document.getElementById('ccAnomalyTable').innerHTML=tblHtml;
+  document.querySelectorAll('.ccAnomRow').forEach(tr=>{
+    tr.onclick=()=>{ccSearch=tr.dataset.nm;searchBox.value=ccSearch;_ccRenderSearch();document.getElementById('ccSearchResult').scrollIntoView({behavior:'smooth',block:'center'});};
+  });
+}
+function _ccRenderSearch(){
+  const wrap=document.getElementById('ccSearchResult');
+  if(!wrap)return;
+  if(!ccSearch||ccSearch.length<2){wrap.innerHTML='<span style="color:var(--mut);font-size:12px">Type at least 2 characters to look up a customer&#39;s full monthly customer-charge history.</span>';return;}
+  const q=ccSearch.toLowerCase();
+  const matches=D.accts.filter(a=>(a.n||'').toLowerCase().includes(q)).slice(0,15);
+  if(!matches.length){wrap.innerHTML='<span style="color:var(--mut);font-size:12px">No customer matches "'+esc(ccSearch)+'".</span>';return;}
+  let html='<div class="chartttl">'+matches.length+' match'+(matches.length===1?'':'es')+'</div><table style="width:100%;font-size:11.5px;border-collapse:collapse"><thead><tr style="color:var(--mut);text-align:left"><th style="padding:4px">Customer</th><th style="padding:4px">Rate Class</th>'+
+    D.mlabels.map(m=>'<th style="padding:4px;text-align:right">'+esc(m)+'</th>').join('')+'</tr></thead><tbody>';
+  matches.forEach(a=>{
+    const c=a.cust||[];
+    const vals=c.filter(v=>v!=null);
+    const sorted=[...vals].sort((x,y)=>x-y);
+    const med=sorted.length?(sorted.length%2?sorted[(sorted.length-1)/2]:(sorted[sorted.length/2-1]+sorted[sorted.length/2])/2):0;
+    html+='<tr style="border-top:1px solid #1e2d40"><td style="padding:4px;font-weight:500">'+esc(a.n)+'</td><td style="padding:4px">'+esc(a.c)+'</td>'+
+      c.map(v=>{
+        if(v==null)return '<td style="padding:4px;text-align:right;color:#3a4557">·</td>';
+        const flagged=med&&Math.abs((v-med)/med)>ccThreshold;
+        return '<td style="padding:4px;text-align:right'+(flagged?';color:#e25c4b;font-weight:700':'')+'" title="normal ~'+Math.round(med).toLocaleString()+'">'+Math.round(v).toLocaleString()+'</td>';
+      }).join('')+'</tr>';
+  });
+  html+='</tbody></table>';
+  wrap.innerHTML=html;
+}
+
+
+/* ==========================================
+   SHARED FETCHERS — tariff rates + anomaly review workflow rows
+========================================== */
+let _tariffs=null;
+async function _fetchTariffs(){
+  if(_tariffs)return _tariffs;
+  const{data,error}=await _SB.from('jps_tariff_rates').select('rate_class,effective_year,customer_charge_jmd,energy_rate_jmd_kwh,demand_rate_standard_jmd,demand_rate_on_peak_jmd,demand_rate_off_peak_jmd,demand_rate_partial_peak_jmd');
+  _tariffs=error?{}:Object.fromEntries((data||[]).map(r=>[r.rate_class+'_'+r.effective_year,r]));
+  return _tariffs;
+}
+// Explorer buckets RT60-ST rows under 'RT60'; the tariff table keys them 'RT60-ST'.
+function _tariffRowFor(rc,year){
+  const key=(rc==='RT60'?'RT60-ST':rc)+'_'+year;
+  return _tariffs?_tariffs[key]:undefined;
+}
+function _ccTariffFor(rc,year){
+  const row=_tariffRowFor(rc,year);
+  return row?+row.customer_charge_jmd:undefined;
+}
+// SCAT_CODE -> the tariff column that prices it, for converting a physical
+// adjustment quantity to J$. KW-family codes have no distinct kW tariff line in
+// jps_tariff_rates (demand is billed in kVA) — converting them via the kVA rate
+// would silently assume unity power factor, so they're excluded from $ rather
+// than guessed. KWH suffixes (P/O/L) share the one energy_rate_jmd_kwh column —
+// this tariff has no time-of-use energy pricing, only time-of-use demand.
+const ADJ_DOLLAR_FIELD={
+  KWH:'energy_rate_jmd_kwh',KWHP:'energy_rate_jmd_kwh',KWHO:'energy_rate_jmd_kwh',KWHL:'energy_rate_jmd_kwh',
+  KVA:'demand_rate_standard_jmd',KVAP:'demand_rate_on_peak_jmd',KVAO:'demand_rate_off_peak_jmd',KVAL:'demand_rate_partial_peak_jmd',
+};
+function adjDollarVal(r){
+  const field=ADJ_DOLLAR_FIELD[r.scat_code];
+  if(!field)return null; // KW-family, or an unrecognized code — not prices
+  const row=_tariffRowFor(r.rate_class,r.year);
+  if(!row||row[field]==null)return null;
+  return (+r.adj_value||0)*(+row[field]);
+}
+let _anomReviews=null;
+async function _fetchAnomReviews(force){
+  if(_anomReviews&&!force)return _anomReviews;
+  const{data,error}=await _SB.from('jps_anomaly_reviews').select('*').limit(5000);
+  _anomReviews=error?[]:(data||[]);
+  return _anomReviews;
+}
+const _revKey=r=>r.account_name+'|'+r.metric+'|'+r.month;
+
+/* ==========================================
+   LIVE DATA BOOTSTRAP — builds D from jps_billing_components (account-level
+   revenue components: kwh/fuel/ipp/energy/demand/customer-charge) + jps_kam +
+   jps_industries, on every page load. Replaces the old build-time embedded blob.
+   Aggregation (class/parish/total rollups) mirrors gen_appdata3.py exactly,
+   ported to JS, so every existing render function needs zero changes.
+========================================== */
+async function _fetchBillingComponents(){
+  const cols='month,account_code,name,rate_class,parish_group,kwh,revenue_jmd,demand_jmd,fuel_jmd,energy_jmd,ipp_jmd,customer_charge_jmd';
+  let all=[],from=0;const PAGE=1000;
+  for(;;){
+    const{data,error}=await _SB.from('jps_billing_components').select(cols).range(from,from+PAGE-1);
+    if(error){console.error('jps_billing_components fetch failed',error);break;}
+    if(!data||!data.length)break;
+    all=all.concat(data);
+    if(data.length<PAGE)break;
+    from+=PAGE;
+  }
+  return all;
+}
+async function _fetchKamIndustryMaps(){
+  const[{data:kamData,error:kErr},{data:indData,error:iErr}]=await Promise.all([
+    _SB.from('jps_kam').select('jps_ac,kam'),
+    _SB.from('jps_industries').select('jps_ac,industry'),
+  ]);
+  const kamMap={};(kErr?[]:kamData||[]).forEach(r=>{if(r.kam)kamMap[String(r.jps_ac||'').trim()]=r.kam;});
+  const indMap={};(iErr?[]:indData||[]).forEach(r=>{if(r.industry)indMap[String(r.jps_ac||'').trim()]=r.industry;});
+  return{kamMap,indMap};
+}
+// Same exact-then-prefix fallback as the Driver Forecast engine's _kl() in
+// JPS_Sales_Platform_v1.html — jps_kam/jps_industries key on the customer-number
+// prefix, not the full "customer-premises" account code.
+function _klLive(map,ac){
+  ac=String(ac||'');
+  if(map[ac]!=null)return map[ac];
+  return map[ac.split('-')[0]]||'';
+}
+const MLAB_MON={'01':'Jan','02':'Feb','03':'Mar','04':'Apr','05':'May','06':'Jun','07':'Jul','08':'Aug','09':'Sep','10':'Oct','11':'Nov','12':'Dec'};
+const BILLING_CLASSES=['RT10','RT20','RT40','RT50','RT60','RT70','Other'];
+const BILLING_KEYS=['kwh','rev','demand','fuel','energy','ipp','cust_chg'];
+
+// Top Variance Movers (customer view only — see note in renderTopMovers about
+// the RT10 consumption-bucket view, which needs a bucket-level live table this
+// build doesn't add). Faithfully ports build_top_movers.py's methodology:
+// estimated budget = each customer's Jan+Feb actual share of its class, applied
+// to the class's YTD budget total (which carries the real monthly/seasonal
+// shape) — variance = actual − estimated budget. Budget now read live from
+// jps_budget instead of a pre-baked budget_monthly.json.
+async function _computeLiveMovers(accts,months,mIdx){
+  const ytdYear=months.length?+months[months.length-1].slice(0,4):null;
+  const YTD=months.filter(m=>m.startsWith(ytdYear+''));
+  const JF=[ytdYear+'-01',ytdYear+'-02'].filter(m=>mIdx[m]!=null);
+  if(!YTD.length||!JF.length)return{window:'n/a',note:'Not enough of the current year loaded yet to estimate a seasonal budget split.',byCustomer:{},byBucketRT10:{}};
+  const{data:budRows,error:budErr}=await _SB.from('jps_budget').select('year,month,rate_class,kwh_budget,revenue_budget,demand_budget').eq('year',ytdYear);
+  const bud=budErr?[]:(budRows||[]);
+  const budByClsMonth={}; // 'RC_M' -> {kwh,rev,dem}
+  bud.forEach(r=>{
+    const rc=(r.rate_class==='RT60-ST'?'RT60':r.rate_class);
+    const key=rc+'_'+r.month;
+    const b=budByClsMonth[key]=budByClsMonth[key]||{kwh:0,rev:0,dem:0};
+    b.kwh+=+r.kwh_budget||0; b.rev+=(+r.revenue_budget||0)+(+r.demand_budget||0); b.dem+=+r.demand_budget||0;
+  });
+  const bclassYTD=(metric,cls)=>YTD.reduce((s,m)=>{
+    const b=budByClsMonth[cls+'_'+(+m.slice(5,7))];if(!b)return s;
+    return s+(metric==='vol'?b.kwh/1000:metric==='dem'?b.dem:b.rev);
+  },0);
+  const av=(a,i)=>a.kwh[i]/1000, ad=(a,i)=>a.dem[i], ar=(a,i)=>a.fuel[i]+a.energy[i]+a.dem[i]+a.cust[i];
+  const MET={vol:av,dem:ad,rev:ar};
+  const ytdLbl=YTD.length>1?MLAB_MON[YTD[0].slice(5,7)]+'-'+MLAB_MON[YTD[YTD.length-1].slice(5,7)]+' '+ytdYear:MLAB_MON[YTD[0].slice(5,7)]+' '+ytdYear;
+  const out={window:ytdLbl,note:'Estimated budget = Jan+Feb actual share × budgeted class total (seasonally shaped). Variance = Actual − Est. Budget. Budget read live from jps_budget.',byCustomer:{},byBucketRT10:{}};
+  const CLS=['RT40','RT50','RT70'];
+  Object.entries(MET).forEach(([metric,fn])=>{
+    const rows=[];
+    CLS.forEach(cls=>{
+      const clsAccts=accts.filter(a=>a.c===cls);
+      const clsJF=clsAccts.reduce((s,a)=>s+JF.reduce((s2,m)=>s2+fn(a,mIdx[m]),0),0)||1;
+      const budYTD=bclassYTD(metric,cls);
+      clsAccts.forEach(a=>{
+        const jf=JF.reduce((s,m)=>s+fn(a,mIdx[m]),0);
+        const share=jf/clsJF, est=share*budYTD;
+        const act=YTD.reduce((s,m)=>s+fn(a,mIdx[m]),0);
+        if(Math.abs(act)<1e-6&&Math.abs(est)<1e-6)return;
+        rows.push({name:a.n,cls,act:+act.toFixed(2),bud:+est.toFixed(2),var:+(act-est).toFixed(2)});
+      });
+    });
+    rows.sort((a,b)=>Math.abs(b.var)-Math.abs(a.var));
+    out.byCustomer[metric]=rows.slice(0,40);
+  });
+  // RT10 consumption-bucket movers need bucket-grain data this table doesn't
+  // carry (jps_billing_components is account-level only) — left empty rather
+  // than fabricated; renderTopMovers shows an explicit note instead of a chart.
+  return out;
+}
+
+async function bootstrapExplorerData(){
+  const[rows,{kamMap,indMap}]=await Promise.all([_fetchBillingComponents(),_fetchKamIndustryMaps()]);
+  const months=[...new Set(rows.map(r=>r.month))].sort();
+  const mlabels=months.map(m=>MLAB_MON[m.slice(5,7)]+'·'+m.slice(2,4));
+  const mIdx={};months.forEach((m,i)=>mIdx[m]=i);
+  const cls={};BILLING_CLASSES.forEach(c=>{cls[c]={};BILLING_KEYS.forEach(k=>cls[c][k]=new Array(months.length).fill(0));});
+  const parishAgg={};
+  const acctMap={};
+  rows.forEach(r=>{
+    const j=mIdx[r.month];if(j==null)return;
+    const rc=BILLING_CLASSES.includes(r.rate_class)?r.rate_class:'Other';
+    const kwh=+r.kwh||0,rev=+r.revenue_jmd||0,dem=+r.demand_jmd||0,fuel=+r.fuel_jmd||0,energy=+r.energy_jmd||0,ipp=+r.ipp_jmd||0,cust=+r.customer_charge_jmd||0;
+    const cc=cls[rc];
+    cc.kwh[j]+=kwh;cc.rev[j]+=rev;cc.demand[j]+=dem;cc.fuel[j]+=fuel;cc.energy[j]+=energy;cc.ipp[j]+=ipp;cc.cust_chg[j]+=cust;
+    const pg=r.parish_group||'UNMAPPED';
+    const pa=parishAgg[pg]=parishAgg[pg]||Object.fromEntries(BILLING_KEYS.map(k=>[k,new Array(months.length).fill(0)]));
+    pa.kwh[j]+=kwh;pa.rev[j]+=rev;pa.demand[j]+=dem;pa.fuel[j]+=fuel;pa.energy[j]+=energy;pa.ipp[j]+=ipp;pa.cust_chg[j]+=cust;
+    const key=r.account_code+'~'+rc;
+    let a=acctMap[key];
+    if(!a){
+      a={id:key,n:r.name,c:rc,pg,
+         kwh:new Array(months.length).fill(0),rev:new Array(months.length).fill(0),dem:new Array(months.length).fill(0),
+         fuel:new Array(months.length).fill(0),energy:new Array(months.length).fill(0),ipp:new Array(months.length).fill(0),cust:new Array(months.length).fill(0),
+         kam:_klLive(kamMap,r.account_code)||'',industry:_klLive(indMap,r.account_code)||''};
+      acctMap[key]=a;
+    }
+    a.kwh[j]+=kwh;a.rev[j]+=rev;a.dem[j]+=dem;a.fuel[j]+=fuel;a.energy[j]+=energy;a.ipp[j]+=ipp;a.cust[j]+=cust;
+  });
+  const total={};BILLING_KEYS.forEach(k=>{total[k]=months.map((_,j)=>BILLING_CLASSES.reduce((s,c)=>s+cls[c][k][j],0));});
+  const accts=Object.values(acctMap).filter(a=>a.kwh.some(v=>v)||a.rev.some(v=>v));
+  const parishes=Object.keys(parishAgg).sort();
+  D.months=months;D.mlabels=mlabels;D.classes=BILLING_CLASSES;D.cls=cls;D.total=total;D.accts=accts;
+  D.parishes=parishes;D.parish=parishAgg;
+  D.movers=months.length?await _computeLiveMovers(accts,months,mIdx):{window:'n/a',note:'',byCustomer:{},byBucketRT10:{}};
+}
+
+/* ==========================================
+   GENERIC ANOMALY ENGINE — one scan across every revenue component.
+   Per account, per metric: robust z-score vs the account's own history
+   (median ± MAD, z=0.6745·(x−med)/MAD, flag |z|>3.5 — standard robust cut).
+   MAD=0 (flat series, e.g. customer charge) → any move >2% of the median
+   flags at pseudo-z 99, since a flat series deviating AT ALL is the signal.
+   Materiality floors (per metric, shown in the UI) keep pocket-change out.
+   CAVEAT: kWh/fuel are seasonal and the embedded window has a Jun–Sep 2025
+   gap, so volume flags are leads to investigate, not verdicts.
+========================================== */
+const ANOM_METRICS={
+  kwh:{l:'Volume (kWh)',floor:20000,fmt:v=>Math.round(v).toLocaleString()},
+  rev:{l:'Revenue (J$)',floor:500000,fmt:v=>Math.round(v).toLocaleString()},
+  energy:{l:'Energy chg (J$)',floor:250000,fmt:v=>Math.round(v).toLocaleString()},
+  fuel:{l:'Fuel (J$)',floor:250000,fmt:v=>Math.round(v).toLocaleString()},
+  ipp:{l:'IPP (J$)',floor:250000,fmt:v=>Math.round(v).toLocaleString()},
+  dem:{l:'Demand chg (J$)',floor:100000,fmt:v=>Math.round(v).toLocaleString()},
+  cust:{l:'Customer chg (J$)',floor:2000,fmt:v=>Math.round(v).toLocaleString()},
+  rpk:{l:'J$/kWh blended',floor:5,fmt:v=>v.toFixed(1)},
+};
+function _anomSeries(a,mk){
+  if(mk==='rpk')return D.months.map((_,i)=>(a.kwh[i]>10000&&a.rev[i]!=null)?a.rev[i]/a.kwh[i]:null);
+  return D.months.map((_,i)=>a[mk]?a[mk][i]:null);
+}
+let _anomCache=null;
+function _anomScan(){
+  if(_anomCache)return _anomCache;
+  const out=[];
+  D.accts.forEach(a=>{
+    for(const mk of Object.keys(ANOM_METRICS)){
+      const cfg=ANOM_METRICS[mk];
+      const series=_anomSeries(a,mk);
+      const vals=series.filter(v=>v!=null&&isFinite(v));
+      if(vals.length<4)continue;
+      const sorted=[...vals].sort((x,y)=>x-y);
+      const med=sorted.length%2?sorted[(sorted.length-1)/2]:(sorted[sorted.length/2-1]+sorted[sorted.length/2])/2;
+      const absdev=vals.map(v=>Math.abs(v-med)).sort((x,y)=>x-y);
+      const mad=absdev.length%2?absdev[(absdev.length-1)/2]:(absdev[absdev.length/2-1]+absdev[absdev.length/2])/2;
+      series.forEach((v,i)=>{
+        if(v==null||!isFinite(v))return;
+        const diff=v-med;
+        if(Math.abs(diff)<cfg.floor)return;
+        let z;
+        if(mad>0){z=0.6745*diff/mad;}
+        else{
+          if(med===0||Math.abs(diff/med)<0.02)return;
+          z=diff>0?99:-99;
+        }
+        if(Math.abs(z)<3.5)return;
+        out.push({name:a.n,rc:a.c,metric:mk,mlabel:D.mlabels[i],month:D.months[i],actual:v,typical:med,z,sev:Math.min(Math.abs(z),99)});
+      });
+    }
+  });
+  out.sort((x,y)=>y.sev-x.sev);
+  _anomCache=out;
+  return out;
+}
+
+/* ── Anomalies tab: severity-ranked findings + annotate workflow ── */
+let anomMetricFilter='all', anomHideExplained=true, anomSearch='', anomOpenKey=null;
+async function renderAnomalies(){
+  const app=document.getElementById('app');
+  app.innerHTML='<div class="card"><span style="color:var(--mut)">Scanning '+D.accts.length+' accounts &times; '+Object.keys(ANOM_METRICS).length+' components&hellip;</span></div>';
+  const reviews=await _fetchAnomReviews();
+  const revMap=Object.fromEntries(reviews.map(r=>[_revKey(r),r]));
+  const all=_anomScan();
+  const counts={};all.forEach(x=>{counts[x.metric]=(counts[x.metric]||0)+1;});
+  let rowsF=anomMetricFilter==='all'?all:all.filter(x=>x.metric===anomMetricFilter);
+  if(anomSearch&&anomSearch.length>=2){const q=anomSearch.toLowerCase();rowsF=rowsF.filter(x=>x.name.toLowerCase().includes(q));}
+  const withStatus=rowsF.map(x=>({...x,review:revMap[x.name+'|'+x.metric+'|'+x.month]||null}));
+  const shown=anomHideExplained?withStatus.filter(x=>!x.review||x.review.status==='new'):withStatus;
+  const unreviewed=withStatus.filter(x=>!x.review||x.review.status==='new').length;
+
+  let h='<div class="grid" style="grid-template-columns:repeat(3,1fr)">'+
+    '<div class="card"><div class="chartttl">Flagged account-months</div><div style="font-size:26px;font-weight:700;margin-top:4px">'+all.length+'</div></div>'+
+    '<div class="card"><div class="chartttl">Unreviewed</div><div style="font-size:26px;font-weight:700;margin-top:4px;color:#e25c4b">'+unreviewed+'</div></div>'+
+    '<div class="card"><div class="chartttl">Explained / escalated</div><div style="font-size:26px;font-weight:700;margin-top:4px;color:#1D9E75">'+reviews.filter(r=>r.status!=='new').length+'</div></div></div>';
+  h+='<div class="card" style="margin-top:14px;padding:10px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">'+
+    '<div class="seg" id="anomMetSeg"><button data-mk="all" class="'+(anomMetricFilter==='all'?'on':'')+'">All ('+all.length+')</button>'+
+    Object.keys(ANOM_METRICS).filter(mk=>counts[mk]).map(mk=>'<button data-mk="'+mk+'" class="'+(anomMetricFilter===mk?'on':'')+'">'+ANOM_METRICS[mk].l+' ('+counts[mk]+')</button>').join('')+'</div>'+
+    '<label style="font-size:12px;color:var(--mut)"><input type="checkbox" id="anomHideEx" '+(anomHideExplained?'checked':'')+'> hide explained</label>'+
+    '<input id="anomSearchBox" type="text" placeholder="Search customer&hellip;" value="'+esc(anomSearch)+'" style="flex:1;min-width:180px;padding:6px 10px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:inherit;font-size:12px">'+
+    '</div>';
+  const cap=150;
+  h+='<div class="card" style="margin-top:14px"><div class="chartttl">Findings'+(shown.length>cap?' <span style="font-weight:400;color:var(--mut);font-size:11px">(worst '+cap+' of '+shown.length+')</span>':'')+' <span style="font-weight:400;color:var(--mut);font-size:11px">&mdash; click a row to annotate</span></div>';
+  if(!shown.length){h+='<div style="color:var(--mut);font-size:12px;padding:6px 0">Nothing at this filter.</div>';}
+  else{
+    h+='<table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr style="color:var(--mut);text-align:left">'+
+      '<th style="padding:4px">Sev</th><th style="padding:4px">Customer</th><th style="padding:4px">Class</th><th style="padding:4px">Component</th><th style="padding:4px">Month</th><th style="padding:4px;text-align:right">Typical</th><th style="padding:4px;text-align:right">Actual</th><th style="padding:4px">Status</th></tr></thead><tbody>';
+    shown.slice(0,cap).forEach(x=>{
+      const key=x.name+'|'+x.metric+'|'+x.month;
+      const st=x.review?x.review.status:'new';
+      const stCol=st==='new'?'#e25c4b':st==='explained'?'#1D9E75':'#BA7517';
+      const cfg=ANOM_METRICS[x.metric];
+      h+='<tr class="anomRow" data-key="'+esc(key)+'" style="border-top:1px solid var(--line);cursor:pointer" onmouseover="this.style.background=\'#F0F4F8\'" onmouseout="this.style.background=\'\'">'+
+        '<td style="padding:4px;font-weight:700;color:'+(x.sev>=99?'#e25c4b':'#BA7517')+'">'+(x.sev>=99?'FLAT&Delta;':x.sev.toFixed(1))+'</td>'+
+        '<td style="padding:4px;font-weight:500">'+esc(x.name)+'</td><td style="padding:4px">'+esc(x.rc)+'</td>'+
+        '<td style="padding:4px">'+cfg.l+'</td><td style="padding:4px">'+esc(x.mlabel)+'</td>'+
+        '<td style="padding:4px;text-align:right">'+cfg.fmt(x.typical)+'</td>'+
+        '<td style="padding:4px;text-align:right;font-weight:600;color:'+(x.actual<x.typical?'#e25c4b':'inherit')+'">'+cfg.fmt(x.actual)+'</td>'+
+        '<td style="padding:4px;color:'+stCol+';font-weight:600">'+st+(x.review&&x.review.explanation?' &middot; <span style="font-weight:400;color:var(--mut)">'+esc(x.review.explanation.slice(0,40))+'</span>':'')+'</td></tr>';
+      if(anomOpenKey===key){
+        h+='<tr><td colspan="8" style="padding:8px;background:#F8FAFC"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+
+          '<select id="anomStSel" style="padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px">'+['new','explained','escalated'].map(s=>'<option value="'+s+'"'+(st===s?' selected':'')+'>'+s+'</option>').join('')+'</select>'+
+          '<input id="anomExpl" type="text" placeholder="Explanation (e.g. confirmed retro credit, ticket #&hellip;)" value="'+esc(x.review&&x.review.explanation||'')+'" style="flex:1;min-width:240px;padding:5px 10px;border:1px solid var(--line);border-radius:6px;font-size:12px">'+
+          '<button id="anomSave" class="btnish" style="padding:6px 14px;border:0;border-radius:6px;background:#0C3547;color:#fff;font-size:12px;cursor:pointer">Save</button>'+
+          '<span id="anomSaveMsg" style="font-size:11px;color:var(--mut)"></span></div></td></tr>';
+      }
+    });
+    h+='</tbody></table>';
+  }
+  h+='<div style="font-size:10.5px;color:var(--mut);padding:8px 4px 0">Materiality floors: '+Object.entries(ANOM_METRICS).map(([k,c])=>c.l+' &ge; '+c.fmt(c.floor)).join(' &middot; ')+'. Flat-series moves flag at any size above 2%. Annotations save to jps_anomaly_reviews (requires sign-in).</div></div>';
+  app.innerHTML=h;
+
+  document.querySelectorAll('#anomMetSeg [data-mk]').forEach(b=>b.onclick=()=>{anomMetricFilter=b.dataset.mk;renderAnomalies();});
+  document.getElementById('anomHideEx').onchange=e=>{anomHideExplained=e.target.checked;renderAnomalies();};
+  const sb2=document.getElementById('anomSearchBox');
+  sb2.oninput=e=>{anomSearch=e.target.value;clearTimeout(sb2._t);sb2._t=setTimeout(renderAnomalies,300);};
+  document.querySelectorAll('.anomRow').forEach(tr=>{
+    tr.onclick=()=>{anomOpenKey=(anomOpenKey===tr.dataset.key)?null:tr.dataset.key;renderAnomalies();};
+  });
+  const saveBtn=document.getElementById('anomSave');
+  if(saveBtn)saveBtn.onclick=async ev=>{
+    ev.stopPropagation();
+    const[name,metric,month]=anomOpenKey.split('|');
+    const x=all.find(a=>a.name===name&&a.metric===metric&&a.month===month);
+    const msg=document.getElementById('anomSaveMsg');
+    msg.textContent='Saving…';
+    const{data:{session}}=await _SB.auth.getSession();
+    const{error}=await _SB.from('jps_anomaly_reviews').upsert({
+      account_name:name,metric,month,
+      actual:x?x.actual:null,typical:x?x.typical:null,severity:x?x.sev:null,
+      status:document.getElementById('anomStSel').value,
+      explanation:document.getElementById('anomExpl').value||null,
+      reviewed_by:session&&session.user?session.user.email:null,
+      updated_at:new Date().toISOString(),
+    },{onConflict:'account_name,metric,month'});
+    if(error){msg.textContent='Save failed: '+error.message;return;}
+    await _fetchAnomReviews(true);
+    anomOpenKey=null;
+    renderAnomalies();
+  };
+}
+
+/* ── Landing digest: the data nominates its own headlines ── */
+function _navTo(v){view=v;render();}
+function _digestMoney(v){const s=v<0?'-':'';const a=Math.abs(v);return s+(a>=1e9?'J$'+(a/1e9).toFixed(2)+'B':'J$'+(a/1e6).toFixed(1)+'M');}
+async function renderDigest(){
+  const app=document.getElementById('app');
+  const iL=D.months.length-1,iP=D.months.length-2;
+  const mL=D.mlabels[iL],mP=D.mlabels[iP];
+  // class movers MoM (rev + kwh)
+  const classMoves=D.classes.map(c=>{
+    const o=D.cls[c];if(!o)return null;
+    return{c,dRev:(o.rev[iL]||0)-(o.rev[iP]||0),dKwh:(o.kwh[iL]||0)-(o.kwh[iP]||0)};
+  }).filter(Boolean).sort((a,b)=>Math.abs(b.dRev)-Math.abs(a.dRev));
+  const cm=classMoves[0];
+  // customer movers MoM by |Δrev|
+  const custMoves=D.accts.map(a=>({n:a.n,d:(a.rev[iL]||0)-(a.rev[iP]||0)})).sort((a,b)=>Math.abs(b.d)-Math.abs(a.d)).slice(0,3);
+  // anomalies (sync scan; reviews + adjustments fill async below)
+  const anoms=_anomScan();
+  const anomsLastMonth=anoms.filter(x=>x.month===D.months[iL]);
+  // customer-charge summary at current threshold
+  const ccA=_ccAnomalies();
+  const ccImpact=ccA.reduce((s,x)=>s+(x.actual-x.normal),0);
+  // contiguity check for the coverage card
+  let gaps=0;
+  for(let i=1;i<D.months.length;i++){
+    const[y1,m1]=D.months[i-1].split('-').map(Number),[y2,m2]=D.months[i].split('-').map(Number);
+    if((y2*12+m2)-(y1*12+m1)!==1)gaps++;
+  }
+  const card=(title,big,sub,go,goLbl)=>'<div class="card"><div class="chartttl">'+title+'</div>'+
+    '<div style="font-size:22px;font-weight:700;margin:6px 0 2px">'+big+'</div>'+
+    '<div style="font-size:12px;color:var(--mut);line-height:1.5">'+sub+'</div>'+
+    (go?'<div style="margin-top:10px"><button onclick="_navTo(\''+go+'\')" style="border:1px solid var(--line);background:none;border-radius:6px;padding:5px 12px;font-size:11.5px;color:var(--blu);cursor:pointer;font-weight:600">'+goLbl+' &rarr;</button></div>':'')+'</div>';
+
+  let h='<div class="grid" style="grid-template-columns:repeat(3,1fr);gap:14px">';
+  h+=card('Data coverage',mL,D.months.length+' months loaded'+(gaps?' &middot; <span style="color:#e25c4b;font-weight:600">'+gaps+' gap'+(gaps>1?'s':'')+' in the series (Jun&ndash;Sep 2025 missing)</span>':' &middot; contiguous'),null,null);
+  h+=cm?card('Biggest class move &middot; '+mP+' &rarr; '+mL,esc(cm.c)+' '+(cm.dRev>=0?'+':'')+_digestMoney(cm.dRev),(cm.dKwh>=0?'+':'')+Math.round(cm.dKwh/1e6*10)/10+' GWh volume move in the same month','trends','Trends'):'';
+  h+=card('Top customer movers &middot; MoM',esc(custMoves[0].n.slice(0,26)),custMoves.map(x=>esc(x.n.slice(0,26))+' <b>'+(x.d>=0?'+':'')+_digestMoney(x.d)+'</b>').join('<br>'),'customers','Customers');
+  h+=card('Anomalies &middot; all components',String(anoms.length),'<span id="digAnomSub">'+anomsLastMonth.length+' in '+mL+' &middot; loading review status&hellip;</span>','anomalies','Review');
+  h+=card('Customer charge',ccA.length+' flagged months',_digestMoney(ccImpact)+' net variance vs each account&rsquo;s normal charge &middot; threshold '+(ccThreshold*100)+'%','custcharge','Investigate');
+  h+='<div class="card"><div class="chartttl">Adjustments &middot; latest data month</div><div id="digAdj" style="font-size:12px;color:var(--mut);margin-top:6px">Loading&hellip;</div>'+
+    '<div style="margin-top:10px"><button onclick="_navTo(\'adjustments\')" style="border:1px solid var(--line);background:none;border-radius:6px;padding:5px 12px;font-size:11.5px;color:var(--blu);cursor:pointer;font-weight:600">Adjustments &rarr;</button></div></div>';
+  h+='</div>';
+  app.innerHTML=h;
+
+  // async fills — review status + adjustments summary
+  _fetchAnomReviews().then(reviews=>{
+    const revMap=new Set(reviews.filter(r=>r.status!=='new').map(_revKey));
+    const unrev=anoms.filter(x=>!revMap.has(x.name+'|'+x.metric+'|'+x.month)).length;
+    const el=document.getElementById('digAnomSub');
+    if(el)el.innerHTML=anomsLastMonth.length+' in '+mL+' &middot; <b style="color:#e25c4b">'+unrev+' unreviewed</b> &middot; '+(anoms.length-unrev)+' explained';
+  });
+  _fetchSpecialAdj().then(rows=>{
+    const el=document.getElementById('digAdj');if(!el)return;
+    if(!rows.length){el.textContent='No adjustment data loaded.';return;}
+    const ymKey=r=>r.year+'-'+String(r.month).padStart(2,'0');
+    const last=[...new Set(rows.map(ymKey))].sort().pop();
+    const lastRows=rows.filter(r=>ymKey(r)===last);
+    const byWho={};lastRows.forEach(r=>{byWho[r.who||'?']=(byWho[r.who||'?']||0)+1;});
+    const top=Object.entries(byWho).sort((a,b)=>b[1]-a[1])[0];
+    el.innerHTML='<span style="font-size:22px;font-weight:700;color:#1E293B">'+lastRows.length+'</span> line-items in '+last+'<br>'+esc(top[0])+' processed '+top[1]+' ('+Math.round(top[1]/lastRows.length*100)+'%)';
+  });
+}
+
+function renderCompare(){
+  if(!pA)pA=D.months[0]; if(!pB)pB=D.months[D.months.length-1];
+  const iA=D.months.indexOf(pA), iB=D.months.indexOf(pB);
+  let h='<div class="ctrl"><span class="lbl">Compare</span>'+
+    '<select id="pA">'+D.months.map((m,i)=>'<option value="'+m+'"'+(pA===m?' selected':'')+'>'+D.mlabels[i]+'</option>').join('')+'</select>'+
+    '<span class="lbl">vs</span><select id="pB">'+D.months.map((m,i)=>'<option value="'+m+'"'+(pB===m?' selected':'')+'>'+D.mlabels[i]+'</option>').join('')+'</select>'+
+    '<div class="seg">'+[['class','Rate class'],['comp','Components'],['customer','Customers']].map(o=>'<button data-cmg="'+o[0]+'" class="'+(cmGroup===o[0]?'on':'')+'">'+o[1]+'</button>').join('')+'</div>';
+  if(cmGroup!=='comp') h+='<span class="lbl">Metric</span><select id="cmMet">'+Object.keys(AMU).map(k=>'<option value="'+k+'"'+(cmMet===k?' selected':'')+'>'+AMU[k].l+'</option>').join('')+'</select>';
+  h+='</div>';
+  h+='<div class="grid"><div class="card"><div class="chartttl">'+D.mlabels[iA]+' vs '+D.mlabels[iB]+(cmGroup==='comp'?' — revenue components (J$B)':cmGroup==='class'?' — by rate class':' — top movers')+'</div><div class="chartwrap"><canvas id="c"></canvas></div></div>'+
+    '<div class="card" style="padding:10px"><div class="tbl"><table><thead><tr><th class="l">'+(cmGroup==='comp'?'Component':cmGroup==='class'?'Class':'Customer')+'</th><th>'+D.mlabels[iA]+'</th><th>'+D.mlabels[iB]+'</th><th>Δ%</th></tr></thead><tbody id="tb"></tbody></table></div></div></div>';
+  document.getElementById('app').innerHTML=h;
+  let labels,aVals,bVals;
+  if(cmGroup==='comp'){const ca=comps(D.total,iA),cb=comps(D.total,iB);labels=COMPS;aVals=COMPS.map(k=>ca[k]/1e9);bVals=COMPS.map(k=>cb[k]/1e9);}
+  else if(cmGroup==='class'){labels=D.classes;aVals=D.classes.map(c=>CMfn[cmMet](D.cls[c])[iA]);bVals=D.classes.map(c=>CMfn[cmMet](D.cls[c])[iB]);}
+  else {const r=D.accts.map(a=>{const s=AM[cmMet](a);return {n:a.n,a:s[iA],b:s[iB]};}).sort((x,y)=>Math.abs(y.b-y.a)-Math.abs(x.b-x.a)).slice(0,12);labels=r.map(x=>x.n.slice(0,18));aVals=r.map(x=>x.a);bVals=r.map(x=>x.b);}
+  if(chart)chart.destroy();
+  chart=new Chart(document.getElementById('c'),{type:'bar',data:{labels,datasets:[
+    {label:D.mlabels[iA],data:aVals,backgroundColor:'#93C5FD',borderRadius:3},
+    {label:D.mlabels[iB],data:bVals,backgroundColor:'#1B4F8A',borderRadius:3}]},
+    options:{maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{x:{grid:{display:false},ticks:{maxRotation:cmGroup==='customer'?50:0,minRotation:cmGroup==='customer'?50:0,font:{size:cmGroup==='customer'?10:12}}},y:{grid:{color:'#E2E8F0'}}}}});
+  const dec=cmGroup==='comp'?2:(AMU[cmMet]?AMU[cmMet].d:1);
+  document.getElementById('tb').innerHTML=labels.map((l,i)=>'<tr><td class="l">'+esc(l)+'</td><td>'+aVals[i].toFixed(dec)+'</td><td>'+bVals[i].toFixed(dec)+'</td><td class="'+(bVals[i]>=aVals[i]?'up':'dn')+'">'+sp(pctV(aVals[i],bVals[i]))+'%</td></tr>').join('');
+  document.getElementById('pA').onchange=e=>{pA=e.target.value;renderCompare();};
+  document.getElementById('pB').onchange=e=>{pB=e.target.value;renderCompare();};
+  document.querySelectorAll('[data-cmg]').forEach(b=>b.onclick=()=>{cmGroup=b.dataset.cmg;renderCompare();});
+  const me=document.getElementById('cmMet'); if(me)me.onchange=e=>{cmMet=e.target.value;renderCompare();};
+}
+
+function renderMix(){
+  const o=mScope==='Total'?D.total:D.cls[mScope];
+  let h='<div class="ctrl"><span class="lbl">Scope</span><div class="seg">'+
+    ['Total'].concat(D.classes).map(c=>'<button data-ms="'+c+'" class="'+(mScope===c?'on':'')+'">'+c+'</button>').join('')+'</div>'+
+    '<div class="seg"><button data-mm="abs" class="'+(mMode==='abs'?'on':'')+'">J$ absolute</button><button data-mm="share" class="'+(mMode==='share'?'on':'')+'">% share</button></div></div>';
+  h+=monthChips();
+  h+='<div class="grid"><div class="card"><div class="chartttl">Revenue breakdown — '+mScope+' ('+(mMode==='abs'?'J$B':'% of revenue')+')</div><div class="chartwrap"><canvas id="c"></canvas></div></div><div class="kpis" id="kp"></div></div>';
+  document.getElementById('app').innerHTML=h;
+  const idx=selIdx(), labels=idx.map(i=>D.mlabels[i]), raw=idx.map(i=>comps(o,i));
+  const ds=COMPS.map(k=>{let data;
+    if(mMode==='share') data=raw.map(r=>{const t=COMPS.reduce((s,kk)=>s+Math.max(r[kk],0),0);return t?Math.max(r[k],0)/t*100:0;});
+    else data=raw.map(r=>r[k]/1e9);
+    return {label:k,data,backgroundColor:COMPCOL[k],borderWidth:0};});
+  if(chart)chart.destroy();
+  chart=new Chart(document.getElementById('c'),{type:'bar',data:{labels,datasets:ds},
+    options:{maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:12,padding:8}},
+      tooltip:{callbacks:{label:c=>c.dataset.label+': '+(mMode==='share'?c.raw.toFixed(1)+'%':'J$'+c.raw.toFixed(2)+'B')}}},
+      scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,grid:{color:'#E2E8F0'},ticks:{callback:v=>mMode==='share'?v+'%':'J$'+v}}}}});
+  const lastR=raw[raw.length-1]||{}, tot=COMPS.reduce((s,k)=>s+Math.max(lastR[k]||0,0),0)||1;
+  const sortk=COMPS.slice().sort((a,b)=>(lastR[b]||0)-(lastR[a]||0));
+  document.getElementById('kp').innerHTML=
+    kpi('Latest revenue · '+labels[labels.length-1],'J$'+(o.rev[idx[idx.length-1]]/1e9).toFixed(2)+'B','net billed')+
+    sortk.slice(0,4).map(k=>kpi(k+' share',((lastR[k]||0)/tot*100).toFixed(1)+'%','J$'+((lastR[k]||0)/1e9).toFixed(2)+'B',k==='Demand'?'dn':'')).join('');
+  document.querySelectorAll('[data-ms]').forEach(b=>b.onclick=()=>{mScope=b.dataset.ms;renderMix();});
+  document.querySelectorAll('[data-mm]').forEach(b=>b.onclick=()=>{mMode=b.dataset.mm;renderMix();});
+  bindMonths(renderMix);
+}
+
+let caseSel=null, wowMet='rev', movCls='RT50', movMode='topbot', movMet='kwh';
+let tmMet='rev', tmView='customer';
+function renderTopMovers(){
+  const MV=D.movers; if(!MV){document.getElementById('app').innerHTML='<div class="card">Top movers not available — rebuild data.</div>';return;}
+  if(tmView==='bucket'&&tmMet==='dem')tmMet='vol';
+  const div=tmMet==='vol'?1000:1e6, un=tmMet==='vol'?'GWh':'J$M';
+  const data=(tmView==='customer'?MV.byCustomer[tmMet]:MV.byBucketRT10[tmMet])||[];
+  const lab=r=>r.name||r.bucket;
+  let h='<div class="ctrl"><span class="lbl">Metric</span><div class="seg">'+
+    [['vol','Volume'],['dem','Demand'],['rev','Revenue']].map(o=>'<button data-tmm="'+o[0]+'" class="'+(tmMet===o[0]?'on':'')+'"'+(o[0]==='dem'&&tmView==='bucket'?' disabled style="opacity:.4"':'')+'>'+o[1]+'</button>').join('')+'</div>'+
+    '<div class="seg"><button data-tmv="customer" class="'+(tmView==='customer'?'on':'')+'">By customer · RT40/50/70</button><button data-tmv="bucket" class="'+(tmView==='bucket'?'on':'')+'">RT10 buckets</button></div></div>';
+  h+='<div style="margin:0 2px 8px;color:var(--mut);font-size:12px">'+MV.window+' · Actual − estimated budget ('+un+') · est. budget = Jan/Feb share × seasonally-shaped class budget</div>';
+  if(tmView==='bucket'&&!data.length){h+='<div class="card" style="color:var(--mut);font-size:12.5px">RT10 consumption-bucket movers aren&rsquo;t available in live mode &mdash; they need bucket-grain data (jps_billing_components is account-level only). By-customer movers (RT40/50/70) are live above.</div>';document.getElementById('app').innerHTML=h;return;}
+  h+='<div class="grid"><div class="card"><div class="chartttl">Top variance movers · '+(tmMet==='vol'?'Volume':tmMet==='dem'?'Demand':'Revenue')+' ('+un+')</div><div class="chartwrap" style="height:'+(Math.min(data.length,20)*26+90)+'px"><canvas id="c"></canvas></div></div>'+
+     '<div class="card" style="padding:10px"><div class="tbl"><table><thead><tr><th class="l">'+(tmView==='customer'?'Customer':'Bucket')+'</th><th>Actual</th><th>Est. Bud</th><th>Var</th></tr></thead><tbody id="tb"></tbody></table></div></div></div>';
+  document.getElementById('app').innerHTML=h;
+  const top=data.slice(0,20);
+  barChart('c',top.map(r=>lab(r).slice(0,26)),top.map(r=>+(r.var/div).toFixed(2)),top.map(r=>r.var>=0?'#1D9E75':'#E24B4A'),v=>(v>=0?'+':'')+(+v).toFixed(1),{x:{grid:{color:'#223247'}},y:{grid:{display:false},ticks:{font:{size:10.5}}}},true);
+  document.getElementById('tb').innerHTML=data.slice(0,80).map(r=>'<tr><td class="l">'+esc(lab(r)).slice(0,26)+(r.cls?' <span class="badge">'+r.cls+'</span>':'')+'</td><td>'+(r.act/div).toFixed(1)+'</td><td>'+(r.bud/div).toFixed(1)+'</td><td class="'+(r.var>=0?'up':'dn')+'">'+(r.var>=0?'+':'')+(r.var/div).toFixed(1)+'</td></tr>').join('');
+  document.querySelectorAll('[data-tmm]').forEach(b=>b.onclick=()=>{tmMet=b.dataset.tmm;renderTopMovers();});
+  document.querySelectorAll('[data-tmv]').forEach(b=>b.onclick=()=>{tmView=b.dataset.tmv;renderTopMovers();});
+}
+let aBase=null, aCur=null;
+function aIdx(){if(aBase==null)aBase=D.months[0];if(aCur==null)aCur=D.months[D.months.length-1];return [D.months.indexOf(aBase),D.months.indexOf(aCur)];}
+function periodSel(){return '<span class="lbl">Compare</span><select id="aB">'+D.months.map((m,i)=>'<option value="'+m+'"'+(aBase===m?' selected':'')+'>'+D.mlabels[i]+'</option>').join('')+'</select><span class="lbl">→</span><select id="aC">'+D.months.map((m,i)=>'<option value="'+m+'"'+(aCur===m?' selected':'')+'>'+D.mlabels[i]+'</option>').join('')+'</select>';}
+function bindPeriod(fn){document.getElementById('aB').onchange=e=>{aBase=e.target.value;fn();};document.getElementById('aC').onchange=e=>{aCur=e.target.value;fn();};}
+function dlbl(fmt){return {display:true,anchor:'end',align:'end',clip:false,formatter:fmt,color:'#c7d3e0',font:{size:11,weight:500}};}
+function barChart(id,labels,data,colors,fmt,scales,horiz,onClickBar){
+  if(chart)chart.destroy();
+  chart=new Chart(document.getElementById(id),{type:'bar',data:{labels,datasets:[{data,backgroundColor:colors,borderRadius:3}]},
+    options:{indexAxis:horiz?'y':'x',responsive:true,maintainAspectRatio:false,onClick:onClickBar?(evt,els)=>{if(els.length)onClickBar(els[0].index);}:undefined,plugins:{legend:{display:false},datalabels:dlbl(fmt),tooltip:{callbacks:{label:c=>fmt(c.raw)}}},scales:scales}});
+  if(onClickBar&&document.getElementById(id))document.getElementById(id).style.cursor='pointer';
+}
+const ANSWER_FIELDS=['kwh','energy','fuel','ipp','dem','cust'];
+const ANSWER_UNITS={kwh:['kWh (M)',1e6,''],energy:['Energy (J$M)',1e6,'J$'],fuel:['Fuel (J$M)',1e6,'J$'],ipp:['IPP (J$M)',1e6,'J$'],dem:['Demand charge (J$M)',1e6,'J$'],cust:['Customer charge (J$M)',1e6,'J$'],rev:['Total revenue (J$M)',1e6,'J$']};
+let _contribCtx=null;
+const _safeId=s=>String(s).replace(/[^\w]/g,'_');
+function _budgetField(field){return field==='rev'?'rev':field==='dem'?'dem':'kwh';}
+function renderAnswerContributors(field,iA,iB){
+  const [label,div,pfx]=ANSWER_UNITS[field];
+  const dv=a=>((a[field]?a[field][iB]:0)-(a[field]?a[field][iA]:0));
+  const rows=D.accts.map(a=>({id:a.id,n:a.n,c:a.c,d:dv(a)})).sort((x,y)=>y.d-x.d);
+  const top=rows.slice(0,10),bot=rows.slice(-10).reverse();
+  _contribCtx={top,bot,label,div,pfx,iA,iB,field};
+  const bf=_budgetField(field), bDiv=bf==='kwh'?1000:1e6, bUnit=bf==='kwh'?'MWh':'J$M';
+  const row=r=>{
+    const sid=_safeId(r.id);
+    return '<tr style="cursor:pointer" onclick="toggleContribRow(\''+r.id+'\')"><td class="l"><span id="carrow-'+sid+'" style="color:var(--mut);display:inline-block;width:12px">&#9656;</span>'+esc(r.n).slice(0,26)+'</td><td><span class="badge">'+r.c+'</span></td><td class="'+(r.d>=0?'up':'dn')+'">'+(r.d>=0?'+':'')+pfx+(Math.abs(r.d)/div).toFixed(1)+'</td><td id="bud-'+sid+'" style="text-align:right;color:var(--mut)">…</td></tr>'+
+      '<tr id="cdet-'+sid+'" style="display:none"><td colspan="4" style="padding:0"><div id="cbody-'+sid+'" style="padding:8px 6px 10px 22px;background:#F8FAFC;border-left:2px solid var(--yel)"></div></td></tr>';
+  };
+  const el=document.getElementById('answer-contrib');
+  if(!el)return;
+  el.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin:8px 0 4px;border-top:1px solid var(--line);padding-top:8px"><div style="font-size:10px;font-weight:700;color:var(--mut);letter-spacing:1px">TOP 10 / BOTTOM 10 · '+label+' — '+D.mlabels[iA]+' → '+D.mlabels[iB]+' <span style="font-weight:400;text-transform:none;letter-spacing:0">(click a row to expand accounts)</span></div><button class="chip" id="contrib-export-btn" onclick="exportContributors()" style="border-color:var(--yel);color:var(--yel);font-weight:700">⬇ Excel</button></div>'+
+    '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="color:var(--mut);text-align:left"><th class="l" style="padding:2px 4px">Customer</th><th style="padding:2px 4px">Cls</th><th style="padding:2px 4px;text-align:right">Δ '+label+'</th><th style="padding:2px 4px;text-align:right">'+D.mlabels[iB]+' vs Budget ('+bUnit+')</th></tr></thead><tbody>'+
+    top.map(row).join('')+'<tr><td colspan="4" style="padding:2px 4px;color:var(--mut);font-size:10px">— bottom 10 —</td></tr>'+bot.map(row).join('')+
+    '</tbody></table></div>';
+  const all=top.concat(bot);
+  Promise.all(all.map(r=>{
+    const a=D.accts.find(x=>x.id===r.id);
+    if(!a)return Promise.resolve(null);
+    return _fetchBudgetAgg(a.n,a.c,D.months[iB]).then(bg=>({r,a,bg}));
+  })).then(results=>{
+    results.forEach(res=>{
+      if(!res)return;
+      const {r,a,bg}=res, sid=_safeId(r.id), cell=document.getElementById('bud-'+sid);
+      if(!cell)return;
+      if(!bg){cell.textContent='—';return;}
+      const actual=a[bf]?a[bf][iB]:0, v=(actual-bg[bf])/bDiv;
+      cell.textContent=(v>=0?'+':'')+v.toFixed(1);
+      cell.className=v>=0?'up':'dn';
+    });
+  });
+}
+function _renderAcctSimple(rows,err,field,lA,lB){
+  if(err)return '<div style="color:#e25c4b;font-size:11px;padding:4px 0">⚠ '+esc(err)+'</div>';
+  if(!rows||!rows.length)return '<div style="color:var(--mut);font-size:11px;padding:4px 0">No account data found.</div>';
+  const tracked=field==='rev'||field==='kwh'||field==='dem';
+  const unitLbl=field==='rev'||field==='dem'?'J$M':'MWh';
+  const fmt=v=>v!=null?(field==='rev'||field==='dem'?(v/1e6).toFixed(2):(v/1000).toFixed(1)):'—';
+  const val=r=>field==='rev'?{b:r.base?.rev,c:r.cur?.rev}:field==='dem'?{b:r.base?.dem,c:r.cur?.dem}:{b:r.base?.kwh,c:r.cur?.kwh};
+  const bf=_budgetField(field), bud=r=>r.budget?r.budget[bf]:null;
+  let h=tracked?'':'<div style="color:var(--mut);font-size:10px;margin-bottom:4px">This component isn\'t billed per account — showing kWh, the closest metered driver.</div>';
+  h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="color:var(--mut);text-align:left"><th style="padding:2px 4px">A/c No.</th><th style="padding:2px 4px;text-align:right">'+esc(lA)+'</th><th style="padding:2px 4px;text-align:right">'+esc(lB)+'</th><th style="padding:2px 4px;text-align:right">Δ ('+unitLbl+')</th><th style="padding:2px 4px;text-align:right">'+esc(lB)+' Budget</th><th style="padding:2px 4px;text-align:right">Var</th></tr></thead><tbody>';
+  for(const r of rows){
+    const {b,c}=val(r), d=(b!=null&&c!=null)?c-b:null;
+    const bg=bud(r), v=(c!=null&&bg!=null)?c-bg:null;
+    h+='<tr style="border-top:1px solid #1e2d40"><td style="padding:3px 4px;font-family:monospace;font-size:10.5px;color:var(--yel)">'+esc(r.ac)+'</td>'
+      +'<td style="padding:3px 4px;text-align:right">'+fmt(b)+'</td>'
+      +'<td style="padding:3px 4px;text-align:right">'+fmt(c)+'</td>'
+      +'<td style="padding:3px 4px;text-align:right" class="'+(d>=0?'up':'dn')+'">'+(d!=null?(d>=0?'+':'')+fmt(d):'—')+'</td>'
+      +'<td style="padding:3px 4px;text-align:right;color:var(--mut)">'+fmt(bg)+'</td>'
+      +'<td style="padding:3px 4px;text-align:right" class="'+(v>=0?'up':'dn')+'">'+(v!=null?(v>=0?'+':'')+fmt(v):'—')+'</td></tr>';
+  }
+  h+='</tbody></table></div>';
+  return h;
+}
+function toggleContribRow(id){
+  const sid=_safeId(id);
+  const tr=document.getElementById('cdet-'+sid), arrow=document.getElementById('carrow-'+sid);
+  if(!tr)return;
+  const opening=tr.style.display==='none';
+  tr.style.display=opening?'table-row':'none';
+  if(arrow)arrow.innerHTML=opening?'&#9662;':'&#9656;';
+  if(!opening)return;
+  const body=document.getElementById('cbody-'+sid);
+  if(!body||body.dataset.loaded)return;
+  body.dataset.loaded='1';
+  const a=D.accts.find(x=>x.id===id);if(!a){body.innerHTML='';return;}
+  const {iA,iB,field}=_contribCtx;
+  body.innerHTML='<div style="color:var(--mut);font-size:11px">Loading accounts…</div>';
+  _fetchAccts(a.n,D.months[iA],D.months[iB],a.c).then(({rows,err})=>{
+    body.innerHTML=_renderAcctSimple(rows,err,field,D.mlabels[iA],D.mlabels[iB]);
+    body._acctRows=rows;
+  });
+}
+window.toggleContribRow=toggleContribRow;
+async function exportContributors(){
+  if(!_contribCtx)return;
+  const {top,bot,label,div,pfx,iA,iB}=_contribCtx;
+  const lb=D.mlabels[iA],lc=D.mlabels[iB];
+  const btn=document.getElementById('contrib-export-btn');
+  const origTxt=btn?btn.textContent:'';
+  if(btn){btn.textContent='Building…';btn.disabled=true;}
+  const all=top.map((r,i)=>({...r,rank:i+1,grp:'TOP 10'})).concat(bot.map((r,i)=>({...r,rank:i+1,grp:'BOTTOM 10'})));
+  const [fetched,budgets]=await Promise.all([
+    Promise.all(all.map(r=>{
+      const a=D.accts.find(x=>x.id===r.id);
+      if(!a)return Promise.resolve({rows:[]});
+      return _fetchAccts(a.n,D.months[iA],D.months[iB],a.c);
+    })),
+    Promise.all(all.map(r=>{
+      const a=D.accts.find(x=>x.id===r.id);
+      if(!a)return Promise.resolve(null);
+      return _fetchBudgetAgg(a.n,a.c,D.months[iB]);
+    }))
+  ]);
+  const hdr=['Rank','Customer','Class','Δ '+label,'A/C No.','Parish',
+    'kWh '+lb+' (MWh)','kWh '+lc+' (MWh)','Energy '+lb+' (J$M)','Energy '+lc+' (J$M)',
+    'Demand '+lb+' (J$M)','Demand '+lc+' (J$M)','Rev '+lb+' (J$M)','Rev '+lc+' (J$M)',
+    'kWh Budget '+lc+' (MWh)','Demand Budget '+lc+' (J$M)','Rev Budget '+lc+' (J$M)'];
+  const aoa=[hdr]; const rowMeta=[null];
+  let curGrp=null;
+  const G=(a,kk,j)=>(a[kk]&&a[kk][j]!=null?a[kk][j]:0);
+  all.forEach((r,i)=>{
+    if(r.grp!==curGrp){curGrp=r.grp;aoa.push([curGrp,'','','','','','','','','','','','','','','','']);rowMeta.push(null);}
+    const a=D.accts.find(x=>x.id===r.id), bg=budgets[i];
+    aoa.push([r.rank,r.n,r.c,+(r.d/div).toFixed(2),'','',
+      a?+(G(a,'kwh',iA)/1000).toFixed(1):'',a?+(G(a,'kwh',iB)/1000).toFixed(1):'',
+      a?+(G(a,'energy',iA)/1e6).toFixed(2):'',a?+(G(a,'energy',iB)/1e6).toFixed(2):'',
+      a?+(G(a,'dem',iA)/1e6).toFixed(2):'',a?+(G(a,'dem',iB)/1e6).toFixed(2):'',
+      a?+(G(a,'rev',iA)/1e6).toFixed(2):'',a?+(G(a,'rev',iB)/1e6).toFixed(2):'',
+      bg?+(bg.kwh/1000).toFixed(1):'',bg?+(bg.dem/1e6).toFixed(2):'',bg?+(bg.rev/1e6).toFixed(2):'']);
+    rowMeta.push({level:0});
+    (fetched[i].rows||[]).forEach(ar=>{
+      aoa.push(['','','','',ar.ac,ar.parish||'',
+        ar.base?.kwh!=null?+(ar.base.kwh/1000).toFixed(1):'',ar.cur?.kwh!=null?+(ar.cur.kwh/1000).toFixed(1):'',
+        '','',
+        ar.base?.dem!=null?+(ar.base.dem/1e6).toFixed(2):'',ar.cur?.dem!=null?+(ar.cur.dem/1e6).toFixed(2):'',
+        ar.base?.rev!=null?+(ar.base.rev/1e6).toFixed(2):'',ar.cur?.rev!=null?+(ar.cur.rev/1e6).toFixed(2):'',
+        ar.budget?.kwh!=null?+(ar.budget.kwh/1000).toFixed(1):'',ar.budget?.dem!=null?+(ar.budget.dem/1e6).toFixed(2):'',ar.budget?.rev!=null?+(ar.budget.rev/1e6).toFixed(2):'']);
+      rowMeta.push({level:1});
+    });
+  });
+  const fname='JPS_'+label.replace(/[^\w]+/g,'_')+'_Movers_'+lb+'_to_'+lc;
+  if(window.XLSX){
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    ws['!rows']=rowMeta.map(m=>m?{level:m.level}:undefined);
+    ws['!outline']={summaryBelow:false};
+    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Movers'); XLSX.writeFile(wb,fname+'.xlsx');
+  } else {
+    const csv=aoa.map(r=>r.map(c=>typeof c==='string'&&/[",\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c).join(',')).join('\n');
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download=fname+'.csv'; a.click();
+  }
+  if(btn){btn.textContent=origTxt;btn.disabled=false;}
+}
+window.exportContributors=exportContributors;
+function renderAnswer(){
+  const [iA,iB]=aIdx(), T=D.total;
+  const comp=[['Volume (kWh)',pctV(T.kwh[iA],T.kwh[iB])],['Energy',pctV(T.energy[iA],T.energy[iB])],['Fuel',pctV(T.fuel[iA],T.fuel[iB])],['IPP',pctV(T.ipp[iA],T.ipp[iB])],['Demand (kVA)',pctV(T.demand[iA],T.demand[iB])],['Customer',pctV(T.cust_chg[iA],T.cust_chg[iB])]];
+  const revPc=pctV(T.rev[iA],T.rev[iB]), kPc=pctV(T.kwh[iA],T.kwh[iB]), dPc=pctV(T.demand[iA],T.demand[iB]);
+  document.getElementById('app').innerHTML='<div class="ctrl">'+periodSel()+'</div><div class="grid"><div class="card"><div class="chartttl">'+D.mlabels[iA]+' → '+D.mlabels[iB]+' · % change by component <span style="font-weight:400;color:var(--mut);font-size:11px">(click a bar to change the driver below)</span></div><div class="chartwrap"><canvas id="c"></canvas></div></div><div class="kpis" id="kp"></div></div><div class="card" id="answer-contrib" style="margin-top:16px"></div>';
+  barChart('c',comp.map(c=>c[0]),comp.map(c=>+c[1].toFixed(1)),comp.map(c=>c[0][0]==='D'?'#E24B4A':c[0][0]==='V'?'#9AA7B4':'#3b6ea5'),v=>(v>=0?'+':'')+v.toFixed(1)+'%',{x:{grid:{display:false}},y:{grid:{color:'#223247'},ticks:{callback:v=>v+'%'}}},false,idx=>renderAnswerContributors(ANSWER_FIELDS[idx],iA,iB));
+  document.getElementById('kp').innerHTML=kpi('Volume',(kPc>=0?'+':'')+kPc.toFixed(1)+'%','kWh',kPc>=0?'up':'dn')+kpi('Revenue',(revPc>=0?'+':'')+revPc.toFixed(1)+'%',(revPc>kPc?'outpaced':'lagged')+' volume',revPc>=0?'up':'dn')+kpi('Demand charge',(dPc>=0?'+':'')+dPc.toFixed(1)+'%','fixed kVA',dPc<kPc?'dn':'up')+'<div class="kpi"><div class="l">Read</div><div style="font-size:12px;line-height:1.5;margin-top:4px;color:#c7d3e0">Energy &amp; fuel track kWh; demand is fixed. When volume outruns demand, blended realization dilutes.</div></div>';
+  renderAnswerContributors('rev',iA,iB);
+  bindPeriod(renderAnswer);
+}
+function renderBridge(){
+  const [iA,iB]=aIdx(), T=D.total;
+  const d={Fuel:T.fuel[iB]-T.fuel[iA],Energy:T.energy[iB]-T.energy[iA],IPP:T.ipp[iB]-T.ipp[iA],Demand:T.demand[iB]-T.demand[iA],Customer:T.cust_chg[iB]-T.cust_chg[iA]};
+  const net=T.rev[iB]-T.rev[iA], other=net-(d.Fuel+d.Energy+d.IPP+d.Demand+d.Customer);
+  const rows=[['Fuel',d.Fuel],['Energy',d.Energy],['Customer',d.Customer],['Other/adj',other],['Demand',d.Demand],['IPP',d.IPP]].sort((a,b)=>b[1]-a[1]);
+  document.getElementById('app').innerHTML='<div class="ctrl">'+periodSel()+'</div><div class="grid"><div class="card"><div class="chartttl">'+D.mlabels[iA]+' → '+D.mlabels[iB]+' · revenue change by charge component (J$M)</div><div class="chartwrap"><canvas id="c"></canvas></div></div><div class="kpis" id="kp"></div></div>';
+  barChart('c',rows.map(r=>r[0]),rows.map(r=>Math.round(r[1]/1e6)),rows.map(r=>r[1]>=0?'#1D9E75':'#E24B4A'),v=>(v>=0?'+':'')+v+'M',{x:{grid:{color:'#223247'},ticks:{callback:v=>v+'M'}},y:{grid:{display:false}}},true);
+  const margin=Math.round((d.Energy+d.Demand+d.Customer)/1e6);
+  document.getElementById('kp').innerHTML=kpi('Net revenue',(net>=0?'+':'-')+'J$'+Math.abs(Math.round(net/1e6))+'M',pctV(T.rev[iA],T.rev[iB]).toFixed(1)+'% on vol '+(pctV(T.kwh[iA],T.kwh[iB])>=0?'+':'')+pctV(T.kwh[iA],T.kwh[iB]).toFixed(1)+'%',net>=0?'up':'dn')+kpi('IPP (pass-through)',(d.IPP>=0?'+':'-')+'J$'+Math.abs(Math.round(d.IPP/1e6))+'M','margin-neutral',d.IPP>=0?'up':'dn')+kpi('Demand',(d.Demand>=0?'+':'-')+'J$'+Math.abs(Math.round(d.Demand/1e6))+'M','structural',d.Demand>=0?'up':'dn')+'<div class="kpi"><div class="l">Read</div><div style="font-size:12px;line-height:1.5;margin-top:4px;color:#c7d3e0">Margin-bearing (energy+demand+customer) net '+(margin>=0?'+':'')+margin+'M. Fuel &amp; IPP are pass-through.</div></div>';
+  bindPeriod(renderBridge);
+}
+function renderCases(){
+  const [iA,iB]=aIdx();
+  const big=D.accts.slice().sort((a,b)=>b.rev[iB]-a.rev[iB]).slice(0,40);
+  if(!caseSel||!D.accts.find(a=>a.n===caseSel)){const al=D.accts.find(a=>a.n.toLowerCase().includes('alcoa'));caseSel=al?al.n:(big[0]&&big[0].n);}
+  const a=D.accts.find(x=>x.n===caseSel)||big[0];
+  const anchors=['Alcoa','Caribbean Cement','Windalco','Jamaica Broilers','National Water'];
+  let h='<div class="ctrl">'+periodSel()+'<select id="caseSel">'+big.map((x,i)=>'<option value="'+i+'"'+(x.n===caseSel?' selected':'')+'>'+esc(x.n).slice(0,30)+'</option>').join('')+'</select></div>';
+  h+='<div style="margin:0 2px 10px;display:flex;gap:6px;flex-wrap:wrap">'+anchors.map(n=>'<span class="chip" data-anc="'+n+'">'+n+'</span>').join('')+'</div>';
+  h+='<div class="grid"><div class="card"><div class="chartttl">'+esc(a.n).slice(0,32)+' ['+a.c+'] · indexed to '+D.mlabels[iA]+' = 100</div><div class="chartwrap"><canvas id="c"></canvas></div></div><div class="card" style="padding:10px"><div class="tbl"><table><thead><tr><th class="l"></th><th>'+D.mlabels[iA]+'</th><th>'+D.mlabels[iB]+'</th><th>Δ</th></tr></thead><tbody id="tb"></tbody></table></div></div></div>';
+  document.getElementById('app').innerHTML=h;
+  const pc=(x,y)=>Math.round((x?y/x-1:0)*100);
+  const dpkA=a.kwh[iA]?a.dem[iA]/a.kwh[iA]:0, dpkB=a.kwh[iB]?a.dem[iB]/a.kwh[iB]:0;
+  const tr=[['kWh',(a.kwh[iA]/1e6).toFixed(1)+'M',(a.kwh[iB]/1e6).toFixed(1)+'M',pc(a.kwh[iA],a.kwh[iB])],['Revenue','J$'+(a.rev[iA]/1e6).toFixed(1)+'M','J$'+(a.rev[iB]/1e6).toFixed(1)+'M',pc(a.rev[iA],a.rev[iB])],['Demand','J$'+(a.dem[iA]/1e6).toFixed(1)+'M','J$'+(a.dem[iB]/1e6).toFixed(1)+'M',pc(a.dem[iA],a.dem[iB])],['Demand/kWh','J$'+dpkA.toFixed(2),'J$'+dpkB.toFixed(2),pc(dpkA,dpkB)]];
+  document.getElementById('tb').innerHTML=tr.map(r=>'<tr><td class="l">'+r[0]+'</td><td>'+r[1]+'</td><td>'+r[2]+'</td><td class="'+(r[3]>=0?'up':'dn')+'">'+(r[3]>=0?'+':'')+r[3]+'%</td></tr>').join('');
+  const idx=[pc(a.kwh[iA],a.kwh[iB])+100,pc(a.rev[iA],a.rev[iB])+100,pc(a.dem[iA],a.dem[iB])+100];
+  if(chart)chart.destroy();
+  chart=new Chart(document.getElementById('c'),{type:'bar',data:{labels:['kWh','Revenue','Demand'],datasets:[{label:D.mlabels[iA],data:[100,100,100],backgroundColor:'#7d93ab',borderRadius:3},{label:D.mlabels[iB],data:idx,backgroundColor:'#3b6ea5',borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'},datalabels:dlbl(v=>Math.round(v))},scales:{x:{grid:{display:false}},y:{grid:{color:'#223247'}}}}});
+  document.getElementById('caseSel').onchange=e=>{caseSel=big[+e.target.value].n;renderCases();};
+  document.querySelectorAll('[data-anc]').forEach(c=>c.onclick=()=>{const m=D.accts.filter(x=>x.n.toLowerCase().includes(c.dataset.anc.toLowerCase()));if(m.length){caseSel=m.sort((x,y)=>y.rev[iB]-x.rev[iB])[0].n;renderCases();}});
+  bindPeriod(renderCases);
+}
+function renderGiants(){
+  const [iA,iB]=aIdx(), cls=['RT40','RT50','RT70'];
+  const giants=['alcoa','windalco','caribbean cement'], isG=n=>giants.some(p=>n.toLowerCase().includes(p));
+  const cl=c=>wowMet==='rev'?D.cls[c].rev:D.cls[c].demand, ac=a=>wowMet==='rev'?a.rev:a.dem;
+  let h='<div class="ctrl">'+periodSel()+'<div class="seg"><button data-wm="rev" class="'+(wowMet==='rev'?'on':'')+'">Revenue</button><button data-wm="dem" class="'+(wowMet==='dem'?'on':'')+'">Demand</button></div></div>';
+  h+='<div class="grid"><div class="card"><div class="chartttl">'+D.mlabels[iA]+' → '+D.mlabels[iB]+' · '+(wowMet==='rev'?'revenue':'demand')+' % — all vs ex-giants (Carib/Alcoa/Windalco)</div><div class="chartwrap"><canvas id="c"></canvas></div></div><div class="kpis" id="kp"></div></div>';
+  document.getElementById('app').innerHTML=h;
+  const R={};
+  cls.forEach(c=>{const aA=cl(c)[iA],aB=cl(c)[iB];let gA=0,gB=0;D.accts.forEach(x=>{if(x.c===c&&isG(x.n)){gA+=ac(x)[iA];gB+=ac(x)[iB];}});R[c]={all:pctV(aA,aB),ex:pctV(aA-gA,aB-gB)};});
+  if(chart)chart.destroy();
+  chart=new Chart(document.getElementById('c'),{type:'bar',data:{labels:cls,datasets:[{label:'All accounts',data:cls.map(c=>+R[c].all.toFixed(1)),backgroundColor:'#3b6ea5',borderRadius:3},{label:'Ex-giants',data:cls.map(c=>+R[c].ex.toFixed(1)),backgroundColor:'#c8772f',borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'},datalabels:dlbl(v=>(v>=0?'+':'')+v.toFixed(1)+'%')},scales:{x:{grid:{display:false}},y:{grid:{color:'#223247'},ticks:{callback:v=>v+'%'}}}}});
+  document.getElementById('kp').innerHTML=kpi('RT50 '+(wowMet==='rev'?'revenue':'demand'),(R.RT50.all>=0?'+':'')+R.RT50.all.toFixed(1)+'%','ex-Carib: '+(R.RT50.ex>=0?'+':'')+R.RT50.ex.toFixed(1)+'%',R.RT50.all>=0?'up':'dn')+kpi('RT70 '+(wowMet==='rev'?'revenue':'demand'),(R.RT70.all>=0?'+':'')+R.RT70.all.toFixed(1)+'%','ex-Alcoa/Windalco: '+(R.RT70.ex>=0?'+':'')+R.RT70.ex.toFixed(1)+'%',R.RT70.all>=0?'up':'dn')+'<div class="kpi"><div class="l">Read</div><div style="font-size:12px;line-height:1.5;margin-top:4px;color:#c7d3e0">A few giants mask each class trend. Strip them out to see the underlying book.</div></div>';
+  document.querySelectorAll('[data-wm]').forEach(b=>b.onclick=()=>{wowMet=b.dataset.wm;renderGiants();});
+  bindPeriod(renderGiants);
+}
+const MOVMET={kwh:['Volume (kWh)','kwh','M kWh'],rev:['Revenue','rev','M J$'],fuel:['Fuel','fuel','M J$'],ipp:['IPP','ipp','M J$'],energy:['Energy (non-fuel)','energy','M J$'],demand:['Demand','dem','M J$'],cust:['Customer charge','cust','M J$']};
+function renderMovers(){
+  const [iA,iB]=aIdx();
+  const mm=MOVMET[movMet]||MOVMET.kwh, fld=mm[1], un=mm[2];
+  const dv=a=>((a[fld]?a[fld][iB]:0)-(a[fld]?a[fld][iA]:0))/1e6;
+  let h='<div class="ctrl">'+periodSel()+
+    '<span class="lbl">Line</span><select id="mvmet">'+Object.keys(MOVMET).map(k=>'<option value="'+k+'"'+(movMet===k?' selected':'')+'>'+MOVMET[k][0]+'</option>').join('')+'</select>'+
+    '<div class="seg"><button data-mvm="topbot" class="'+(movMode==='topbot'?'on':'')+'">Top/bottom 5</button><button data-mvm="cluster" class="'+(movMode==='cluster'?'on':'')+'">Clustered</button></div>';
+  if(movMode==='topbot') h+='<div class="seg">'+['RT40','RT50','RT70'].map(c=>'<button data-mvc="'+c+'" class="'+(movCls===c?'on':'')+'">'+c+'</button>').join('')+'</div>';
+  h+='</div>';
+  if(movMode==='topbot'){
+    const m=D.accts.filter(a=>a.c===movCls).map(a=>({n:a.n,d:dv(a)})).sort((x,y)=>y.d-x.d);
+    const rows=m.slice(0,5).concat(m.slice(-5));
+    h+='<div class="card"><div class="chartttl">'+movCls+' · top &amp; bottom 5 movers · '+mm[0]+' — '+D.mlabels[iA]+' → '+D.mlabels[iB]+' ('+un+')</div><div class="chartwrap" style="height:480px"><canvas id="c"></canvas></div></div>';
+    document.getElementById('app').innerHTML=h;
+    barChart('c',rows.map(r=>r.n.slice(0,26)),rows.map(r=>+r.d.toFixed(1)),rows.map(r=>r.d>=0?'#1D9E75':'#E24B4A'),v=>(v>=0?'+':'')+v.toFixed(1),{x:{grid:{color:'#223247'}},y:{grid:{display:false},ticks:{font:{size:11}}}},true);
+  } else {
+    const named=['alcoa','windalco','wigton','jamaica private power','west kingston power','seawind','kingston free port','playa hall','bay roc','x fund','musson international dairies','caribbean cement','jamaica broilers','national water'];
+    const isN=n=>named.some(p=>n.toLowerCase().includes(p));
+    const co=[],rest=[];
+    D.accts.forEach(a=>{const dR=dv(a)*1e6;(isN(a.n)?co:rest).push({n:a.n,dR});});
+    const TH=2e6, inc=rest.filter(a=>a.dR>TH), dec=rest.filter(a=>a.dR<-TH), flat=rest.filter(a=>Math.abs(a.dR)<=TH);
+    const sum=b=>b.reduce((s,a)=>s+a.dR,0);
+    const cl=co.filter(a=>Math.abs(a.dR)>1e6).sort((a,b)=>b.dR-a.dR);
+    const labels=cl.map(a=>a.n.slice(0,24)).concat(['▸ Other increase ('+inc.length+')','▸ No change ('+flat.length+')','▸ Other decrease ('+dec.length+')']);
+    const data=cl.map(a=>Math.round(a.dR/1e6)).concat([Math.round(sum(inc)/1e6),Math.round(sum(flat)/1e6),Math.round(sum(dec)/1e6)]);
+    h+='<div class="card"><div class="chartttl">Clustered movers · '+mm[0]+' — call-outs + buckets · '+D.mlabels[iA]+' → '+D.mlabels[iB]+' ('+un+')</div><div class="chartwrap" style="height:'+(labels.length*30+90)+'px"><canvas id="c"></canvas></div></div>';
+    document.getElementById('app').innerHTML=h;
+    barChart('c',labels,data,data.map((v,i)=>i>=cl.length?'#BA7517':(v>=0?'#1D9E75':'#E24B4A')),v=>(v>=0?'+':'')+v,{x:{grid:{color:'#223247'}},y:{grid:{display:false},ticks:{font:{size:10.5}}}},true);
+  }
+  const me=document.getElementById('mvmet'); if(me)me.onchange=e=>{movMet=e.target.value;renderMovers();};
+  document.querySelectorAll('[data-mvm]').forEach(b=>b.onclick=()=>{movMode=b.dataset.mvm;renderMovers();});
+  document.querySelectorAll('[data-mvc]').forEach(b=>b.onclick=()=>{movCls=b.dataset.mvc;renderMovers();});
+  bindPeriod(renderMovers);
+}
+
+function render(){
+  document.querySelectorAll('.toggle button').forEach(b=>b.classList.toggle('on',b.dataset.v===view));
+  const N=document.getElementById('note');
+  if(view==='digest'){renderDigest();N.innerHTML='<b>This month</b> &mdash; auto-generated highlights: what moved, what looks wrong, what needs review. Every card links to the tab with the full detail. The data itself nominates these; nothing here is hand-picked.';}
+  else if(view==='anomalies'){renderAnomalies();N.innerHTML='<b>Anomalies</b> &mdash; one engine across every revenue component (kWh, revenue, energy, fuel, IPP, demand, customer charge, blended J$/kWh): each account is compared to its own history with a robust z-score (median &plusmn; MAD), severity-ranked, with a materiality floor so trivia stays out. kWh flags can be seasonal &mdash; treat volume flags as leads, not verdicts. Click a row to annotate; explained items stop counting as new.';}
+  else if(view==='answer'){renderAnswer();N.innerHTML='<b>The answer</b> &mdash; pick any two periods. Energy &amp; fuel scale with kWh; the fixed <b>demand</b> charge does not &mdash; so when volume outruns demand, blended realization dilutes. Watch the demand bar lag the volume bar.';}
+  else if(view==='bridge'){renderBridge();N.innerHTML='<b>Component bridge</b> between the two selected periods. Splits the revenue change into Fuel/IPP (pass-through) vs the margin-bearing Energy/Demand/Customer charges.';}
+  else if(view==='cases'){renderCases();N.innerHTML='<b>Big-customer cases</b> &mdash; meter-level proof for any account, indexed across the two periods. <b>Alcoa</b>: kWh up but demand slashed (extreme dilution). Use the anchor chips or the dropdown.';}
+  else if(view==='giants'){renderGiants();N.innerHTML='<b>With vs without the giants</b> &mdash; each class with and without Carib / Alcoa / Windalco, for the selected periods. Strips the few large accounts that mask the underlying class trend.';}
+  else if(view==='movers'){renderMovers();N.innerHTML='<b>Movers</b> &mdash; top/bottom 5 by class, or the <b>clustered</b> view: named call-outs pulled out individually, everyone else bucketed into Other increase / decrease / no-change &mdash; all for the selected periods.';}
+  else if(view==='topmovers'){renderTopMovers();N.innerHTML='<b>Top Variance Movers</b> &mdash; customers (RT40/50/70) and RT10 consumption buckets ranked by <b>Actual &minus; estimated budget</b> ('+(D.movers?esc(D.movers.window):'YTD')+'). Est. budget = each customer/bucket Jan+Feb share applied to the seasonally-shaped class budget. Toggle Volume / Demand / Revenue.';}
+  else if(view==='adjustments'){renderAdjustments();N.innerHTML='<b>Billing adjustments</b> on the 40 Special Accounts (cross-referenced against the Special Accounts Directory) &mdash; monthly count of correction line-items, by who processed them, by rate class, and by adjustment type (demand kVA / demand kW / energy kWh &mdash; no fuel, IPP, or customer-charge adjustments appear in this data, see the Customer Charge tab for that). Switch the metric toggle for $ value, physical units, or plain counts. Nearly all flow through one person (Revenue Management) &mdash; a concentration worth flagging for segregation-of-duties review.';}
+  else if(view==='custcharge'){renderCustCharge();N.innerHTML='<b>Customer charge</b> is a flat monthly fee set by rate class (jps_tariff_rates.customer_charge_jmd), billed the same to every account on that class &mdash; it should be essentially constant month to month per account. This view flags accounts whose billed customer charge deviates from their own normal value, which usually means a real billing issue (rate-class change mid-month, missed bill, retroactive credit/reversal) rather than a data artifact. Search any customer to see their full monthly series regardless of whether it is flagged.';}
+  else if(view==='trends'){renderTrends();
+    document.getElementById('note').innerHTML='<b>Trends</b> across '+D.months.length+' months. Toggle period chips to focus a window; switch metric (revenue, sales, demand charge, realization, non-fuel/fuel tariff, demand share) and group by rate class or total.';}
+  else if(view==='mix'){renderMix();
+    document.getElementById('note').innerHTML='<b>Revenue breakdown</b> — net revenue split into Fuel & IPP (pass-through), Energy (non-fuel margin), Demand (fixed kVA) and Customer charge, stacked over time. Watch the <b>Demand</b> band shrink as a share — the dilution. Toggle % share, or pick one rate class.';}
+  else if(view==='demand'){renderDemand();
+    document.getElementById('note').innerHTML='<b>Demand charges</b> by rate class over time — view as J$, % of revenue, or J$/kWh. RT40/50/70 carry demand; watch the band fall as volume rises. Side panel lists the biggest demand drops and the dilution-account count for the selected window.';}
+  else if(view==='compare'){renderCompare();
+    document.getElementById('note').innerHTML='<b>Compare</b> any two periods side by side — by rate class, revenue components (fuel/IPP/energy/demand/customer), or top-moving customers. Pick Period A and Period B; the table shows the J$ values and Δ%.';}
+  else {renderCustomers();
+    document.getElementById('note').innerHTML='<b>Customers</b> — '+D.accts.length+' industrial accounts (RT40/50/70). Search/filter, sort by Δ over the selected window, click any row to chart its trend. Switch to <b>By rate class</b> to compare class trajectories.';}
+}
+document.querySelectorAll('.toggle button').forEach(b=>b.onclick=()=>{view=b.dataset.v;render();});
+// Everything below needs live data first — D starts empty (see the D
+// declaration up top) and render() would show a blank/broken page if called
+// before bootstrapExplorerData() resolves. Show a loading state, fetch, then
+// render for real. A slow fetch (cold cache, large jps_billing_components)
+// shows a visible spinner rather than a blank screen.
+document.getElementById('app').innerHTML='<div class="card" style="text-align:center;padding:40px;color:var(--mut)">Loading live billing data&hellip;</div>';
+(async function(){
+  try{
+    await bootstrapExplorerData();
+  }catch(e){
+    console.error('bootstrapExplorerData failed',e);
+    document.getElementById('app').innerHTML='<div class="card" style="color:#e25c4b">Could not load live data: '+esc(e.message||String(e))+'. Check the console, or that you are signed in.</div>';
+    return;
+  }
+  if(!D.months.length){
+    document.getElementById('app').innerHTML='<div class="card" style="color:var(--mut)">No billing data loaded yet in jps_billing_components — run the month-end pipeline, then reload.</div>';
+    return;
+  }
+  document.getElementById('dataStamp').textContent='· Data through '+D.mlabels[D.months.length-1]+' · live';
+  // Was a hardcoded "MAY 2026" that never changed as new months loaded — the
+  // exact "still says May" confusion this badge itself was causing. Now mirrors
+  // the latest loaded month (derived from D.months, e.g. "2026-06" -> "JUN 2026"),
+  // same source of truth as dataStamp above.
+  var MON=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  var last=D.months[D.months.length-1].split('-'); // 'YYYY-MM'
+  document.getElementById('topbarBadge').textContent=MON[+last[1]-1]+' '+last[0];
+  sel=new Set(D.months); // month-chip filter (Trends/Mix/Demand) defaults to "all", same as before
+  render();
+})();
+</script></body></html>
