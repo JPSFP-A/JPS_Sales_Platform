@@ -124,6 +124,12 @@ Chart.defaults.color='#475569';Chart.defaults.font.family='Calibri,Segoe UI,sans
 if(window.ChartDataLabels){Chart.register(ChartDataLabels);Chart.defaults.set('plugins.datalabels',{display:false});}
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const sp=v=>(v>=0?'+':'')+v.toFixed(1);
+// D.accts[i].id is "account_code~rate_class" (e.g. "878189~RT40") — the account
+// number is everything before the "~". Customer identity in this app is name-only
+// almost everywhere (matches jps_billing_components' own grain, which has no
+// premises suffix), so this is shown alongside name, not in place of it.
+const acctNum=id=>String(id||'').split('~')[0];
+const nameNum=a=>esc(a.n)+' <span class="muted" style="font-family:monospace;font-size:10px">#'+esc(acctNum(a.id))+'</span>';
 // ── Supabase account drill-down ──────────────────────────────────
 const _SB=supabase.createClient('https://bhrswnbenkvflpdjhfpa.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJocnN3bmJlbmt2ZmxwZGpoZnBhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMTc0OTcsImV4cCI6MjA5MTg5MzQ5N30.JupFs0tnMn3k282PqFOSMi2ch-wtB7Ewv7O8fN16-94',
   window.JpsAuth?JpsAuth.clientOptions():undefined);
@@ -405,14 +411,14 @@ const AMU={rev:{l:'Revenue (J$M)',d:1},kwh:{l:'Sales (MWh)',d:1},dem:{l:'Demand 
 const CMfn={rev:c=>c.rev.map(v=>v/1e6),kwh:c=>c.kwh.map(v=>v/1e6),dem:c=>c.demand.map(v=>v/1e6),real:c=>c.rev.map((r,i)=>c.kwh[i]?r/c.kwh[i]:0),demsh:c=>c.rev.map((r,i)=>r?c.demand[i]/r*100:0)};
 function exportCustomers(iB,iC){
   const lb=D.months[iB], lc=D.months[iC], q=cSearch.toLowerCase();
-  const rows=D.accts.filter(a=>(cClass==='ALL'||a.c===cClass)&&a.n.toLowerCase().includes(q));
+  const rows=D.accts.filter(a=>(cClass==='ALL'||a.c===cClass)&&(a.n.toLowerCase().includes(q)||acctNum(a.id).toLowerCase().includes(q)));
   const g=(a,k,i)=>(a[k]&&a[k][i]!=null?a[k][i]:0), M=v=>+(v/1e6).toFixed(3), pc=(x,y)=>x?+((y/x-1)*100).toFixed(1):0;
-  const hdr=['Customer','Class','Parish','kWh '+lb+' (M)','kWh '+lc+' (M)','dKWh%','Revenue '+lb+' (J$M)','Revenue '+lc+' (J$M)','dRev%','Demand '+lb+' (J$M)','Demand '+lc+' (J$M)','dDemand%','Energy '+lb+' (J$M)','Energy '+lc+' (J$M)','Fuel '+lb+' (J$M)','Fuel '+lc+' (J$M)','IPP '+lb+' (J$M)','IPP '+lc+' (J$M)'];
-  const body=rows.map(a=>[a.n,a.c,a.pg||'',M(g(a,'kwh',iB)),M(g(a,'kwh',iC)),pc(g(a,'kwh',iB),g(a,'kwh',iC)),M(g(a,'rev',iB)),M(g(a,'rev',iC)),pc(g(a,'rev',iB),g(a,'rev',iC)),M(g(a,'dem',iB)),M(g(a,'dem',iC)),pc(g(a,'dem',iB),g(a,'dem',iC)),M(g(a,'energy',iB)),M(g(a,'energy',iC)),M(g(a,'fuel',iB)),M(g(a,'fuel',iC)),M(g(a,'ipp',iB)),M(g(a,'ipp',iC))]);
+  const hdr=['Customer','Account #','Class','Parish','kWh '+lb+' (M)','kWh '+lc+' (M)','dKWh%','Revenue '+lb+' (J$M)','Revenue '+lc+' (J$M)','dRev%','Demand '+lb+' (J$M)','Demand '+lc+' (J$M)','dDemand%','Energy '+lb+' (J$M)','Energy '+lc+' (J$M)','Fuel '+lb+' (J$M)','Fuel '+lc+' (J$M)','IPP '+lb+' (J$M)','IPP '+lc+' (J$M)'];
+  const body=rows.map(a=>[a.n,acctNum(a.id),a.c,a.pg||'',M(g(a,'kwh',iB)),M(g(a,'kwh',iC)),pc(g(a,'kwh',iB),g(a,'kwh',iC)),M(g(a,'rev',iB)),M(g(a,'rev',iC)),pc(g(a,'rev',iB),g(a,'rev',iC)),M(g(a,'dem',iB)),M(g(a,'dem',iC)),pc(g(a,'dem',iB),g(a,'dem',iC)),M(g(a,'energy',iB)),M(g(a,'energy',iC)),M(g(a,'fuel',iB)),M(g(a,'fuel',iC)),M(g(a,'ipp',iB)),M(g(a,'ipp',iC))]);
   const sc=i=>body.reduce((s,r)=>s+(typeof r[i]==='number'?r[i]:0),0);
   const ov=(b,c)=>b?+(((c/b-1)*100)).toFixed(1):0;
-  const tot=hdr.map((h,i)=> i===0?'TOTAL ('+rows.length+')' : i<3?'' : (i===5||i===8||i===11)?'' : +sc(i).toFixed(3));
-  tot[5]=ov(sc(3),sc(4)); tot[8]=ov(sc(6),sc(7)); tot[11]=ov(sc(9),sc(10));
+  const tot=hdr.map((h,i)=> i===0?'TOTAL ('+rows.length+')' : i<4?'' : (i===6||i===9||i===12)?'' : +sc(i).toFixed(3));
+  tot[6]=ov(sc(4),sc(5)); tot[9]=ov(sc(7),sc(8)); tot[12]=ov(sc(10),sc(11));
   const aoa=[hdr].concat(body).concat([tot]);
   const fname='JPS_Customers_'+D.months[iB]+'_to_'+D.months[iC];
   if(window.XLSX){
@@ -435,27 +441,27 @@ function renderCustomers(){
     '<span class="lbl">Compare</span><select id="cB">'+cOpt(cBase)+'</select>'+
     '<span class="lbl">→</span><select id="cC">'+cOpt(cCur)+'</select>'+
     '<select id="csort">'+[['dDem','Sort: Δ Demand'],['dRev','Sort: Δ Revenue'],['dKwh','Sort: Δ kWh'],['demC','Sort: Demand J$']].map(o=>'<option value="'+o[0]+'"'+(cSort===o[0]?' selected':'')+'>'+o[1]+'</option>').join('')+'</select>'+
-    '<input class="search" id="csearch" placeholder="Search customer…" value="'+esc(cSearch)+'">'+
+    '<input class="search" id="csearch" placeholder="Search customer or account #…" value="'+esc(cSearch)+'">'+
     '<button class="chip" id="cexport" style="border-color:var(--yel);color:var(--yel);font-weight:700">⬇ Excel</button></div>';
   const q=cSearch.toLowerCase();
-  const rows=D.accts.filter(a=>(cClass==='ALL'||a.c===cClass)&&a.n.toLowerCase().includes(q))
-    .map(a=>({id:a.id,name:a.n,cls:a.c,kB:a.kwh[iB],kC:a.kwh[iC],rB:a.rev[iB],rC:a.rev[iC],dB:a.dem[iB],dC:a.dem[iC],
+  const rows=D.accts.filter(a=>(cClass==='ALL'||a.c===cClass)&&(a.n.toLowerCase().includes(q)||acctNum(a.id).toLowerCase().includes(q)))
+    .map(a=>({id:a.id,name:a.n,acct:acctNum(a.id),cls:a.c,kB:a.kwh[iB],kC:a.kwh[iC],rB:a.rev[iB],rC:a.rev[iC],dB:a.dem[iB],dC:a.dem[iC],
       dRev:a.rev[iC]-a.rev[iB],dKwh:a.kwh[iC]-a.kwh[iB],dDem:a.dem[iC]-a.dem[iB],demC:a.dem[iC],
       dilut:(a.kwh[iC]>a.kwh[iB]&&a.dem[iC]<a.dem[iB])}))
     .sort((x,y)=>{const a=x[cSort],b=y[cSort];
       if(cDir===0) return Math.abs(b||0)-Math.abs(a||0);
-      if(cSort==='name'||cSort==='cls') return cDir>0?String(a).localeCompare(String(b)):String(b).localeCompare(String(a));
+      if(cSort==='name'||cSort==='cls'||cSort==='acct') return cDir>0?String(a).localeCompare(String(b)):String(b).localeCompare(String(a));
       return cDir>0?((a||0)-(b||0)):((b||0)-(a||0));});
   h+='<div style="margin:0 2px 8px;color:var(--mut);font-size:12px">'+rows.length+' accounts · '+D.mlabels[iB]+' → '+D.mlabels[iC]+' · <span class="flag">⚑</span> = kWh up but demand down (dilution)</div>';
   const arr=k=>cSort===k?(cDir===0?' ⇅':cDir>0?' ▲':' ▼'):'';
   const TH=(k,lab,cl)=>'<th'+(cl?' class="'+cl+'"':'')+' onclick="setSort(\''+k+'\')" title="click to sort">'+lab+arr(k)+'</th>';
   h+='<div class="grid"><div class="card" style="padding:10px"><div class="tbl"><table><thead><tr>'+
-     TH('name','Customer','l')+TH('cls','Cls')+TH('kC','kWh M')+TH('dC','Demand J$M')+TH('dDem','Δ Dem')+TH('dKwh','Δ kWh')+TH('dRev','Δ Rev')+
+     TH('name','Customer','l')+TH('acct','Account #','l')+TH('cls','Cls')+TH('kC','kWh M')+TH('dC','Demand J$M')+TH('dDem','Δ Dem')+TH('dKwh','Δ kWh')+TH('dRev','Δ Rev')+
      '</tr></thead><tbody id="tb"></tbody></table></div></div><div class="kpis" id="kp"></div></div>';
   document.getElementById('app').innerHTML=h;
   const T=k=>rows.reduce((s,r)=>s+r[k],0);
   const tkB=T('kB'),tkC=T('kC'),tdB=T('dB'),tdC=T('dC'),trB=T('rB'),trC=T('rC');
-  const totRow='<tr style="background:#E8F4FF;font-weight:700;position:sticky;top:0;color:#0C3547"><td class="l">TOTAL · '+rows.length+' accounts</td><td></td>'+
+  const totRow='<tr style="background:#E8F4FF;font-weight:700;position:sticky;top:0;color:#0C3547"><td class="l">TOTAL · '+rows.length+' accounts</td><td></td><td></td>'+
     '<td>'+(tkB/1e6).toFixed(1)+'→'+(tkC/1e6).toFixed(1)+'</td>'+
     '<td>'+(tdB/1e6).toFixed(1)+'→'+(tdC/1e6).toFixed(1)+'</td>'+
     '<td class="'+(pctV(tdB,tdC)>=0?'up':'dn')+'">'+sp(pctV(tdB,tdC))+'%</td>'+
@@ -465,6 +471,7 @@ function renderCustomers(){
     const dp=pctV(r.dB,r.dC),kp=pctV(r.kB,r.kC),rp=pctV(r.rB,r.rC);
     return '<tr class="'+(cSel===r.id?'sel':'')+'" onclick="pickRow(\''+r.id+'\')">'+
       '<td class="l">'+(r.dilut?'<span class="flag">⚑ </span>':'')+esc(r.name).slice(0,28)+'</td>'+
+      '<td class="l" style="font-family:monospace;font-size:11px;color:var(--mut)">'+esc(r.acct)+'</td>'+
       '<td><span class="badge">'+r.cls+'</span></td>'+
       '<td>'+(r.kB/1e6).toFixed(1)+'→'+(r.kC/1e6).toFixed(1)+'</td>'+
       '<td>'+(r.dB/1e6).toFixed(1)+'→'+(r.dC/1e6).toFixed(1)+'</td>'+
@@ -790,12 +797,13 @@ async function renderAdjustments(){
     byAcct[nm].val+=adjMetricVal(r);
   });
   let acctHtml='<div class="chartttl">By customer account'+(adjMonthFilter?'':' <span style="font-weight:400;color:var(--mut);font-size:11px">(click a row for the monthly breakdown below)</span>')+'</div><table style="width:100%;font-size:12px;border-collapse:collapse">'+
-    '<thead><tr style="color:var(--mut);text-align:left"><th style="padding:4px">Account</th><th style="padding:4px">Rate Class</th><th style="padding:4px">Who</th><th style="padding:4px">Type(s)</th><th style="padding:4px;text-align:right"># Adjustments</th><th style="padding:4px;text-align:right">'+esc(adjMetricLabel())+'</th></tr></thead><tbody>';
-  acctHtml+='<tr style="font-weight:700;background:#F8FAFC"><td style="padding:4px" colspan="4">TOTAL &middot; '+Object.keys(byAcct).length+' accounts</td><td style="padding:4px;text-align:right">'+activeRows.length+'</td><td style="padding:4px;text-align:right">'+Math.round(Object.values(byAcct).reduce((s,v)=>s+v.val,0)).toLocaleString()+'</td></tr>';
+    '<thead><tr style="color:var(--mut);text-align:left"><th style="padding:4px">Account</th><th style="padding:4px">Account #</th><th style="padding:4px">Rate Class</th><th style="padding:4px">Who</th><th style="padding:4px">Type(s)</th><th style="padding:4px;text-align:right"># Adjustments</th><th style="padding:4px;text-align:right">'+esc(adjMetricLabel())+'</th></tr></thead><tbody>';
+  acctHtml+='<tr style="font-weight:700;background:#F8FAFC"><td style="padding:4px" colspan="5">TOTAL &middot; '+Object.keys(byAcct).length+' accounts</td><td style="padding:4px;text-align:right">'+activeRows.length+'</td><td style="padding:4px;text-align:right">'+Math.round(Object.values(byAcct).reduce((s,v)=>s+v.val,0)).toLocaleString()+'</td></tr>';
   const acctRows=Object.entries(byAcct).sort((a,b)=>b[1].n-a[1].n);
   acctRows.forEach(([nm,v])=>{
     acctHtml+='<tr class="adjAcctRow" data-acct="'+esc(nm)+'" style="border-top:1px solid #1e2d40;cursor:pointer" onmouseover="this.style.background=\'#16222f\'" onmouseout="this.style.background=\'\'">'+
       '<td style="padding:4px;font-weight:500">'+esc(nm)+'</td>'+
+      '<td style="padding:4px;font-family:monospace;font-size:11px;color:var(--mut)">'+esc(v.jps_ac)+'</td>'+
       '<td style="padding:4px">'+esc(v.rc)+'</td>'+
       '<td style="padding:4px">'+esc([...v.who].join(', '))+'</td>'+
       '<td style="padding:4px;font-size:11px;color:var(--mut)">'+esc([...v.types].join(', '))+'</td>'+
@@ -903,7 +911,7 @@ function _ccAnomalies(){
       if(v==null)return;
       const dev=(v-med)/med;
       if(Math.abs(dev)>ccThreshold){
-        out.push({name:a.n,rc:a.c,parish:a.pg,month:D.months[i],mlabel:D.mlabels[i],normal:med,actual:v,dev:dev*100});
+        out.push({name:a.n,acct:acctNum(a.id),rc:a.c,parish:a.pg,month:D.months[i],mlabel:D.mlabels[i],normal:med,actual:v,dev:dev*100});
       }
     });
   });
@@ -952,7 +960,7 @@ async function renderCustCharge(){
     if(implied>200)return;
     const nearest=Math.round(implied);
     if(nearest>=1&&Math.abs(implied-nearest)<=0.02)return;
-    persistent.push({n:a.n,rc:a.c,med,t,implied,gap:Math.abs(implied-Math.max(nearest,1))*t});
+    persistent.push({n:a.n,acct:acctNum(a.id),rc:a.c,med,t,implied,gap:Math.abs(implied-Math.max(nearest,1))*t});
   });
   persistent.sort((x,y)=>y.gap-x.gap);
   let pHtml='<div class="chartttl">Persistent billing anomalies &mdash; tariff cross-check <span style="font-weight:400;color:var(--mut);font-size:11px">(accounts whose NORMAL charge is not a clean multiple of their rate-class tariff &mdash; the own-history detector above cannot see these)</span></div>';
@@ -963,11 +971,12 @@ async function renderCustCharge(){
     pHtml+='<div style="color:var(--mut);font-size:12px;padding:6px 0">Every analyzed account&rsquo;s median charge is a clean integer multiple of its tariff &mdash; no structural billing errors detected.</div>';
   }else{
     pHtml+='<table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr style="color:var(--mut);text-align:left">'+
-      '<th style="padding:4px">Customer</th><th style="padding:4px">Rate Class</th><th style="padding:4px;text-align:right">Median charge (J$)</th><th style="padding:4px;text-align:right">Tariff (J$)</th><th style="padding:4px;text-align:right">Implied services</th><th style="padding:4px;text-align:right">Structural gap (J$/mo)</th></tr></thead><tbody>';
-    pHtml+='<tr style="font-weight:700;background:#F8FAFC"><td style="padding:4px" colspan="2">TOTAL &middot; '+persistent.length+' accounts</td><td style="padding:4px;text-align:right">&mdash;</td><td style="padding:4px;text-align:right">&mdash;</td><td style="padding:4px;text-align:right">&mdash;</td><td style="padding:4px;text-align:right">'+Math.round(persistent.reduce((s,x)=>s+x.gap,0)).toLocaleString()+'</td></tr>';
+      '<th style="padding:4px">Customer</th><th style="padding:4px">Account #</th><th style="padding:4px">Rate Class</th><th style="padding:4px;text-align:right">Median charge (J$)</th><th style="padding:4px;text-align:right">Tariff (J$)</th><th style="padding:4px;text-align:right">Implied services</th><th style="padding:4px;text-align:right">Structural gap (J$/mo)</th></tr></thead><tbody>';
+    pHtml+='<tr style="font-weight:700;background:#F8FAFC"><td style="padding:4px" colspan="3">TOTAL &middot; '+persistent.length+' accounts</td><td style="padding:4px;text-align:right">&mdash;</td><td style="padding:4px;text-align:right">&mdash;</td><td style="padding:4px;text-align:right">&mdash;</td><td style="padding:4px;text-align:right">'+Math.round(persistent.reduce((s,x)=>s+x.gap,0)).toLocaleString()+'</td></tr>';
     persistent.slice(0,50).forEach(x=>{
       pHtml+='<tr class="ccAnomRow" data-nm="'+esc(x.n)+'" style="border-top:1px solid var(--line);cursor:pointer" onmouseover="this.style.background=\'#F0F4F8\'" onmouseout="this.style.background=\'\'">'+
-        '<td style="padding:4px;font-weight:500">'+esc(x.n)+'</td><td style="padding:4px">'+esc(x.rc)+'</td>'+
+        '<td style="padding:4px;font-weight:500">'+esc(x.n)+'</td>'+
+        '<td style="padding:4px;font-family:monospace;font-size:11px;color:var(--mut)">'+esc(x.acct)+'</td><td style="padding:4px">'+esc(x.rc)+'</td>'+
         '<td style="padding:4px;text-align:right">'+Math.round(x.med).toLocaleString()+'</td>'+
         '<td style="padding:4px;text-align:right">'+Math.round(x.t).toLocaleString()+'</td>'+
         '<td style="padding:4px;text-align:right;font-weight:600;color:#BA7517">'+x.implied.toFixed(2)+'&times;</td>'+
@@ -991,16 +1000,17 @@ async function renderCustCharge(){
     tblHtml+='<div style="color:var(--mut);font-size:12px;padding:6px 0">No account exceeds the '+(ccThreshold*100)+'% threshold — customer charge billing looks clean at this sensitivity.</div>';
   }else{
     tblHtml+='<table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr style="color:var(--mut);text-align:left">'+
-      '<th style="padding:4px">Customer</th><th style="padding:4px">Rate Class</th><th style="padding:4px">Month</th><th style="padding:4px;text-align:right">Normal (J$)</th><th style="padding:4px;text-align:right">Actual (J$)</th><th style="padding:4px;text-align:right">Deviation</th></tr></thead><tbody>';
+      '<th style="padding:4px">Customer</th><th style="padding:4px">Account #</th><th style="padding:4px">Rate Class</th><th style="padding:4px">Month</th><th style="padding:4px;text-align:right">Normal (J$)</th><th style="padding:4px;text-align:right">Actual (J$)</th><th style="padding:4px;text-align:right">Deviation</th></tr></thead><tbody>';
     const shownAnom=anomalies.slice(0,cap);
     const tNorm=shownAnom.reduce((s,x)=>s+x.normal,0), tAct=shownAnom.reduce((s,x)=>s+x.actual,0);
-    tblHtml+='<tr style="font-weight:700;background:#F8FAFC"><td style="padding:4px" colspan="3">TOTAL (shown '+shownAnom.length+')</td>'+
+    tblHtml+='<tr style="font-weight:700;background:#F8FAFC"><td style="padding:4px" colspan="4">TOTAL (shown '+shownAnom.length+')</td>'+
       '<td style="padding:4px;text-align:right">'+Math.round(tNorm).toLocaleString()+'</td>'+
       '<td style="padding:4px;text-align:right">'+Math.round(tAct).toLocaleString()+'</td>'+
       '<td style="padding:4px;text-align:right;color:'+(tAct<tNorm?'#e25c4b':'#1D9E75')+'">'+_digestMoney(tAct-tNorm)+'</td></tr>';
     shownAnom.forEach(x=>{
       tblHtml+='<tr class="ccAnomRow" data-nm="'+esc(x.name)+'" style="border-top:1px solid #1e2d40;cursor:pointer" onmouseover="this.style.background=\'#16222f\'" onmouseout="this.style.background=\'\'">'+
         '<td style="padding:4px;font-weight:500">'+esc(x.name)+'</td>'+
+        '<td style="padding:4px;font-family:monospace;font-size:11px;color:var(--mut)">'+esc(x.acct)+'</td>'+
         '<td style="padding:4px">'+esc(x.rc)+'</td>'+
         '<td style="padding:4px">'+esc(x.mlabel)+'</td>'+
         '<td style="padding:4px;text-align:right">'+Math.round(x.normal).toLocaleString()+'</td>'+
@@ -1019,10 +1029,10 @@ function _ccRenderSearch(){
   if(!wrap)return;
   if(!ccSearch||ccSearch.length<2){wrap.innerHTML='<span style="color:var(--mut);font-size:12px">Type at least 2 characters to look up a customer&#39;s full monthly customer-charge history.</span>';return;}
   const q=ccSearch.toLowerCase();
-  const matches=D.accts.filter(a=>(a.n||'').toLowerCase().includes(q)).slice(0,15);
+  const matches=D.accts.filter(a=>(a.n||'').toLowerCase().includes(q)||acctNum(a.id).toLowerCase().includes(q)).slice(0,15);
   if(!matches.length){wrap.innerHTML='<span style="color:var(--mut);font-size:12px">No customer matches "'+esc(ccSearch)+'".</span>';return;}
   const sIdx=selIdx();
-  let html='<div class="chartttl">'+matches.length+' match'+(matches.length===1?'':'es')+'</div><table style="width:100%;font-size:11.5px;border-collapse:collapse"><thead><tr style="color:var(--mut);text-align:left"><th style="padding:4px">Customer</th><th style="padding:4px">Rate Class</th>'+
+  let html='<div class="chartttl">'+matches.length+' match'+(matches.length===1?'':'es')+'</div><table style="width:100%;font-size:11.5px;border-collapse:collapse"><thead><tr style="color:var(--mut);text-align:left"><th style="padding:4px">Customer</th><th style="padding:4px">Account #</th><th style="padding:4px">Rate Class</th>'+
     sIdx.map(i=>'<th style="padding:4px;text-align:right">'+esc(D.mlabels[i])+'</th>').join('')+'<th style="padding:4px;text-align:right;font-weight:700">Total</th></tr></thead><tbody>';
   let colTotals=sIdx.map(()=>0);
   matches.forEach(a=>{
@@ -1031,7 +1041,7 @@ function _ccRenderSearch(){
     const sorted=[...vals].sort((x,y)=>x-y);
     const med=sorted.length?(sorted.length%2?sorted[(sorted.length-1)/2]:(sorted[sorted.length/2-1]+sorted[sorted.length/2])/2):0;
     let rowTotal=0;
-    html+='<tr style="border-top:1px solid #1e2d40"><td style="padding:4px;font-weight:500">'+esc(a.n)+'</td><td style="padding:4px">'+esc(a.c)+'</td>'+
+    html+='<tr style="border-top:1px solid #1e2d40"><td style="padding:4px;font-weight:500">'+esc(a.n)+'</td><td style="padding:4px;font-family:monospace;font-size:10.5px;color:var(--mut)">'+esc(acctNum(a.id))+'</td><td style="padding:4px">'+esc(a.c)+'</td>'+
       sIdx.map((i,k)=>{
         const v=c[i];
         if(v==null)return '<td style="padding:4px;text-align:right;color:#3a4557">·</td>';
@@ -1040,7 +1050,7 @@ function _ccRenderSearch(){
         return '<td style="padding:4px;text-align:right'+(flagged?';color:#e25c4b;font-weight:700':'')+'" title="normal ~'+Math.round(med).toLocaleString()+'">'+Math.round(v).toLocaleString()+'</td>';
       }).join('')+'<td style="padding:4px;text-align:right;font-weight:700">'+Math.round(rowTotal).toLocaleString()+'</td></tr>';
   });
-  html+='<tr style="border-top:2px solid var(--line);font-weight:700;background:#F8FAFC"><td style="padding:4px" colspan="2">TOTAL</td>'+
+  html+='<tr style="border-top:2px solid var(--line);font-weight:700;background:#F8FAFC"><td style="padding:4px" colspan="3">TOTAL</td>'+
     colTotals.map(v=>'<td style="padding:4px;text-align:right">'+Math.round(v).toLocaleString()+'</td>').join('')+
     '<td style="padding:4px;text-align:right">'+Math.round(colTotals.reduce((s,v)=>s+v,0)).toLocaleString()+'</td></tr>';
   html+='</tbody></table>';
@@ -1191,7 +1201,7 @@ async function _computeLiveMovers(accts,months,mIdx,budByClsMonth){
         const share=jf/clsJF, est=share*budYTD;
         const act=YTD.reduce((s,m)=>s+fn(a,mIdx[m]),0);
         if(Math.abs(act)<1e-6&&Math.abs(est)<1e-6)return;
-        rows.push({name:a.n,cls,act:+act.toFixed(2),bud:+est.toFixed(2),var:+(act-est).toFixed(2)});
+        rows.push({name:a.n,acct:acctNum(a.id),cls,act:+act.toFixed(2),bud:+est.toFixed(2),var:+(act-est).toFixed(2)});
       });
     });
     rows.sort((a,b)=>Math.abs(b.var)-Math.abs(a.var));
@@ -1331,7 +1341,7 @@ function _anomScan(){
           z=diff>0?99:-99;
         }
         if(Math.abs(z)<3.5)return;
-        out.push({name:a.n,rc:a.c,metric:mk,mlabel:D.mlabels[i],month:D.months[i],actual:v,typical:med,z,sev:Math.min(Math.abs(z),99)});
+        out.push({name:a.n,acct:acctNum(a.id),rc:a.c,metric:mk,mlabel:D.mlabels[i],month:D.months[i],actual:v,typical:med,z,sev:Math.min(Math.abs(z),99)});
       });
     }
   });
@@ -1350,7 +1360,7 @@ async function renderAnomalies(){
   const all=_anomScan();
   const counts={};all.forEach(x=>{counts[x.metric]=(counts[x.metric]||0)+1;});
   let rowsF=anomMetricFilter==='all'?all:all.filter(x=>x.metric===anomMetricFilter);
-  if(anomSearch&&anomSearch.length>=2){const q=anomSearch.toLowerCase();rowsF=rowsF.filter(x=>x.name.toLowerCase().includes(q));}
+  if(anomSearch&&anomSearch.length>=2){const q=anomSearch.toLowerCase();rowsF=rowsF.filter(x=>x.name.toLowerCase().includes(q)||(x.acct||'').toLowerCase().includes(q));}
   const withStatus=rowsF.map(x=>({...x,review:revMap[x.name+'|'+x.metric+'|'+x.month]||null}));
   const shown=anomHideExplained?withStatus.filter(x=>!x.review||x.review.status==='new'):withStatus;
   const unreviewed=withStatus.filter(x=>!x.review||x.review.status==='new').length;
@@ -1363,14 +1373,14 @@ async function renderAnomalies(){
     '<div class="seg" id="anomMetSeg"><button data-mk="all" class="'+(anomMetricFilter==='all'?'on':'')+'">All ('+all.length+')</button>'+
     Object.keys(ANOM_METRICS).filter(mk=>counts[mk]).map(mk=>'<button data-mk="'+mk+'" class="'+(anomMetricFilter===mk?'on':'')+'">'+ANOM_METRICS[mk].l+' ('+counts[mk]+')</button>').join('')+'</div>'+
     '<label style="font-size:12px;color:var(--mut)"><input type="checkbox" id="anomHideEx" '+(anomHideExplained?'checked':'')+'> hide explained</label>'+
-    '<input id="anomSearchBox" type="text" placeholder="Search customer&hellip;" value="'+esc(anomSearch)+'" style="flex:1;min-width:180px;padding:6px 10px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:inherit;font-size:12px">'+
+    '<input id="anomSearchBox" type="text" placeholder="Search customer or account #&hellip;" value="'+esc(anomSearch)+'" style="flex:1;min-width:180px;padding:6px 10px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:inherit;font-size:12px">'+
     '</div>';
   const cap=150;
   h+='<div class="card" style="margin-top:14px"><div class="chartttl">Findings'+(shown.length>cap?' <span style="font-weight:400;color:var(--mut);font-size:11px">(worst '+cap+' of '+shown.length+')</span>':'')+' <span style="font-weight:400;color:var(--mut);font-size:11px">&mdash; click a row to annotate</span></div>';
   if(!shown.length){h+='<div style="color:var(--mut);font-size:12px;padding:6px 0">Nothing at this filter.</div>';}
   else{
     h+='<table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr style="color:var(--mut);text-align:left">'+
-      '<th style="padding:4px">Sev</th><th style="padding:4px">Customer</th><th style="padding:4px">Class</th><th style="padding:4px">Component</th><th style="padding:4px">Month</th><th style="padding:4px;text-align:right">Typical</th><th style="padding:4px;text-align:right">Actual</th><th style="padding:4px">Status</th></tr></thead><tbody>';
+      '<th style="padding:4px">Sev</th><th style="padding:4px">Customer</th><th style="padding:4px">Account #</th><th style="padding:4px">Class</th><th style="padding:4px">Component</th><th style="padding:4px">Month</th><th style="padding:4px;text-align:right">Typical</th><th style="padding:4px;text-align:right">Actual</th><th style="padding:4px">Status</th></tr></thead><tbody>';
     shown.slice(0,cap).forEach(x=>{
       const key=x.name+'|'+x.metric+'|'+x.month;
       const st=x.review?x.review.status:'new';
@@ -1378,13 +1388,14 @@ async function renderAnomalies(){
       const cfg=ANOM_METRICS[x.metric];
       h+='<tr class="anomRow" data-key="'+esc(key)+'" style="border-top:1px solid var(--line);cursor:pointer" onmouseover="this.style.background=\'#F0F4F8\'" onmouseout="this.style.background=\'\'">'+
         '<td style="padding:4px;font-weight:700;color:'+(x.sev>=99?'#e25c4b':'#BA7517')+'">'+(x.sev>=99?'FLAT&Delta;':x.sev.toFixed(1))+'</td>'+
-        '<td style="padding:4px;font-weight:500">'+esc(x.name)+'</td><td style="padding:4px">'+esc(x.rc)+'</td>'+
+        '<td style="padding:4px;font-weight:500">'+esc(x.name)+'</td>'+
+        '<td style="padding:4px;font-family:monospace;font-size:11px;color:var(--mut)">'+esc(x.acct)+'</td><td style="padding:4px">'+esc(x.rc)+'</td>'+
         '<td style="padding:4px">'+cfg.l+'</td><td style="padding:4px">'+esc(x.mlabel)+'</td>'+
         '<td style="padding:4px;text-align:right">'+cfg.fmt(x.typical)+'</td>'+
         '<td style="padding:4px;text-align:right;font-weight:600;color:'+(x.actual<x.typical?'#e25c4b':'inherit')+'">'+cfg.fmt(x.actual)+'</td>'+
         '<td style="padding:4px;color:'+stCol+';font-weight:600">'+st+(x.review&&x.review.explanation?' &middot; <span style="font-weight:400;color:var(--mut)">'+esc(x.review.explanation.slice(0,40))+'</span>':'')+'</td></tr>';
       if(anomOpenKey===key){
-        h+='<tr><td colspan="8" style="padding:8px;background:#F8FAFC"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+
+        h+='<tr><td colspan="9" style="padding:8px;background:#F8FAFC"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+
           '<select id="anomStSel" style="padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px">'+['new','explained','escalated'].map(s=>'<option value="'+s+'"'+(st===s?' selected':'')+'>'+s+'</option>').join('')+'</select>'+
           '<input id="anomExpl" type="text" placeholder="Explanation (e.g. confirmed retro credit, ticket #&hellip;)" value="'+esc(x.review&&x.review.explanation||'')+'" style="flex:1;min-width:240px;padding:5px 10px;border:1px solid var(--line);border-radius:6px;font-size:12px">'+
           '<button id="anomSave" class="btnish" style="padding:6px 14px;border:0;border-radius:6px;background:#0C3547;color:#fff;font-size:12px;cursor:pointer">Save</button>'+
@@ -1574,7 +1585,7 @@ function renderTopMovers(){
   const shownRows=data.slice(0,80);
   const tAct=shownRows.reduce((s,r)=>s+r.act,0), tBud=shownRows.reduce((s,r)=>s+r.bud,0), tVar=shownRows.reduce((s,r)=>s+r.var,0);
   const totRow='<tr style="font-weight:700;background:#F8FAFC"><td class="l">TOTAL (shown '+shownRows.length+')</td><td>'+(tAct/div).toFixed(1)+'</td><td>'+(tBud/div).toFixed(1)+'</td><td class="'+(tVar>=0?'up':'dn')+'">'+(tVar>=0?'+':'')+(tVar/div).toFixed(1)+'</td></tr>';
-  document.getElementById('tb').innerHTML=totRow+shownRows.map(r=>'<tr><td class="l">'+esc(lab(r)).slice(0,26)+(r.cls?' <span class="badge">'+r.cls+'</span>':'')+'</td><td>'+(r.act/div).toFixed(1)+'</td><td>'+(r.bud/div).toFixed(1)+'</td><td class="'+(r.var>=0?'up':'dn')+'">'+(r.var>=0?'+':'')+(r.var/div).toFixed(1)+'</td></tr>').join('');
+  document.getElementById('tb').innerHTML=totRow+shownRows.map(r=>'<tr><td class="l">'+esc(lab(r)).slice(0,26)+(r.acct?' <span class="muted" style="font-family:monospace;font-size:10px">#'+esc(r.acct)+'</span>':'')+(r.cls?' <span class="badge">'+r.cls+'</span>':'')+'</td><td>'+(r.act/div).toFixed(1)+'</td><td>'+(r.bud/div).toFixed(1)+'</td><td class="'+(r.var>=0?'up':'dn')+'">'+(r.var>=0?'+':'')+(r.var/div).toFixed(1)+'</td></tr>').join('');
   document.querySelectorAll('[data-tmm]').forEach(b=>b.onclick=()=>{tmMet=b.dataset.tmm;renderTopMovers();});
   document.querySelectorAll('[data-tmv]').forEach(b=>b.onclick=()=>{tmView=b.dataset.tmv;renderTopMovers();});
 }
@@ -1615,7 +1626,7 @@ function renderAnswerContributors(field,iA,iB){
   const bf=_budgetField(field), bDiv=bf==='kwh'?1000:1e6, bUnit=bf==='kwh'?'MWh':'J$M';
   const row=r=>{
     const sid=_safeId(r.id);
-    return '<tr style="cursor:pointer" onclick="toggleContribRow(\''+r.id+'\')"><td class="l"><span id="carrow-'+sid+'" style="color:var(--mut);display:inline-block;width:12px">&#9656;</span>'+esc(r.n).slice(0,26)+'</td><td><span class="badge">'+r.c+'</span></td><td class="'+(r.d>=0?'up':'dn')+'">'+(r.d>=0?'+':'')+pfx+(Math.abs(r.d)/div).toFixed(1)+'</td><td id="bud-'+sid+'" style="text-align:right;color:var(--mut)">…</td></tr>'+
+    return '<tr style="cursor:pointer" onclick="toggleContribRow(\''+r.id+'\')"><td class="l"><span id="carrow-'+sid+'" style="color:var(--mut);display:inline-block;width:12px">&#9656;</span>'+esc(r.n).slice(0,26)+' <span class="muted" style="font-family:monospace;font-size:10px">#'+esc(acctNum(r.id))+'</span></td><td><span class="badge">'+r.c+'</span></td><td class="'+(r.d>=0?'up':'dn')+'">'+(r.d>=0?'+':'')+pfx+(Math.abs(r.d)/div).toFixed(1)+'</td><td id="bud-'+sid+'" style="text-align:right;color:var(--mut)">…</td></tr>'+
       '<tr id="cdet-'+sid+'" style="display:none"><td colspan="4" style="padding:0"><div id="cbody-'+sid+'" style="padding:8px 6px 10px 22px;background:#F8FAFC;border-left:2px solid var(--yel)"></div></td></tr>';
   };
   const el=document.getElementById('answer-contrib');
@@ -1714,7 +1725,7 @@ async function exportContributors(){
       return _fetchBudgetAgg(a.n,a.c,D.months[iB]);
     }))
   ]);
-  const hdr=['Rank','Customer','Class','Δ '+label,'A/C No.','Parish',
+  const hdr=['Rank','Customer','Account #','Class','Δ '+label,'A/C No. (granular)','Parish',
     'kWh '+lb+' (MWh)','kWh '+lc+' (MWh)','Energy '+lb+' (J$M)','Energy '+lc+' (J$M)',
     'Demand '+lb+' (J$M)','Demand '+lc+' (J$M)','Rev '+lb+' (J$M)','Rev '+lc+' (J$M)',
     'kWh Budget '+lc+' (MWh)','Demand Budget '+lc+' (J$M)','Rev Budget '+lc+' (J$M)'];
@@ -1722,9 +1733,9 @@ async function exportContributors(){
   let curGrp=null;
   const G=(a,kk,j)=>(a[kk]&&a[kk][j]!=null?a[kk][j]:0);
   all.forEach((r,i)=>{
-    if(r.grp!==curGrp){curGrp=r.grp;aoa.push([curGrp,'','','','','','','','','','','','','','','','']);rowMeta.push(null);}
+    if(r.grp!==curGrp){curGrp=r.grp;aoa.push([curGrp,'','','','','','','','','','','','','','','','','']);rowMeta.push(null);}
     const a=D.accts.find(x=>x.id===r.id), bg=budgets[i];
-    aoa.push([r.rank,r.n,r.c,+(r.d/div).toFixed(2),'','',
+    aoa.push([r.rank,r.n,acctNum(r.id),r.c,+(r.d/div).toFixed(2),'','',
       a?+(G(a,'kwh',iA)/1000).toFixed(1):'',a?+(G(a,'kwh',iB)/1000).toFixed(1):'',
       a?+(G(a,'energy',iA)/1e6).toFixed(2):'',a?+(G(a,'energy',iB)/1e6).toFixed(2):'',
       a?+(G(a,'dem',iA)/1e6).toFixed(2):'',a?+(G(a,'dem',iB)/1e6).toFixed(2):'',
@@ -1732,7 +1743,7 @@ async function exportContributors(){
       bg?+(bg.kwh/1000).toFixed(1):'',bg?+(bg.dem/1e6).toFixed(2):'',bg?+(bg.rev/1e6).toFixed(2):'']);
     rowMeta.push({level:0});
     (fetched[i].rows||[]).forEach(ar=>{
-      aoa.push(['','','','',ar.ac,ar.parish||'',
+      aoa.push(['','','','','',ar.ac,ar.parish||'',
         ar.base?.kwh!=null?+(ar.base.kwh/1000).toFixed(1):'',ar.cur?.kwh!=null?+(ar.cur.kwh/1000).toFixed(1):'',
         '','',
         ar.base?.dem!=null?+(ar.base.dem/1e6).toFixed(2):'',ar.cur?.dem!=null?+(ar.cur.dem/1e6).toFixed(2):'',
@@ -1781,9 +1792,9 @@ function renderCases(){
   if(!caseSel||!D.accts.find(a=>a.n===caseSel)){const al=D.accts.find(a=>a.n.toLowerCase().includes('alcoa'));caseSel=al?al.n:(big[0]&&big[0].n);}
   const a=D.accts.find(x=>x.n===caseSel)||big[0];
   const anchors=['Alcoa','Caribbean Cement','Windalco','Jamaica Broilers','National Water'];
-  let h='<div class="ctrl">'+periodSel()+'<select id="caseSel">'+big.map((x,i)=>'<option value="'+i+'"'+(x.n===caseSel?' selected':'')+'>'+esc(x.n).slice(0,30)+'</option>').join('')+'</select></div>';
+  let h='<div class="ctrl">'+periodSel()+'<select id="caseSel">'+big.map((x,i)=>'<option value="'+i+'"'+(x.n===caseSel?' selected':'')+'>'+esc(x.n).slice(0,30)+' #'+esc(acctNum(x.id))+'</option>').join('')+'</select></div>';
   h+='<div style="margin:0 2px 10px;display:flex;gap:6px;flex-wrap:wrap">'+anchors.map(n=>'<span class="chip" data-anc="'+n+'">'+n+'</span>').join('')+'</div>';
-  h+='<div class="grid"><div class="card"><div class="chartttl">'+esc(a.n).slice(0,32)+' ['+a.c+'] · indexed to '+D.mlabels[iA]+' = 100</div><div class="chartwrap"><canvas id="c"></canvas></div></div><div class="card" style="padding:10px"><div class="tbl"><table><thead><tr><th class="l"></th><th>'+D.mlabels[iA]+'</th><th>'+D.mlabels[iB]+'</th><th>Δ</th></tr></thead><tbody id="tb"></tbody></table></div></div></div>';
+  h+='<div class="grid"><div class="card"><div class="chartttl">'+esc(a.n).slice(0,32)+' #'+esc(acctNum(a.id))+' ['+a.c+'] · indexed to '+D.mlabels[iA]+' = 100</div><div class="chartwrap"><canvas id="c"></canvas></div></div><div class="card" style="padding:10px"><div class="tbl"><table><thead><tr><th class="l"></th><th>'+D.mlabels[iA]+'</th><th>'+D.mlabels[iB]+'</th><th>Δ</th></tr></thead><tbody id="tb"></tbody></table></div></div></div>';
   document.getElementById('app').innerHTML=h;
   const pc=(x,y)=>Math.round((x?y/x-1:0)*100);
   const dpkA=a.kwh[iA]?a.dem[iA]/a.kwh[iA]:0, dpkB=a.kwh[iB]?a.dem[iB]/a.kwh[iB]:0;
