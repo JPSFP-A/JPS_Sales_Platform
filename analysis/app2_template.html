@@ -843,7 +843,7 @@ function renderAdjMonthlyByAccount(rows, months, ymKey){
   let html='<div class="chartttl">Monthly detail by customer'+(adjAccountFocus?' — '+esc(adjAccountFocus)+' <a href="javascript:void(0)" id="adjAcctReset" style="font-weight:400;color:var(--mut);text-decoration:underline;font-size:11px;margin-left:8px">show all accounts</a>':' <span style="font-weight:400;color:var(--mut);font-size:11px">('+esc(adjMetricLabel())+' per month; click a customer above to focus)</span>')+'</div>';
   html+='<div style="overflow-x:auto"><table style="width:100%;font-size:11.5px;border-collapse:collapse;min-width:'+(700+months.length*70)+'px">'+
     '<thead><tr style="color:var(--mut);text-align:left"><th style="padding:4px;position:sticky;left:0;background:var(--card)">Account</th>'+
-    months.map(m=>'<th style="padding:4px;text-align:right'+(m===adjMonthFilter?';background:#3a2c0f;color:#e8b866':'')+'">'+esc(m)+'</th>').join('')+
+    months.map(m=>'<th style="padding:4px;text-align:right'+(m===adjMonthFilter?';background:#FDF3E0;color:#B87800':'')+'">'+esc(m)+'</th>').join('')+
     '<th style="padding:4px;text-align:right;font-weight:700">Total</th></tr></thead><tbody>';
   const colTotals={}; let grandTotal=0, grandN=0;
   const acctHtmlRows=shown.map(acct=>{
@@ -864,7 +864,7 @@ function renderAdjMonthlyByAccount(rows, months, ymKey){
     return '<tr style="border-top:1px solid #1e2d40"><td style="padding:4px;font-weight:500;position:sticky;left:0;background:var(--card)">'+esc(acct)+'</td>'+
       months.map(m=>{
         const v=byMonth[m];
-        const hl=m===adjMonthFilter?'background:#2a2010;':'';
+        const hl=m===adjMonthFilter?'background:#FFF7E8;':'';
         if(!v)return '<td style="padding:4px;text-align:right;color:#3a4557;'+hl+'">·</td>';
         const txt=adjMetric==='volumes'?String(v.n):(v.val?Math.round(v.val).toLocaleString():'0');
         return '<td style="padding:4px;text-align:right;'+hl+'" title="'+v.n+' adjustment(s)">'+txt+'</td>';
@@ -874,7 +874,7 @@ function renderAdjMonthlyByAccount(rows, months, ymKey){
   html+='<tr style="border-top:2px solid var(--line);font-weight:700;background:#F8FAFC"><td style="padding:4px;position:sticky;left:0;background:#F8FAFC">TOTAL</td>'+
     months.map(m=>{
       const ct=colTotals[m];
-      const hl=m===adjMonthFilter?'background:#3a2c0f;color:#e8b866;':'';
+      const hl=m===adjMonthFilter?'background:#FDF3E0;color:#B87800;':'';
       if(!ct)return '<td style="padding:4px;text-align:right;'+hl+'">·</td>';
       const txt=adjMetric==='volumes'?String(ct.n):Math.round(ct.val).toLocaleString();
       return '<td style="padding:4px;text-align:right;'+hl+'">'+txt+'</td>';
