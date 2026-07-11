@@ -100,6 +100,7 @@ tr.sel td{background:#EFF6FF}tr:hover td{background:#F8FAFC;cursor:pointer}
     <button data-v="demand">Demand charges</button>
   </div>
 </div>
+<div id="monthFilterBar"></div>
 <div id="app"></div>
 <div class="note" id="note"></div>
 </div>
@@ -280,9 +281,11 @@ function _renderAcctTable(rows,lB,lC,err){
     +'<th style="padding:2px 4px;text-align:right">Rev '+lC+'</th>'
     +'<th style="padding:2px 4px;text-align:right">Δ Rev%</th>'
     +'</tr></thead><tbody>';
+  let tbk=0,tck=0,tbr=0,tcr=0;
   for(const r of rows){
     const bk=r.base?.kwh,ck=r.cur?.kwh,br=r.base?.rev,cr=r.cur?.rev;
     const dk=pc(bk,ck),dr=pc(br,cr);
+    tbk+=bk||0;tck+=ck||0;tbr+=br||0;tcr+=cr||0;
     h+='<tr style="border-top:1px solid #1e2d40">'
       +'<td style="padding:3px 4px;font-family:monospace;font-size:10.5px;color:var(--yel)">'+esc(r.ac)+'</td>'
       +'<td style="padding:3px 4px;color:var(--mut)">'+esc(r.parish||'')+'</td>'
@@ -294,6 +297,14 @@ function _renderAcctTable(rows,lB,lC,err){
       +'<td style="padding:3px 4px;text-align:right" class="'+cls(br,cr)+'">'+(br!=null&&cr!=null?sp(dr)+'%':'—')+'</td>'
       +'</tr>';
   }
+  h+='<tr style="border-top:2px solid var(--line);font-weight:700;background:#F8FAFC">'
+    +'<td style="padding:3px 4px" colspan="2">TOTAL</td>'
+    +'<td style="padding:3px 4px;text-align:right">'+fk(tbk)+'</td>'
+    +'<td style="padding:3px 4px;text-align:right">'+fk(tck)+'</td>'
+    +'<td style="padding:3px 4px;text-align:right" class="'+cls(tbk,tck)+'">'+sp(pc(tbk,tck))+'%</td>'
+    +'<td style="padding:3px 4px;text-align:right">'+fr(tbr)+'</td>'
+    +'<td style="padding:3px 4px;text-align:right">'+fr(tcr)+'</td>'
+    +'<td style="padding:3px 4px;text-align:right" class="'+cls(tbr,tcr)+'">'+sp(pc(tbr,tcr))+'%</td></tr>';
   h+='</tbody></table></div>';
   return h;
 }
@@ -330,6 +341,7 @@ function bindMonths(rerender){
     const m=c.dataset.mo;
     if(m==='__all') sel=new Set(D.months); else if(m==='__none') sel=new Set();
     else { if(sel.has(m))sel.delete(m); else sel.add(m); }
+    _anomCache=null; // anomaly series are computed over the filtered window now
     rerender();
   });
 }
@@ -347,7 +359,6 @@ function renderTrends(){
   let h='<div class="ctrl"><span class="lbl">Metric</span><select id="tmet">'+
     Object.keys(MET).map(k=>'<option value="'+k+'"'+(tMet===k?' selected':'')+'>'+MET[k].l+'</option>').join('')+'</select>'+
     '<div class="seg"><button data-tg="class" class="'+(tGroup==='class'?'on':'')+'">By rate class</button><button data-tg="parish" class="'+(tGroup==='parish'?'on':'')+'">By parish</button><button data-tg="total" class="'+(tGroup==='total'?'on':'')+'">Total</button></div></div>';
-  h+=monthChips();
   h+='<div class="grid"><div class="card"><div class="chartttl">'+m.l+' — '+(tGroup==='total'?'total':tGroup==='parish'?'by parish':'by rate class')+'</div><div class="chartwrap"><canvas id="c"></canvas></div></div><div class="kpis" id="kp"></div></div>';
   document.getElementById('app').innerHTML=h;
   const idx=selIdx(), labels=idx.map(i=>D.mlabels[i]);
@@ -367,7 +378,6 @@ function renderTrends(){
     kpi('Periods shown',idx.length+' of '+D.months.length,'toggle chips above');
   document.getElementById('tmet').onchange=e=>{tMet=e.target.value;renderTrends();};
   document.querySelectorAll('[data-tg]').forEach(b=>b.onclick=()=>{tGroup=b.dataset.tg;renderTrends();});
-  bindMonths(renderTrends);
 }
 // ---- customers ----
 const AM={rev:a=>a.rev.map(v=>v/1e6),kwh:a=>a.kwh.map(v=>v/1e6),dem:a=>a.dem.map(v=>v/1e6),
@@ -396,12 +406,15 @@ function exportCustomers(iB,iC){
 }
 window.exportCustomers=exportCustomers;
 function renderCustomers(){
-  if(cBase==null)cBase=D.months[0]; if(cCur==null)cCur=D.months[D.months.length-1];
+  const cIdx=selIdx();
+  if(cBase==null||!sel.has(cBase))cBase=D.months[cIdx[0]];
+  if(cCur==null||!sel.has(cCur))cCur=D.months[cIdx[cIdx.length-1]];
   const iB=D.months.indexOf(cBase), iC=D.months.indexOf(cCur);
+  const cOpt=(cur)=>cIdx.map(i=>'<option value="'+D.months[i]+'"'+(cur===D.months[i]?' selected':'')+'>'+D.mlabels[i]+'</option>').join('');
   let h='<div class="ctrl">'+
     '<div class="seg">'+['ALL','RT40','RT50','RT70'].map(x=>'<button data-cf="'+x+'" class="'+(cClass===x?'on':'')+'">'+(x==='ALL'?'All':x)+'</button>').join('')+'</div>'+
-    '<span class="lbl">Compare</span><select id="cB">'+D.months.map((m,i)=>'<option value="'+m+'"'+(cBase===m?' selected':'')+'>'+D.mlabels[i]+'</option>').join('')+'</select>'+
-    '<span class="lbl">→</span><select id="cC">'+D.months.map((m,i)=>'<option value="'+m+'"'+(cCur===m?' selected':'')+'>'+D.mlabels[i]+'</option>').join('')+'</select>'+
+    '<span class="lbl">Compare</span><select id="cB">'+cOpt(cBase)+'</select>'+
+    '<span class="lbl">→</span><select id="cC">'+cOpt(cCur)+'</select>'+
     '<select id="csort">'+[['dDem','Sort: Δ Demand'],['dRev','Sort: Δ Revenue'],['dKwh','Sort: Δ kWh'],['demC','Sort: Demand J$']].map(o=>'<option value="'+o[0]+'"'+(cSort===o[0]?' selected':'')+'>'+o[1]+'</option>').join('')+'</select>'+
     '<input class="search" id="csearch" placeholder="Search customer…" value="'+esc(cSearch)+'">'+
     '<button class="chip" id="cexport" style="border-color:var(--yel);color:var(--yel);font-weight:700">⬇ Excel</button></div>';
@@ -533,7 +546,6 @@ let pA=null,pB=null,cmGroup='class',cmMet='rev',dMode='abs';
 function renderDemand(){
   let h='<div class="ctrl"><span class="lbl">Demand as</span><div class="seg">'+
     [['abs','J$ charge'],['share','% of revenue'],['perkwh','J$ / kWh']].map(o=>'<button data-dm="'+o[0]+'" class="'+(dMode===o[0]?'on':'')+'">'+o[1]+'</button>').join('')+'</div></div>';
-  h+=monthChips();
   h+='<div class="grid"><div class="card"><div class="chartttl">Demand charge — by rate class ('+(dMode==='abs'?'J$M':dMode==='share'?'% of class revenue':'J$ per kWh')+')</div><div class="chartwrap"><canvas id="c"></canvas></div></div><div class="kpis" id="kp"></div></div>';
   h+='<div class="card" style="margin-top:14px"><div class="chartttl">Peak Demand Volume — billed kVA (RT40/RT50/RT70), standard vs on/partial/off-peak</div><div id="kvaPanel" style="font-size:12px;color:var(--mut);padding:8px 0">Loading…</div></div>';
   document.getElementById('app').innerHTML=h;
@@ -554,7 +566,6 @@ function renderDemand(){
     movers.slice(0,5).map(m=>'<div style="display:flex;justify-content:space-between;gap:8px"><span class="muted" style="overflow:hidden;text-overflow:ellipsis">'+esc(m.n).slice(0,22)+'</span><span class="'+(m.d<0?'dn':'up')+'">'+(m.d>=0?'+':'')+m.d.toFixed(1)+'M</span></div>').join('')+'</div></div>';
   document.getElementById('kp').innerHTML=kp;
   document.querySelectorAll('[data-dm]').forEach(b=>b.onclick=()=>{dMode=b.dataset.dm;renderDemand();});
-  bindMonths(renderDemand);
 }
 let chartKva=null;
 async function renderDemandKva(){
@@ -627,8 +638,13 @@ async function renderAdjustments(){
   h+='<div class="card" style="margin-top:14px" id="adjMonthlyByAccount"></div>';
   document.getElementById('app').innerHTML=h;
   await _fetchTariffs(); // needed for the $ Value metric (energy_rate_jmd_kwh / demand_rate_*)
-  const rows=await _fetchSpecialAdj();
-  if(!rows.length){document.getElementById('cAdj').parentElement.innerHTML='<span style="color:var(--mut)">No adjustment data loaded yet.</span>';return;}
+  const allRows=await _fetchSpecialAdj();
+  if(!allRows.length){document.getElementById('cAdj').parentElement.innerHTML='<span style="color:var(--mut)">No adjustment data loaded yet.</span>';return;}
+  const ymKey=r=>r.year+'-'+String(r.month).padStart(2,'0');
+  // Global month filter narrows the universe first; the click-a-bar adjMonthFilter
+  // (below) narrows further to one specific month within that.
+  const rows=allRows.filter(r=>sel.has(ymKey(r)));
+  if(!rows.length){document.getElementById('cAdj').parentElement.innerHTML='<span style="color:var(--mut)">No adjustments in the selected months.</span>';return;}
   if(adjMetric==='dollar'){
     const priced=rows.filter(r=>ADJ_DOLLAR_FIELD[r.scat_code]);
     const unpriced=rows.length-priced.length;
@@ -637,7 +653,6 @@ async function renderAdjustments(){
       (unpriced?' <b style="color:'+(unpriced>0?'#BA7517':'inherit')+'">'+unpriced+' of '+rows.length+' rows excluded</b> — kW-family codes have no distinct kW tariff line in this system (demand is billed in kVA; converting kW via the kVA rate would silently assume unity power factor, so those rows show as J$0 here rather than a guessed number). Switch to Demand (kVA/kW) to see them in physical units.':'')+
       '</span>';
   }
-  const ymKey=r=>r.year+'-'+String(r.month).padStart(2,'0');
   const months=[...new Set(rows.map(ymKey))].sort();
   const whos=[...new Set(rows.map(r=>r.who||'Unidentified'))];
   const WHO_COLOR={'Karlease Brown':'#3b6ea5','Taneece Treasure':'#e25c4b','Norman Titus':'#1D9E75'};
@@ -685,6 +700,7 @@ async function renderAdjustments(){
   });
   let whoHtml='<div class="chartttl">By who</div><table style="width:100%;font-size:12px;border-collapse:collapse">'+
     '<thead><tr style="color:var(--mut);text-align:left"><th style="padding:4px">Who</th><th style="padding:4px;text-align:right"># Adjustments</th><th style="padding:4px;text-align:right">Accounts</th><th style="padding:4px;text-align:right">'+esc(adjMetricLabel())+'</th></tr></thead><tbody>';
+  whoHtml+='<tr style="font-weight:700;background:#F8FAFC"><td style="padding:4px">TOTAL</td><td style="padding:4px;text-align:right">'+activeRows.length+'</td><td style="padding:4px;text-align:right">'+new Set(activeRows.map(r=>r.account_name)).size+'</td><td style="padding:4px;text-align:right">'+Math.round(Object.values(byWho).reduce((s,v)=>s+v.val,0)).toLocaleString()+'</td></tr>';
   Object.entries(byWho).sort((a,b)=>b[1].n-a[1].n).forEach(([w,v])=>{
     whoHtml+='<tr style="border-top:1px solid #1e2d40"><td style="padding:4px">'+esc(w)+'</td><td style="padding:4px;text-align:right">'+v.n+'</td><td style="padding:4px;text-align:right">'+v.accts.size+'</td><td style="padding:4px;text-align:right">'+Math.round(v.val).toLocaleString()+'</td></tr>';
   });
@@ -700,6 +716,7 @@ async function renderAdjustments(){
   });
   let rcHtml='<div class="chartttl">By rate class</div><table style="width:100%;font-size:12px;border-collapse:collapse">'+
     '<thead><tr style="color:var(--mut);text-align:left"><th style="padding:4px">Rate Class</th><th style="padding:4px;text-align:right"># Adjustments</th><th style="padding:4px;text-align:right">'+esc(adjMetricLabel())+'</th></tr></thead><tbody>';
+  rcHtml+='<tr style="font-weight:700;background:#F8FAFC"><td style="padding:4px">TOTAL</td><td style="padding:4px;text-align:right">'+activeRows.length+'</td><td style="padding:4px;text-align:right">'+Math.round(Object.values(byRc).reduce((s,v)=>s+v.val,0)).toLocaleString()+'</td></tr>';
   Object.entries(byRc).sort((a,b)=>b[1].n-a[1].n).forEach(([rc,v])=>{
     rcHtml+='<tr style="border-top:1px solid #1e2d40"><td style="padding:4px">'+esc(rc)+'</td><td style="padding:4px;text-align:right">'+v.n+'</td><td style="padding:4px;text-align:right">'+Math.round(v.val).toLocaleString()+'</td></tr>';
   });
@@ -717,6 +734,7 @@ async function renderAdjustments(){
   const typeOrder=[...SCAT_TYPE_ORDER,...Object.keys(byType).filter(t=>!SCAT_TYPE_ORDER.includes(t))];
   let typeHtml='<div class="chartttl">By adjustment type</div><table style="width:100%;font-size:12px;border-collapse:collapse">'+
     '<thead><tr style="color:var(--mut);text-align:left"><th style="padding:4px">Type</th><th style="padding:4px;text-align:right"># Adjustments</th><th style="padding:4px;text-align:right">Accounts</th><th style="padding:4px;text-align:right">Net Value</th></tr></thead><tbody>';
+  typeHtml+='<tr style="font-weight:700;background:#F8FAFC"><td style="padding:4px">TOTAL</td><td style="padding:4px;text-align:right">'+activeRows.length+'</td><td style="padding:4px;text-align:right">'+new Set(activeRows.map(r=>r.account_name)).size+'</td><td style="padding:4px;text-align:right">'+Math.round(Object.values(byType).reduce((s,v)=>s+v.val,0)).toLocaleString()+'</td></tr>';
   typeOrder.forEach(t=>{
     const v=byType[t]; if(!v)return;
     typeHtml+='<tr style="border-top:1px solid #1e2d40"><td style="padding:4px"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:'+(SCAT_TYPE_COLOR[t]||'#666')+';margin-right:6px"></span>'+esc(t)+'</td><td style="padding:4px;text-align:right">'+v.n+'</td><td style="padding:4px;text-align:right">'+v.accts.size+'</td><td style="padding:4px;text-align:right">'+Math.round(v.val).toLocaleString()+'</td></tr>';
@@ -733,6 +751,8 @@ async function renderAdjustments(){
   });
   let wtHtml='<div class="chartttl">Who did which type</div><table style="width:100%;font-size:12px;border-collapse:collapse">'+
     '<thead><tr style="color:var(--mut);text-align:left"><th style="padding:4px">Who</th>'+typeOrder.filter(t=>byType[t]).map(t=>'<th style="padding:4px;text-align:right">'+esc(t)+'</th>').join('')+'<th style="padding:4px;text-align:right">Total</th></tr></thead><tbody>';
+  const shownTypes=typeOrder.filter(t=>byType[t]);
+  wtHtml+='<tr style="font-weight:700;background:#F8FAFC"><td style="padding:4px">TOTAL</td>'+shownTypes.map(t=>'<td style="padding:4px;text-align:right">'+byType[t].n+'</td>').join('')+'<td style="padding:4px;text-align:right">'+activeRows.length+'</td></tr>';
   Object.entries(byWhoType).sort((a,b)=>Object.values(b[1]).reduce((s,v)=>s+v,0)-Object.values(a[1]).reduce((s,v)=>s+v,0)).forEach(([w,tv])=>{
     const total=Object.values(tv).reduce((s,v)=>s+v,0);
     wtHtml+='<tr style="border-top:1px solid #1e2d40"><td style="padding:4px">'+esc(w)+'</td>'+typeOrder.filter(t=>byType[t]).map(t=>'<td style="padding:4px;text-align:right">'+(tv[t]||0)+'</td>').join('')+'<td style="padding:4px;text-align:right;font-weight:600">'+total+'</td></tr>';
@@ -752,6 +772,7 @@ async function renderAdjustments(){
   });
   let acctHtml='<div class="chartttl">By customer account'+(adjMonthFilter?'':' <span style="font-weight:400;color:var(--mut);font-size:11px">(click a row for the monthly breakdown below)</span>')+'</div><table style="width:100%;font-size:12px;border-collapse:collapse">'+
     '<thead><tr style="color:var(--mut);text-align:left"><th style="padding:4px">Account</th><th style="padding:4px">Rate Class</th><th style="padding:4px">Who</th><th style="padding:4px">Type(s)</th><th style="padding:4px;text-align:right"># Adjustments</th><th style="padding:4px;text-align:right">'+esc(adjMetricLabel())+'</th></tr></thead><tbody>';
+  acctHtml+='<tr style="font-weight:700;background:#F8FAFC"><td style="padding:4px" colspan="4">TOTAL &middot; '+Object.keys(byAcct).length+' accounts</td><td style="padding:4px;text-align:right">'+activeRows.length+'</td><td style="padding:4px;text-align:right">'+Math.round(Object.values(byAcct).reduce((s,v)=>s+v.val,0)).toLocaleString()+'</td></tr>';
   const acctRows=Object.entries(byAcct).sort((a,b)=>b[1].n-a[1].n);
   acctRows.forEach(([nm,v])=>{
     acctHtml+='<tr class="adjAcctRow" data-acct="'+esc(nm)+'" style="border-top:1px solid #1e2d40;cursor:pointer" onmouseover="this.style.background=\'#16222f\'" onmouseout="this.style.background=\'\'">'+
@@ -791,9 +812,10 @@ function renderAdjMonthlyByAccount(rows, months, ymKey){
     '<thead><tr style="color:var(--mut);text-align:left"><th style="padding:4px;position:sticky;left:0;background:var(--card)">Account</th>'+
     months.map(m=>'<th style="padding:4px;text-align:right'+(m===adjMonthFilter?';background:#3a2c0f;color:#e8b866':'')+'">'+esc(m)+'</th>').join('')+
     '<th style="padding:4px;text-align:right;font-weight:700">Total</th></tr></thead><tbody>';
-  shown.forEach(acct=>{
+  const colTotals={}; let grandTotal=0, grandN=0;
+  const acctHtmlRows=shown.map(acct=>{
     const acctRows=rows.filter(r=>(r.account_name||'(unnamed account)')===acct);
-    if(!acctRows.length)return;
+    if(!acctRows.length)return '';
     const byMonth={};
     let total=0;
     acctRows.forEach(r=>{
@@ -802,8 +824,11 @@ function renderAdjMonthlyByAccount(rows, months, ymKey){
       byMonth[ym].n++;
       const v=adjMetricVal(r);
       byMonth[ym].val+=v; total+=v;
+      const ct=colTotals[ym]=colTotals[ym]||{n:0,val:0};
+      ct.n++; ct.val+=v;
     });
-    html+='<tr style="border-top:1px solid #1e2d40"><td style="padding:4px;font-weight:500;position:sticky;left:0;background:var(--card)">'+esc(acct)+'</td>'+
+    grandTotal+=total; grandN+=acctRows.length;
+    return '<tr style="border-top:1px solid #1e2d40"><td style="padding:4px;font-weight:500;position:sticky;left:0;background:var(--card)">'+esc(acct)+'</td>'+
       months.map(m=>{
         const v=byMonth[m];
         const hl=m===adjMonthFilter?'background:#2a2010;':'';
@@ -813,6 +838,16 @@ function renderAdjMonthlyByAccount(rows, months, ymKey){
       }).join('')+
       '<td style="padding:4px;text-align:right;font-weight:700">'+Math.round(total).toLocaleString()+'</td></tr>';
   });
+  html+='<tr style="border-top:2px solid var(--line);font-weight:700;background:#F8FAFC"><td style="padding:4px;position:sticky;left:0;background:#F8FAFC">TOTAL</td>'+
+    months.map(m=>{
+      const ct=colTotals[m];
+      const hl=m===adjMonthFilter?'background:#3a2c0f;color:#e8b866;':'';
+      if(!ct)return '<td style="padding:4px;text-align:right;'+hl+'">·</td>';
+      const txt=adjMetric==='volumes'?String(ct.n):Math.round(ct.val).toLocaleString();
+      return '<td style="padding:4px;text-align:right;'+hl+'">'+txt+'</td>';
+    }).join('')+
+    '<td style="padding:4px;text-align:right">'+(adjMetric==='volumes'?grandN:Math.round(grandTotal).toLocaleString())+'</td></tr>';
+  html+=acctHtmlRows.join('');
   html+='</tbody></table></div>';
   wrap.innerHTML=html;
   const resetBtn=document.getElementById('adjAcctReset');
@@ -836,14 +871,16 @@ let ccThreshold=0.05; // flag if a month deviates from the account's own median 
 let ccSearch='';
 function _ccAnomalies(){
   const out=[];
+  const idx=selIdx(); // both the account's "normal" (median) and the flagged months are scoped to the global filter
   D.accts.forEach(a=>{
     const c=a.cust||[];
-    const vals=c.filter(v=>v!=null);
+    const vals=idx.map(i=>c[i]).filter(v=>v!=null);
     if(vals.length<2)return;
     const sorted=[...vals].sort((x,y)=>x-y);
     const med=sorted.length%2?sorted[(sorted.length-1)/2]:(sorted[sorted.length/2-1]+sorted[sorted.length/2])/2;
     if(!med)return; // median 0 — can't compute a meaningful % deviation
-    c.forEach((v,i)=>{
+    idx.forEach(i=>{
+      const v=c[i];
       if(v==null)return;
       const dev=(v-med)/med;
       if(Math.abs(dev)>ccThreshold){
@@ -883,9 +920,10 @@ async function renderCustCharge(){
   // mid-cycle start prorates ONE month, not the median). Aggregate/bulk rows
   // (implied > 200 meters) are skipped — integer drift there is rounding noise.
   const persistent=[];
-  const tariffYear=+D.months[D.months.length-1].slice(0,4);
+  const ccIdx=selIdx();
+  const tariffYear=+D.months[ccIdx[ccIdx.length-1]].slice(0,4);
   D.accts.forEach(a=>{
-    const vals=(a.cust||[]).filter(v=>v!=null&&v>0);
+    const vals=ccIdx.map(i=>a.cust&&a.cust[i]).filter(v=>v!=null&&v>0);
     if(vals.length<4)return;
     const t=_ccTariffFor(a.c,tariffYear);
     if(!t)return;
@@ -907,6 +945,7 @@ async function renderCustCharge(){
   }else{
     pHtml+='<table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr style="color:var(--mut);text-align:left">'+
       '<th style="padding:4px">Customer</th><th style="padding:4px">Rate Class</th><th style="padding:4px;text-align:right">Median charge (J$)</th><th style="padding:4px;text-align:right">Tariff (J$)</th><th style="padding:4px;text-align:right">Implied services</th><th style="padding:4px;text-align:right">Structural gap (J$/mo)</th></tr></thead><tbody>';
+    pHtml+='<tr style="font-weight:700;background:#F8FAFC"><td style="padding:4px" colspan="2">TOTAL &middot; '+persistent.length+' accounts</td><td style="padding:4px;text-align:right">&mdash;</td><td style="padding:4px;text-align:right">&mdash;</td><td style="padding:4px;text-align:right">&mdash;</td><td style="padding:4px;text-align:right">'+Math.round(persistent.reduce((s,x)=>s+x.gap,0)).toLocaleString()+'</td></tr>';
     persistent.slice(0,50).forEach(x=>{
       pHtml+='<tr class="ccAnomRow" data-nm="'+esc(x.n)+'" style="border-top:1px solid var(--line);cursor:pointer" onmouseover="this.style.background=\'#F0F4F8\'" onmouseout="this.style.background=\'\'">'+
         '<td style="padding:4px;font-weight:500">'+esc(x.n)+'</td><td style="padding:4px">'+esc(x.rc)+'</td>'+
@@ -934,7 +973,13 @@ async function renderCustCharge(){
   }else{
     tblHtml+='<table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr style="color:var(--mut);text-align:left">'+
       '<th style="padding:4px">Customer</th><th style="padding:4px">Rate Class</th><th style="padding:4px">Month</th><th style="padding:4px;text-align:right">Normal (J$)</th><th style="padding:4px;text-align:right">Actual (J$)</th><th style="padding:4px;text-align:right">Deviation</th></tr></thead><tbody>';
-    anomalies.slice(0,cap).forEach(x=>{
+    const shownAnom=anomalies.slice(0,cap);
+    const tNorm=shownAnom.reduce((s,x)=>s+x.normal,0), tAct=shownAnom.reduce((s,x)=>s+x.actual,0);
+    tblHtml+='<tr style="font-weight:700;background:#F8FAFC"><td style="padding:4px" colspan="3">TOTAL (shown '+shownAnom.length+')</td>'+
+      '<td style="padding:4px;text-align:right">'+Math.round(tNorm).toLocaleString()+'</td>'+
+      '<td style="padding:4px;text-align:right">'+Math.round(tAct).toLocaleString()+'</td>'+
+      '<td style="padding:4px;text-align:right;color:'+(tAct<tNorm?'#e25c4b':'#1D9E75')+'">'+_digestMoney(tAct-tNorm)+'</td></tr>';
+    shownAnom.forEach(x=>{
       tblHtml+='<tr class="ccAnomRow" data-nm="'+esc(x.name)+'" style="border-top:1px solid #1e2d40;cursor:pointer" onmouseover="this.style.background=\'#16222f\'" onmouseout="this.style.background=\'\'">'+
         '<td style="padding:4px;font-weight:500">'+esc(x.name)+'</td>'+
         '<td style="padding:4px">'+esc(x.rc)+'</td>'+
@@ -957,20 +1002,28 @@ function _ccRenderSearch(){
   const q=ccSearch.toLowerCase();
   const matches=D.accts.filter(a=>(a.n||'').toLowerCase().includes(q)).slice(0,15);
   if(!matches.length){wrap.innerHTML='<span style="color:var(--mut);font-size:12px">No customer matches "'+esc(ccSearch)+'".</span>';return;}
+  const sIdx=selIdx();
   let html='<div class="chartttl">'+matches.length+' match'+(matches.length===1?'':'es')+'</div><table style="width:100%;font-size:11.5px;border-collapse:collapse"><thead><tr style="color:var(--mut);text-align:left"><th style="padding:4px">Customer</th><th style="padding:4px">Rate Class</th>'+
-    D.mlabels.map(m=>'<th style="padding:4px;text-align:right">'+esc(m)+'</th>').join('')+'</tr></thead><tbody>';
+    sIdx.map(i=>'<th style="padding:4px;text-align:right">'+esc(D.mlabels[i])+'</th>').join('')+'<th style="padding:4px;text-align:right;font-weight:700">Total</th></tr></thead><tbody>';
+  let colTotals=sIdx.map(()=>0);
   matches.forEach(a=>{
     const c=a.cust||[];
-    const vals=c.filter(v=>v!=null);
+    const vals=sIdx.map(i=>c[i]).filter(v=>v!=null);
     const sorted=[...vals].sort((x,y)=>x-y);
     const med=sorted.length?(sorted.length%2?sorted[(sorted.length-1)/2]:(sorted[sorted.length/2-1]+sorted[sorted.length/2])/2):0;
+    let rowTotal=0;
     html+='<tr style="border-top:1px solid #1e2d40"><td style="padding:4px;font-weight:500">'+esc(a.n)+'</td><td style="padding:4px">'+esc(a.c)+'</td>'+
-      c.map(v=>{
+      sIdx.map((i,k)=>{
+        const v=c[i];
         if(v==null)return '<td style="padding:4px;text-align:right;color:#3a4557">·</td>';
+        rowTotal+=v; colTotals[k]+=v;
         const flagged=med&&Math.abs((v-med)/med)>ccThreshold;
         return '<td style="padding:4px;text-align:right'+(flagged?';color:#e25c4b;font-weight:700':'')+'" title="normal ~'+Math.round(med).toLocaleString()+'">'+Math.round(v).toLocaleString()+'</td>';
-      }).join('')+'</tr>';
+      }).join('')+'<td style="padding:4px;text-align:right;font-weight:700">'+Math.round(rowTotal).toLocaleString()+'</td></tr>';
   });
+  html+='<tr style="border-top:2px solid var(--line);font-weight:700;background:#F8FAFC"><td style="padding:4px" colspan="2">TOTAL</td>'+
+    colTotals.map(v=>'<td style="padding:4px;text-align:right">'+Math.round(v).toLocaleString()+'</td>').join('')+
+    '<td style="padding:4px;text-align:right">'+Math.round(colTotals.reduce((s,v)=>s+v,0)).toLocaleString()+'</td></tr>';
   html+='</tbody></table>';
   wrap.innerHTML=html;
 }
@@ -1030,15 +1083,21 @@ const _revKey=r=>r.account_name+'|'+r.metric+'|'+r.month;
 ========================================== */
 async function _fetchBillingComponents(){
   const cols='month,account_code,name,rate_class,parish_group,kwh,revenue_jmd,demand_jmd,fuel_jmd,energy_jmd,ipp_jmd,customer_charge_jmd';
-  let all=[],from=0;const PAGE=1000;
-  for(;;){
-    const{data,error}=await _SB.from('jps_billing_components').select(cols).range(from,from+PAGE-1);
-    if(error){console.error('jps_billing_components fetch failed',error);break;}
-    if(!data||!data.length)break;
-    all=all.concat(data);
-    if(data.length<PAGE)break;
-    from+=PAGE;
-  }
+  const PAGE=1000;
+  // Was a sequential for(;;) loop — one page had to round-trip before the next
+  // was even requested, so ~10k rows meant ~11 serial fetches. Get the exact
+  // row count first (cheap HEAD request), then fire every page concurrently.
+  const{count,error:countErr}=await _SB.from('jps_billing_components').select('*',{count:'exact',head:true});
+  if(countErr){console.error('jps_billing_components count failed',countErr);return[];}
+  if(!count)return[];
+  const pages=Math.ceil(count/PAGE);
+  const results=await Promise.all(Array.from({length:pages},(_,p)=>
+    _SB.from('jps_billing_components').select(cols).range(p*PAGE,p*PAGE+PAGE-1)));
+  const all=[];
+  results.forEach(({data,error})=>{
+    if(error){console.error('jps_billing_components page fetch failed',error);return;}
+    if(data)all.push(...data);
+  });
   return all;
 }
 async function _fetchKamIndustryMaps(){
@@ -1172,8 +1231,12 @@ const ANOM_METRICS={
   rpk:{l:'J$/kWh blended',floor:5,fmt:v=>v.toFixed(1)},
 };
 function _anomSeries(a,mk){
-  if(mk==='rpk')return D.months.map((_,i)=>(a.kwh[i]>10000&&a.rev[i]!=null)?a.rev[i]/a.kwh[i]:null);
-  return D.months.map((_,i)=>a[mk]?a[mk][i]:null);
+  // Months outside the global filter come back null — the existing v==null skip
+  // in _anomScan means both the "normal" (median/MAD) and the flagged months are
+  // scoped to the filtered window, same as the customer-charge anomaly detector.
+  const inSel=i=>sel.has(D.months[i]);
+  if(mk==='rpk')return D.months.map((_,i)=>(inSel(i)&&a.kwh[i]>10000&&a.rev[i]!=null)?a.rev[i]/a.kwh[i]:null);
+  return D.months.map((_,i)=>(inSel(i)&&a[mk])?a[mk][i]:null);
 }
 let _anomCache=null;
 function _anomScan(){
@@ -1300,8 +1363,11 @@ function _navTo(v){view=v;render();}
 function _digestMoney(v){const s=v<0?'-':'';const a=Math.abs(v);return s+(a>=1e9?'J$'+(a/1e9).toFixed(2)+'B':'J$'+(a/1e6).toFixed(1)+'M');}
 async function renderDigest(){
   const app=document.getElementById('app');
-  const iL=D.months.length-1,iP=D.months.length-2;
-  const mL=D.mlabels[iL],mP=D.mlabels[iP];
+  // "This month" = the latest month within the global filter, not necessarily
+  // the latest month loaded — so filtering to an earlier window changes the digest too.
+  const dIdx=selIdx();
+  const iL=dIdx[dIdx.length-1],iP=dIdx.length>1?dIdx[dIdx.length-2]:-1;
+  const mL=D.mlabels[iL],mP=D.mlabels[iP]||'—';
   // class movers MoM (rev + kwh)
   const classMoves=D.classes.map(c=>{
     const o=D.cls[c];if(!o)return null;
@@ -1349,7 +1415,8 @@ async function renderDigest(){
     const el=document.getElementById('digAdj');if(!el)return;
     if(!rows.length){el.textContent='No adjustment data loaded.';return;}
     const ymKey=r=>r.year+'-'+String(r.month).padStart(2,'0');
-    const last=[...new Set(rows.map(ymKey))].sort().pop();
+    const monthsInSel=[...new Set(rows.map(ymKey))].filter(m=>sel.has(m)).sort();
+    const last=monthsInSel.length?monthsInSel.pop():[...new Set(rows.map(ymKey))].sort().pop();
     const lastRows=rows.filter(r=>ymKey(r)===last);
     const byWho={};lastRows.forEach(r=>{byWho[r.who||'?']=(byWho[r.who||'?']||0)+1;});
     const top=Object.entries(byWho).sort((a,b)=>b[1]-a[1])[0];
@@ -1358,11 +1425,14 @@ async function renderDigest(){
 }
 
 function renderCompare(){
-  if(!pA)pA=D.months[0]; if(!pB)pB=D.months[D.months.length-1];
+  const pIdx=selIdx();
+  if(!pA||!sel.has(pA))pA=D.months[pIdx[0]];
+  if(!pB||!sel.has(pB))pB=D.months[pIdx[pIdx.length-1]];
   const iA=D.months.indexOf(pA), iB=D.months.indexOf(pB);
+  const pOpt=(cur)=>pIdx.map(i=>'<option value="'+D.months[i]+'"'+(cur===D.months[i]?' selected':'')+'>'+D.mlabels[i]+'</option>').join('');
   let h='<div class="ctrl"><span class="lbl">Compare</span>'+
-    '<select id="pA">'+D.months.map((m,i)=>'<option value="'+m+'"'+(pA===m?' selected':'')+'>'+D.mlabels[i]+'</option>').join('')+'</select>'+
-    '<span class="lbl">vs</span><select id="pB">'+D.months.map((m,i)=>'<option value="'+m+'"'+(pB===m?' selected':'')+'>'+D.mlabels[i]+'</option>').join('')+'</select>'+
+    '<select id="pA">'+pOpt(pA)+'</select>'+
+    '<span class="lbl">vs</span><select id="pB">'+pOpt(pB)+'</select>'+
     '<div class="seg">'+[['class','Rate class'],['comp','Components'],['customer','Customers']].map(o=>'<button data-cmg="'+o[0]+'" class="'+(cmGroup===o[0]?'on':'')+'">'+o[1]+'</button>').join('')+'</div>';
   if(cmGroup!=='comp') h+='<span class="lbl">Metric</span><select id="cmMet">'+Object.keys(AMU).map(k=>'<option value="'+k+'"'+(cmMet===k?' selected':'')+'>'+AMU[k].l+'</option>').join('')+'</select>';
   h+='</div>';
@@ -1379,7 +1449,10 @@ function renderCompare(){
     {label:D.mlabels[iB],data:bVals,backgroundColor:'#1B4F8A',borderRadius:3}]},
     options:{maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{x:{grid:{display:false},ticks:{maxRotation:cmGroup==='customer'?50:0,minRotation:cmGroup==='customer'?50:0,font:{size:cmGroup==='customer'?10:12}}},y:{grid:{color:'#E2E8F0'}}}}});
   const dec=cmGroup==='comp'?2:(AMU[cmMet]?AMU[cmMet].d:1);
-  document.getElementById('tb').innerHTML=labels.map((l,i)=>'<tr><td class="l">'+esc(l)+'</td><td>'+aVals[i].toFixed(dec)+'</td><td>'+bVals[i].toFixed(dec)+'</td><td class="'+(bVals[i]>=aVals[i]?'up':'dn')+'">'+sp(pctV(aVals[i],bVals[i]))+'%</td></tr>').join('');
+  const taA=aVals.reduce((s,v)=>s+v,0), taB=bVals.reduce((s,v)=>s+v,0);
+  const totLbl=cmGroup==='customer'?'TOTAL (shown '+labels.length+')':'TOTAL';
+  const totRow='<tr style="font-weight:700;background:#F8FAFC"><td class="l">'+totLbl+'</td><td>'+taA.toFixed(dec)+'</td><td>'+taB.toFixed(dec)+'</td><td class="'+(taB>=taA?'up':'dn')+'">'+sp(pctV(taA,taB))+'%</td></tr>';
+  document.getElementById('tb').innerHTML=totRow+labels.map((l,i)=>'<tr><td class="l">'+esc(l)+'</td><td>'+aVals[i].toFixed(dec)+'</td><td>'+bVals[i].toFixed(dec)+'</td><td class="'+(bVals[i]>=aVals[i]?'up':'dn')+'">'+sp(pctV(aVals[i],bVals[i]))+'%</td></tr>').join('');
   document.getElementById('pA').onchange=e=>{pA=e.target.value;renderCompare();};
   document.getElementById('pB').onchange=e=>{pB=e.target.value;renderCompare();};
   document.querySelectorAll('[data-cmg]').forEach(b=>b.onclick=()=>{cmGroup=b.dataset.cmg;renderCompare();});
@@ -1391,7 +1464,6 @@ function renderMix(){
   let h='<div class="ctrl"><span class="lbl">Scope</span><div class="seg">'+
     ['Total'].concat(D.classes).map(c=>'<button data-ms="'+c+'" class="'+(mScope===c?'on':'')+'">'+c+'</button>').join('')+'</div>'+
     '<div class="seg"><button data-mm="abs" class="'+(mMode==='abs'?'on':'')+'">J$ absolute</button><button data-mm="share" class="'+(mMode==='share'?'on':'')+'">% share</button></div></div>';
-  h+=monthChips();
   h+='<div class="grid"><div class="card"><div class="chartttl">Revenue breakdown — '+mScope+' ('+(mMode==='abs'?'J$B':'% of revenue')+')</div><div class="chartwrap"><canvas id="c"></canvas></div></div><div class="kpis" id="kp"></div></div>';
   document.getElementById('app').innerHTML=h;
   const idx=selIdx(), labels=idx.map(i=>D.mlabels[i]), raw=idx.map(i=>comps(o,i));
@@ -1411,7 +1483,6 @@ function renderMix(){
     sortk.slice(0,4).map(k=>kpi(k+' share',((lastR[k]||0)/tot*100).toFixed(1)+'%','J$'+((lastR[k]||0)/1e9).toFixed(2)+'B',k==='Demand'?'dn':'')).join('');
   document.querySelectorAll('[data-ms]').forEach(b=>b.onclick=()=>{mScope=b.dataset.ms;renderMix();});
   document.querySelectorAll('[data-mm]').forEach(b=>b.onclick=()=>{mMode=b.dataset.mm;renderMix();});
-  bindMonths(renderMix);
 }
 
 let caseSel=null, wowMet='rev', movCls='RT50', movMode='topbot', movMet='kwh';
@@ -1432,13 +1503,28 @@ function renderTopMovers(){
   document.getElementById('app').innerHTML=h;
   const top=data.slice(0,20);
   barChart('c',top.map(r=>lab(r).slice(0,26)),top.map(r=>+(r.var/div).toFixed(2)),top.map(r=>r.var>=0?'#1D9E75':'#E24B4A'),v=>(v>=0?'+':'')+(+v).toFixed(1),{x:{grid:{color:'#223247'}},y:{grid:{display:false},ticks:{font:{size:10.5}}}},true);
-  document.getElementById('tb').innerHTML=data.slice(0,80).map(r=>'<tr><td class="l">'+esc(lab(r)).slice(0,26)+(r.cls?' <span class="badge">'+r.cls+'</span>':'')+'</td><td>'+(r.act/div).toFixed(1)+'</td><td>'+(r.bud/div).toFixed(1)+'</td><td class="'+(r.var>=0?'up':'dn')+'">'+(r.var>=0?'+':'')+(r.var/div).toFixed(1)+'</td></tr>').join('');
+  const shownRows=data.slice(0,80);
+  const tAct=shownRows.reduce((s,r)=>s+r.act,0), tBud=shownRows.reduce((s,r)=>s+r.bud,0), tVar=shownRows.reduce((s,r)=>s+r.var,0);
+  const totRow='<tr style="font-weight:700;background:#F8FAFC"><td class="l">TOTAL (shown '+shownRows.length+')</td><td>'+(tAct/div).toFixed(1)+'</td><td>'+(tBud/div).toFixed(1)+'</td><td class="'+(tVar>=0?'up':'dn')+'">'+(tVar>=0?'+':'')+(tVar/div).toFixed(1)+'</td></tr>';
+  document.getElementById('tb').innerHTML=totRow+shownRows.map(r=>'<tr><td class="l">'+esc(lab(r)).slice(0,26)+(r.cls?' <span class="badge">'+r.cls+'</span>':'')+'</td><td>'+(r.act/div).toFixed(1)+'</td><td>'+(r.bud/div).toFixed(1)+'</td><td class="'+(r.var>=0?'up':'dn')+'">'+(r.var>=0?'+':'')+(r.var/div).toFixed(1)+'</td></tr>').join('');
   document.querySelectorAll('[data-tmm]').forEach(b=>b.onclick=()=>{tmMet=b.dataset.tmm;renderTopMovers();});
   document.querySelectorAll('[data-tmv]').forEach(b=>b.onclick=()=>{tmView=b.dataset.tmv;renderTopMovers();});
 }
 let aBase=null, aCur=null;
-function aIdx(){if(aBase==null)aBase=D.months[0];if(aCur==null)aCur=D.months[D.months.length-1];return [D.months.indexOf(aBase),D.months.indexOf(aCur)];}
-function periodSel(){return '<span class="lbl">Compare</span><select id="aB">'+D.months.map((m,i)=>'<option value="'+m+'"'+(aBase===m?' selected':'')+'>'+D.mlabels[i]+'</option>').join('')+'</select><span class="lbl">→</span><select id="aC">'+D.months.map((m,i)=>'<option value="'+m+'"'+(aCur===m?' selected':'')+'>'+D.mlabels[i]+'</option>').join('')+'</select>';}
+// aBase/aCur are constrained to the globally-filtered month set (sel) — if either
+// falls outside the current filter (filter changed, or first load), snap to the
+// filtered window's first/last month rather than the full unfiltered range.
+function aIdx(){
+  const idx=selIdx();
+  if(aBase==null||!sel.has(aBase))aBase=D.months[idx[0]];
+  if(aCur==null||!sel.has(aCur))aCur=D.months[idx[idx.length-1]];
+  return [D.months.indexOf(aBase),D.months.indexOf(aCur)];
+}
+function periodSel(){
+  const idx=selIdx();
+  const opt=(cur)=>idx.map(i=>'<option value="'+D.months[i]+'"'+(cur===D.months[i]?' selected':'')+'>'+D.mlabels[i]+'</option>').join('');
+  return '<span class="lbl">Compare</span><select id="aB">'+opt(aBase)+'</select><span class="lbl">→</span><select id="aC">'+opt(aCur)+'</select>';
+}
 function bindPeriod(fn){document.getElementById('aB').onchange=e=>{aBase=e.target.value;fn();};document.getElementById('aC').onchange=e=>{aCur=e.target.value;fn();};}
 function dlbl(fmt){return {display:true,anchor:'end',align:'end',clip:false,formatter:fmt,color:'#c7d3e0',font:{size:11,weight:500}};}
 function barChart(id,labels,data,colors,fmt,scales,horiz,onClickBar){
@@ -1466,9 +1552,10 @@ function renderAnswerContributors(field,iA,iB){
   };
   const el=document.getElementById('answer-contrib');
   if(!el)return;
+  const subtotal=(lbl,grp)=>{const s=grp.reduce((s,r)=>s+r.d,0);return '<tr style="font-weight:700;background:#F8FAFC"><td class="l" colspan="2">'+lbl+'</td><td class="'+(s>=0?'up':'dn')+'">'+(s>=0?'+':'')+pfx+(Math.abs(s)/div).toFixed(1)+'</td><td></td></tr>';};
   el.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin:8px 0 4px;border-top:1px solid var(--line);padding-top:8px"><div style="font-size:10px;font-weight:700;color:var(--mut);letter-spacing:1px">TOP 10 / BOTTOM 10 · '+label+' — '+D.mlabels[iA]+' → '+D.mlabels[iB]+' <span style="font-weight:400;text-transform:none;letter-spacing:0">(click a row to expand accounts)</span></div><button class="chip" id="contrib-export-btn" onclick="exportContributors()" style="border-color:var(--yel);color:var(--yel);font-weight:700">⬇ Excel</button></div>'+
     '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="color:var(--mut);text-align:left"><th class="l" style="padding:2px 4px">Customer</th><th style="padding:2px 4px">Cls</th><th style="padding:2px 4px;text-align:right">Δ '+label+'</th><th style="padding:2px 4px;text-align:right">'+D.mlabels[iB]+' vs Budget ('+bUnit+')</th></tr></thead><tbody>'+
-    top.map(row).join('')+'<tr><td colspan="4" style="padding:2px 4px;color:var(--mut);font-size:10px">— bottom 10 —</td></tr>'+bot.map(row).join('')+
+    subtotal('TOTAL · top 10',top)+top.map(row).join('')+'<tr><td colspan="4" style="padding:2px 4px;color:var(--mut);font-size:10px">— bottom 10 —</td></tr>'+subtotal('TOTAL · bottom 10',bot)+bot.map(row).join('')+
     '</tbody></table></div>';
   const all=top.concat(bot);
   Promise.all(all.map(r=>{
@@ -1497,9 +1584,11 @@ function _renderAcctSimple(rows,err,field,lA,lB){
   const bf=_budgetField(field), bud=r=>r.budget?r.budget[bf]:null;
   let h=tracked?'':'<div style="color:var(--mut);font-size:10px;margin-bottom:4px">This component isn\'t billed per account — showing kWh, the closest metered driver.</div>';
   h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="color:var(--mut);text-align:left"><th style="padding:2px 4px">A/c No.</th><th style="padding:2px 4px;text-align:right">'+esc(lA)+'</th><th style="padding:2px 4px;text-align:right">'+esc(lB)+'</th><th style="padding:2px 4px;text-align:right">Δ ('+unitLbl+')</th><th style="padding:2px 4px;text-align:right">'+esc(lB)+' Budget</th><th style="padding:2px 4px;text-align:right">Var</th></tr></thead><tbody>';
+  let tb=0,tc=0,tbg=0;
   for(const r of rows){
     const {b,c}=val(r), d=(b!=null&&c!=null)?c-b:null;
     const bg=bud(r), v=(c!=null&&bg!=null)?c-bg:null;
+    tb+=b||0;tc+=c||0;tbg+=bg||0;
     h+='<tr style="border-top:1px solid #1e2d40"><td style="padding:3px 4px;font-family:monospace;font-size:10.5px;color:var(--yel)">'+esc(r.ac)+'</td>'
       +'<td style="padding:3px 4px;text-align:right">'+fmt(b)+'</td>'
       +'<td style="padding:3px 4px;text-align:right">'+fmt(c)+'</td>'
@@ -1507,6 +1596,13 @@ function _renderAcctSimple(rows,err,field,lA,lB){
       +'<td style="padding:3px 4px;text-align:right;color:var(--mut)">'+fmt(bg)+'</td>'
       +'<td style="padding:3px 4px;text-align:right" class="'+(v>=0?'up':'dn')+'">'+(v!=null?(v>=0?'+':'')+fmt(v):'—')+'</td></tr>';
   }
+  const td=tc-tb, tv=tc-tbg;
+  h+='<tr style="border-top:2px solid var(--line);font-weight:700;background:#F8FAFC"><td style="padding:3px 4px">TOTAL</td>'
+    +'<td style="padding:3px 4px;text-align:right">'+fmt(tb)+'</td>'
+    +'<td style="padding:3px 4px;text-align:right">'+fmt(tc)+'</td>'
+    +'<td style="padding:3px 4px;text-align:right" class="'+(td>=0?'up':'dn')+'">'+(td>=0?'+':'')+fmt(td)+'</td>'
+    +'<td style="padding:3px 4px;text-align:right;color:var(--mut)">'+fmt(tbg)+'</td>'
+    +'<td style="padding:3px 4px;text-align:right" class="'+(tv>=0?'up':'dn')+'">'+(tv>=0?'+':'')+fmt(tv)+'</td></tr>';
   h+='</tbody></table></div>';
   return h;
 }
@@ -1686,6 +1782,16 @@ function renderMovers(){
 function render(){
   document.querySelectorAll('.toggle button').forEach(b=>b.classList.toggle('on',b.dataset.v===view));
   const N=document.getElementById('note');
+  // Global month filter — one control for the whole app, always visible regardless
+  // of tab. Every view reads the filtered window via selIdx()/visMonths() instead
+  // of the raw D.months range.
+  const mfb=document.getElementById('monthFilterBar');
+  if(mfb){mfb.innerHTML=monthChips();bindMonths(render);}
+  if(!sel.size){
+    document.getElementById('app').innerHTML='<div class="card" style="color:var(--mut)">No months selected — pick at least one above.</div>';
+    N.innerHTML='';
+    return;
+  }
   if(view==='digest'){renderDigest();N.innerHTML='<b>This month</b> &mdash; auto-generated highlights: what moved, what looks wrong, what needs review. Every card links to the tab with the full detail. The data itself nominates these; nothing here is hand-picked.';}
   else if(view==='anomalies'){renderAnomalies();N.innerHTML='<b>Anomalies</b> &mdash; one engine across every revenue component (kWh, revenue, energy, fuel, IPP, demand, customer charge, blended J$/kWh): each account is compared to its own history with a robust z-score (median &plusmn; MAD), severity-ranked, with a materiality floor so trivia stays out. kWh flags can be seasonal &mdash; treat volume flags as leads, not verdicts. Click a row to annotate; explained items stop counting as new.';}
   else if(view==='answer'){renderAnswer();N.innerHTML='<b>The answer</b> &mdash; pick any two periods. Energy &amp; fuel scale with kWh; the fixed <b>demand</b> charge does not &mdash; so when volume outruns demand, blended realization dilutes. Watch the demand bar lag the volume bar.';}
