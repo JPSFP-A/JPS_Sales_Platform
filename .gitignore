@@ -8,3 +8,6 @@
 analysis/
 salesanalysis_deploy/
 *.pre-submit.bak.html
+
+# Supabase CLI local cache
+supabase/.temp/

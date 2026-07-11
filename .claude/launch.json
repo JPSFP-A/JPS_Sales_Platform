@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "sales-explorer-dev",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "-p", "8834", "analysis"],
+      "port": 8834
+    },
+    {
+      "name": "sales-platform-dev",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "-p", "8835", "."],
+      "port": 8835
+    }
+  ]
+}
