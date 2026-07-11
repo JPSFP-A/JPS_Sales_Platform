@@ -117,7 +117,7 @@ tr.sel td{background:#EFF6FF}tr:hover td{background:#F8FAFC;cursor:pointer}
 // jps_industries for KAM & industry context) — the same live-query pattern
 // the Adjustments tab already used. Starts empty so nothing throws before the
 // bootstrap resolves; render() is gated behind it.
-let D={months:[],mlabels:[],classes:['RT10','RT20','RT40','RT50','RT60','RT70','Other'],cls:{},total:{},accts:[],parishes:[],parish:{},movers:null};
+let D={months:[],mlabels:[],classes:['RT10','RT20','RT40','RT50','RT60','RT70','Other'],cls:{},total:{},accts:[],parishes:[],parish:{},movers:null,budget:null};
 const COL={RT10:'#D98900',RT20:'#2563EB',RT40:'#0D9488',RT50:'#7C3AED',RT60:'#EA6C1E',RT70:'#475569',Other:'#94A3B8',Total:'#1E293B'};
 const PCOL=['#D98900','#2563EB','#0D9488','#7C3AED','#EA6C1E','#475569','#DC2626','#16A34A','#c8772f','#94A3B8','#475569','#2563EB','#7C3AED','#0D9488','#EA6C1E','#D98900','#16A34A','#c8772f'];
 Chart.defaults.color='#475569';Chart.defaults.font.family='Calibri,Segoe UI,sans-serif';Chart.defaults.font.size=12.5;
@@ -321,7 +321,7 @@ const MET={
  demsh:{l:'Demand share (%)',f:(c,i)=>c.rev[i]?c.demand[i]/c.rev[i]*100:0,d:1,u:'%'},
 };
 let chart=null, view='digest';
-let tMet='rev', tGroup='class', sel=new Set(D.months);
+let tMet='rev', tGroup='class', tShowBudget=false, sel=new Set(D.months);
 let cGroup='customer', cMet='rev', cClass='ALL', cSearch='', cSel=null;
 let cBase=null, cCur=null, cSort='dDem', cDir=0;  // cDir: 0=magnitude, 1=asc, -1=desc
 function setSort(k){ if(cSort===k){ cDir = cDir<=0 ? 1 : -1; } else { cSort=k; cDir=-1; } renderCustomers(); }
@@ -348,7 +348,7 @@ function bindMonths(rerender){
 function mkChart(ctx,labels,datasets,fmt){
   if(chart)chart.destroy();
   chart=new Chart(ctx,{type:'line',data:{labels,datasets:datasets.map(d=>({label:d.name,data:d.data,
-    borderColor:d.col,backgroundColor:d.col,tension:.3,borderWidth:2.5,pointRadius:2.5,pointHoverRadius:5,fill:false}))},
+    borderColor:d.col,backgroundColor:d.col,borderDash:d.dash||[],tension:.3,borderWidth:2.5,pointRadius:d.dash?0:2.5,pointHoverRadius:5,fill:false}))},
     options:{maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
       plugins:{legend:{display:datasets.length>1,position:'bottom',labels:{boxWidth:12,padding:10}},
         tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt(c.raw)}}},
@@ -356,10 +356,16 @@ function mkChart(ctx,labels,datasets,fmt){
 }
 function renderTrends(){
   const m=MET[tMet];
+  // Budget only exists for rev/kwh/dem (jps_budget has no fuel/energy/ipp/customer
+  // split, so realization/non-fuel/fuel/demand-share can't be compared to it), and
+  // has no parish dimension.
+  const budgetOK=['rev','kwh','dem'].includes(tMet)&&tGroup!=='parish'&&D.budget;
   let h='<div class="ctrl"><span class="lbl">Metric</span><select id="tmet">'+
     Object.keys(MET).map(k=>'<option value="'+k+'"'+(tMet===k?' selected':'')+'>'+MET[k].l+'</option>').join('')+'</select>'+
-    '<div class="seg"><button data-tg="class" class="'+(tGroup==='class'?'on':'')+'">By rate class</button><button data-tg="parish" class="'+(tGroup==='parish'?'on':'')+'">By parish</button><button data-tg="total" class="'+(tGroup==='total'?'on':'')+'">Total</button></div></div>';
-  h+='<div class="grid"><div class="card"><div class="chartttl">'+m.l+' — '+(tGroup==='total'?'total':tGroup==='parish'?'by parish':'by rate class')+'</div><div class="chartwrap"><canvas id="c"></canvas></div></div><div class="kpis" id="kp"></div></div>';
+    '<div class="seg"><button data-tg="class" class="'+(tGroup==='class'?'on':'')+'">By rate class</button><button data-tg="parish" class="'+(tGroup==='parish'?'on':'')+'">By parish</button><button data-tg="total" class="'+(tGroup==='total'?'on':'')+'">Total</button></div>'+
+    (budgetOK?'<label style="font-size:12px;color:var(--mut);display:flex;align-items:center;gap:5px;margin-left:4px"><input type="checkbox" id="tShowBud"'+(tShowBudget?' checked':'')+'> vs Budget</label>':'')+'</div>';
+  h+='<div class="grid"><div class="card"><div class="chartttl">'+m.l+' — '+(tGroup==='total'?'total':tGroup==='parish'?'by parish':'by rate class')+(budgetOK&&tShowBudget?' <span style="font-weight:400;color:var(--mut);font-size:11px">(dashed = budget)</span>':'')+'</div><div class="chartwrap"><canvas id="c"></canvas></div></div><div class="kpis" id="kp"></div></div>';
+  if(budgetOK&&tShowBudget)h+='<div style="font-size:11px;color:var(--mut);margin-top:6px">Budget shown for RT40/RT50/RT60/RT70/Other only — RT10/RT20 (mass-market) have no account-level actuals in this data, so their budget isn&rsquo;t plotted (it would compare real numbers to nothing).</div>';
   document.getElementById('app').innerHTML=h;
   const idx=selIdx(), labels=idx.map(i=>D.mlabels[i]);
   const fmt=v=>(v==null?'':(tMet==='rev'?'J$':'')+(+v).toFixed(m.d)+m.u);
@@ -367,6 +373,10 @@ function renderTrends(){
   if(tGroup==='total') ds=[{name:'Total',col:COL.Total,data:idx.map(i=>m.f(D.total,i))}];
   else if(tGroup==='parish') ds=(D.parishes||[]).map((p,k)=>({name:p,col:PCOL[k%PCOL.length],data:idx.map(i=>m.f(D.parish[p],i))}));
   else ds=D.classes.map(c=>({name:c,col:COL[c],data:idx.map(i=>m.f(D.cls[c],i))}));
+  if(budgetOK&&tShowBudget){
+    if(tGroup==='total') ds.push({name:'Budget',col:'#94A3B8',dash:[6,4],data:idx.map(i=>m.f(D.budget.total,i))});
+    else ds=ds.concat(D.classes.filter(c=>BUDGET_COVERED_CLASSES.includes(c)).map(c=>({name:c+' Budget',col:COL[c],dash:[6,4],data:idx.map(i=>m.f(D.budget.cls[c],i))})));
+  }
   mkChart(document.getElementById('c'),labels,ds,fmt);
   // KPIs: latest, peak, MoM, range (on total or sum)
   const tot=idx.map(i=>m.f(D.total,i));
@@ -375,9 +385,18 @@ function renderTrends(){
     kpi('Latest · '+labels[labels.length-1],(tMet==='rev'?'J$':'')+last.toFixed(m.d)+m.u, prev!=null?sp(pctV(prev,last))+'% MoM':'', last>=prev?'up':'dn')+
     kpi('Peak',(tMet==='rev'?'J$':'')+Math.max(...tot).toFixed(m.d)+m.u, labels[tot.indexOf(Math.max(...tot))])+
     kpi('Low',(tMet==='rev'?'J$':'')+Math.min(...tot).toFixed(m.d)+m.u, labels[tot.indexOf(Math.min(...tot))])+
+    (budgetOK?(()=>{
+      const budTot=idx.map(i=>m.f(D.budget.total,i));
+      const bLast=budTot[budTot.length-1];
+      if(bLast==null)return kpi('vs Budget · '+labels[labels.length-1],'—','no budget loaded for this month');
+      const v=pctV(bLast,last);
+      return kpi('vs Budget · '+labels[labels.length-1],sp(v)+'%','actual '+(tMet==='rev'?'J$':'')+last.toFixed(m.d)+m.u+' vs budget '+(tMet==='rev'?'J$':'')+bLast.toFixed(m.d)+m.u,v>=0?'up':'dn');
+    })():'')+
     kpi('Periods shown',idx.length+' of '+D.months.length,'toggle chips above');
   document.getElementById('tmet').onchange=e=>{tMet=e.target.value;renderTrends();};
   document.querySelectorAll('[data-tg]').forEach(b=>b.onclick=()=>{tGroup=b.dataset.tg;renderTrends();});
+  const budChk=document.getElementById('tShowBud');
+  if(budChk)budChk.onchange=e=>{tShowBudget=e.target.checked;renderTrends();};
 }
 // ---- customers ----
 const AM={rev:a=>a.rev.map(v=>v/1e6),kwh:a=>a.kwh.map(v=>v/1e6),dem:a=>a.dem.map(v=>v/1e6),
@@ -1121,27 +1140,37 @@ const MLAB_MON={'01':'Jan','02':'Feb','03':'Mar','04':'Apr','05':'May','06':'Jun
 const BILLING_CLASSES=['RT10','RT20','RT40','RT50','RT60','RT70','Other'];
 const BILLING_KEYS=['kwh','rev','demand','fuel','energy','ipp','cust_chg'];
 
-// Top Variance Movers (customer view only — see note in renderTopMovers about
-// the RT10 consumption-bucket view, which needs a bucket-level live table this
-// build doesn't add). Faithfully ports build_top_movers.py's methodology:
-// estimated budget = each customer's Jan+Feb actual share of its class, applied
-// to the class's YTD budget total (which carries the real monthly/seasonal
-// shape) — variance = actual − estimated budget. Budget now read live from
-// jps_budget instead of a pre-baked budget_monthly.json.
-async function _computeLiveMovers(accts,months,mIdx){
-  const ytdYear=months.length?+months[months.length-1].slice(0,4):null;
-  const YTD=months.filter(m=>m.startsWith(ytdYear+''));
-  const JF=[ytdYear+'-01',ytdYear+'-02'].filter(m=>mIdx[m]!=null);
-  if(!YTD.length||!JF.length)return{window:'n/a',note:'Not enough of the current year loaded yet to estimate a seasonal budget split.',byCustomer:{},byBucketRT10:{}};
-  const{data:budRows,error:budErr}=await _SB.from('jps_budget').select('year,month,rate_class,kwh_budget,revenue_budget,demand_budget').eq('year',ytdYear);
-  const bud=budErr?[]:(budRows||[]);
+// Aggregate-only view (rate_class x year x month sums — no per-customer rows),
+// backing both the Trends "Actual vs Budget" overlay and Top Variance Movers.
+// Deliberately NOT the raw jps_budget table: that table is 111K+ per-account
+// rows and anon access to it is being phased out (see jps-actuals-budget-anon-
+// lockdown-jul11 memory) — this view is the replacement so Explorer never needs
+// direct anon access to raw jps_budget again.
+async function _fetchBudgetClassMonth(){
+  const{data,error}=await _SB.from('jps_budget_class_month').select('rate_class,year,month,kwh_budget,revenue_budget,demand_budget');
+  return error?[]:(data||[]);
+}
+function _budByClsMonth(budRows){
   const budByClsMonth={}; // 'RC_M' -> {kwh,rev,dem}
-  bud.forEach(r=>{
+  budRows.forEach(r=>{
     const rc=(r.rate_class==='RT60-ST'?'RT60':r.rate_class);
     const key=rc+'_'+r.month;
     const b=budByClsMonth[key]=budByClsMonth[key]||{kwh:0,rev:0,dem:0};
     b.kwh+=+r.kwh_budget||0; b.rev+=(+r.revenue_budget||0)+(+r.demand_budget||0); b.dem+=+r.demand_budget||0;
   });
+  return budByClsMonth;
+}
+// Top Variance Movers (customer view only — see note in renderTopMovers about
+// the RT10 consumption-bucket view, which needs a bucket-level live table this
+// build doesn't add). Faithfully ports build_top_movers.py's methodology:
+// estimated budget = each customer's Jan+Feb actual share of its class, applied
+// to the class's YTD budget total (which carries the real monthly/seasonal
+// shape) — variance = actual − estimated budget.
+async function _computeLiveMovers(accts,months,mIdx,budByClsMonth){
+  const ytdYear=months.length?+months[months.length-1].slice(0,4):null;
+  const YTD=months.filter(m=>m.startsWith(ytdYear+''));
+  const JF=[ytdYear+'-01',ytdYear+'-02'].filter(m=>mIdx[m]!=null);
+  if(!YTD.length||!JF.length)return{window:'n/a',note:'Not enough of the current year loaded yet to estimate a seasonal budget split.',byCustomer:{},byBucketRT10:{}};
   const bclassYTD=(metric,cls)=>YTD.reduce((s,m)=>{
     const b=budByClsMonth[cls+'_'+(+m.slice(5,7))];if(!b)return s;
     return s+(metric==='vol'?b.kwh/1000:metric==='dem'?b.dem:b.rev);
@@ -1149,7 +1178,7 @@ async function _computeLiveMovers(accts,months,mIdx){
   const av=(a,i)=>a.kwh[i]/1000, ad=(a,i)=>a.dem[i], ar=(a,i)=>a.fuel[i]+a.energy[i]+a.dem[i]+a.cust[i];
   const MET={vol:av,dem:ad,rev:ar};
   const ytdLbl=YTD.length>1?MLAB_MON[YTD[0].slice(5,7)]+'-'+MLAB_MON[YTD[YTD.length-1].slice(5,7)]+' '+ytdYear:MLAB_MON[YTD[0].slice(5,7)]+' '+ytdYear;
-  const out={window:ytdLbl,note:'Estimated budget = Jan+Feb actual share × budgeted class total (seasonally shaped). Variance = Actual − Est. Budget. Budget read live from jps_budget.',byCustomer:{},byBucketRT10:{}};
+  const out={window:ytdLbl,note:'Estimated budget = Jan+Feb actual share × budgeted class total (seasonally shaped). Variance = Actual − Est. Budget. Budget read live from jps_budget_class_month.',byCustomer:{},byBucketRT10:{}};
   const CLS=['RT40','RT50','RT70'];
   Object.entries(MET).forEach(([metric,fn])=>{
     const rows=[];
@@ -1174,8 +1203,46 @@ async function _computeLiveMovers(accts,months,mIdx){
   return out;
 }
 
+// RT10/RT20 (mass-market) are billed at consumption-bucket grain, not account
+// grain — corrected_scan.py never puts them in jps_billing_components, so
+// D.cls.RT10/RT20 are always zero here (this is pre-existing, not new). jps_budget
+// DOES have RT10/RT20 rows (everyone has a budget), so summing budget across ALL
+// classes for "Total" would compare real actuals against a budget that includes
+// ~J$6-7B/mo of residential budget Explorer has no matching actuals for — a scope
+// mismatch, not a real variance. Total budget is scoped to the same classes
+// Explorer's actuals cover so the comparison is apples-to-apples.
+const BUDGET_COVERED_CLASSES=['RT40','RT50','RT60','RT70','Other'];
+// Aligns budget totals (rate_class x year x month, from jps_budget_class_month)
+// onto the same D.months index the actuals use, so Trends can overlay Actual vs
+// Budget as two series on the same chart. "rev" adds demand_budget back into
+// revenue_budget to match how revenue_jmd is the all-inclusive total in actuals
+// (see comps() — Demand is a component OF rev, not separate from it), same
+// convention _computeLiveMovers already used for its own budget rev.
+function _buildBudgetSeries(budRows,months,mIdx){
+  // Keyed kwh/rev/demand (not "dem") so MET[k].f() from the Trends metric table
+  // works unchanged on D.budget.total/D.budget.cls[c], same as it does on D.total/D.cls.
+  const clsBudget={};BILLING_CLASSES.forEach(c=>{clsBudget[c]={kwh:new Array(months.length).fill(null),rev:new Array(months.length).fill(null),demand:new Array(months.length).fill(null)};});
+  budRows.forEach(r=>{
+    const rc=(r.rate_class==='RT60-ST'?'RT60':r.rate_class);
+    const cls=BILLING_CLASSES.includes(rc)?rc:'Other';
+    const ym=r.year+'-'+String(r.month).padStart(2,'0');
+    const j=mIdx[ym]; if(j==null)return;
+    const b=clsBudget[cls];
+    b.kwh[j]=(b.kwh[j]||0)+(+r.kwh_budget||0);
+    b.rev[j]=(b.rev[j]||0)+(+r.revenue_budget||0)+(+r.demand_budget||0);
+    b.demand[j]=(b.demand[j]||0)+(+r.demand_budget||0);
+  });
+  const total={kwh:new Array(months.length).fill(null),rev:new Array(months.length).fill(null),demand:new Array(months.length).fill(null)};
+  months.forEach((_,j)=>{
+    ['kwh','rev','demand'].forEach(k=>{
+      const vals=BUDGET_COVERED_CLASSES.map(c=>clsBudget[c][k][j]).filter(v=>v!=null);
+      total[k][j]=vals.length?vals.reduce((s,v)=>s+v,0):null;
+    });
+  });
+  return {cls:clsBudget,total};
+}
 async function bootstrapExplorerData(){
-  const[rows,{kamMap,indMap}]=await Promise.all([_fetchBillingComponents(),_fetchKamIndustryMaps()]);
+  const[rows,{kamMap,indMap},budRows]=await Promise.all([_fetchBillingComponents(),_fetchKamIndustryMaps(),_fetchBudgetClassMonth()]);
   const months=[...new Set(rows.map(r=>r.month))].sort();
   const mlabels=months.map(m=>MLAB_MON[m.slice(5,7)]+'·'+m.slice(2,4));
   const mIdx={};months.forEach((m,i)=>mIdx[m]=i);
@@ -1207,7 +1274,8 @@ async function bootstrapExplorerData(){
   const parishes=Object.keys(parishAgg).sort();
   D.months=months;D.mlabels=mlabels;D.classes=BILLING_CLASSES;D.cls=cls;D.total=total;D.accts=accts;
   D.parishes=parishes;D.parish=parishAgg;
-  D.movers=months.length?await _computeLiveMovers(accts,months,mIdx):{window:'n/a',note:'',byCustomer:{},byBucketRT10:{}};
+  D.budget=_buildBudgetSeries(budRows,months,mIdx);
+  D.movers=months.length?await _computeLiveMovers(accts,months,mIdx,_budByClsMonth(budRows)):{window:'n/a',note:'',byCustomer:{},byBucketRT10:{}};
 }
 
 /* ==========================================
