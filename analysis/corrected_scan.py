@@ -27,6 +27,17 @@ def _discover_billing_files():
             print('  ?? duplicate files for', key, ':', files[key], 'vs', base, '- keeping first', flush=True)
             continue
         files[key]=base
+    # Secondary source: raw CIS exports named "<Mon> <YY>.csv" (e.g. "Feb 25.csv") -
+    # same column schema as the xlsx extracts, comma-delimited w/ quoted fields. Only
+    # fills months the xlsx source above didn't already find (never overrides one).
+    csv_cands=sorted(set(_glob.glob(os.path.join(DL,'*.csv'))+_glob.glob('*.csv')))
+    for fp in csv_cands:
+        base=os.path.basename(fp)
+        m=_re.match(r'(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+(\d{2})\.CSV$', base.upper())
+        if not m: continue
+        key='20%s-%02d'%(m.group(2), _MONNUM[m.group(1)])
+        if key in files: continue
+        files[key]=base
     return dict(sorted(files.items()))
 FILES=_discover_billing_files()
 print('discovered %d billing files:'%len(FILES), flush=True)
@@ -74,8 +85,16 @@ def _rows_tsv(path):
     with open(path, encoding='latin-1', errors='replace') as f:
         for line in f:
             yield tuple(line.rstrip('\r\n').split('\t'))
+def _rows_csv(path):
+    # Raw CIS export: comma-delimited w/ quoted fields (addresses contain commas), header row first
+    with open(path, encoding='utf-8', errors='replace', newline='') as f:
+        for r in csv.reader(f):
+            yield tuple(r)
 def proc(path):
-    rows=_rows_xlsx(path) if _is_zip_xlsx(path) else _rows_tsv(path)
+    if path.lower().endswith('.csv'):
+        rows=_rows_csv(path)
+    else:
+        rows=_rows_xlsx(path) if _is_zip_xlsx(path) else _rows_tsv(path)
     hdr=None
     for r in rows:
         if r and r[0]=='Cust_Code': hdr=list(r); break
