@@ -113,10 +113,12 @@ tr.sel td{background:#EFF6FF}tr:hover td{background:#F8FAFC;cursor:pointer}
 <script>
 // D used to be a build-time snapshot embedded here as a placeholder token
 // baked into the HTML by build_full.py. It's now populated live by bootstrapExplorerData()
-// at the bottom of this script, from jps_billing_components (+ jps_kam /
-// jps_industries for KAM & industry context) — the same live-query pattern
-// the Adjustments tab already used. Starts empty so nothing throws before the
-// bootstrap resolves; render() is gated behind it.
+// at the bottom of this script, from jps_actuals (+ jps_kam / jps_industries for
+// KAM & industry context) — the same live-query pattern the Adjustments tab
+// already used. jps_actuals is the platform's unified actuals table, shared with
+// Sales Platform (sales.jmfinancelab.com) — jps_billing_components (this app's
+// original standalone table) is retired. Starts empty so nothing throws before
+// the bootstrap resolves; render() is gated behind it.
 let D={months:[],mlabels:[],classes:['RT10','RT20','RT40','RT50','RT60','RT70','Other'],cls:{},total:{},accts:[],parishes:[],parish:{},movers:null,budget:null};
 const COL={RT10:'#D98900',RT20:'#2563EB',RT40:'#0D9488',RT50:'#7C3AED',RT60:'#EA6C1E',RT70:'#475569',Other:'#94A3B8',Total:'#1E293B'};
 const PCOL=['#D98900','#2563EB','#0D9488','#7C3AED','#EA6C1E','#475569','#DC2626','#16A34A','#c8772f','#94A3B8','#475569','#2563EB','#7C3AED','#0D9488','#EA6C1E','#D98900','#16A34A','#c8772f'];
@@ -124,17 +126,11 @@ Chart.defaults.color='#475569';Chart.defaults.font.family='Calibri,Segoe UI,sans
 if(window.ChartDataLabels){Chart.register(ChartDataLabels);Chart.defaults.set('plugins.datalabels',{display:false});}
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const sp=v=>(v>=0?'+':'')+v.toFixed(1);
-// D.accts[i].id is "cust_code~rate_class" (e.g. "878189~RT40"). This is the
-// CUSTOMER CODE, not the full customer/account number — the real number is
-// "cust_code-prem_code" (e.g. "878189-001"), but jps_billing_components (this
-// app's account-level source) is built at cust-code grain only, one row per
-// customer per rate class, rolling up every premise under that customer. Checked
-// live: of the accounts here, 54% span MORE THAN ONE premise (one as high as
-// 1,190) — so there is no single real account number to show for most rows, only
-// the customer code. Shown/labeled as "Cust Code" everywhere, never "Account #".
-// (The Adjustments "By customer account" table is different — jps_ac there comes
-// straight from jps_special_account_adjustments, which already carries the full
-// cust_code-prem_code number, so that one legitimately stays "Account #".)
+// D.accts[i].id is "jps_ac~rate_class" (e.g. "878189-827378~RT40"). jps_ac IS
+// the true premise-level account number ("cust_code-prem_code") now that this
+// app reads from jps_actuals — one row per physical premise, not per customer.
+// (UI labels that still say "Cust Code" instead of "Account #" are stale wording
+// from an earlier customer-code-grain source; the number itself is correct.)
 const acctNum=id=>String(id||'').split('~')[0];
 // ── Supabase account drill-down ──────────────────────────────────
 const _SB=supabase.createClient('https://bhrswnbenkvflpdjhfpa.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJocnN3bmJlbmt2ZmxwZGpoZnBhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMTc0OTcsImV4cCI6MjA5MTg5MzQ5N30.JupFs0tnMn3k282PqFOSMi2ch-wtB7Ewv7O8fN16-94',
@@ -1110,30 +1106,45 @@ async function _fetchAnomReviews(force){
 const _revKey=r=>r.account_name+'|'+r.metric+'|'+r.month;
 
 /* ==========================================
-   LIVE DATA BOOTSTRAP — builds D from jps_billing_components (account-level
-   revenue components: kwh/fuel/ipp/energy/demand/customer-charge) + jps_kam +
-   jps_industries, on every page load. Replaces the old build-time embedded blob.
+   LIVE DATA BOOTSTRAP — builds D from jps_actuals (account-level revenue
+   components: kwh/fuel/ipp/energy/demand/customer-charge, RT40/50/60/70 real
+   premise accounts) + jps_kam + jps_industries, on every page load. Replaces
+   the old build-time embedded blob.
    Aggregation (class/parish/total rollups) mirrors gen_appdata3.py exactly,
    ported to JS, so every existing render function needs zero changes.
 ========================================== */
 async function _fetchBillingComponents(){
-  const cols='month,account_code,name,rate_class,parish_group,kwh,revenue_jmd,demand_jmd,fuel_jmd,energy_jmd,ipp_jmd,customer_charge_jmd';
+  // Reads jps_actuals now (unified data source, shared with Sales Platform) instead
+  // of the retired jps_billing_components. Output is reshaped to the exact same row
+  // shape the old table produced (month as "YYYY-MM" string, account_code bare, RT60-ST
+  // normalized to RT60) so every downstream render function needs zero changes.
+  const cols='jps_ac,year,month,name,rate_class,parish,kwh,revenue_jmd,demand_jmd,fuel_jmd,energy_jmd,ipp_jmd,customer_charge_jmd';
   const PAGE=1000;
-  // Was a sequential for(;;) loop — one page had to round-trip before the next
-  // was even requested, so ~10k rows meant ~11 serial fetches. Get the exact
-  // row count first (cheap HEAD request), then fire every page concurrently.
-  const{count,error:countErr}=await _SB.from('jps_billing_components').select('*',{count:'exact',head:true});
-  if(countErr){console.error('jps_billing_components count failed',countErr);return[];}
+  const RCS=['RT40','RT50','RT60-ST','RT70'];
+  const{count,error:countErr}=await _SB.from('jps_actuals').select('*',{count:'exact',head:true}).in('rate_class',RCS);
+  if(countErr){console.error('jps_actuals count failed',countErr);return[];}
   if(!count)return[];
   const pages=Math.ceil(count/PAGE);
   const results=await Promise.all(Array.from({length:pages},(_,p)=>
-    _SB.from('jps_billing_components').select(cols).range(p*PAGE,p*PAGE+PAGE-1)));
+    _SB.from('jps_actuals').select(cols).in('rate_class',RCS).range(p*PAGE,p*PAGE+PAGE-1)));
   const all=[];
   results.forEach(({data,error})=>{
-    if(error){console.error('jps_billing_components page fetch failed',error);return;}
+    if(error){console.error('jps_actuals page fetch failed',error);return;}
     if(data)all.push(...data);
   });
-  return all;
+  // Real premise accounts only ("cust_code-prem_code", both numeric) — excludes
+  // jps_actuals' residential mass-market bucket/segment rows (jps_ac like
+  // "Postpaid"/"Zero-Postpaid"), a different grain this app doesn't use.
+  const real=all.filter(r=>/^\d+-\d+$/.test(String(r.jps_ac||'')));
+  return real.map(r=>({
+    month:r.year+'-'+String(r.month).padStart(2,'0'),
+    account_code:r.jps_ac,
+    name:r.name,
+    rate_class:r.rate_class==='RT60-ST'?'RT60':r.rate_class,
+    parish_group:r.parish,
+    kwh:r.kwh,revenue_jmd:r.revenue_jmd,demand_jmd:r.demand_jmd,
+    fuel_jmd:r.fuel_jmd,energy_jmd:r.energy_jmd,ipp_jmd:r.ipp_jmd,customer_charge_jmd:r.customer_charge_jmd,
+  }));
 }
 async function _fetchKamIndustryMaps(){
   const[{data:kamData,error:kErr},{data:indData,error:iErr}]=await Promise.all([
@@ -1213,15 +1224,19 @@ async function _computeLiveMovers(accts,months,mIdx,budByClsMonth){
     rows.sort((a,b)=>Math.abs(b.var)-Math.abs(a.var));
     out.byCustomer[metric]=rows.slice(0,40);
   });
-  // RT10 consumption-bucket movers need bucket-grain data this table doesn't
-  // carry (jps_billing_components is account-level only) — left empty rather
-  // than fabricated; renderTopMovers shows an explicit note instead of a chart.
+  // RT10 consumption-bucket movers aren't wired up yet — jps_actuals DOES carry
+  // RT10/RT20 bucket-grain rows, but their revenue_jmd is still GCT-inclusive
+  // (uncorrected as of this pass, unlike the RT40+ premise accounts above) and
+  // the segmentation rule behind those bucket totals isn't understood yet. Left
+  // empty rather than showing an inflated number; renderTopMovers shows an
+  // explicit note instead of a chart.
   return out;
 }
 
-// RT10/RT20 (mass-market) are billed at consumption-bucket grain, not account
-// grain — corrected_scan.py never puts them in jps_billing_components, so
-// D.cls.RT10/RT20 are always zero here (this is pre-existing, not new). jps_budget
+// RT10/RT20 (mass-market) are billed at consumption-bucket grain in jps_actuals,
+// and _fetchBillingComponents() deliberately excludes them (still GCT-inclusive,
+// segmentation rule not yet understood) — so D.cls.RT10/RT20 are always zero
+// here. jps_budget
 // DOES have RT10/RT20 rows (everyone has a budget), so summing budget across ALL
 // classes for "Total" would compare real actuals against a budget that includes
 // ~J$6-7B/mo of residential budget Explorer has no matching actuals for — a scope
@@ -1582,7 +1597,7 @@ function renderTopMovers(){
     [['vol','Volume'],['dem','Demand'],['rev','Revenue']].map(o=>'<button data-tmm="'+o[0]+'" class="'+(tmMet===o[0]?'on':'')+'"'+(o[0]==='dem'&&tmView==='bucket'?' disabled style="opacity:.4"':'')+'>'+o[1]+'</button>').join('')+'</div>'+
     '<div class="seg"><button data-tmv="customer" class="'+(tmView==='customer'?'on':'')+'">By customer · RT40/50/70</button><button data-tmv="bucket" class="'+(tmView==='bucket'?'on':'')+'">RT10 buckets</button></div></div>';
   h+='<div style="margin:0 2px 8px;color:var(--mut);font-size:12px">'+MV.window+' · Actual − estimated budget ('+un+') · est. budget = Jan/Feb share × seasonally-shaped class budget</div>';
-  if(tmView==='bucket'&&!data.length){h+='<div class="card" style="color:var(--mut);font-size:12.5px">RT10 consumption-bucket movers aren&rsquo;t available in live mode &mdash; they need bucket-grain data (jps_billing_components is account-level only). By-customer movers (RT40/50/70) are live above.</div>';document.getElementById('app').innerHTML=h;return;}
+  if(tmView==='bucket'&&!data.length){h+='<div class="card" style="color:var(--mut);font-size:12.5px">RT10 consumption-bucket movers aren&rsquo;t available yet &mdash; that segment of jps_actuals is still GCT-inclusive and not wired up here. By-customer movers (RT40/50/70) are live above.</div>';document.getElementById('app').innerHTML=h;return;}
   h+='<div class="grid"><div class="card"><div class="chartttl">Top variance movers · '+(tmMet==='vol'?'Volume':tmMet==='dem'?'Demand':'Revenue')+' ('+un+')</div><div class="chartwrap" style="height:'+(Math.min(data.length,20)*26+90)+'px"><canvas id="c"></canvas></div></div>'+
      '<div class="card" style="padding:10px"><div class="tbl"><table><thead><tr><th class="l">'+(tmView==='customer'?'Customer':'Bucket')+'</th><th>Actual</th><th>Est. Bud</th><th>Var</th></tr></thead><tbody id="tb"></tbody></table></div></div></div>';
   document.getElementById('app').innerHTML=h;
@@ -1902,8 +1917,8 @@ document.querySelectorAll('.toggle button').forEach(b=>b.onclick=()=>{view=b.dat
 // Everything below needs live data first — D starts empty (see the D
 // declaration up top) and render() would show a blank/broken page if called
 // before bootstrapExplorerData() resolves. Show a loading state, fetch, then
-// render for real. A slow fetch (cold cache, large jps_billing_components)
-// shows a visible spinner rather than a blank screen.
+// render for real. A slow fetch (cold cache, large jps_actuals table) shows a
+// visible spinner rather than a blank screen.
 document.getElementById('app').innerHTML='<div class="card" style="text-align:center;padding:40px;color:var(--mut)">Loading live billing data&hellip;</div>';
 (async function(){
   try{
@@ -1914,7 +1929,7 @@ document.getElementById('app').innerHTML='<div class="card" style="text-align:ce
     return;
   }
   if(!D.months.length){
-    document.getElementById('app').innerHTML='<div class="card" style="color:var(--mut)">No billing data loaded yet in jps_billing_components — run the month-end pipeline, then reload.</div>';
+    document.getElementById('app').innerHTML='<div class="card" style="color:var(--mut)">No billing data loaded yet in jps_actuals — run the month-end pipeline, then reload.</div>';
     return;
   }
   document.getElementById('dataStamp').textContent='· Data through '+D.mlabels[D.months.length-1]+' · live';
