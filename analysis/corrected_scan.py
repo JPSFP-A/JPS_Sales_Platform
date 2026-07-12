@@ -84,10 +84,17 @@ def proc(path):
     g=lambda r,n: NUM(r[I[n]]) if n in I and I[n]<len(r) else 0.0
     gv=lambda r,n: (r[I[n]] if n in I and I[n]<len(r) else None)
     it=rows
-    srt={}; acc={}; buck={}; uns={}; unp={}; n=0
+    srt={}; acc={}; buck={}; uns={}; unp={}; n=0; skipped_unbilled=0
     for r in it:
         code=r[I['Cust_Code']]
         if code in (None,'','Cust_Code'): continue
+        # cust_billed=0 means the row wasn't actually billed this cycle (verified: 5,719
+        # of 724,563 June rows are 0, and over half of those still carry nonzero
+        # net_billed_revenue/Cust_Charge — deposits/administrative charges, not real
+        # monthly billing) — exclude entirely rather than let them inflate totals.
+        cb=gv(r,'cust_billed')
+        if cb is not None and str(cb).strip() in ('0','0.0'):
+            skipped_unbilled+=1; continue
         n+=1
         srat=str(gv(r,'Srat_Code')); rc=str(gv(r,'rate_class')); title=title_of(rc,srat)
         if title is None: uns[srat+' / '+rc]=uns.get(srat+' / '+rc,0)+1; title='UNMAPPED'
@@ -105,7 +112,15 @@ def proc(path):
             bk=buck.setdefault(title,{}).setdefault(binof(kwh),[0.0]*7)
             bk[0]+=1;bk[1]+=kwh;bk[2]+=rev;bk[3]+=en;bk[4]+=fu;bk[5]+=ip;bk[6]+=cc
         else:
-            akey=(str(code),title)   # split each customer by rate class
+            # Premise-level grain: the real account number is "cust_code-prem_code"
+            # (verified against jps_actuals.jps_ac). One row per PHYSICAL PREMISE, not
+            # per customer — a customer with several premises now gets several account
+            # rows, each carrying its own true number, instead of one rolled-up row with
+            # no single real account number (was cust_code-only; ~54% of accounts here
+            # span multiple premises, one as high as 1,190).
+            prem=str(gv(r,'Prem_Code') or '').strip()
+            full_ac=str(code)+'-'+prem if prem else str(code)
+            akey=(full_ac,title)   # split each premise by rate class
             b=acc.get(akey)
             if b is None:
                 b=acc[akey]={'name':str(gv(r,'Name') or '').strip(),'srat':srat,'rc':rc,'title':title,'pg':pg,
@@ -113,7 +128,7 @@ def proc(path):
                              'v':[0.0]*11}
             v=b['v']
             v[0]+=kwh;v[1]+=rev;v[2]+=kvap;v[3]+=kval;v[4]+=kvao;v[5]+=kva;v[6]+=en;v[7]+=fu;v[8]+=ip;v[9]+=cc;v[10]+=radj
-    return srt,acc,buck,uns,unp,n
+    return srt,acc,buck,uns,unp,n,skipped_unbilled
 M=json.load(open('corrected.json')) if os.path.exists('corrected.json') else {
   'months':[], 'bin':BIN,'cap':CAP,'sep':SEP,
   'srat_legend':['count','kwh','rev','kvap','kval','kvao','kva','energy','fuel','ipp','cust','rev_adj','net_bill_adj'],
@@ -123,11 +138,11 @@ M=json.load(open('corrected.json')) if os.path.exists('corrected.json') else {
 for mo,f in FILES.items():
     if mo in M['months']: print('skip',mo,'(done)',flush=True); continue
     t=time.time(); print('processing',mo,flush=True)
-    srt,acc,buck,uns,unp,n=proc(os.path.join(DL,f) if not os.path.exists(f) else f)
+    srt,acc,buck,uns,unp,n,skipped_unbilled=proc(os.path.join(DL,f) if not os.path.exists(f) else f)
     M['srat'][mo]={k:{pg:[round(x,2) for x in v] for pg,v in d.items()} for k,d in srt.items()}
     M['bucket'][mo]={tt:{str(b):[round(x,2) for x in v] for b,v in d.items()} for tt,d in buck.items()}
     for (code,title),b in acc.items():
-        akey=str(code)+'~'+title   # one record per (customer, rate class)
+        akey=str(code)+'~'+title   # one record per (premise, rate class) — code is now "cust_code-prem_code"
         rec=M['acct'].setdefault(akey,{'name':b['name'],'code':str(code),'srat':b['srat'],'rc':b['rc'],'title':title,'pg':b['pg'],'key':b['key'],'m':{}})
         rec.update(name=b['name'],code=str(code),srat=b['srat'],rc=b['rc'],title=title,pg=b['pg'],key=b['key'])
         rec['m'][mo]=[round(x) for x in b['v']]
@@ -138,5 +153,5 @@ for mo,f in FILES.items():
     tr={}
     for k,d in srt.items():
         srat,rc=k.split(SEP,1); tt=title_of(rc,srat) or 'UNMAPPED'; tr[tt]=tr.get(tt,0)+round(sum(v[2] for v in d.values()))
-    print('  done',mo,'rows',n,'in',round(time.time()-t),'s | title rev:',{k:round(v/1e6) for k,v in tr.items()},'M',flush=True)
+    print('  done',mo,'rows',n,'(skipped',skipped_unbilled,'cust_billed=0)','in',round(time.time()-t),'s | title rev:',{k:round(v/1e6) for k,v in tr.items()},'M',flush=True)
 print('WROTE corrected.json months',M['months'],'| unmapped(srat/rc):',M['unmapped_srat'],flush=True)
