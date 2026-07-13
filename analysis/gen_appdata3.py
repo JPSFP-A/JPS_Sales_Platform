@@ -17,8 +17,13 @@ d=json.load(open('corrected.json'))
 L=d['srat_legend']; ix={n:i for i,n in enumerate(L)}; SEP=d.get('sep','||')
 AL=d['acct_legend']; aix={n:i for i,n in enumerate(AL)}
 months=d['months']; M=len(months)
-MLAB={'2025-05':'May·25','2025-10':'Oct·25','2025-11':'Nov·25','2025-12':'Dec·25','2026-01':'Jan·26','2026-02':'Feb·26','2026-03':'Mar·26','2026-04':'Apr·26','2026-05':'May·26','2026-06':'Jun·26'}
-mlabels=[MLAB.get(m,m) for m in months]
+# Was a hardcoded dict of specific "YYYY-MM" keys that stopped at whatever month
+# it was last updated for — any newer month silently fell back to the raw "YYYY-MM"
+# key instead of a pretty label. Compute the label from the string itself instead.
+_MON_SHORT=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+def _mlabel(m):
+    y,mo=m.split('-'); return _MON_SHORT[int(mo)-1]+'·'+y[2:]
+mlabels=[_mlabel(m) for m in months]
 def title_of(key):
     s,rc=key.split(SEP,1); return baseT(RCMAP.get(norm(rc)) or RMAP.get(norm(s)) or 'Other')
 KEYS=['kwh','rev','demand','fuel','energy','ipp','cust_chg']

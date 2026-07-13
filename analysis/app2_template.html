@@ -1336,8 +1336,9 @@ async function bootstrapExplorerData(){
    MAD=0 (flat series, e.g. customer charge) → any move >2% of the median
    flags at pseudo-z 99, since a flat series deviating AT ALL is the signal.
    Materiality floors (per metric, shown in the UI) keep pocket-change out.
-   CAVEAT: kWh/fuel are seasonal and the embedded window has a Jun–Sep 2025
-   gap, so volume flags are leads to investigate, not verdicts.
+   CAVEAT: kWh/fuel are seasonal, so volume flags are leads to investigate,
+   not verdicts — doubly so if D.months currently has a gap (see the "Data
+   coverage" card on Overview for whether one exists right now).
 ========================================== */
 const ANOM_METRICS={
   kwh:{l:'Volume (kWh)',floor:20000,fmt:v=>Math.round(v).toLocaleString()},
@@ -1502,19 +1503,30 @@ async function renderDigest(){
   // customer-charge summary at current threshold
   const ccA=_ccAnomalies();
   const ccImpact=ccA.reduce((s,x)=>s+(x.actual-x.normal),0);
-  // contiguity check for the coverage card
+  // contiguity check for the coverage card — also collect the ACTUAL missing
+  // month labels (was a hardcoded "Jun-Sep 2025" string that stayed correct only
+  // as long as the underlying data's one-time gap never changed or moved).
   let gaps=0;
+  const missingMonths=[];
   for(let i=1;i<D.months.length;i++){
     const[y1,m1]=D.months[i-1].split('-').map(Number),[y2,m2]=D.months[i].split('-').map(Number);
-    if((y2*12+m2)-(y1*12+m1)!==1)gaps++;
+    const diff=(y2*12+m2)-(y1*12+m1);
+    if(diff!==1){
+      gaps++;
+      for(let k=1;k<diff;k++){
+        const tot=y1*12+m1+k, my=Math.floor((tot-1)/12), mm=tot-my*12;
+        missingMonths.push(MLAB_MON[String(mm).padStart(2,'0')]+'&middot;'+String(my).slice(2));
+      }
+    }
   }
+  const missingLbl=missingMonths.length?missingMonths.join(', ')+' missing':'';
   const card=(title,big,sub,go,goLbl)=>'<div class="card"><div class="chartttl">'+title+'</div>'+
     '<div style="font-size:22px;font-weight:700;margin:6px 0 2px">'+big+'</div>'+
     '<div style="font-size:12px;color:var(--mut);line-height:1.5">'+sub+'</div>'+
     (go?'<div style="margin-top:10px"><button onclick="_navTo(\''+go+'\')" style="border:1px solid var(--line);background:none;border-radius:6px;padding:5px 12px;font-size:11.5px;color:var(--blu);cursor:pointer;font-weight:600">'+goLbl+' &rarr;</button></div>':'')+'</div>';
 
   let h='<div class="grid" style="grid-template-columns:repeat(3,1fr);gap:14px">';
-  h+=card('Data coverage',mL,D.months.length+' months loaded'+(gaps?' &middot; <span style="color:#e25c4b;font-weight:600">'+gaps+' gap'+(gaps>1?'s':'')+' in the series (Jun&ndash;Sep 2025 missing)</span>':' &middot; contiguous'),null,null);
+  h+=card('Data coverage',mL,D.months.length+' months loaded'+(gaps?' &middot; <span style="color:#e25c4b;font-weight:600">'+gaps+' gap'+(gaps>1?'s':'')+' in the series ('+missingLbl+')</span>':' &middot; contiguous'),null,null);
   h+=cm?card('Biggest class move &middot; '+mP+' &rarr; '+mL,esc(cm.c)+' '+(cm.dRev>=0?'+':'')+_digestMoney(cm.dRev),(cm.dKwh>=0?'+':'')+Math.round(cm.dKwh/1e6*10)/10+' GWh volume move in the same month','trends','Trends'):'';
   h+=card('Top customer movers &middot; MoM',esc(custMoves[0].n.slice(0,26)),custMoves.map(x=>esc(x.n.slice(0,26))+' <b>'+(x.d>=0?'+':'')+_digestMoney(x.d)+'</b>').join('<br>'),'customers','Customers');
   h+=card('Anomalies &middot; all components',String(anoms.length),'<span id="digAnomSub">'+anomsLastMonth.length+' in '+mL+' &middot; loading review status&hellip;</span>','anomalies','Review');
