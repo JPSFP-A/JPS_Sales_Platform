@@ -253,12 +253,20 @@ async function _fetchAccts(name,mB,mC,rc){
   const [resB,resC,resBud]=await Promise.all([oneMonth(bym.y,bym.mo),oneMonth(cym.y,cym.mo),budgetForC(cym.y,cym.mo)]);
   const error=resB.error||resC.error;
   if(error)return {rows:[],err:error.message||error.details||'query error'};
+  // Real premise accounts only — matches _fetchBillingComponents()'s filter.
+  // Without this, a residential bucket/segment row (jps_ac like "Postpaid") could
+  // in principle appear here if its name happened to match, which would show a
+  // different account universe than the rest of the app (Customers/Anomalies/
+  // Trends all already exclude these).
+  const isRealAcct=ac=>/^\d+-\d+$/.test(String(ac||''));
   const byAc={};
   for(const r of (resB.data||[])){
+    if(!isRealAcct(r.jps_ac))continue;
     if(!byAc[r.jps_ac])byAc[r.jps_ac]={ac:r.jps_ac,parish:r.parish,rc:r.rate_class,base:null,cur:null,budget:null};
     byAc[r.jps_ac].base={kwh:+r.kwh,rev:+r.revenue_jmd,dem:r.demand_jmd!=null?+r.demand_jmd:null};
   }
   for(const r of (resC.data||[])){
+    if(!isRealAcct(r.jps_ac))continue;
     if(!byAc[r.jps_ac])byAc[r.jps_ac]={ac:r.jps_ac,parish:r.parish,rc:r.rate_class,base:null,cur:null,budget:null};
     byAc[r.jps_ac].cur={kwh:+r.kwh,rev:+r.revenue_jmd,dem:r.demand_jmd!=null?+r.demand_jmd:null};
   }
