@@ -1284,6 +1284,16 @@ async function bootstrapExplorerData(){
     const j=mIdx[r.month];if(j==null)return;
     const rc=BILLING_CLASSES.includes(r.rate_class)?r.rate_class:'Other';
     const kwh=+r.kwh||0,rev=+r.revenue_jmd||0,dem=+r.demand_jmd||0,fuel=+r.fuel_jmd||0,energy=+r.energy_jmd||0,ipp=+r.ipp_jmd||0,cust=+r.customer_charge_jmd||0;
+    // Component detail (fuel/energy/ipp/customer-charge) is null for any jps_actuals
+    // account that was never in the pre-unification jps_billing_components migration
+    // (e.g. accounts only ever seen via Sales Platform's own uploads). Coercing that
+    // to 0 with ||0 above is fine for class/parish/total AGGREGATES (a missing
+    // account's contribution is genuinely absent from the sum), but at the PER-
+    // ACCOUNT level it must stay distinguishable from a real 0 reading, or the
+    // Anomalies/Customer-Charge tabs' null-aware detectors (which already correctly
+    // skip v==null — see _ccAnomalies/_anomSeries) can never actually skip these
+    // months, and instead see a fake "$0 this month" and flag a false anomaly.
+    const hasDetail=r.fuel_jmd!=null||r.energy_jmd!=null||r.ipp_jmd!=null||r.customer_charge_jmd!=null;
     const cc=cls[rc];
     cc.kwh[j]+=kwh;cc.rev[j]+=rev;cc.demand[j]+=dem;cc.fuel[j]+=fuel;cc.energy[j]+=energy;cc.ipp[j]+=ipp;cc.cust_chg[j]+=cust;
     const pg=r.parish_group||'UNMAPPED';
@@ -1295,10 +1305,20 @@ async function bootstrapExplorerData(){
       a={id:key,n:r.name,c:rc,pg,
          kwh:new Array(months.length).fill(0),rev:new Array(months.length).fill(0),dem:new Array(months.length).fill(0),
          fuel:new Array(months.length).fill(0),energy:new Array(months.length).fill(0),ipp:new Array(months.length).fill(0),cust:new Array(months.length).fill(0),
+         hasDetail:new Array(months.length).fill(false),
          kam:_klLive(kamMap,r.account_code)||'',industry:_klLive(indMap,r.account_code)||''};
       acctMap[key]=a;
     }
     a.kwh[j]+=kwh;a.rev[j]+=rev;a.dem[j]+=dem;a.fuel[j]+=fuel;a.energy[j]+=energy;a.ipp[j]+=ipp;a.cust[j]+=cust;
+    if(hasDetail)a.hasDetail[j]=true;
+  });
+  // Second pass: null out fuel/energy/ipp/cust for any account+month that never had
+  // component detail, so downstream null-aware code (already written to skip
+  // v==null) actually gets the chance to skip it instead of seeing a fake 0.
+  Object.values(acctMap).forEach(a=>{
+    a.hasDetail.forEach((has,j)=>{
+      if(!has){a.fuel[j]=null;a.energy[j]=null;a.ipp[j]=null;a.cust[j]=null;}
+    });
   });
   const total={};BILLING_KEYS.forEach(k=>{total[k]=months.map((_,j)=>BILLING_CLASSES.reduce((s,c)=>s+cls[c][k][j],0));});
   const accts=Object.values(acctMap).filter(a=>a.kwh.some(v=>v)||a.rev.some(v=>v));

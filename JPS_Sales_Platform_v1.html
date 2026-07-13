@@ -2882,25 +2882,33 @@ function computeDefectors(){
 }
 function _computeDefectorsRaw(){
   return CUSTOMERS.map(c=>{
-    const m=c.m;
-    // Dynamic rolling window: current 3 months ending at (curMonth-1), vs same 3 months prior year
-    // m[] is 0-based (0=Jan … 11=Dec); curMonth is 1-based
+    const m=c.m, pm=c.py_m||Array(12).fill(0);
+    // Dynamic rolling window: current 3 months ending at (curMonth-1), vs the SAME
+    // 3 calendar months one year earlier — a real YoY comparison. (Previously this
+    // read backward into the same current-year array as a "proxy," which for most
+    // of the year indexed into future not-yet-reported months — always zero — and
+    // silently forced ratio=1/Normal/not-a-defector regardless of actual behavior.)
+    // m[]/pm[] are 0-based (0=Jan … 11=Dec); curMonth is 1-based.
     const ci=(curMonth-2+12)%12; // most recent complete month index
     const i0=ci, i1=(ci-1+12)%12, i2=(ci-2+12)%12;
-    // Prior year same 3 months = same indices (year-over-year, data only covers 2 years)
-    // Use 9-month lookback within the same array as proxy (m has 12 months of 2026 data)
-    const p0=(ci-9+12)%12, p1=(ci-10+12)%12, p2=(ci-11+12)%12;
     const curr3=((m[i0]||0)+(m[i1]||0)+(m[i2]||0))/3;
-    const prior3=((m[p0]||0)+(m[p1]||0)+(m[p2]||0))/3;
-    const ratio=prior3>0?curr3/prior3:1;
+    const prior3=((pm[i0]||0)+(pm[i1]||0)+(pm[i2]||0))/3;
+    // No prior-year baseline (new customer, or py_m not yet populated) — can't
+    // judge defection without something to compare against; don't flag it.
+    const hasBaseline=prior3>0;
+    const ratio=hasBaseline?curr3/prior3:1;
     let sev='Normal', cons=0;
-    if(ratio<0.5)sev='Critical';
-    else if(ratio<0.65)sev='Severe';
-    else if(ratio<0.80)sev='Moderate';
+    if(hasBaseline){
+      if(ratio<0.5)sev='Critical';
+      else if(ratio<0.65)sev='Severe';
+      else if(ratio<0.80)sev='Moderate';
+    }
     if(sev!=='Normal'){
-      for(let i=m.length-1;i>=0;i--){
-        const r3=i>=2?((m[i]||0)+(m[i-1]||0)+(m[i-2]||0))/3:m[i]||0;
-        const p3=i>=3?((m[i-3]||0)+(m[i-4]||0)+(m[i-5]||0))/3:prior3;
+      // Walk backward from the most recent complete month, comparing each rolling
+      // 3-month window against the SAME 3 calendar months one year earlier.
+      for(let i=ci;i>=0;i--){
+        const r3=i>=2?((m[i]||0)+(m[i-1]||0)+(m[i-2]||0))/3:(m[i]||0);
+        const p3=i>=2?((pm[i]||0)+(pm[i-1]||0)+(pm[i-2]||0))/3:(pm[i]||0);
         if(p3>0&&r3/p3<0.80)cons++;else break;
       }
     }
@@ -3018,16 +3026,26 @@ async function loadCommercialDetail(){
   const _cutoff=new Date().getFullYear()-1;
   const _yrCol=YEAR_COL||'year';
   const _cols='id,year,month,jps_ac,name,rate_class,parish,consumption_bucket,kwh,revenue_jmd,customer_count';
+  let _commFailed=false;
   try{
     const{data,error}=await sb.rpc('get_comm_actuals',{year_cutoff:_cutoff});
     if(error)throw error;
     sbActualsComm=data||[];
   }catch(e){
     console.warn('[comm] get_comm_actuals fallback to raw table:',e.message);
-    const d=await sbTable('jps_actuals',{gte:[_yrCol,_cutoff],cols:_cols,limit:100000});
-    sbActualsComm=(d||[]).filter(r=>r.jps_ac&&String(r.jps_ac).trim());
+    try{
+      const d=await sbTable('jps_actuals',{gte:[_yrCol,_cutoff],cols:_cols,limit:100000});
+      if(d==null)throw new Error('fallback query returned no result');
+      sbActualsComm=d.filter(r=>r.jps_ac&&String(r.jps_ac).trim());
+    }catch(e2){
+      console.error('[comm] get_comm_actuals fallback ALSO failed — commercial data is missing, not just empty:',e2.message);
+      if(window.JpsMonitor&&JpsMonitor.error)JpsMonitor.error('sync:comm_actuals_failed',e2.message||'RPC and fallback both failed');
+      sbActualsComm=[];
+      _commFailed=true;
+      toast('Commercial data failed to load (both fetch paths errored) — commercial figures are missing, not zero','w');
+    }
   }
-  _commDetailLoaded=true;
+  _commDetailLoaded=!_commFailed; // leave retryable (don't mark "loaded") if it genuinely failed
   console.log('[comm] loaded',sbActualsComm.length,'commercial rows');
   // whatever section was already rendered before this finished was residential-only —
   // refresh it now that the full actuals set (residential+commercial) is available
@@ -3043,14 +3061,19 @@ async function loadLEDetail(){
   const _cutoff=new Date().getFullYear()-1;
   const wrap=document.getElementById('le_table')||document.getElementById('le_krow');
   if(wrap)wrap.innerHTML='<div style="padding:20px;color:var(--text2);font-size:12px">Loading LE data…</div>';
+  let _leFailed=false;
   try{
     const d=await sbTable('jps_le',{limit:100000,cols:'year,month,jps_ac,name,rate_class,parish,consumption_bucket,kwh_le,revenue_le,demand_le,customer_count,le_label',gte:['year',_cutoff]});
-    sbLE=d||[];
+    if(d==null)throw new Error('jps_le query returned no result');
+    sbLE=d;
   }catch(e){
-    console.warn('[le] loadLEDetail failed:',e.message);
+    console.error('[le] loadLEDetail failed — LE data is missing, not empty:',e.message);
+    if(window.JpsMonitor&&JpsMonitor.error)JpsMonitor.error('sync:le_failed',e.message||'jps_le fetch failed');
     sbLE=[];
+    _leFailed=true;
+    toast('LE data failed to load — LE figures are missing, not zero','w');
   }
-  _leDetailLoaded=true;
+  _leDetailLoaded=!_leFailed; // leave retryable if it genuinely failed
   console.log('[le] loaded',sbLE.length,'LE rows');
   renderLE();
 }
@@ -3085,8 +3108,12 @@ function sw(id,el){
     el.classList.add('on');
   }
   const _swSections=['ov','cm','df','ro','fc','rb_res'];
-  // Lazy-load commercial detail rows when commercial or forecast sections open
-  const _commSections=['cm','df','ro','fc','le','dfc','adjlog','rcfr'];
+  // Lazy-load commercial detail rows when commercial or forecast sections open.
+  // 'ov'/'es' (Overview, Exec Summary) are included too — both show KPIs that sum
+  // sbActuals+sbActualsComm (e.g. Revenue Recovery), and landing on either directly
+  // without ever visiting a commercial tab previously showed a silently-undercounted
+  // residential-only total with no loading indicator.
+  const _commSections=['ov','es','cm','df','ro','fc','le','dfc','adjlog','rcfr'];
   if(_commSections.includes(id)&&!_commDetailLoaded){
     loadCommercialDetail().catch(e=>console.warn('loadCommercialDetail:',e));
   }
@@ -8945,7 +8972,7 @@ function buildDashboardData(){
     sbCustSummary.forEach(r=>{
       const acct=String(r.jps_ac||'').trim();
       if(!acct)return;
-      if(!custMap[acct])custMap[acct]={num:acct,name:r.name||'',rate:r.rate_class||'',ind:'',parish:r.parish||'',yPY:0,yCY:0,bud:0,m:Array(12).fill(0),cmt:''};
+      if(!custMap[acct])custMap[acct]={num:acct,name:r.name||'',rate:r.rate_class||'',ind:'',parish:r.parish||'',yPY:0,yCY:0,bud:0,m:Array(12).fill(0),py_m:Array(12).fill(0),cmt:''};
       const c=custMap[acct];
       if(r.name&&!c.name)c.name=r.name;
       if(r.rate_class&&!c.rate)c.rate=r.rate_class;
@@ -8953,17 +8980,22 @@ function buildDashboardData(){
       c.yPY+=Number(r.kwh_py||0)/1e6;
       c.yCY+=Number(r.kwh_cy||0)/1e6;
       for(let i=1;i<=12;i++)c.m[i-1]+=Number(r['m'+String(i).padStart(2,'0')]||0)/1e6;
+      // py_m: true prior-year monthly kWh, same calendar months — needed for a real
+      // YoY defector comparison (see computeDefectors()). Falls back to all-zero
+      // (treated as "no prior-year baseline" downstream) on an older RPC version
+      // that doesn't return py_m01..py_m12 yet.
+      for(let i=1;i<=12;i++)c.py_m[i-1]+=Number(r['py_m'+String(i).padStart(2,'0')]||0)/1e6;
     });
   } else {
     // Fallback: build from raw rows (sbActuals — available if get_res_actuals returned full data, or no summary loaded)
     rows.forEach(r=>{
       if(!_COMM_RCS.has(r.rc))return; // skip residential — no individual account data needed here
-      if(!custMap[r.acct])custMap[r.acct]={num:r.acct,name:r.name,rate:r.rc,ind:r.industry,parish:r.parish,yPY:0,yCY:0,bud:0,m:Array(12).fill(0),cmt:''};
+      if(!custMap[r.acct])custMap[r.acct]={num:r.acct,name:r.name,rate:r.rc,ind:r.industry,parish:r.parish,yPY:0,yCY:0,bud:0,m:Array(12).fill(0),py_m:Array(12).fill(0),cmt:''};
       const c=custMap[r.acct],gwh=r.kwh/1e6;
       if(r.name&&!c.name)c.name=r.name;
       if(r.rc&&!c.rate)c.rate=r.rc;
       if(r.parish&&!c.parish)c.parish=r.parish;
-      if(r.year===py)c.yPY+=gwh;
+      if(r.year===py){c.yPY+=gwh;if(r.month>=1&&r.month<=12)c.py_m[r.month-1]+=gwh;}
       if(r.year===cy){c.yCY+=gwh;if(r.month>=1&&r.month<=12)c.m[r.month-1]+=gwh;}
     });
   }
@@ -9103,8 +9135,11 @@ async function syncSupabase(silent=false){
     const _useCachedActuals=false; // always fetch fresh actuals
     // Use the confirmed YEAR_COL for the gte filter (handles both 'year' and 'cal_year')
     const _yearFilterCol=YEAR_COL||'year';
-    // Only fetch columns the platform uses — skips created_at, saves bandwidth
-    const _actCols='id,year,month,jps_ac,name,rate_class,parish,consumption_bucket,kwh,revenue_jmd,demand_kva,customer_count';
+    // Only fetch columns the platform uses — skips created_at, saves bandwidth.
+    // demand_kva does NOT exist on jps_actuals (that column was only ever added to
+    // jps_le/jps_demand_actuals; jps_actuals' demand field is demand_jmd) — including
+    // it here made this fallback query fail every single time it was invoked.
+    const _actCols='id,year,month,jps_ac,name,rate_class,parish,consumption_bucket,kwh,revenue_jmd,demand_jmd,customer_count';
     const [
       indData,kamData,amData,actData,
       budData,sysStatsData,lossesFcData,
@@ -9123,14 +9158,25 @@ async function syncSupabase(silent=false){
         try{
           const{data,error}=await getSB().rpc('get_res_actuals',{year_cutoff:_actYearCutoff});
           if(error)throw error;
-          return data||null;
+          return data||[]; // successful call, legitimately zero rows — NOT a failure
         }catch(e){
           console.warn('[sync] get_res_actuals RPC failed, fallback to full table:',e.message);
-          // get_res_actuals only returns rows WHERE jps_ac IS NULL OR jps_ac=''  (residential buckets).
-          // The raw-table fallback must mirror that scope, or commercial rows get double-counted once
-          // here and again via sbActualsComm/get_comm_actuals in _sbAllActuals()'s concatenation.
-          const _resFallback=await sbTable('jps_actuals',{gte:[_yearFilterCol,_actYearCutoff],cols:_actCols});
-          return (_resFallback||[]).filter(r=>!r.jps_ac||!String(r.jps_ac).trim());
+          try{
+            // get_res_actuals only returns rows WHERE jps_ac IS NULL OR jps_ac=''  (residential buckets).
+            // The raw-table fallback must mirror that scope, or commercial rows get double-counted once
+            // here and again via sbActualsComm/get_comm_actuals in _sbAllActuals()'s concatenation.
+            const _resFallback=await sbTable('jps_actuals',{gte:[_yearFilterCol,_actYearCutoff],cols:_actCols});
+            if(_resFallback==null)throw new Error('fallback query returned no result (see console for the underlying error)');
+            return _resFallback.filter(r=>!r.jps_ac||!String(r.jps_ac).trim());
+          }catch(e2){
+            // BOTH the RPC and its fallback failed — this must not look like "zero rows,
+            // successfully fetched." Return null (a distinct sentinel from a real empty
+            // array) so the caller below can tell total failure apart from legitimate
+            // emptiness, and surface it instead of a false green "Sync complete" toast.
+            console.error('[sync] get_res_actuals fallback ALSO failed — actuals fetch has completely failed:',e2.message);
+            if(window.JpsMonitor&&JpsMonitor.error)JpsMonitor.error('sync:res_actuals_failed',e2.message||'RPC and fallback both failed');
+            return null;
+          }
         }
       })(),
       (async()=>{
@@ -9177,8 +9223,11 @@ async function syncSupabase(silent=false){
     if(amData){sbAccountMaster=amData;log.push(`Account Master: jps_account_master (${amData.length} accounts)`);}
     else log.push('Account Master: jps_account_master not found (optional — run schema SQL to enable)');
 
-    const actOk=_useCachedActuals||!!actData;
-    if(!_useCachedActuals&&actData){
+    // actData is null ONLY when both the RPC and its raw-table fallback genuinely
+    // failed (see the fetch above) — a real [] means "fetched successfully, zero
+    // rows," which must NOT be treated as a failure. Do not conflate the two.
+    const actOk=_useCachedActuals||actData!=null;
+    if(!_useCachedActuals&&actData!=null){
       sbActuals=actData;
       log.push(`Actuals: jps_actuals (${actData.length} rows — fresh fetch)`);
       if(actData.length>0){
@@ -9195,7 +9244,7 @@ async function syncSupabase(silent=false){
       log.push(`Actuals: ${sbActuals.length} rows (from cache)`);
       if(sbActuals.length>0){_yearColConfirmed=true;}
     }
-    if(!actOk)log.push('Actuals: ⚠ jps_actuals not accessible — check RLS policies');
+    if(!actOk)log.push('Actuals: ⚠ jps_actuals FETCH FAILED (RPC and fallback both errored) — figures below are stale or missing, do not trust them until this is fixed');
     // Build O(1) lookup: 'custNum_year_month' → row — eliminates a full sbActuals.find() scan
     // per customer per month (was O(customers × months × sbActuals.length) in renderFcKPIs)
     sbActualsIdx={};
