@@ -3791,25 +3791,40 @@ async function loadExcel(input){
               console.log(`[upload] aggregated ${rows.length} rows → ${uploadRows.length} unique keys`);
 
             if(uploadRows.length){
+              // Upsert first, always — new/changed rows land durably even if the
+              // browser closes or a later step throws. Never delete before the
+              // new data is safely written (delete-safe uploads rule).
+              await batchUpsert('jps_actuals',uploadRows,`${YEAR_COL},month,jps_ac,rate_class,parish,consumption_bucket`);
+
               if(mode==='overwrite'){
-                // Delete existing rows using IDs from in-memory sbActuals.
-                // This bypasses the year/cal_year column entirely — works even with
-                // a stale PostgREST schema cache that doesn't know cal_year.
-                const periods=[...new Set(uploadRows.map(r=>`${r[YEAR_COL]}-${r.month}`))];
-                for(const p of periods){
+                // Remove rows that exist in the DB for a period but weren't in this
+                // upload (e.g. an account dropped from this month's file) — the
+                // upsert above only touches keys present in uploadRows, so stale
+                // rows would otherwise linger forever. Anti-join delete on the
+                // natural key, scoped per period (bounded read, not a full scan).
+                const byPeriod={};
+                uploadRows.forEach(r=>{
+                  const p=`${r[YEAR_COL]}-${r.month}`;
+                  (byPeriod[p]=byPeriod[p]||new Set()).add(`${r.jps_ac}|${r.rate_class}|${r.parish}|${r.consumption_bucket}`);
+                });
+                for(const p of Object.keys(byPeriod)){
                   const[y,m]=p.split('-');
                   const yrN=Number(y),mN=Number(m);
                   if(!yrN||!mN)continue;
-                  if(stEl)stEl.textContent=`Clearing ${y}-${m}…`;
-                  // Delete by period directly — handles all rows (residential + commercial)
-                  // ID-based delete was unreliable with sbActuals now being residential-only
-                  const{error:delErr}=await sb.from('jps_actuals').delete().eq('year',yrN).eq('month',mN);
-                  if(delErr)throw new Error('Delete failed: '+delErr.message);
+                  if(stEl)stEl.textContent=`Removing stale rows for ${y}-${m}…`;
+                  const{data:existing,error:selErr}=await sb.from('jps_actuals')
+                    .select('id,jps_ac,rate_class,parish,consumption_bucket')
+                    .eq('year',yrN).eq('month',mN);
+                  if(selErr)throw new Error('Stale-row lookup failed: '+selErr.message);
+                  const keptKeys=byPeriod[p];
+                  const staleIds=(existing||[])
+                    .filter(r=>!keptKeys.has(`${r.jps_ac}|${r.rate_class}|${r.parish}|${r.consumption_bucket}`))
+                    .map(r=>r.id);
+                  for(let i=0;i<staleIds.length;i+=500){
+                    const{error:delErr}=await sb.from('jps_actuals').delete().in('id',staleIds.slice(i,i+500));
+                    if(delErr)throw new Error('Stale-row delete failed: '+delErr.message);
+                  }
                 }
-                // Insert fresh
-                await batchUpsert('jps_actuals',uploadRows,`${YEAR_COL},month,jps_ac,rate_class,parish,consumption_bucket`);
-              } else {
-                await batchUpsert('jps_actuals',uploadRows,`${YEAR_COL},month,jps_ac,rate_class,parish,consumption_bucket`);
               }
             }
           } else if(isBudget){
@@ -10959,20 +10974,22 @@ function _frCollectData(){
     walkChain(chain,co.rate_class,null,null);
   });
 
-  // FY2025 actuals — by rate class (raw, ex-EV) and by customer name (same
-  // account population as custFy, via acToName) and by industry H2 (KAM only).
+  // Prior-year actuals (year-1, matching the FY${d.year-1} label the report renders) —
+  // by rate class (raw, ex-EV) and by customer name (same account population as
+  // custFy, via acToName) and by industry H2 (KAM only).
+  const priorYear=year-1;
   const fy25Rc={}, fy25Cust={}, indH2Actual25={};
   const kamAcSet=new Set(keyAccounts.map(a=>a.ac));
   const indMap={};sbIndustries.forEach(i=>{indMap[String(i.jps_ac||'').trim()]=i.industry||'';});
   _sbAllActuals().forEach(r=>{
     if(r.rate_class==='EV')return;
     const kwh=Number(r.kwh)||0;
-    if(Number(r.year)===2025){
+    if(Number(r.year)===priorYear){
       fy25Rc[r.rate_class]=(fy25Rc[r.rate_class]||0)+kwh;
       const nm=acToName[r.jps_ac];
       if(nm)fy25Cust[nm]=(fy25Cust[nm]||0)+kwh;
     }
-    if(Number(r.year)===2025&&Number(r.month)>=7&&Number(r.month)<=12&&kamAcSet.has(r.jps_ac)){
+    if(Number(r.year)===priorYear&&Number(r.month)>=7&&Number(r.month)<=12&&kamAcSet.has(r.jps_ac)){
       const ind=_kl(indMap,r.jps_ac);
       if(ind&&modeledIndustries.has(ind))indH2Actual25[ind]=(indH2Actual25[ind]||0)+kwh;
     }
@@ -12620,91 +12637,20 @@ function _showRestoreLoading(show){
   }
 })();
 
-// CSP-safe arithmetic evaluator — replaces Function()/eval (blocked by CSP 'unsafe-eval').
-function _arithEval(code) {
-  if (typeof code !== 'string') return 0;
-  var toks = [], re = /\s*([0-9]*\.?[0-9]+(?:[eE][+\-]?[0-9]+)?|[+\-*/()])\s*/g, last = 0, mm;
-  while ((mm = re.exec(code)) !== null) { if (mm.index !== last) return 0; toks.push(mm[1]); last = re.lastIndex; }
-  if (last !== code.length) return 0;
-  var p = 0;
-  function peek(){ return toks[p]; } function next(){ return toks[p++]; }
-  function expr(){ var v=term(); while(peek()==='+'||peek()==='-'){ var o=next(); var r=term(); v=o==='+'?v+r:v-r; } return v; }
-  function term(){ var v=factor(); while(peek()==='*'||peek()==='/'){ var o=next(); var r=factor(); v=o==='*'?v*r:(r===0?0:v/r); } return v; }
-  function factor(){ var t=peek(); if(t==='+'){next();return factor();} if(t==='-'){next();return -factor();} if(t==='('){next();var v=expr();if(peek()===')')next();return v;} next(); var n=parseFloat(t); return isNaN(n)?0:n; }
-  try { var r=expr(); return (typeof r==='number'&&isFinite(r))?r:0; } catch(e){ return 0; }
-}
-
 // Post-commit derived formula sync — recalculates net_inc/ebitda/etc. for this version+year
 async function _syncDerivedFormulas(sbClient, versionId, yr) {
   if (!sbClient || !versionId || !yr) return;
   try {
-    const { data: formulas, error: fe } = await sbClient
-      .from('fpa_derived_formulas')
-      .select('line_id,calc_expr,sort_order')
-      .eq('is_active', true)
-      .order('sort_order', { ascending: true });
-    if (fe || !formulas || !formulas.length) return;
-
-    const componentIds = new Set();
-    formulas.forEach(function(f) {
-      let m; const re = /\b([A-Za-z][A-Za-z0-9_]*)\b/g;
-      while ((m = re.exec(f.calc_expr)) !== null) componentIds.add(m[1]);
+    // Whole read-compute-write recompute now happens atomically server-side
+    // (sales_sync_derived_formulas RPC) — no client-side round trip between
+    // reading component facts and writing derived ones, so no OCC race window
+    // exists here to guard against (fixes 2026-08-09 audit finding).
+    const { data: n, error } = await sbClient.rpc('sales_sync_derived_formulas', {
+      p_version_id: versionId,
+      p_year: yr,
     });
-
-    const { data: rows, error: re } = await sbClient
-      .from('fpa_facts')
-      .select('line_id,period_id,value')
-      .eq('version_id', versionId)
-      .in('line_id', Array.from(componentIds))
-      .gte('period_id', yr * 100 + 1)
-      .lte('period_id', yr * 100 + 12);
-    if (re || !rows || !rows.length) return;
-
-    const facts = {};
-    rows.forEach(function(r) {
-      if (!facts[r.line_id]) facts[r.line_id] = {};
-      facts[r.line_id][r.period_id] = r.value ?? 0;
-    });
-
-    const periods = new Set();
-    Object.values(facts).forEach(function(pm) { Object.keys(pm).forEach(function(p) { periods.add(Number(p)); }); });
-    if (!periods.size) return;
-    const sortedPeriods = Array.from(periods).sort(function(a, b) { return a - b; });
-
-    const upsertRows = [];
-    formulas.forEach(function(formula) {
-      sortedPeriods.forEach(function(p) {
-        const allKeys = Object.keys(facts).sort(function(a, b) { return b.length - a.length; });
-        let code = formula.calc_expr;
-        allKeys.forEach(function(k) {
-          const v = (facts[k] && facts[k][p] != null) ? facts[k][p] : 0;
-          code = code.replace(new RegExp('\\b' + k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'g'), String(v));
-        });
-        let val = _arithEval(code);
-        upsertRows.push({ version_id: versionId, line_id: formula.line_id, period_id: p, value: val, source: 'formula' });
-        if (!facts[formula.line_id]) facts[formula.line_id] = {};
-        facts[formula.line_id][p] = val;
-      });
-    });
-
-    // OCC: verify version is not locked before writing derived formula rows
-    const { data: verLockCheck, error: verLockErr } = await sbClient
-      .from('fpa_versions')
-      .select('is_locked,code')
-      .eq('id', versionId)
-      .maybeSingle();
-    if (verLockErr) { console.warn('[DFsync] could not verify lock status:', verLockErr.message); return; }
-    if (verLockCheck?.is_locked) {
-      console.warn('[DFsync] version', verLockCheck.code, 'is locked — skipping derived formula sync');
-      return;
-    }
-    for (let i = 0; i < upsertRows.length; i += 500) {
-      const { error: ue } = await sbClient
-        .from('fpa_facts')
-        .upsert(upsertRows.slice(i, i + 500), { onConflict: 'version_id,line_id,period_id' });
-      if (ue) throw ue;
-    }
-    console.log('[DFsync] recalculated', formulas.map(function(f){ return f.line_id; }).join(', '), 'for', versionId, 'yr', yr);
+    if (error) throw error;
+    console.log('[DFsync] recalculated', n, 'derived rows for', versionId, 'yr', yr);
   } catch(e) {
     console.error('[DFsync]', e);
   }
