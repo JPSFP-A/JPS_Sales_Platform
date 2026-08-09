@@ -40,6 +40,7 @@ rt20_real = json.load(open("_res_rt20_real.json"))
 rt20_budget = json.load(open("_res_jps_budget.json"))
 rt20_le = json.load(open("_res_jps_le.json"))
 unassigned_payg = json.load(open("_res_unassigned_payg.json"))
+zero_streaks = json.load(open("_zero_streak_result.json"))
 
 
 def agg_rt20_real_totals(month_num):
@@ -84,12 +85,19 @@ def bin_bucket_of(bk):
     return "over 950"
 
 
+RT10_TRUE_ZERO = json.load(open("rt10_zero_fix_result.json")) if os.path.exists("rt10_zero_fix_result.json") else {}
+
+
 def roll_up(month, title):
     out = {b: {"count": 0.0, "kwh": 0.0, "rev": 0.0} for b in BUCKET_ORDER}
     for bstr, v in BUCK.get(month, {}).get(title, {}).items():
         bk = int(bstr)
         label = bin_bucket_of(bk if bk < 5000 else 5000)
         out[label]["count"] += v[0]; out[label]["kwh"] += v[1]; out[label]["rev"] += v[2]
+    if title == "RT10" and month in RT10_TRUE_ZERO:
+        tz_count, tz_kwh, tz_rev = RT10_TRUE_ZERO[month]["TrueZero"][:3]
+        out["Zero"]["count"] += tz_count; out["Zero"]["kwh"] += tz_kwh; out["Zero"]["rev"] += tz_rev
+        out["<150"]["count"] -= tz_count; out["<150"]["kwh"] -= tz_kwh; out["<150"]["rev"] -= tz_rev
     return out
 
 
@@ -478,6 +486,44 @@ story.append(Paragraph(
     "9–14%. A volume forecast built primarily off customer-count growth will materially understate near-term "
     "RT10/RT20 volume. Recommendation: weight the trailing usage-per-customer trend, not just customer-count "
     "growth, in the next LE build for these two classes.", body))
+
+story.append(PageBreak())
+
+# Zero-Consumption Anomaly Check
+story.append(Paragraph("Zero-Consumption Anomaly Check — All Rate Classes", h1))
+streaks = zero_streaks["streaks"]
+n_total = len(streaks)
+n_12plus = sum(1 for s in streaks if s["streak_len"] >= 12)
+n_3plus = sum(1 for s in streaks if s["streak_len"] >= 3)
+story.append(Paragraph(
+    f"{n_total:,} premise-level accounts (RT20-Commercial, RT40, RT50, RT60-ST, RT70) currently have an ongoing "
+    f"consecutive-months-at-zero-kWh streak — {n_3plus:,} for 3+ months, {n_12plus:,} for 12+ months (the entire "
+    "Jan 2025-Jul 2026 window on record, with no positive-consumption month at all). RT10 and RT20's "
+    "residential-style population have no per-customer identity in the data, so only a monthly zero-consumption "
+    "customer count is possible there, not a per-account streak — see the companion "
+    "Zero_Consumption_Anomaly_Report.xlsx for that trend and full account-level detail.", body))
+story.append(Spacer(1, 6))
+story.append(Paragraph(
+    "Notable: several of the longest streaks belong to large, recognizable institutional accounts — National Water "
+    "Commission, Ministry of Health, Bank of Nova Scotia, JPS's own account — with $0 revenue in every one of the "
+    "19 months, not just 0 kWh. A real active premise of that size showing a literal $0 bill for 19 straight months "
+    "reads more like a stale or duplicate account record than genuine zero usage — worth a billing/CIS "
+    "investigation rather than treating as a real anomaly to action commercially.", flag))
+story.append(Spacer(1, 8))
+top10 = streaks[:10]
+data = [["Account", "Name", "Class", "Streak (mo)", "Start", "End"]]
+for s in top10:
+    data.append([s["jps_ac"], (s["name"] or "")[:30], s["rate_class"], str(s["streak_len"]), s["streak_start"], s["streak_end"]])
+t = Table(data, colWidths=[1.1*inch, 2.0*inch, 0.7*inch, 0.8*inch, 0.85*inch, 0.85*inch])
+t.setStyle(TableStyle([
+    ("BACKGROUND", (0, 0), (-1, 0), GOLD), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+    ("FONTSIZE", (0, 0), (-1, -1), 7.8), ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, LTGREY]),
+    ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#D0D8E2")),
+    ("ALIGN", (3, 0), (5, -1), "CENTER"),
+    ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+]))
+story.append(t)
 
 doc.build(story)
 print("wrote JPS_July2026_Performance_Report.pdf")

@@ -100,6 +100,9 @@ rt20_le = json.load(open("_res_jps_le.json"))
 unassigned_payg = json.load(open("_res_unassigned_payg.json"))
 
 
+RT10_TRUE_ZERO = json.load(open("rt10_zero_fix_result.json")) if os.path.exists("rt10_zero_fix_result.json") else {}
+
+
 def roll_up_buckets(month, title):
     """Fine 50kWh bins -> the 8 human bands, for one month/rate-class."""
     out = {b: {"count": 0.0, "kwh": 0.0, "rev": 0.0} for b in BUCKET_ORDER}
@@ -110,6 +113,18 @@ def roll_up_buckets(month, title):
         out[label]["count"] += v[0]
         out[label]["kwh"] += v[1]
         out[label]["rev"] += v[2]
+    if title == "RT10" and month in RT10_TRUE_ZERO:
+        # bin_bucket_of() folds corrected.json's [0,50) bin into "<150" wholesale since
+        # that bin can't distinguish exactly-zero from 1-49kWh on its own. Pull the true
+        # zero-consumption count back out using the raw-file reprocessing in
+        # rt10_zero_fix.py, which can (kwh==0 exactly vs 0<kwh<150).
+        tz_count, tz_kwh, tz_rev = RT10_TRUE_ZERO[month]["TrueZero"][:3]
+        out["Zero"]["count"] += tz_count
+        out["Zero"]["kwh"] += tz_kwh
+        out["Zero"]["rev"] += tz_rev
+        out["<150"]["count"] -= tz_count
+        out["<150"]["kwh"] -= tz_kwh
+        out["<150"]["rev"] -= tz_rev
     return out
 
 
