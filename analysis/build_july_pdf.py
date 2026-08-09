@@ -232,7 +232,18 @@ body = ParagraphStyle("BodyX", parent=styles["Normal"], fontSize=9.5, leading=13
 small = ParagraphStyle("SmallX", parent=styles["Normal"], fontSize=8, leading=11, textColor=GREY)
 flag = ParagraphStyle("FlagX", parent=styles["Normal"], fontSize=9, leading=12.5, textColor=colors.HexColor("#C00000"))
 
-doc = SimpleDocTemplate("JPS_July2026_Performance_Report.pdf", pagesize=letter,
+import itertools
+OUT_PDF = "JPS_July2026_Performance_Report.pdf"
+for suffix in itertools.chain([""], (f"_v{n}" for n in itertools.count(2))):
+    OUT_PDF = f"JPS_July2026_Performance_Report{suffix}.pdf"
+    try:
+        with open(OUT_PDF, "ab"):
+            pass
+        break
+    except PermissionError:
+        continue
+
+doc = SimpleDocTemplate(OUT_PDF, pagesize=letter,
                          topMargin=0.6*inch, bottomMargin=0.6*inch, leftMargin=0.65*inch, rightMargin=0.65*inch)
 story = []
 
@@ -520,19 +531,34 @@ story.append(Paragraph(
 story.append(Spacer(1, 8))
 zero_rev_accts = [s for s in streaks if s.get("current_monthly_revenue") == 0]
 top10 = zero_rev_accts
-data = [["Account", "Name", "Class", "Streak (mo)", "Start", "End"]]
+data = [["Account", "Name", "Class", "Streak (mo)", "Start", "End", "Status"]]
 for s in top10:
-    data.append([s["jps_ac"], (s["name"] or "")[:30], s["rate_class"], str(s["streak_len"]), s["streak_start"], s["streak_end"]])
-t = Table(data, colWidths=[1.1*inch, 2.0*inch, 0.7*inch, 0.8*inch, 0.85*inch, 0.85*inch])
+    data.append([s["jps_ac"], (s["name"] or "")[:26], s["rate_class"], str(s["streak_len"]), s["streak_start"], s["streak_end"],
+                 s.get("account_status_label", "?")])
+t = Table(data, colWidths=[1.0*inch, 1.75*inch, 0.6*inch, 0.7*inch, 0.75*inch, 0.75*inch, 0.85*inch])
 t.setStyle(TableStyle([
     ("BACKGROUND", (0, 0), (-1, 0), GOLD), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
     ("FONTSIZE", (0, 0), (-1, -1), 7.8), ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
     ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, LTGREY]),
     ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#D0D8E2")),
-    ("ALIGN", (3, 0), (5, -1), "CENTER"),
+    ("ALIGN", (3, 0), (6, -1), "CENTER"),
     ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
 ]))
 story.append(t)
+story.append(Spacer(1, 8))
+top_priority = [s for s in streaks if s.get("account_status") == "A" and s["current_monthly_revenue"] == 0]
+if top_priority:
+    story.append(Paragraph(
+        f"Of those, {len(top_priority)} are formally marked Active (not Inactive/Final/suspended) in the CIS "
+        "extract — an active, unsuspended account generating $0 revenue is the genuine priority case; the rest "
+        "are Inactive/Final accounts correctly billing nothing.", flag))
+else:
+    story.append(Paragraph(
+        "Every one of those is formally Inactive or Final in the CIS extract, not Active — consistent with a "
+        "closed/dormant account correctly generating no charges, not a live billing gap.", small))
+story.append(Paragraph(
+    "Full Account_Status/is_suspended breakdown for all 2,977 flagged accounts (not just the $0-revenue ones) is "
+    "in the companion workbook's 'Account Status Breakdown' sheet.", small))
 
 doc.build(story)
-print("wrote JPS_July2026_Performance_Report.pdf")
+print("wrote", OUT_PDF)

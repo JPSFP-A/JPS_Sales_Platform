@@ -181,7 +181,8 @@ ws["B2"] = "Account-Level Detail — Ongoing Zero-Consumption Streaks (longest f
 ws["B2"].font = TITLE_FONT
 row = 4
 hdr = ["Account", "Name", "Rate Class", "Streak (months)", "Streak Start", "Streak End",
-       "Current Monthly Revenue J$", "Total Revenue During Streak J$", "On Minimum-Bill Tariff?"]
+       "Current Monthly Revenue J$", "Total Revenue During Streak J$", "On Minimum-Bill Tariff?",
+       "Account Status (as of streak end)", "Suspended?"]
 for i, h in enumerate(hdr):
     ws.cell(row=row, column=2 + i, value=h)
 style_header(ws, row, len(hdr), start_col=2)
@@ -192,19 +193,80 @@ for s in streaks:
     ws.cell(row=row, column=4, value=s["rate_class"])
     c = ws.cell(row=row, column=5, value=s["streak_len"])
     c.number_format = NUMFMT
-    is_flag_worthy = s["streak_len"] >= 12 and not s["is_minbill_cluster"]
-    if is_flag_worthy:
+    # The real priority flag: an ACTIVE, non-suspended account generating $0 revenue.
+    # 12+ months isolated (not on a minbill tariff) is a secondary, softer flag.
+    is_top_priority = s.get("account_status") == "A" and s["current_monthly_revenue"] == 0
+    is_soft_flag = s["streak_len"] >= 12 and not s["is_minbill_cluster"]
+    if is_top_priority:
         c.fill = WARN_FILL
+    elif is_soft_flag:
+        c.fill = PatternFill("solid", fgColor="FFF2CC")
     ws.cell(row=row, column=6, value=s["streak_start"])
     ws.cell(row=row, column=7, value=s["streak_end"])
     ws.cell(row=row, column=8, value=s["current_monthly_revenue"]).number_format = MONEYFMT
     ws.cell(row=row, column=9, value=s["streak_total_revenue"]).number_format = MONEYFMT
-    cflag = ws.cell(row=row, column=10, value="Yes" if s["is_minbill_cluster"] else "No — isolated")
-    if is_flag_worthy:
-        cflag.fill = WARN_FILL
+    ws.cell(row=row, column=10, value="Yes" if s["is_minbill_cluster"] else "No — isolated")
+    cstatus = ws.cell(row=row, column=11, value=s.get("account_status_label", "?"))
+    csusp = ws.cell(row=row, column=12, value=s.get("is_suspended") or "")
+    if is_top_priority:
+        cstatus.fill = WARN_FILL
+        csusp.fill = WARN_FILL
     row += 1
-autosize(ws, [3, 22, 34, 12, 16, 14, 14, 18, 20, 18])
+autosize(ws, [3, 22, 34, 12, 16, 14, 14, 18, 20, 18, 20, 12])
 ws.freeze_panes = "B5"
+
+# ===== Account Status Breakdown =====
+ws = wb.create_sheet("Account Status Breakdown")
+ws.sheet_view.showGridLines = False
+ws["B2"] = "Account Status of Flagged Zero-Consumption Accounts (from the raw CIS extract)"
+ws["B2"].font = TITLE_FONT
+ws["B4"] = ("Account_Status / is_suspended pulled from the raw billing file for each account's most recent "
+            "(streak-end) month. This is the real breakdown behind the minimum-bill-tariff finding: Inactive/"
+            "Final accounts correctly billing $0 need no action; an Active, non-suspended account billing $0 is "
+            "the priority case.")
+ws["B4"].font = Font(name=FONT, italic=True, size=9, color="7F7F7F")
+ws["B4"].alignment = Alignment(wrap_text=True)
+row = 6
+ws.cell(row=row, column=2, value="By account status").font = SUB_FONT
+row += 1
+hdr = ["Account Status", "Count", "Of which: on minimum-bill tariff", "Of which: $0 current revenue"]
+for i, h in enumerate(hdr):
+    ws.cell(row=row, column=2 + i, value=h)
+style_header(ws, row, len(hdr), start_col=2)
+row += 1
+from collections import Counter
+status_labels = sorted(set(s.get("account_status_label", "?") for s in streaks),
+                        key=lambda lbl: -sum(1 for s in streaks if s.get("account_status_label") == lbl))
+for lbl in status_labels:
+    grp = [s for s in streaks if s.get("account_status_label") == lbl]
+    ws.cell(row=row, column=2, value=lbl)
+    ws.cell(row=row, column=3, value=len(grp)).number_format = NUMFMT
+    ws.cell(row=row, column=4, value=sum(1 for s in grp if s["is_minbill_cluster"])).number_format = NUMFMT
+    c = ws.cell(row=row, column=5, value=sum(1 for s in grp if s["current_monthly_revenue"] == 0))
+    c.number_format = NUMFMT
+    if lbl == "Active" and c.value:
+        c.fill = WARN_FILL
+    row += 1
+row += 2
+top_priority = [s for s in streaks if s.get("account_status") == "A" and s["current_monthly_revenue"] == 0]
+ws.cell(row=row, column=2, value=f"Top-priority accounts: Active status + $0 current revenue ({len(top_priority)})").font = SUB_FONT
+row += 1
+if top_priority:
+    hdr2 = ["Account", "Name", "Rate Class", "Streak (months)", "Streak End"]
+    for i, h in enumerate(hdr2):
+        ws.cell(row=row, column=2 + i, value=h)
+    style_header(ws, row, len(hdr2), start_col=2)
+    row += 1
+    for s in top_priority:
+        ws.cell(row=row, column=2, value=s["jps_ac"])
+        ws.cell(row=row, column=3, value=s["name"])
+        ws.cell(row=row, column=4, value=s["rate_class"])
+        ws.cell(row=row, column=5, value=s["streak_len"]).number_format = NUMFMT
+        ws.cell(row=row, column=6, value=s["streak_end"])
+        row += 1
+else:
+    ws.cell(row=row, column=2, value="None — every flagged account with $0 current revenue is formally Inactive/Final/etc., not Active.")
+autosize(ws, [3, 30, 30, 16, 14])
 
 # ===== RT10 / RT20 Residential Trend =====
 ws = wb.create_sheet("RT10-RT20 Residential Trend")

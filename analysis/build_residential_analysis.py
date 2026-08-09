@@ -263,6 +263,15 @@ for rc, label in [("RT10", "RT10 - Residential"), ("RT20", "RT20 - General Servi
     row += 1
     cy = [class_total(m, rc) for m in MONTHS_2026]
     py = [class_total(m, rc) for m in MONTHS_2025]
+
+    def prepaid_totals(month_num, rate_class):
+        rows_m = [r for r in prepaid if r["year"] == 2026 and r["month"] == month_num and r["rate_class"] == rate_class]
+        if not rows_m:
+            return None
+        return sum(r["kwh"] or 0 for r in rows_m), sum(r["revenue_jmd"] or 0 for r in rows_m), sum(r["customer_count"] or 0 for r in rows_m)
+
+    pp = [prepaid_totals(mn, rc) for mn in (5, 6, 7)]
+
     metrics = [
         ("kWh", [v[0] for v in cy], [v[0] for v in py], NUMFMT),
         ("Revenue (J$)", [v[1] for v in cy], [v[1] for v in py], MONEYFMT),
@@ -281,6 +290,37 @@ for rc, label in [("RT10", "RT10 - Residential"), ("RT20", "RT20 - General Servi
             yoy = (v / p - 1) if p else 0
             c = ws.cell(row=row, column=7 + i, value=yoy); c.number_format = PCTFMT
         row += 1
+
+    # Explicit incl.-Prepaid reconciliation rows -- Overview above is postpaid-only by
+    # source design (CIS Billing Details Report never carries PAYG meters). Shown here
+    # so this sheet also gives a true combined total, not just a documented gap.
+    ws.cell(row=row, column=2, value="Prepaid (PAYG) kWh").font = Font(name=FONT, italic=True, color="7F7F7F")
+    for i, p in enumerate(pp):
+        c = ws.cell(row=row, column=3 + i, value=round(p[0], 2) if p else "N/A (file not supplied)")
+        if p:
+            c.number_format = NUMFMT
+    row += 1
+    ws.cell(row=row, column=2, value="Prepaid (PAYG) Revenue (J$)").font = Font(name=FONT, italic=True, color="7F7F7F")
+    for i, p in enumerate(pp):
+        c = ws.cell(row=row, column=3 + i, value=round(p[1], 2) if p else "N/A (file not supplied)")
+        if p:
+            c.number_format = MONEYFMT
+    row += 1
+    ws.cell(row=row, column=2, value="TOTAL kWh incl. Prepaid").font = BOLD
+    for i, (v, p) in enumerate(zip(cy, pp)):
+        total = v[0] + p[0] if p else None
+        c = ws.cell(row=row, column=3 + i, value=round(total, 2) if total is not None else "N/A")
+        if total is not None:
+            c.number_format = NUMFMT
+    row += 1
+    ws.cell(row=row, column=2, value="TOTAL Revenue incl. Prepaid (J$)").font = BOLD
+    for i, (v, p) in enumerate(zip(cy, pp)):
+        total = v[1] + p[1] if p else None
+        c = ws.cell(row=row, column=3 + i, value=round(total, 2) if total is not None else "N/A")
+        if total is not None:
+            c.number_format = MONEYFMT
+    row += 1
+
     row += 2
 autosize(ws, [3] + [16] * 10)
 
