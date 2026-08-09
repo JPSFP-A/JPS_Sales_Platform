@@ -67,6 +67,28 @@ def bucket_of(kwh):
     return "over 950"
 
 
+def bin_bucket_of(bk):
+    """For corrected.json's fine 50kWh-WIDE histogram bins, not exact per-customer kWh.
+    Bin key 0 means the range [0,50) - it is NOT "exactly zero" (bucket_of(0) would say
+    "Zero", which is wrong here and previously caused the whole [0,50) bin's real,
+    nonzero consumption to display under the "Zero" tier). This data source has no bin
+    fine enough to isolate exactly-zero consumption, so "Zero" is left empty for it and
+    the [0,50) bin folds into "<150" like every other 50kWh bin does."""
+    if bk < 0:
+        return "<Zero"
+    if bk < 150:
+        return "<150"
+    if bk < 350:
+        return "150>350"
+    if bk < 550:
+        return "350>550"
+    if bk < 750:
+        return "550>750"
+    if bk < 950:
+        return "750>950"
+    return "over 950"
+
+
 # ---------- load sources ----------
 CJ = json.load(open("corrected.json"))
 BUCK = CJ["bucket"]  # month -> title -> {bin: [count,kwh,rev,energy,fuel,ipp,cust]}
@@ -84,7 +106,7 @@ def roll_up_buckets(month, title):
     cell = BUCK.get(month, {}).get(title, {})
     for bstr, v in cell.items():
         bk = int(bstr)
-        label = bucket_of(bk if bk < 5000 else 5000)
+        label = bin_bucket_of(bk if bk < 5000 else 5000)
         out[label]["count"] += v[0]
         out[label]["kwh"] += v[1]
         out[label]["rev"] += v[2]
@@ -501,13 +523,22 @@ row = write_block(ws, row, "5. Kingston-metro (KSAN/KSAS) parish detail in the P
 ])
 
 row = write_block(ws, row, "6. 'Zero' consumption-tier customers still generate real revenue - not a data error", [
-    "The 'Zero' bucket (0 kWh billed) shows non-zero revenue in By Bucket/Overview because Jamaican utility billing "
-    "applies a fixed monthly customer/connection charge regardless of consumption - a customer who used no power "
-    "still owes the connection fee (plus GCT on it). This is expected, standard billing behavior. One completeness "
-    "gap found while building this: the RT20 residential-style (no-NAICS) bucket aggregation does not currently "
-    "break the fixed-charge component out into its own column the way the Commercial (NAICS) premise rows do - "
-    "revenue is correct in total, but the components (customer_charge_jmd, demand_jmd, etc.) read 0 for these rows. "
-    "Worth fixing in rt20_split.py if component-level detail on the residential-style population is ever needed.",
+    "In the jps_actuals-sourced views (e.g. 'By Parish - RT20 Real'), the 'Zero' bucket (0 kWh billed) shows "
+    "non-zero revenue because Jamaican utility billing applies a fixed monthly customer/connection charge "
+    "regardless of consumption - a customer who used no power still owes the connection fee (plus GCT on it). "
+    "This is expected, standard billing behavior. One completeness gap found while building this: the RT20 "
+    "residential-style (no-NAICS) bucket aggregation does not currently break the fixed-charge component out into "
+    "its own column the way the Commercial (NAICS) premise rows do - revenue is correct in total, but the "
+    "components (customer_charge_jmd, demand_jmd, etc.) read 0 for these rows. Worth fixing in rt20_split.py if "
+    "component-level detail on the residential-style population is ever needed.",
+    "",
+    "FIX APPLIED THIS BUILD: the 'By Bucket' sheet's 'Zero' row was previously showing real, substantial kWh volume "
+    "(e.g. RT10 ~2.1-2.2M kWh/month) — a genuine bug, not the billing behavior above. corrected.json's histogram "
+    "source bins are 50kWh WIDE: the bin labeled '0' actually covers the range [0,50) kWh, not exactly-zero "
+    "consumption. The rollup was reusing a per-customer classifier (where kwh==0 correctly means 'Zero') on that "
+    "bin's raw label, so the entire [0,50) bin's real consumption was mislabeled as 'Zero'. Fixed by using a "
+    "dedicated bin classifier that folds bin '0' into '<150' like every other bin - this data source has no bin "
+    "fine enough to isolate exactly-zero consumption, so 'Zero' now correctly reads empty in this sheet.",
 ])
 
 row = write_block(ws, row, "7. Usage per customer, not customer growth, is what should drive the next LE's volume assumption", [
@@ -519,10 +550,12 @@ row = write_block(ws, row, "7. Usage per customer, not customer growth, is what 
 
 autosize(ws, [3, 118])
 
-OUT_XLSX = "Residential_RT10_RT20_Analysis_2026Q_v2.xlsx"
-try:
-    wb.save(OUT_XLSX)
-except PermissionError:
-    OUT_XLSX = "Residential_RT10_RT20_Analysis_2026Q_v3.xlsx"
-    wb.save(OUT_XLSX)
+import itertools
+for suffix in itertools.chain(["", "_v2", "_v3"], (f"_v{n}" for n in itertools.count(4))):
+    OUT_XLSX = f"Residential_RT10_RT20_Analysis_2026Q{suffix}.xlsx"
+    try:
+        wb.save(OUT_XLSX)
+        break
+    except PermissionError:
+        continue
 print("wrote", OUT_XLSX)

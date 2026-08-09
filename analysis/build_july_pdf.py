@@ -69,11 +69,26 @@ def bucket_of(kwh):
     return "over 950"
 
 
+def bin_bucket_of(bk):
+    """corrected.json's histogram bins are 50kWh WIDE - bin key 0 means [0,50), not
+    exactly zero. bucket_of(0) would wrongly say "Zero" and dump that bin's real,
+    nonzero consumption into the Zero tier. This data source can't isolate exactly-zero
+    consumption, so Zero is left empty here and [0,50) folds into "<150" like every
+    other bin."""
+    if bk < 0: return "<Zero"
+    if bk < 150: return "<150"
+    if bk < 350: return "150>350"
+    if bk < 550: return "350>550"
+    if bk < 750: return "550>750"
+    if bk < 950: return "750>950"
+    return "over 950"
+
+
 def roll_up(month, title):
     out = {b: {"count": 0.0, "kwh": 0.0, "rev": 0.0} for b in BUCKET_ORDER}
     for bstr, v in BUCK.get(month, {}).get(title, {}).items():
         bk = int(bstr)
-        label = bucket_of(bk if bk < 5000 else 5000)
+        label = bin_bucket_of(bk if bk < 5000 else 5000)
         out[label]["count"] += v[0]; out[label]["kwh"] += v[1]; out[label]["rev"] += v[2]
     return out
 
@@ -443,11 +458,18 @@ story.append(Spacer(1, 6))
 
 story.append(Paragraph("6. 'Zero' consumption-tier customers still generate real revenue — not a data error", h2))
 story.append(Paragraph(
-    "Jamaican utility billing applies a fixed monthly customer/connection charge regardless of consumption, so "
-    "zero-kWh customers still show non-zero revenue. Expected behavior. One completeness gap found while building "
-    "this: the RT20 residential-style bucket aggregation doesn't break the fixed-charge component into its own "
-    "column the way Commercial premise rows do — total revenue is correct, component detail (customer_charge_jmd "
-    "etc.) reads 0 for these rows.", small))
+    "In the jps_actuals-sourced views, the 'Zero' bucket (0 kWh billed) shows non-zero revenue because Jamaican "
+    "utility billing applies a fixed monthly customer/connection charge regardless of consumption. Expected "
+    "behavior. One completeness gap found while building this: the RT20 residential-style bucket aggregation "
+    "doesn't break the fixed-charge component into its own column the way Commercial premise rows do — total "
+    "revenue is correct, component detail (customer_charge_jmd etc.) reads 0 for these rows.", small))
+story.append(Spacer(1, 4))
+story.append(Paragraph(
+    "FIX APPLIED THIS BUILD: the residential mix chart above previously showed real, substantial kWh volume in the "
+    "'Zero' tier — a genuine bug, not the billing behavior above. corrected.json's histogram bins are 50kWh wide; "
+    "the bin labeled '0' covers [0,50) kWh, not exactly-zero consumption. The rollup was misclassifying that whole "
+    "bin as 'Zero'. Fixed by folding bin '0' into '<150' like every other bin — this source can't isolate "
+    "exactly-zero consumption, so 'Zero' now correctly reads empty here.", small))
 story.append(Spacer(1, 6))
 
 story.append(Paragraph("7. Usage per customer, not customer growth, should drive the next LE's volume assumption", h2))
