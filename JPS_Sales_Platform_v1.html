@@ -17,6 +17,13 @@
 <meta http-equiv="Pragma" content="no-cache"/>
 <meta http-equiv="Expires" content="0"/>
 <title>JPS Sales Analytics Platform</title>
+<meta name="description" content="JPS Sales Analytics Platform — revenue and customer sales reporting." />
+<meta property="og:title" content="JPS Sales Analytics Platform" />
+<meta property="og:description" content="JPS Sales Analytics Platform — revenue and customer sales reporting." />
+<meta property="og:type" content="website" />
+<meta property="og:image" content="https://sales.jmfinancelab.com/og-image.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <!-- XLSX loaded lazily on first upload/download — saves ~1MB on initial page load -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -505,9 +512,9 @@ document.getElementById('schema_stale_banner').style.display='none';
     <button class="pbtn" onclick="setPeriod('QTD',this)">QTD</button>
     <button class="pbtn" onclick="setPeriod('YTD',this)">YTD</button>
     <button class="pbtn" onclick="setPeriod('Annual',this)">Annual</button>
-    <select class="psel" id="selYear" onchange="curYear=Number(this.value);buildDashboardData();rebuildYearDropdowns();document.getElementById('periodLabel').textContent=fmtPeriodLabel();renderSection(document.querySelector('.sec.on')?.id)">
+    <select class="psel" id="selYear" onchange="curYear=Number(this.value);buildDashboardData();rebuildYearDropdowns();document.getElementById('periodLabel').textContent=fmtPeriodLabel();try{buildCharts();}catch(ce){console.warn('buildCharts error:',ce);}renderSection(document.querySelector('.sec.on')?.id)">
     </select>
-    <select class="psel" id="selMonth" onchange="curMonth=Number(this.value);renderSection(document.querySelector('.sec.on')?.id)">
+    <select class="psel" id="selMonth" onchange="curMonth=Number(this.value);try{buildCharts();}catch(ce){console.warn('buildCharts error:',ce);}renderSection(document.querySelector('.sec.on')?.id)">
       <option value="1">Jan</option><option value="2">Feb</option>
       <option value="3">Mar</option><option value="4">Apr</option>
       <option value="5">May</option><option value="6">Jun</option>
@@ -515,7 +522,7 @@ document.getElementById('schema_stale_banner').style.display='none';
       <option value="9">Sep</option><option value="10">Oct</option>
       <option value="11">Nov</option><option value="12">Dec</option>
     </select>
-    <select class="psel" id="selQtr" style="display:none" onchange="curQtr=Number(this.value);renderSection(document.querySelector('.sec.on')?.id)">
+    <select class="psel" id="selQtr" style="display:none" onchange="curQtr=Number(this.value);try{buildCharts();}catch(ce){console.warn('buildCharts error:',ce);}renderSection(document.querySelector('.sec.on')?.id)">
       <option value="1">Q1</option><option value="2">Q2</option>
       <option value="3">Q3</option><option value="4">Q4</option>
     </select>
@@ -4144,8 +4151,13 @@ function mkBracketCharts(){
   const TC=getComputedStyle(document.documentElement).getPropertyValue('--text2').trim()||'#aaa';
   const CC=getComputedStyle(document.documentElement).getPropertyValue('--border').trim()||'rgba(255,255,255,0.07)';
   const co=()=>({responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:TC,font:{size:10}},grid:{color:CC}},y:{ticks:{color:TC,font:{size:10}},grid:{color:CC}}}});
+  // Only the intentional consumption-tier scheme belongs on this chart. jps_actuals also
+  // carries an older, unrelated parish-aggregate tagging scheme (consumption_bucket values
+  // like 'Postpaid'/'Prepaid'/account-status labels, not consumption bands) for months that
+  // predate the tier-bucket backfill — those must never appear as chart categories here.
+  const CANON_BKTS=['<Zero','Zero','<150','150>350','350>550','550>750','750>950','over 950'];
   const mkBktChart=(canvasId,rc)=>{
-    const bRows=sbActuals.filter(r=>String(r.rate_class||'')===rc&&(r.consumption_bucket||'').trim());
+    const bRows=sbActuals.filter(r=>String(r.rate_class||'')===rc&&CANON_BKTS.includes((r.consumption_bucket||'').trim()));
     const _bktOrder=s=>{
       const sl=s.toLowerCase().trim();
       if(sl.includes('zero'))return -1;                       // "< Zero" always first
@@ -4804,11 +4816,18 @@ function renderRsKPIs(){
 function renderRsPar(){
   const q=(document.getElementById('rs_q')?.value||'').toLowerCase();
   const resRCs=['RT10','RT20'];
+  // Only the intentional consumption-tier scheme belongs here — jps_actuals also carries an
+  // older, unrelated parish-aggregate tagging scheme (consumption_bucket values like
+  // 'Postpaid'/'Prepaid', account-status labels rather than consumption bands) for months
+  // that predate the tier-bucket backfill. Excluding those keeps this table's brackets and
+  // PY comparison meaningful instead of mixing two incompatible categorization schemes.
+  const CANON_BKTS=['<Zero','Zero','<150','150>350','350>550','550>750','750>950','over 950'];
+  const isCanonBkt=r=>CANON_BKTS.includes((r.consumption_bucket||'').trim());
 
   // Populate bracket dropdown dynamically from actual data
   const bktSel=document.getElementById('rs_bracket');
   if(bktSel){
-    const liveBuckets=[...new Set(sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&(r.consumption_bucket||'').trim()).map(r=>(r.consumption_bucket||'').trim()))].filter(Boolean).sort();
+    const liveBuckets=[...new Set(sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&isCanonBkt(r)).map(r=>(r.consumption_bucket||'').trim()))].filter(Boolean).sort();
     const cur=bktSel.value;
     bktSel.innerHTML='<option value="">All brackets</option>'+liveBuckets.map(b=>`<option value="${b}"${b===cur?' selected':''}>${b}</option>`).join('');
   }
@@ -4820,16 +4839,16 @@ function renderRsPar(){
   const curAct=sbActuals.filter(r=>
     resRCs.includes(String(r.rate_class||''))&&
     Number(r[YEAR_COL])===curYear&&pmSet.has(Number(r.month||0))&&
-    (r.consumption_bucket||'').trim()
+    isCanonBkt(r)
   );
   const prevAct=sbActuals.filter(r=>
     resRCs.includes(String(r.rate_class||''))&&
     Number(r[YEAR_COL])===(curYear-1)&&pmSet.has(Number(r.month||0))&&
-    (r.consumption_bucket||'').trim()
+    isCanonBkt(r)
   );
   // Customer count from last month in period only (headcount is point-in-time, not cumulative)
   const countAgg={};
-  sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month||0)===lastMoPeriod&&(r.consumption_bucket||'').trim()&&(r.consumption_bucket||'').trim()!=='< Zero').forEach(r=>{
+  sbActuals.filter(r=>resRCs.includes(String(r.rate_class||''))&&Number(r[YEAR_COL])===curYear&&Number(r.month||0)===lastMoPeriod&&isCanonBkt(r)&&(r.consumption_bucket||'').trim()!=='< Zero').forEach(r=>{
     const k=`${r.parish||''}|||${(r.consumption_bucket||'').trim()}`;
     countAgg[k]=(countAgg[k]||0)+Number(r.customer_count||0);
   });

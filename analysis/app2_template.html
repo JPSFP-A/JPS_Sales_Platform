@@ -99,6 +99,9 @@ tr.sel td{background:#EFF6FF}tr:hover td{background:#F8FAFC;cursor:pointer}
   <div class="tgroup"><span class="tglbl">Reference</span>
     <button data-v="demand">Demand charges</button>
   </div>
+  <div class="tgroup"><span class="tglbl">Residential</span>
+    <button data-v="residential">RT10 / RT20</button>
+  </div>
 </div>
 <div id="monthFilterBar"></div>
 <div id="app"></div>
@@ -190,6 +193,21 @@ async function _gateInit(){
   }catch(e){/* gate stays up */}
 }
 if(document.body)_gateInit();else document.addEventListener('DOMContentLoaded',_gateInit);
+// Retry wrapper for a single Supabase page request — under the request concurrency a full
+// paginated fetch generates (50+ simultaneous range() calls on a cold load), individual
+// pages occasionally fail transiently. Silently dropping a failed page silently drops real
+// revenue from every downstream total, so retry before giving up.
+async function _sbRetry(fn,tries){
+  tries=tries||3;
+  let lastErr=null;
+  for(let i=0;i<tries;i++){
+    const r=await fn();
+    if(!r.error)return r;
+    lastErr=r.error;
+    if(i<tries-1)await new Promise(res=>setTimeout(res,200*(i+1)));
+  }
+  return{data:null,error:lastErr};
+}
 const _acctCache={};
 // Peak-demand kVA (physical volume, RT40/50/70 only) — live from jps_demand_actuals.
 // Not part of the static embedded D blob (which only carries $ revenue components),
@@ -1133,8 +1151,12 @@ async function _fetchBillingComponents(){
   if(countErr){console.error('jps_actuals count failed',countErr);return[];}
   if(!count)return[];
   const pages=Math.ceil(count/PAGE);
+  // Explicit order is required for .range() pagination to be stable across parallel
+  // requests — without one, Postgrest's default ordering isn't guaranteed consistent
+  // page-to-page, which can silently drop or duplicate rows (found via a revenue
+  // reconciliation mismatch while building the Residential tab's own paginated fetch).
   const results=await Promise.all(Array.from({length:pages},(_,p)=>
-    _SB.from('jps_actuals').select(cols).in('rate_class',RCS).range(p*PAGE,p*PAGE+PAGE-1)));
+    _sbRetry(()=>_SB.from('jps_actuals').select(cols).in('rate_class',RCS).order('id',{ascending:true}).range(p*PAGE,p*PAGE+PAGE-1))));
   const all=[];
   results.forEach(({data,error})=>{
     if(error){console.error('jps_actuals page fetch failed',error);return;}
@@ -1627,6 +1649,7 @@ function renderMix(){
 
 let caseSel=null, wowMet='rev', movCls='RT50', movMode='topbot', movMet='kwh';
 let tmMet='rev', tmView='customer';
+let resParishView='prepaid';
 function renderTopMovers(){
   const MV=D.movers; if(!MV){document.getElementById('app').innerHTML='<div class="card">Top movers not available — rebuild data.</div>';return;}
   if(tmView==='bucket'&&tmMet==='dem')tmMet='vol';
@@ -1919,6 +1942,271 @@ function renderMovers(){
   bindPeriod(renderMovers);
 }
 
+/* ==========================================
+   RESIDENTIAL (RT10 / RT20) — sourced directly from jps_actuals, independent of
+   D (which zeroes these two classes — see _fetchBillingComponents comment).
+   Three DELIBERATELY SEPARATE populations, never blended:
+     1. Consumption-bucket (official, all meters) — RT10 is company-wide only
+        (parish='ALL', no parish split exists at that grain); RT20's no-NAICS
+        residential-style rows DO carry parish.
+     2. Prepaid/parish (PAYG only) — consumption_bucket='Prepaid'.
+     3. RT20 real premises — NAICS-split: 'Commercial' (individual accounts) vs
+        no-NAICS (parish x tier buckets, consumption_bucket ≠ 'Commercial'/'Prepaid').
+   Budget: jps_budget_class_month (RT10 has a real CLASS-level budget; no premise-
+   level RT10 budget exists anywhere, so no parish/tier budget breakdown for RT10).
+========================================== */
+const RES_BUCKET_ORDER=['<Zero','Zero','<150','150>350','350>550','550>750','750>950','over 950'];
+let _resCache=null, _resMonths=null;
+async function _fetchResPaged(rc,cols,or_){
+  const PAGE=1000;
+  const{count,error:countErr}=await _SB.from('jps_actuals').select('*',{count:'exact',head:true}).eq('rate_class',rc).or(or_);
+  if(countErr)return{data:[],error:countErr};
+  if(!count)return{data:[],error:null};
+  const pages=Math.ceil(count/PAGE);
+  // .range() pagination is only stable with an explicit order — without one, Postgrest's
+  // default ordering isn't guaranteed consistent across separate parallel requests, which
+  // silently drops/duplicates rows between pages (found via a revenue reconciliation
+  // mismatch: fetched totals didn't match a direct SQL sum of the same filter).
+  const results=await Promise.all(Array.from({length:pages},(_,p)=>
+    _sbRetry(()=>_SB.from('jps_actuals').select(cols).eq('rate_class',rc).or(or_).order('id',{ascending:true}).range(p*PAGE,p*PAGE+PAGE-1))));
+  const data=[];
+  for(const r of results){if(r.error)return{data:[],error:r.error};data.push(...(r.data||[]));}
+  return{data,error:null};
+}
+async function _fetchResidential(months){
+  const key=months.join(',');
+  if(_resCache&&_resMonths===key)return _resCache;
+  const yms=months.map(m=>{const[y,mo]=m.split('-');return{y:+y,mo:+mo};});
+  const or_=yms.map(x=>'and(year.eq.'+x.y+',month.eq.'+x.mo+')').join(',');
+  const [rt10,rt20]=await Promise.all([
+    _fetchResPaged('RT10','year,month,consumption_bucket,parish,kwh,revenue_jmd,customer_count',or_),
+    _fetchResPaged('RT20','year,month,consumption_bucket,parish,name,jps_ac,kwh,revenue_jmd,customer_count',or_),
+  ]);
+  const out={rt10:rt10.data||[],rt20:rt20.data||[],err:rt10.error||rt20.error};
+  _resCache=out;_resMonths=key;
+  return out;
+}
+async function _fetchResBudget(months){
+  const yms=months.map(m=>{const[y,mo]=m.split('-');return{y:+y,mo:+mo};});
+  const or_=yms.map(x=>'and(year.eq.'+x.y+',month.eq.'+x.mo+')').join(',');
+  const{data,error}=await _SB.from('jps_budget_class_month').select('rate_class,year,month,kwh_budget,revenue_budget').in('rate_class',['RT10','RT20']).or(or_);
+  return error?[]:(data||[]);
+}
+function _resBucketOf(kwh){
+  if(kwh<0)return '<Zero'; if(kwh===0)return 'Zero'; if(kwh<150)return '<150'; if(kwh<350)return '150>350';
+  if(kwh<550)return '350>550'; if(kwh<750)return '550>750'; if(kwh<950)return '750>950'; return 'over 950';
+}
+function _resYm(r){return r.year+'-'+String(r.month).padStart(2,'0');}
+let _resCtx=null;
+async function renderResidential(){
+  const months=D.months.slice(-3); // last 3 available months, live
+  const mlabels=months.map(m=>D.mlabels[D.months.indexOf(m)]);
+  document.getElementById('app').innerHTML='<div class="card" style="text-align:center;padding:40px;color:var(--mut)">Loading RT10/RT20 from jps_actuals&hellip;</div>';
+  const[{rt10,rt20,err},budRows]=await Promise.all([_fetchResidential(months),_fetchResBudget(months)]);
+  if(err){document.getElementById('app').innerHTML='<div class="card" style="color:#B3261E">⚠ '+esc(err.message||'query error')+'</div>';return;}
+
+  // ---- consumption-bucket rollup (RT10 co.-wide; RT20 no-NAICS rows only) ----
+  const bucketRoll=(rc,rows)=>{
+    const out={};months.forEach(m=>{out[m]={};RES_BUCKET_ORDER.forEach(b=>out[m][b]={kwh:0,rev:0,cnt:0});});
+    rows.forEach(r=>{
+      const ym=_resYm(r);if(!out[ym])return;
+      const cb=r.consumption_bucket;
+      // RT10's official all-meter tier data is company-wide only (parish='ALL') — jps_actuals
+      // also has an unrelated legacy RT10 population (empty consumption_bucket, real parish
+      // names, a different grain entirely) that must NOT be blended in here.
+      if(rc==='RT10'&&r.parish!=='ALL')return;
+      if(rc==='RT20'&&(cb==='Commercial'||cb==='Prepaid'))return; // exclude named + prepaid from the tier view
+      if(!RES_BUCKET_ORDER.includes(cb))return; // unknown bucket label — don't guess-classify by kwh
+      out[ym][cb].kwh+=+r.kwh||0; out[ym][cb].rev+=+r.revenue_jmd||0; out[ym][cb].cnt+=r.customer_count||1;
+    });
+    return out;
+  };
+  const rt10Bucket=bucketRoll('RT10',rt10), rt20Bucket=bucketRoll('RT20',rt20);
+  // rt20Bucket (above) deliberately excludes 'Commercial' rows for the tier-mix view — but
+  // that means it understates total RT20 revenue for KPI/budget purposes (Commercial/NAICS
+  // accounts are the bulk of RT20 revenue). Separate full-population total, Prepaid excluded:
+  const rt20FullTotal=(()=>{
+    const out={}; months.forEach(m=>out[m]={kwh:0,rev:0,cnt:0});
+    rt20.forEach(r=>{
+      const ym=_resYm(r); if(!out[ym]||r.consumption_bucket==='Prepaid')return;
+      out[ym].kwh+=+r.kwh||0; out[ym].rev+=+r.revenue_jmd||0;
+      out[ym].cnt+=(r.consumption_bucket==='Commercial'?1:(r.customer_count||0));
+    });
+    return out;
+  })();
+
+  // ---- prepaid by parish (Jun/Jul only if May not loaded — shows whatever months exist) ----
+  const prepaidByParish=(rows)=>{
+    const out={};
+    rows.filter(r=>r.consumption_bucket==='Prepaid').forEach(r=>{
+      const ym=_resYm(r), p=r.parish||'UNMAPPED';
+      const k=out[p]=out[p]||{};
+      const a=k[ym]=k[ym]||{kwh:0,rev:0,cust:0};
+      a.kwh+=+r.kwh||0; a.rev+=+r.revenue_jmd||0; a.cust+=r.customer_count||0;
+    });
+    return out;
+  };
+  const rt10Prepaid=prepaidByParish(rt10), rt20Prepaid=prepaidByParish(rt20);
+
+  // ---- RT20 real premises: Commercial (NAICS) vs residential-style bucket, by parish ----
+  const rt20Real={comm:{},res:{}};
+  rt20.forEach(r=>{
+    const ym=_resYm(r);
+    if(r.consumption_bucket==='Prepaid')return;
+    const p=r.parish||'UNMAPPED';
+    const bucket=(r.consumption_bucket==='Commercial')?rt20Real.comm:rt20Real.res;
+    const k=bucket[p]=bucket[p]||{};
+    const a=k[ym]=k[ym]||{kwh:0,rev:0,cust:0};
+    a.kwh+=+r.kwh||0; a.rev+=+r.revenue_jmd||0; a.cust+=(r.consumption_bucket==='Commercial'?1:(r.customer_count||0));
+  });
+
+  // ---- budget (class grain) ----
+  const budget={RT10:{},RT20:{}};
+  budRows.forEach(r=>{
+    const ym=r.year+'-'+String(r.month).padStart(2,'0');
+    if(budget[r.rate_class])budget[r.rate_class][ym]={kwh:+r.kwh_budget||0,rev:+r.revenue_budget||0};
+  });
+
+  // ---- class totals for KPIs / drivers ----
+  const classTotal=(bucketData,ym)=>{
+    const cell=bucketData[ym]||{}; let kwh=0,rev=0,cnt=0;
+    RES_BUCKET_ORDER.forEach(b=>{const v=cell[b];if(v){kwh+=v.kwh;rev+=v.rev;cnt+=v.cnt;}});
+    return{kwh,rev,cnt};
+  };
+
+  _resCtx={months,mlabels,rt10Bucket,rt20Bucket,rt20FullTotal,rt10Prepaid,rt20Prepaid,rt20Real,budget,classTotal};
+
+  let h='<div class="card"><div class="chartttl">RT10 / RT20 — last 3 months live '+mlabels.join(' → ')+' <span style="font-weight:400;color:var(--mut);font-size:11px">(consumption-bucket population, official/all-meter)</span></div><div class="chartwrap" style="height:300px"><canvas id="cResKpi"></canvas></div></div>';
+  h+='<div class="card" style="margin-top:14px"><div class="chartttl">Consumption-tier mix, '+mlabels[0]+' → '+mlabels[mlabels.length-1]+' <span style="font-weight:400;color:var(--mut);font-size:11px">(the "cluster" view — no individual premise detail exists for RT10)</span></div><div class="chartwrap" style="height:280px"><canvas id="cResBucket"></canvas></div></div>';
+  h+='<div class="card" style="margin-top:14px"><div style="display:flex;justify-content:space-between;align-items:center"><div class="chartttl" style="margin-bottom:0">By parish</div><div class="seg" id="resParishSeg">'+
+    [['prepaid','Prepaid (PAYG)'],['rt20comm','RT20 Commercial'],['rt20res','RT20 Residential-style']].map(o=>'<button data-rp="'+o[0]+'" class="'+(resParishView===o[0]?'on':'')+'">'+o[1]+'</button>').join('')+'</div></div><div id="resParishTbl" style="margin-top:10px"></div></div>';
+  h+='<div class="card" style="margin-top:14px"><div class="chartttl">Budget comparison (class grain)</div><div id="resBudgetTbl"></div></div>';
+  h+='<div class="card" style="margin-top:14px"><div style="display:flex;justify-content:space-between;align-items:center"><div class="chartttl" style="margin-bottom:0">Drivers</div><button class="chip" id="resExportBtn" style="border-color:var(--yel);color:#B87800;font-weight:700">⬇ Export to Excel</button></div><div id="resDrivers" style="margin-top:8px;font-size:12.5px;line-height:1.7"></div></div>';
+  document.getElementById('app').innerHTML=h;
+
+  const kpiLabels=['kWh','Revenue (J$M)','Customers'];
+  const rt10T=months.map(m=>classTotal(rt10Bucket,m)), rt20T=months.map(m=>rt20FullTotal[m]);
+  if(chart)chart.destroy();
+  chart=new Chart(document.getElementById('cResKpi'),{type:'line',
+    data:{labels:mlabels,datasets:[
+      {label:'RT10 Revenue J$M',data:rt10T.map(v=>+(v.rev/1e6).toFixed(1)),borderColor:'#D98900',backgroundColor:'#D98900',tension:.2},
+      {label:'RT20 Revenue J$M',data:rt20T.map(v=>+(v.rev/1e6).toFixed(1)),borderColor:'#2563EB',backgroundColor:'#2563EB',tension:.2},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{y:{grid:{color:'#E5EAF0'}},x:{grid:{display:false}}}}});
+
+  barChart('cResBucket',RES_BUCKET_ORDER,
+    RES_BUCKET_ORDER.map(b=>{const a=rt10Bucket[months[0]][b].cnt,c=rt10Bucket[months[months.length-1]][b].cnt;return +((c-a)).toFixed(0);}),
+    RES_BUCKET_ORDER.map((b,i)=>{const a=rt10Bucket[months[0]][b].cnt,c=rt10Bucket[months[months.length-1]][b].cnt;return(c-a)>=0?'#1D9E75':'#E24B4A';}),
+    v=>(v>=0?'+':'')+v.toLocaleString(),{x:{grid:{display:false}},y:{grid:{color:'#E5EAF0'},title:{display:true,text:'RT10 Δ customer-months, '+mlabels[0]+'→'+mlabels[mlabels.length-1]}}},false);
+
+  _renderResParish();
+  document.querySelectorAll('#resParishSeg [data-rp]').forEach(b=>b.onclick=()=>{resParishView=b.dataset.rp;_renderResParish();document.querySelectorAll('#resParishSeg [data-rp]').forEach(x=>x.classList.toggle('on',x.dataset.rp===resParishView));});
+
+  const budHtml=(rc)=>{
+    let t='<table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr style="color:var(--mut);text-align:left"><th style="padding:4px">Month</th><th style="padding:4px;text-align:right">Actual Rev J$M</th><th style="padding:4px;text-align:right">Budget Rev J$M</th><th style="padding:4px;text-align:right">Var%</th></tr></thead><tbody>';
+    months.forEach((m,i)=>{
+      const act=(rc==='RT10'?rt10T:rt20T)[i].rev, bud=(budget[rc][m]||{}).rev;
+      const varPct=bud?(act/bud-1):null;
+      t+='<tr style="border-top:1px solid var(--line)"><td style="padding:4px">'+mlabels[i]+'</td><td style="padding:4px;text-align:right">'+(act/1e6).toFixed(1)+'</td><td style="padding:4px;text-align:right">'+(bud?(bud/1e6).toFixed(1):'—')+'</td><td style="padding:4px;text-align:right" class="'+(varPct!=null?(varPct>=0?'up':'dn'):'')+'">'+(varPct!=null?(varPct>=0?'+':'')+(varPct*100).toFixed(1)+'%':'N/A')+'</td></tr>';
+    });
+    t+='</tbody></table>';
+    return t;
+  };
+  document.getElementById('resBudgetTbl').innerHTML=
+    '<div style="font-size:11px;font-weight:700;color:var(--mut);letter-spacing:1px;margin-bottom:4px">RT10</div>'+budHtml('RT10')+
+    '<div style="font-size:11px;font-weight:700;color:var(--mut);letter-spacing:1px;margin:12px 0 4px">RT20</div>'+budHtml('RT20')+
+    '<div style="font-size:11px;color:var(--mut);margin-top:8px">RT20\'s actual-vs-budget variance can be large in some months — verified against the source LE model, not a data bug (see this month\'s note if flagged). No premise-level budget exists for either class; this is class-grain only.</div>';
+
+  const drv=(rc)=>{
+    const t0=(rc==='RT10'?rt10T:rt20T)[0], t1=(rc==='RT10'?rt10T:rt20T)[months.length-1];
+    const kwhG=t0.kwh?t1.kwh/t0.kwh-1:0, custG=t0.cnt?t1.cnt/t0.cnt-1:0;
+    const upc0=t0.cnt?t0.kwh/t0.cnt:0, upc1=t1.cnt?t1.kwh/t1.cnt:0;
+    const usageG=upc0?upc1/upc0-1:0;
+    return '<div style="margin-bottom:10px"><b>'+rc+'</b> · kWh '+mlabels[0]+'→'+mlabels[mlabels.length-1]+': '+(kwhG>=0?'+':'')+(kwhG*100).toFixed(1)+'% &nbsp;·&nbsp; customer-months: '+(custG>=0?'+':'')+(custG*100).toFixed(1)+'% &nbsp;·&nbsp; usage/customer: '+(usageG>=0?'+':'')+(usageG*100).toFixed(1)+'% <span style="color:var(--mut)">('+(Math.abs(usageG)>Math.abs(custG)?'usage per customer is the larger driver':'customer count is the larger driver')+')</span></div>';
+  };
+  document.getElementById('resDrivers').innerHTML=drv('RT10')+drv('RT20')+
+    '<div style="font-size:11px;color:var(--mut);margin-top:6px">Parish labels are not consistent across views: Prepaid uses the grouped parish taxonomy; RT20 Commercial/Residential-style uses raw city-level labels straight from the billing extract. Treat as separate breakdowns.</div>';
+  document.getElementById('resExportBtn').onclick=exportResidentialExcel;
+}
+function _renderResParish(){
+  const {months,mlabels,rt10Prepaid,rt20Prepaid,rt20Real}=_resCtx;
+  const el=document.getElementById('resParishTbl'); if(!el)return;
+  const src=resParishView==='prepaid'?{RT10:rt10Prepaid,RT20:rt20Prepaid}
+    :resParishView==='rt20comm'?{RT20:rt20Real.comm}
+    :{RT20:rt20Real.res};
+  let html='';
+  Object.entries(src).forEach(([rc,byParish])=>{
+    const parishes=Object.keys(byParish).sort((a,b)=>{
+      const lastM=months[months.length-1];
+      return (byParish[b][lastM]?.rev||0)-(byParish[a][lastM]?.rev||0);
+    });
+    html+='<div style="font-size:11px;font-weight:700;color:var(--mut);letter-spacing:1px;margin:8px 0 4px">'+rc+'</div>';
+    html+='<div style="overflow-x:auto"><table style="width:100%;font-size:11.5px;border-collapse:collapse"><thead><tr style="color:var(--mut);text-align:left"><th style="padding:3px">Parish</th>'+
+      months.map(m=>'<th style="padding:3px;text-align:right">'+mlabels[months.indexOf(m)]+' Rev J$</th>').join('')+
+      '<th style="padding:3px;text-align:right">Δ%</th></tr></thead><tbody>';
+    parishes.slice(0,15).forEach(p=>{
+      const vals=months.map(m=>byParish[p][m]?.rev||0);
+      const d=vals[0]?(vals[vals.length-1]/vals[0]-1):null;
+      html+='<tr style="border-top:1px solid var(--line)"><td style="padding:3px">'+esc(p)+'</td>'+
+        vals.map(v=>'<td style="padding:3px;text-align:right">'+Math.round(v).toLocaleString()+'</td>').join('')+
+        '<td style="padding:3px;text-align:right" class="'+(d!=null?(d>=0?'up':'dn'):'')+'">'+(d!=null?(d>=0?'+':'')+(d*100).toFixed(1)+'%':'—')+'</td></tr>';
+    });
+    html+='</tbody></table></div>';
+  });
+  el.innerHTML=html;
+}
+async function exportResidentialExcel(){
+  if(!_resCtx||!window.XLSX)return;
+  const{months,mlabels,rt10Bucket,rt20Bucket,rt20FullTotal,rt10Prepaid,rt20Prepaid,rt20Real,budget,classTotal}=_resCtx;
+  const btn=document.getElementById('resExportBtn'); const orig=btn?btn.textContent:'';
+  if(btn){btn.textContent='Building…';btn.disabled=true;}
+  const wb=XLSX.utils.book_new();
+  // rt20Bucket excludes 'Commercial' (NAICS) accounts — correct for the tier-mix sheet below,
+  // but Overview/Budget need RT20's FULL real population (Commercial + residential-style bucket).
+  const totalOf=(rc,m)=>rc==='RT10'?classTotal(rt10Bucket,m):rt20FullTotal[m];
+
+  const overviewAoa=[['Metric',...mlabels]];
+  ['RT10','RT20'].forEach(rc=>{
+    overviewAoa.push([rc]);
+    const t=months.map(m=>totalOf(rc,m));
+    overviewAoa.push(['kWh',...t.map(v=>Math.round(v.kwh))]);
+    overviewAoa.push(['Revenue J$',...t.map(v=>Math.round(v.rev))]);
+    overviewAoa.push(['Customer-months',...t.map(v=>Math.round(v.cnt))]);
+  });
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(overviewAoa),'Overview');
+
+  const bucketAoa=[['Tier',...months.flatMap(m=>[mlabels[months.indexOf(m)]+' kWh',mlabels[months.indexOf(m)]+' Rev J$'])]];
+  ['RT10','RT20'].forEach(rc=>{
+    bucketAoa.push([rc]);
+    const bd=rc==='RT10'?rt10Bucket:rt20Bucket;
+    RES_BUCKET_ORDER.forEach(b=>{
+      bucketAoa.push([b,...months.flatMap(m=>[Math.round(bd[m][b].kwh),Math.round(bd[m][b].rev)])]);
+    });
+  });
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(bucketAoa),'By Bucket');
+
+  const parishAoa=[['View','Rate Class','Parish',...mlabels.map(l=>l+' Rev J$')]];
+  const addParish=(label,rc,byParish)=>Object.entries(byParish).forEach(([p,byM])=>{
+    parishAoa.push([label,rc,p,...months.map(m=>Math.round(byM[m]?.rev||0))]);
+  });
+  addParish('Prepaid','RT10',rt10Prepaid); addParish('Prepaid','RT20',rt20Prepaid);
+  addParish('RT20 Commercial','RT20',rt20Real.comm); addParish('RT20 Residential-style','RT20',rt20Real.res);
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(parishAoa),'By Parish');
+
+  const budAoa=[['Rate Class','Month','Actual Rev J$','Budget Rev J$','Var%']];
+  ['RT10','RT20'].forEach(rc=>{
+    months.forEach((m,i)=>{
+      const act=totalOf(rc,m).rev, bud=(budget[rc][m]||{}).rev;
+      budAoa.push([rc,mlabels[i],Math.round(act),bud?Math.round(bud):'',bud?+((act/bud-1)*100).toFixed(1):'']);
+    });
+  });
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(budAoa),'Budget');
+
+  XLSX.writeFile(wb,'JPS_Residential_RT10_RT20_'+mlabels[0]+'_to_'+mlabels[mlabels.length-1]+'.xlsx');
+  if(btn){btn.textContent=orig;btn.disabled=false;}
+}
+window.exportResidentialExcel=exportResidentialExcel;
+
 function render(){
   document.querySelectorAll('.toggle button').forEach(b=>b.classList.toggle('on',b.dataset.v===view));
   const N=document.getElementById('note');
@@ -1950,6 +2238,7 @@ function render(){
     document.getElementById('note').innerHTML='<b>Demand charges</b> by rate class over time — view as J$, % of revenue, or J$/kWh. RT40/50/70 carry demand; watch the band fall as volume rises. Side panel lists the biggest demand drops and the dilution-account count for the selected window.';}
   else if(view==='compare'){renderCompare();
     document.getElementById('note').innerHTML='<b>Compare</b> any two periods side by side — by rate class, revenue components (fuel/IPP/energy/demand/customer), or top-moving customers. Pick Period A and Period B; the table shows the J$ values and Δ%.';}
+  else if(view==='residential'){renderResidential();N.innerHTML='<b>RT10 / RT20</b> &mdash; residential and general-service/SME. These two classes are excluded from the rest of this app (jps_actuals segmentation rule not yet understood for them), so this tab sources them directly: consumption-tier mix (the official all-meter population), prepaid/parish detail, RT20&rsquo;s real premise population split by NAICS code, and budget comparison at class grain.';}
   else {renderCustomers();
     document.getElementById('note').innerHTML='<b>Customers</b> — '+D.accts.length+' industrial accounts (RT40/50/70). Search/filter, sort by Δ over the selected window, click any row to chart its trend. Switch to <b>By rate class</b> to compare class trajectories.';}
 }
