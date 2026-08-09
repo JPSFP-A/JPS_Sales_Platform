@@ -65,12 +65,22 @@ notes = [
     "   identity — only a monthly zero-consumption CUSTOMER COUNT is possible, not a per-customer streak.",
     "   See 'RT10-RT20 Residential Trend' sheet.",
     "",
-    "KEY FINDING: some of the longest-running streaks (19/19 months, the entire dataset window) belong to",
-    "large, well-known institutional accounts (e.g. National Water Commission, Ministry of Health, Bank of",
-    "Nova Scotia, JPS's own account) with $0 revenue in EVERY month, not just 0 kWh. A real active premise",
-    "of that size showing a literal $0 bill for 19 straight months is unusual enough to warrant a billing/CIS",
-    "investigation — this looks more like a stale or duplicate account record than genuine zero usage. See",
-    "'Streaks' sheet, filtered to rate_class RT40 for the clearest examples.",
+    "KEY FINDING (CORRECTED from an earlier draft of this report — see below): zero-kWh accounts are NOT",
+    "$0-revenue accounts. Traced a sample of the longest streaks (National Water Commission, Ministry of",
+    "Health, Bank of Nova Scotia, JPS's own account, and others) back to the raw CIS billing extract and",
+    "confirmed they bill a real minimum/standby demand charge every month even at 0 metered kWh — present",
+    "in JPS's own source file, not a pipeline artifact. The tell: many unrelated customers (from JPS itself",
+    "down to individual people) share bit-identical demand_jmd/ipp_jmd/customer_charge_jmd figures every",
+    "month, which is the signature of a standardized minimum-bill tariff tier, not duplicate records. The",
+    "'is_minbill_cluster' column on the 'Streaks' sheet flags these — 0 rows in this dataset actually have",
+    "$0 current-month revenue.",
+    "",
+    "So what's still worth flagging: these premises have registered NO metered consumption for the ENTIRE",
+    "dataset window (up to 19 straight months) and are being billed at a default minimum instead. Billing",
+    "math looks correct; the open question is operational — is the meter at these premises actually being",
+    "read at all, or has metering lapsed for over a year? Worth a CIS/field-ops check, not a revenue-",
+    "integrity one. Accounts flagged is_minbill_cluster=False are the more interesting case: an isolated,",
+    "unshared billing profile at zero for 12+ months looks more like a genuine dormant/closed account.",
 ]
 r = 4
 for line in notes:
@@ -121,9 +131,47 @@ row += 3
 ws.cell(row=row, column=2, value=("Note: 'streak' = consecutive months (no gaps) ending at the account's most recent "
                                     "billing record, all at exactly 0 kWh. 12+ months means the account has been at zero "
                                     "for the entire dataset window (Jan 2025-Jul 2026) with no positive-consumption month "
-                                    "on record at all — worth a closer look at whether these are truly active premises."))
+                                    "on record at all. See Read Me: this does NOT mean $0 revenue — most of these are on "
+                                    "a minimum-bill tariff and still generate real revenue every month."))
 ws.cell(row=row, column=2).font = Font(name=FONT, italic=True, size=10)
 ws.cell(row=row, column=2).alignment = Alignment(wrap_text=True)
+row += 2
+n_minbill = sum(1 for s in streaks if s["is_minbill_cluster"])
+n_isolated = len(streaks) - n_minbill
+n_zero_rev = sum(1 for s in streaks if s["current_monthly_revenue"] == 0)
+ws.cell(row=row, column=2, value="Minimum-bill tariff vs. isolated zero-revenue-risk accounts").font = SUB_FONT
+row += 1
+hdr2 = ["", "Count", "Meaning"]
+for i, h in enumerate(hdr2):
+    ws.cell(row=row, column=2 + i, value=h)
+style_header(ws, row, len(hdr2), start_col=2)
+row += 1
+for label, val, meaning in [
+    ("On a shared minimum-bill tariff (is_minbill_cluster=True)", n_minbill, "Real revenue every month; billing is working as designed. Operational question: is the meter being read?"),
+    ("Isolated billing profile (is_minbill_cluster=False)", n_isolated, "Not on a known shared minimum-bill default — could be a legitimate unique demand contract (several are real, large accounts) or worth a closer look. Not conclusive on its own."),
+    ("Genuinely $0 current-month revenue", n_zero_rev, f"The unambiguous finding: these {n_zero_rev} accounts generate no revenue at all, not even a minimum bill. Worth reviewing individually — see names below."),
+]:
+    ws.cell(row=row, column=2, value=label)
+    ws.cell(row=row, column=3, value=val).number_format = NUMFMT
+    ws.cell(row=row, column=4, value=meaning)
+    row += 1
+row += 2
+zero_rev_accts = [s for s in streaks if s["current_monthly_revenue"] == 0]
+if zero_rev_accts:
+    ws.cell(row=row, column=2, value="The genuinely $0-revenue accounts").font = SUB_FONT
+    row += 1
+    hdr3 = ["Account", "Name", "Rate Class", "Streak (months)", "Total Revenue During Streak J$"]
+    for i, h in enumerate(hdr3):
+        ws.cell(row=row, column=2 + i, value=h)
+    style_header(ws, row, len(hdr3), start_col=2)
+    row += 1
+    for s in zero_rev_accts:
+        ws.cell(row=row, column=2, value=s["jps_ac"])
+        ws.cell(row=row, column=3, value=s["name"])
+        ws.cell(row=row, column=4, value=s["rate_class"])
+        ws.cell(row=row, column=5, value=s["streak_len"]).number_format = NUMFMT
+        ws.cell(row=row, column=6, value=s["streak_total_revenue"]).number_format = MONEYFMT
+        row += 1
 autosize(ws, [3, 16, 24, 12, 12, 12, 22])
 
 # ===== Streaks (detail) =====
@@ -132,7 +180,8 @@ ws.sheet_view.showGridLines = False
 ws["B2"] = "Account-Level Detail — Ongoing Zero-Consumption Streaks (longest first)"
 ws["B2"].font = TITLE_FONT
 row = 4
-hdr = ["Account", "Name", "Rate Class", "Streak (months)", "Streak Start", "Streak End", "Last Nonzero Revenue J$"]
+hdr = ["Account", "Name", "Rate Class", "Streak (months)", "Streak Start", "Streak End",
+       "Current Monthly Revenue J$", "Total Revenue During Streak J$", "On Minimum-Bill Tariff?"]
 for i, h in enumerate(hdr):
     ws.cell(row=row, column=2 + i, value=h)
 style_header(ws, row, len(hdr), start_col=2)
@@ -143,13 +192,18 @@ for s in streaks:
     ws.cell(row=row, column=4, value=s["rate_class"])
     c = ws.cell(row=row, column=5, value=s["streak_len"])
     c.number_format = NUMFMT
-    if s["streak_len"] >= 12:
+    is_flag_worthy = s["streak_len"] >= 12 and not s["is_minbill_cluster"]
+    if is_flag_worthy:
         c.fill = WARN_FILL
     ws.cell(row=row, column=6, value=s["streak_start"])
     ws.cell(row=row, column=7, value=s["streak_end"])
-    ws.cell(row=row, column=8, value=s["last_nonzero_rev"]).number_format = MONEYFMT
+    ws.cell(row=row, column=8, value=s["current_monthly_revenue"]).number_format = MONEYFMT
+    ws.cell(row=row, column=9, value=s["streak_total_revenue"]).number_format = MONEYFMT
+    cflag = ws.cell(row=row, column=10, value="Yes" if s["is_minbill_cluster"] else "No — isolated")
+    if is_flag_worthy:
+        cflag.fill = WARN_FILL
     row += 1
-autosize(ws, [3, 22, 34, 12, 16, 14, 14, 20])
+autosize(ws, [3, 22, 34, 12, 16, 14, 14, 18, 20, 18])
 ws.freeze_panes = "B5"
 
 # ===== RT10 / RT20 Residential Trend =====

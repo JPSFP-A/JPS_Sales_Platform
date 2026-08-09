@@ -503,14 +503,23 @@ story.append(Paragraph(
     "customer count is possible there, not a per-account streak — see the companion "
     "Zero_Consumption_Anomaly_Report.xlsx for that trend and full account-level detail.", body))
 story.append(Spacer(1, 6))
+n_minbill = sum(1 for s in streaks if s.get("is_minbill_cluster"))
+n_zero_rev = sum(1 for s in streaks if s.get("current_monthly_revenue") == 0)
 story.append(Paragraph(
-    "Notable: several of the longest streaks belong to large, recognizable institutional accounts — National Water "
-    "Commission, Ministry of Health, Bank of Nova Scotia, JPS's own account — with $0 revenue in every one of the "
-    "19 months, not just 0 kWh. A real active premise of that size showing a literal $0 bill for 19 straight months "
-    "reads more like a stale or duplicate account record than genuine zero usage — worth a billing/CIS "
-    "investigation rather than treating as a real anomaly to action commercially.", flag))
+    "Zero kWh does not mean $0 revenue. Traced a sample of the longest streaks (National Water Commission, "
+    "Ministry of Health, Bank of Nova Scotia, JPS's own account, and others) back to the raw CIS billing extract "
+    "and confirmed they bill a real minimum/standby demand charge every month even at 0 metered kWh — present in "
+    f"JPS's own source file, not a pipeline artifact. {n_minbill:,} of the {n_total:,} streaked accounts share this "
+    f"pattern (a standardized minimum-bill tariff tier, identifiable by unrelated customers billing bit-identical "
+    f"demand/IPP/customer-charge figures); only {n_zero_rev:,} have genuinely $0 current-month revenue. The billing "
+    "math for the minimum-bill group looks correct — the open question there is operational (has metering lapsed "
+    "for over a year at these premises?), not a revenue-integrity one. The remaining accounts (not on a shared "
+    "minimum-bill default) aren't automatically dormant either — several are large, real demand contracts with "
+    f"genuine six/seven-figure monthly revenue. The unambiguous finding is narrower: only {n_zero_rev:,} account(s) "
+    "generate literally $0, not even a minimum bill — those are listed below.", flag))
 story.append(Spacer(1, 8))
-top10 = streaks[:10]
+zero_rev_accts = [s for s in streaks if s.get("current_monthly_revenue") == 0]
+top10 = zero_rev_accts
 data = [["Account", "Name", "Class", "Streak (mo)", "Start", "End"]]
 for s in top10:
     data.append([s["jps_ac"], (s["name"] or "")[:30], s["rate_class"], str(s["streak_len"]), s["streak_start"], s["streak_end"]])
