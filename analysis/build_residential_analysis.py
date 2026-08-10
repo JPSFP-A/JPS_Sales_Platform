@@ -583,14 +583,15 @@ row = write_block(ws, row, f"4. New data-quality finding: {unassigned_share:.0%}
     f"this population is large enough ({unassigned_share:.0%} of PAYG revenue) to matter for rate-class-level LE accuracy.",
 ])
 
-row = write_block(ws, row, "5. New finding: RT40/RT50/RT60-ST carry the same legacy/new duplication RT10/RT20 had", [
-    "Found while adding Prepaid to the company-wide PDF report's totals, and equally applicable here: RT40 and "
-    "RT50 have a legacy 'Postpaid' aggregate tag, and RT60-ST a legacy 'Streetlight' tag, both coexisting with "
-    "the correct per-premise 'Commercial' population for the same Jan 2025-Apr 2026 window - the identical "
-    "legacy/new duplication pattern already found and fixed for RT10/RT20 earlier in this pipeline, never "
-    "checked for these three classes. RT60-ST's 'Streetlight' tag alone carries real revenue in the "
-    "J$105-234M/month range for that window. Not yet verified and cleaned up the way RT10/RT20 were - flagged "
-    "here rather than silently left; that reconciliation is still open.",
+row = write_block(ws, row, "5. Fixed: RT40/RT50/RT60-ST had the same legacy/new duplication RT10/RT20 had", [
+    "Found while adding Prepaid to the company-wide PDF report's totals, now resolved: RT40 and RT50 carried a "
+    "legacy 'Postpaid' aggregate tag, and RT60-ST a legacy 'Streetlight' tag, both coexisting with the correct "
+    "per-premise 'Commercial' population for the same Jan 2025-Apr 2026 window - the identical legacy/new "
+    "duplication pattern already fixed for RT10/RT20 earlier in this pipeline, never checked for these three "
+    "classes until now. Verified 'Commercial' matches corrected.json's raw-file reconciliation exactly (to the "
+    "integer, sampled Jan/Jul 2025 and Apr 2026) before deleting the legacy rows - RT60-ST's 'Streetlight' tag "
+    "alone had carried real revenue in the J$105-234M/month range for that window, now removed as confirmed-"
+    "superseded duplicate data.",
 ])
 
 row = write_block(ws, row, "6. Kingston-metro (KSAN/KSAS) parish detail in the Prepaid source file has degraded", [

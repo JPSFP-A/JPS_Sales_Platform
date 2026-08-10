@@ -9,6 +9,12 @@
 # in jps_actuals (parish-aggregated only, jps_ac=''), so it structurally cannot
 # be included in an account-level movers list. That's a real data-grain limit,
 # not a bug to fix by re-aggregating.
+#
+# No consumption_bucket exclusion needed anymore: the legacy 'Postpaid'
+# (RT40/RT50) and 'Streetlight' (RT60-ST) aggregate tags that coexisted with
+# the correct per-premise 'Commercial' population for Jan 2025-Apr 2026 have
+# been verified (matched exactly against corrected.json's raw-file reconciliation)
+# and deleted -- same treatment RT10/RT20 already got.
 import json, requests
 
 SECRET = open(r'D:\Projects\DataManager\.env').read().split('=', 1)[1].strip()
@@ -57,10 +63,9 @@ def agg_row(rows):
 # session, but never checked/cleaned for these three classes. Including them
 # here would double-count real revenue on top of 'Commercial'. Excluding until
 # they get the same verify-then-delete treatment RT10/RT20 got -- see summary.
-print('fetching Jun/Jul 2026 + Jul 2025, all consumption buckets except unverified legacy tags...', flush=True)
+print('fetching Jun/Jul 2026 + Jul 2025, all consumption buckets...', flush=True)
 rows = get_all('jps_actuals',
-                {'year': 'in.(2025,2026)', 'or': '(and(year.eq.2026,month.in.(6,7)),and(year.eq.2025,month.eq.7))',
-                 'consumption_bucket': 'not.in.(Postpaid,Streetlight)'},
+                {'year': 'in.(2025,2026)', 'or': '(and(year.eq.2026,month.in.(6,7)),and(year.eq.2025,month.eq.7))'},
                 select='year,month,rate_class,kwh,revenue_jmd,demand_jmd,energy_jmd,fuel_jmd,ipp_jmd,customer_charge_jmd')
 print('rows:', len(rows), flush=True)
 

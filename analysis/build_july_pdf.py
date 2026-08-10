@@ -489,15 +489,16 @@ story.append(Paragraph(
     "this population is large enough to matter for rate-class-level LE accuracy.", flag))
 story.append(Spacer(1, 6))
 
-story.append(Paragraph("5. New finding: RT40/RT50/RT60-ST carry the same legacy/new duplication RT10/RT20 had", h2))
+story.append(Paragraph("5. Fixed: RT40/RT50/RT60-ST had the same legacy/new duplication RT10/RT20 had", h2))
 story.append(Paragraph(
-    "Found while adding Prepaid to this report's company-wide totals: RT40 and RT50 have a legacy 'Postpaid' "
-    "aggregate tag, and RT60-ST a legacy 'Streetlight' tag, both coexisting with the correct per-premise "
-    "'Commercial' population for the same Jan 2025-Apr 2026 window -- the identical legacy/new duplication "
-    "pattern already found and fixed for RT10/RT20 earlier in this pipeline, never checked for these three "
-    "classes. RT60-ST's 'Streetlight' tag alone carries real revenue in the J$105-234M/month range for that "
-    "window. Excluded from this report's totals above (to avoid double-counting) rather than guessed at, but "
-    "not yet verified and cleaned up the way RT10/RT20 were -- that reconciliation is still open.", flag))
+    "Found while adding Prepaid to this report's company-wide totals, now resolved: RT40 and RT50 carried a "
+    "legacy 'Postpaid' aggregate tag, and RT60-ST a legacy 'Streetlight' tag, both coexisting with the correct "
+    "per-premise 'Commercial' population for the same Jan 2025-Apr 2026 window -- the identical legacy/new "
+    "duplication pattern already fixed for RT10/RT20 earlier in this pipeline, never checked for these three "
+    "classes until now. Verified 'Commercial' matches corrected.json's raw-file reconciliation exactly (to the "
+    "integer, sampled Jan/Jul 2025 and Apr 2026) before deleting the legacy rows -- RT60-ST's 'Streetlight' tag "
+    "alone had carried real revenue in the J$105-234M/month range for that window, now removed as confirmed-"
+    "superseded duplicate data. This report's totals reflect the cleaned data.", body))
 story.append(Spacer(1, 6))
 
 story.append(Paragraph("6. Kingston-metro (KSAN/KSAS) parish detail in the Prepaid source has degraded", h2))
