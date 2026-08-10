@@ -45,7 +45,12 @@ for _k,_v in FILES.items(): print('  ',_k,'->',_v, flush=True)
 def NUM(v):
     if isinstance(v,(int,float)): return float(v)
     if isinstance(v,str):
-        v=v.strip()
+        v=v.strip().replace(',','')  # some 2025-vintage CSV rows use comma thousands
+        # separators (e.g. "7,807,153") inconsistently within the same file -- without
+        # stripping, float() raises and this silently returned 0.0, zeroing out real
+        # revenue/kWh for the affected row (found via Alcoa Mins Of Ja Ltd's RT70
+        # account reading 0 in corrected.json for Jul/Aug 2025 despite jps_actuals,
+        # loaded by a different script that does strip commas, having the real value).
         if v=='': return 0.0
         try: return float(v)
         except ValueError: return 0.0
@@ -105,7 +110,9 @@ def proc(path):
     it=rows
     srt={}; acc={}; buck={}; uns={}; unp={}; n=0; skipped_unbilled=0
     for r in it:
-        code=r[I['Cust_Code']]
+        code=str(r[I['Cust_Code']] or '').strip().replace(',','')  # same stray-comma
+        # issue as NUM() -- without stripping, this account's key wouldn't match its
+        # jps_actuals counterpart (e.g. "100,185-607213" vs "100185-607213")
         if code in (None,'','Cust_Code'): continue
         # cust_billed=0 means the row wasn't actually billed this cycle (verified: 5,719
         # of 724,563 June rows are 0, and over half of those still carry nonzero
