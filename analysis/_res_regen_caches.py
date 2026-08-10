@@ -34,12 +34,14 @@ def get_all(table, params, select='*'):
     return out
 
 
-# 1. Prepaid population (RT10 + RT20), Jun-Jul 2026
+# 1. Prepaid population (RT10 + RT20), May-Jul 2026 AND May-Jul 2025 (for YoY) --
+#    full history now backfilled to Jan 2025 in jps_actuals; this cache stays scoped
+#    to the residential workbook's 3-month CY window + matching PY window
 prepaid = get_all('jps_actuals', {
     'rate_class': 'in.(RT10,RT20)',
     'consumption_bucket': 'eq.Prepaid',
-    'year': 'eq.2026',
-    'month': 'in.(6,7)',
+    'year': 'in.(2025,2026)',
+    'month': 'in.(5,6,7)',
 })
 json.dump(prepaid, open('_res_prepaid.json', 'w'))
 print('prepaid:', len(prepaid))

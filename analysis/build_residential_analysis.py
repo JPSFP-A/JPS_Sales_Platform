@@ -236,6 +236,14 @@ notes = [
     "raw city-level labels straight from the billing extract (KSA South, Montego Bay, Mandeville...) because the",
     "RT20 NAICS-split script doesn't apply that mapping yet. The two parish views will not line up 1:1 - treat",
     "them as separate breakdowns, not a single reconciled geography.",
+    "",
+    "\"CUSTOMER\" COUNTS ARE PREMISE COUNTS, NOT UNIQUE CUSTOMER-ENTITY COUNTS: every individual-account row (RT20",
+    "Commercial, and any other premise-level class) is keyed as cust_code-prem_code - one row per physical",
+    "premise/meter, not per legal customer. A business with multiple premises (e.g. a bank with several branches,",
+    "a utility with many pump stations) contributes one row PER PREMISE to any customer_count/Customers total, not",
+    "one. 'X customers' anywhere in this workbook and the companion Zero_Consumption_Anomaly_Report.xlsx means X",
+    "premises/meters, which can overstate the true number of distinct customer entities for any account with",
+    "multiple connections.",
 ]
 r = 6
 for line in notes:
@@ -252,12 +260,9 @@ ws = wb.create_sheet("Overview")
 ws.sheet_view.showGridLines = False
 ws["B2"] = "Overview - Total Population (Postpaid + Prepaid, all meters)"
 ws["B2"].font = TITLE_FONT
-ws["B3"] = ("Headline kWh/Revenue/Customer figures below INCLUDE Prepaid (PAYG) wherever a Prepaid file exists for "
-            "that month. May 2026 has no Prepaid file (never supplied) so May is postpaid-only, not zero -- flagged "
-            "explicitly, not silently blended. PY (2025) columns have no Prepaid source at all, so YoY% is postpaid-"
-            "only on both sides for May, and slightly apples-to-oranges for Jun/Jul (CY includes Prepaid, PY doesn't) "
-            "-- Prepaid is a small share of the total (~1-2%), so this rarely moves the YoY conclusion, but treat "
-            "Jun/Jul YoY% as approximate, not exact, for that reason.")
+ws["B3"] = ("Headline kWh/Revenue/Customer figures below INCLUDE Prepaid (PAYG) for both CY (2026) and PY (2025) -- "
+            "Prepaid history is now backfilled from Jan 2025 through Jul 2026, so YoY% here is apples-to-apples on "
+            "both sides, not postpaid-only. 'of which' rows below show the Postpaid/Prepaid split for CY.")
 ws["B3"].font = Font(name=FONT, italic=True, size=9, color="C00000")
 ws["B3"].alignment = Alignment(wrap_text=True)
 ws.row_dimensions[3].height = 42
@@ -273,22 +278,24 @@ for rc, label in [("RT10", "RT10 - Residential"), ("RT20", "RT20 - General Servi
     cy = [class_total(m, rc) for m in MONTHS_2026]
     py = [class_total(m, rc) for m in MONTHS_2025]
 
-    def prepaid_totals(month_num, rate_class):
-        rows_m = [r for r in prepaid if r["year"] == 2026 and r["month"] == month_num and r["rate_class"] == rate_class]
+    def prepaid_totals(year_num, month_num, rate_class):
+        rows_m = [r for r in prepaid if r["year"] == year_num and r["month"] == month_num and r["rate_class"] == rate_class]
         if not rows_m:
             return None
         return sum(r["kwh"] or 0 for r in rows_m), sum(r["revenue_jmd"] or 0 for r in rows_m), sum(r["customer_count"] or 0 for r in rows_m)
 
-    pp = [prepaid_totals(mn, rc) for mn in (5, 6, 7)]
-    # Headline = postpaid + prepaid (prepaid=0 for months with no file, e.g. May)
+    pp = [prepaid_totals(2026, mn, rc) for mn in (5, 6, 7)]
+    pp_py = [prepaid_totals(2025, mn, rc) for mn in (5, 6, 7)]
+    # Headline = postpaid + prepaid (prepaid=0 for any month with no file at all)
     cyi = [(v[0] + (p[0] if p else 0), v[1] + (p[1] if p else 0), v[2] + (p[2] if p else 0)) for v, p in zip(cy, pp)]
+    pyi = [(v[0] + (p[0] if p else 0), v[1] + (p[1] if p else 0), v[2] + (p[2] if p else 0)) for v, p in zip(py, pp_py)]
 
     metrics = [
-        ("kWh", [v[0] for v in cyi], [v[0] for v in py], NUMFMT),
-        ("Revenue (J$)", [v[1] for v in cyi], [v[1] for v in py], MONEYFMT),
-        ("Customer-months", [v[2] for v in cyi], [v[2] for v in py], NUMFMT),
-        ("Rev/kWh (J$)", [v[1] / v[0] if v[0] else 0 for v in cyi], [v[1] / v[0] if v[0] else 0 for v in py], "0.00"),
-        ("Rev/customer (J$)", [v[1] / v[2] if v[2] else 0 for v in cyi], [v[1] / v[2] if v[2] else 0 for v in py], MONEYFMT),
+        ("kWh", [v[0] for v in cyi], [v[0] for v in pyi], NUMFMT),
+        ("Revenue (J$)", [v[1] for v in cyi], [v[1] for v in pyi], MONEYFMT),
+        ("Customer-months", [v[2] for v in cyi], [v[2] for v in pyi], NUMFMT),
+        ("Rev/kWh (J$)", [v[1] / v[0] if v[0] else 0 for v in cyi], [v[1] / v[0] if v[0] else 0 for v in pyi], "0.00"),
+        ("Rev/customer (J$)", [v[1] / v[2] if v[2] else 0 for v in cyi], [v[1] / v[2] if v[2] else 0 for v in pyi], MONEYFMT),
     ]
     for name, vals, pyvals, fmt in metrics:
         ws.cell(row=row, column=2, value=name).font = BOLD
@@ -336,7 +343,8 @@ row = 4
 for rc, label in [("RT10", "RT10 - Residential"), ("RT20", "RT20 - General Service / SME")]:
     ws.cell(row=row, column=2, value=label).font = SUB_FONT
     row += 1
-    hdr = ["Tier"] + [m + " kWh" for m in MLABELS] + [m + " Rev J$M" for m in MLABELS] + [m + " Cust%" for m in MLABELS]
+    hdr = (["Tier"] + [m + " kWh" for m in MLABELS] + [m + " Rev J$M" for m in MLABELS]
+           + [m + " Customers" for m in MLABELS] + [m + " Cust%" for m in MLABELS])
     for i, h in enumerate(hdr):
         ws.cell(row=row, column=2 + i, value=h)
     style_header(ws, row, len(hdr), start_col=2)
@@ -350,11 +358,17 @@ for rc, label in [("RT10", "RT10 - Residential"), ("RT20", "RT20 - General Servi
         for i, pm in enumerate(per_month):
             ws.cell(row=row, column=6 + i, value=round(pm[b]["rev"] / 1e6, 2)).number_format = "#,##0.0"
         for i, pm in enumerate(per_month):
+            ws.cell(row=row, column=9 + i, value=round(pm[b]["count"])).number_format = NUMFMT
+        for i, pm in enumerate(per_month):
             pct = pm[b]["count"] / tot_cust[i] if tot_cust[i] else 0
-            ws.cell(row=row, column=9 + i, value=pct).number_format = PCTFMT
+            ws.cell(row=row, column=12 + i, value=pct).number_format = PCTFMT
         row += 1
+    ws.cell(row=row, column=2, value="TOTAL").font = BOLD
+    for i, pm in enumerate(per_month):
+        ws.cell(row=row, column=9 + i, value=round(tot_cust[i])).number_format = NUMFMT
+        ws.cell(row=row, column=9 + i).font = BOLD
     row += 2
-autosize(ws, [3] + [14] * 9)
+autosize(ws, [3] + [14] * 12)
 
 # ===== By Parish - Prepaid =====
 ws = wb.create_sheet("By Parish - Prepaid")
