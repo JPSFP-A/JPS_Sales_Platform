@@ -14,17 +14,23 @@
 #    but some (e.g. Jan 2025) are just the admin parish name alone, no city.
 #
 # Since none of these files carry a separate GCT column, pre-GCT revenue is
-# backed out using the GCT rate empirically verified against the one file that
-# DID have both (July 2026 xlsx): GCT / Pre_GCT = 7.00% exactly, consistently,
-# across multiple sampled rows. revenue_jmd (this pipeline's pre-GCT convention,
-# matching every other jps_actuals load) = total_amount / 1.07.
+# backed out using GCT rates measured directly against the one file that DID have
+# both columns (July 2026 xlsx, 4772+222+3707 rows sampled per tariff -- this is
+# NOT a single flat rate: RT10-PAYG averages 6.96% (range 0.9-12.9%, consistent
+# with Jamaica's GCT-exempt threshold on low residential consumption), RT20-PAYG
+# averages 14.95% (~ the standard 15% rate, no residential exemption), and
+# 'unassigned' averages 7.30% (matches RT10's pattern -- most are un-tagged
+# residential accounts). Using a single 7% for all three (an earlier version of
+# this script did, before this was checked) overstated RT20's pre-GCT revenue by
+# ~8% -- fixed by keying the rate off Tariff per row.
 import csv, json, glob, os, re, sys, requests, time
+
+GCT_RATE_BY_TARIFF = {'RT10-PAYG': 0.0696, 'RT20-PAYG': 0.1495, 'unassigned': 0.0730}
 
 SECRET = open(r'D:\Projects\DataManager\.env').read().split('=', 1)[1].strip()
 URL = 'https://bhrswnbenkvflpdjhfpa.supabase.co/rest/v1/jps_actuals'
 HDRS = {'apikey': SECRET, 'Authorization': 'Bearer ' + SECRET, 'Content-Type': 'application/json',
         'Prefer': 'resolution=merge-duplicates,return=minimal'}
-GCT_RATE = 0.07
 DRY_RUN = '--dry-run' in sys.argv
 
 PMAP = {}
@@ -196,7 +202,8 @@ for mo, fn in sorted(FILES.items()):
             unmapped_n += 1
         kwh = parse_amount(r[c_kwh])
         total_amt = parse_amount(r[c_amt])
-        pre_gct = total_amt / (1 + GCT_RATE)
+        gct_rate = GCT_RATE_BY_TARIFF.get(tariff, GCT_RATE_BY_TARIFF['unassigned'])
+        pre_gct = total_amt / (1 + gct_rate)
         gct = total_amt - pre_gct
         key = (rc, parish)
         b = buckets.setdefault(key, [0.0, 0.0, 0.0, 0])

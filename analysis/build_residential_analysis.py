@@ -562,29 +562,38 @@ row = write_block(ws, row, "2. RT10 has no LE/budget model at all - Prepaid make
     "separate lines - is stronger than when RT10 was assumed to be a single homogeneous population.",
 ])
 
-row = write_block(ws, row, "3. Prepaid revenue is NOT included in the 'Overview' / 'By Bucket' totals above - by source design, not by omission", [
-    "The Overview and By Bucket sheets are built from the monthly CIS Billing Details Report, which only covers "
-    "postpaid-billed meters - prepaid (PAYG/vended) meters are a structurally separate system and were never in "
-    "that source file. This means any reader treating 'Overview' as the true total RT10/RT20 volume is understating "
-    "it: for July 2026 alone, Prepaid + the newly-identified unassigned-tariff PAYG population (see #4) together add "
-    f"J${(sum(v['revenue_jmd'] or 0 for v in prepaid if v['year']==2026 and v['month']==7) + sum(v['revenue_jmd'] or 0 for v in unassigned_payg))/1e6:,.1f}M "
-    "pre-GCT of revenue not reflected in the Overview sheet's headline numbers. Recommendation: if Overview is used "
-    "as a management-facing 'total RT10/RT20' figure, add an explicit 'incl. Prepaid' reconciliation line so readers "
-    "aren't silently missing a real, growing revenue stream.",
+rev_prepaid_only = sum(v['revenue_jmd'] or 0 for v in prepaid if v['year'] == 2026 and v['month'] == 7)
+rev_unassigned = sum(v["revenue_jmd"] or 0 for v in unassigned_payg)
+row = write_block(ws, row, "3. Prepaid revenue is now included in the Overview headline totals above", [
+    "Fixed since an earlier version of this workbook: Overview was built from the monthly CIS Billing Details "
+    "Report, which only covers postpaid-billed meters, so Prepaid was silently excluded from every headline "
+    f"figure. The headline kWh/Revenue/Customer-months above now blend Postpaid + Prepaid directly "
+    f"(J${(rev_prepaid_only + rev_unassigned)/1e6:,.1f}M pre-GCT of July 2026 revenue that was previously missing), "
+    "with an explicit 'of which: Postpaid / Prepaid' breakout kept underneath for transparency rather than hidden.",
 ])
 
 n_unassigned = sum(v["customer_count"] or 0 for v in unassigned_payg)
-rev_unassigned = sum(v["revenue_jmd"] or 0 for v in unassigned_payg)
-row = write_block(ws, row, "4. New data-quality finding: ~18% of July's PAYG revenue has no rate-class tag in the CIS extract", [
+unassigned_share = rev_unassigned / (rev_prepaid_only + rev_unassigned) if (rev_prepaid_only + rev_unassigned) else 0
+row = write_block(ws, row, f"4. New data-quality finding: {unassigned_share:.0%} of July's PAYG revenue has no rate-class tag in the CIS extract", [
     f"{n_unassigned:,.0f} prepaid customers (J${rev_unassigned/1e6:,.1f}M pre-GCT, July 2026) came through the "
     "Customer-Monthly-Transaction-Report with tariff = 'unassigned' - no RT10/RT20 designation at all. These are "
     "loaded into jps_actuals under rate_class='UNASSIGNED-PAYG' (segment='Residential', consumption_bucket='Prepaid') "
     "rather than guessed into RT10 or RT20, so the data isn't lost, but it also isn't usable for rate-class-level "
     "analysis until resolved. Recommendation: flag to Billing/CIS ops for tariff-code backfill on these accounts - "
-    "this population is large enough (18% of PAYG revenue) to matter for rate-class-level LE accuracy.",
+    f"this population is large enough ({unassigned_share:.0%} of PAYG revenue) to matter for rate-class-level LE accuracy.",
 ])
 
-row = write_block(ws, row, "5. Kingston-metro (KSAN/KSAS) parish detail in the Prepaid source file has degraded", [
+row = write_block(ws, row, "5. New finding: RT40/RT50/RT60-ST carry the same legacy/new duplication RT10/RT20 had", [
+    "Found while adding Prepaid to the company-wide PDF report's totals, and equally applicable here: RT40 and "
+    "RT50 have a legacy 'Postpaid' aggregate tag, and RT60-ST a legacy 'Streetlight' tag, both coexisting with "
+    "the correct per-premise 'Commercial' population for the same Jan 2025-Apr 2026 window - the identical "
+    "legacy/new duplication pattern already found and fixed for RT10/RT20 earlier in this pipeline, never "
+    "checked for these three classes. RT60-ST's 'Streetlight' tag alone carries real revenue in the "
+    "J$105-234M/month range for that window. Not yet verified and cleaned up the way RT10/RT20 were - flagged "
+    "here rather than silently left; that reconciliation is still open.",
+])
+
+row = write_block(ws, row, "6. Kingston-metro (KSAN/KSAS) parish detail in the Prepaid source file has degraded", [
     "The July 2026 Customer-Monthly-Transaction-Report labels the large majority of Kingston-metro PAYG customers "
     "with the generic city value 'Kingston' rather than a specific postal zone, which is not enough information to "
     "split into KSAN vs. KSAS the way earlier loads could. This build preserves the existing (already-correct) "
@@ -594,7 +603,7 @@ row = write_block(ws, row, "5. Kingston-metro (KSAN/KSAS) parish detail in the P
     "zone-level detail used to be there.",
 ])
 
-row = write_block(ws, row, "6. 'Zero' consumption-tier customers still generate real revenue - not a data error", [
+row = write_block(ws, row, "7. 'Zero' consumption-tier customers still generate real revenue - not a data error", [
     "In the jps_actuals-sourced views (e.g. 'By Parish - RT20 Real'), the 'Zero' bucket (0 kWh billed) shows "
     "non-zero revenue because Jamaican utility billing applies a fixed monthly customer/connection charge "
     "regardless of consumption - a customer who used no power still owes the connection fee (plus GCT on it). "
@@ -613,7 +622,7 @@ row = write_block(ws, row, "6. 'Zero' consumption-tier customers still generate 
     "fine enough to isolate exactly-zero consumption, so 'Zero' now correctly reads empty in this sheet.",
 ])
 
-row = write_block(ws, row, "7. Usage per customer, not customer growth, is what should drive the next LE's volume assumption", [
+row = write_block(ws, row, "8. Usage per customer, not customer growth, is what should drive the next LE's volume assumption", [
     "For both RT10 and RT20 (see Drivers sheet), customer counts are nearly flat May→July (+0.1-0.3%) while usage "
     "per customer is up 9-14%. A volume forecast built primarily off customer-count growth will materially "
     "understate near-term RT10/RT20 volume. Recommendation: weight the trailing usage-per-customer trend, not just "

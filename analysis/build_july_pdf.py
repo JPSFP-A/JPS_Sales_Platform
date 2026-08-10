@@ -265,14 +265,34 @@ rev_yoy = jul[idx["rev"]] / jul25[idx["rev"]] - 1
 kwh_mom = jul[idx["kwh"]] / jun[idx["kwh"]] - 1
 kwh_yoy = jul[idx["kwh"]] / jul25[idx["kwh"]] - 1
 
+kwh_mom_verb = "grew" if kwh_mom >= 0 else "fell"
+kwh_yoy_verb = "grew" if kwh_yoy >= 0 else "fell"
+realization_note = (
+    "revenue growth outpacing volume growth in both comparisons means realization (revenue per kWh) improved, "
+    "not just higher consumption"
+    if kwh_mom >= 0 and kwh_yoy >= 0 else
+    "revenue rising while volume fell year-on-year means realization (revenue per kWh) improved materially — "
+    "this is a rate/mix effect, not a consumption effect"
+    if kwh_yoy < 0 <= kwh_mom else
+    "revenue and volume diverging across these comparisons — see Rev/kWh trend for the realization detail"
+)
 story.append(Paragraph("Executive Summary", h1))
 story.append(Paragraph(
     f"July 2026 revenue was {moneyM(jul[idx['rev']])}, up {pct(rev_mom)} month-on-month and {pct(rev_yoy)} "
-    f"year-on-year. Volume (kWh) grew {pct(kwh_mom)} MoM and {pct(kwh_yoy)} YoY — revenue growth outpacing "
-    f"volume growth in both comparisons means realization (revenue per kWh) improved, not just higher consumption. "
+    f"year-on-year. Volume (kWh) {kwh_mom_verb} {pct(kwh_mom)} MoM and {kwh_yoy_verb} {pct(kwh_yoy)} YoY — "
+    f"{realization_note}. "
     f"Growth was broad-based across all 15 parishes (every parish grew MoM — no single region drove the gain) "
     f"and across rate classes, with RT10 (residential) and RT70 (large industrial) the largest dollar contributors.",
     body))
+story.append(Paragraph(
+    "These figures now include Prepaid (PAYG) revenue and volume for the first time, on both sides of every "
+    "comparison (Jun 2026, Jul 2026, and Jul 2025 all now carry Prepaid) — previously excluded here entirely, "
+    "which is why the YoY read has shifted from earlier versions of this report. They exclude two legacy "
+    "aggregate tags found while fixing this ('Postpaid' on RT40/RT50, 'Streetlight' on RT60-ST) that coexist "
+    "with the correct per-premise data for the same Jan 2025-Apr 2026 window and would double-count if included "
+    "— same issue already fixed for RT10/RT20 earlier this pipeline, not yet verified/cleaned for these three "
+    "classes. See the Insights section for detail.",
+    flag))
 story.append(Spacer(1, 6))
 kpi_data = [
     ["", "June 2026", "July 2026", "MoM", "July 2025", "YoY"],
@@ -450,16 +470,18 @@ story.append(Spacer(1, 6))
 
 prepaid_jul_rev = sum(v["revenue_jmd"] or 0 for v in prepaid if v["year"] == 2026 and v["month"] == 7)
 unassigned_rev = sum(v["revenue_jmd"] or 0 for v in unassigned_payg)
-story.append(Paragraph("3. Prepaid revenue is excluded from the residential Overview totals — by source design", h2))
+story.append(Paragraph("3. Prepaid revenue is now included in Overview and this report's headline totals", h2))
 story.append(Paragraph(
-    "The consumption-bucket Overview is built from the CIS Billing Details Report, which only covers postpaid "
-    f"meters. Prepaid + the newly-identified unassigned-tariff PAYG population together add {moneyM(prepaid_jul_rev + unassigned_rev)} "
-    "pre-GCT of July revenue not reflected in that headline figure. If Overview is used as a management-facing "
-    "'total RT10/RT20' number, it should carry an explicit 'incl. Prepaid' reconciliation line.", body))
+    f"Fixed since an earlier version of this report: Prepaid was built from the CIS Billing Details Report, which "
+    f"only covers postpaid meters, so it was silently excluded from every headline total in both this PDF and the "
+    f"residential Overview sheet. Both now blend Prepaid in directly ({moneyM(prepaid_jul_rev + unassigned_rev)} "
+    "pre-GCT of July revenue that was previously missing), with a Postpaid/Prepaid breakout kept for transparency "
+    "rather than hidden.", body))
 story.append(Spacer(1, 6))
 
 n_unassigned = sum(v["customer_count"] or 0 for v in unassigned_payg)
-story.append(Paragraph("4. New finding: ~18% of July PAYG revenue has no rate-class tag", h2))
+unassigned_share = unassigned_rev / (prepaid_jul_rev + unassigned_rev) if (prepaid_jul_rev + unassigned_rev) else 0
+story.append(Paragraph(f"4. New finding: {pct(unassigned_share)} of July PAYG revenue has no rate-class tag", h2))
 story.append(Paragraph(
     f"{n_unassigned:,.0f} prepaid customers ({moneyM(unassigned_rev)} pre-GCT, July) came through the CIS extract "
     "with tariff = 'unassigned'. Loaded under rate_class='UNASSIGNED-PAYG' rather than guessed into RT10/RT20, so "
@@ -467,7 +489,18 @@ story.append(Paragraph(
     "this population is large enough to matter for rate-class-level LE accuracy.", flag))
 story.append(Spacer(1, 6))
 
-story.append(Paragraph("5. Kingston-metro (KSAN/KSAS) parish detail in the Prepaid source has degraded", h2))
+story.append(Paragraph("5. New finding: RT40/RT50/RT60-ST carry the same legacy/new duplication RT10/RT20 had", h2))
+story.append(Paragraph(
+    "Found while adding Prepaid to this report's company-wide totals: RT40 and RT50 have a legacy 'Postpaid' "
+    "aggregate tag, and RT60-ST a legacy 'Streetlight' tag, both coexisting with the correct per-premise "
+    "'Commercial' population for the same Jan 2025-Apr 2026 window -- the identical legacy/new duplication "
+    "pattern already found and fixed for RT10/RT20 earlier in this pipeline, never checked for these three "
+    "classes. RT60-ST's 'Streetlight' tag alone carries real revenue in the J$105-234M/month range for that "
+    "window. Excluded from this report's totals above (to avoid double-counting) rather than guessed at, but "
+    "not yet verified and cleaned up the way RT10/RT20 were -- that reconciliation is still open.", flag))
+story.append(Spacer(1, 6))
+
+story.append(Paragraph("6. Kingston-metro (KSAN/KSAS) parish detail in the Prepaid source has degraded", h2))
 story.append(Paragraph(
     "The July Customer-Monthly-Transaction-Report labels most Kingston-metro PAYG customers with the generic city "
     "value 'Kingston' rather than a specific postal zone — not enough to split into KSAN vs. KSAS. This report "
@@ -475,7 +508,7 @@ story.append(Paragraph(
     "Worth raising with CIS/Billing if parish-level PAYG reporting matters going forward.", small))
 story.append(Spacer(1, 6))
 
-story.append(Paragraph("6. 'Zero' consumption-tier customers still generate real revenue — not a data error", h2))
+story.append(Paragraph("7. 'Zero' consumption-tier customers still generate real revenue — not a data error", h2))
 story.append(Paragraph(
     "In the jps_actuals-sourced views, the 'Zero' bucket (0 kWh billed) shows non-zero revenue because Jamaican "
     "utility billing applies a fixed monthly customer/connection charge regardless of consumption. Expected "
@@ -491,7 +524,7 @@ story.append(Paragraph(
     "exactly-zero consumption, so 'Zero' now correctly reads empty here.", small))
 story.append(Spacer(1, 6))
 
-story.append(Paragraph("7. Usage per customer, not customer growth, should drive the next LE's volume assumption", h2))
+story.append(Paragraph("8. Usage per customer, not customer growth, should drive the next LE's volume assumption", h2))
 story.append(Paragraph(
     "For both RT10 and RT20, customer counts are nearly flat May→July (+0.1–0.3%) while usage per customer is up "
     "9–14%. A volume forecast built primarily off customer-count growth will materially understate near-term "
