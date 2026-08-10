@@ -250,9 +250,18 @@ autosize(ws, [3, 118])
 # ===== Overview =====
 ws = wb.create_sheet("Overview")
 ws.sheet_view.showGridLines = False
-ws["B2"] = "Overview - Consumption-Bucket Population (official, all meters)"
+ws["B2"] = "Overview - Total Population (Postpaid + Prepaid, all meters)"
 ws["B2"].font = TITLE_FONT
-row = 4
+ws["B3"] = ("Headline kWh/Revenue/Customer figures below INCLUDE Prepaid (PAYG) wherever a Prepaid file exists for "
+            "that month. May 2026 has no Prepaid file (never supplied) so May is postpaid-only, not zero -- flagged "
+            "explicitly, not silently blended. PY (2025) columns have no Prepaid source at all, so YoY% is postpaid-"
+            "only on both sides for May, and slightly apples-to-oranges for Jun/Jul (CY includes Prepaid, PY doesn't) "
+            "-- Prepaid is a small share of the total (~1-2%), so this rarely moves the YoY conclusion, but treat "
+            "Jun/Jul YoY% as approximate, not exact, for that reason.")
+ws["B3"].font = Font(name=FONT, italic=True, size=9, color="C00000")
+ws["B3"].alignment = Alignment(wrap_text=True)
+ws.row_dimensions[3].height = 42
+row = 5
 for rc, label in [("RT10", "RT10 - Residential"), ("RT20", "RT20 - General Service / SME")]:
     ws.cell(row=row, column=2, value=label).font = SUB_FONT
     row += 1
@@ -271,13 +280,15 @@ for rc, label in [("RT10", "RT10 - Residential"), ("RT20", "RT20 - General Servi
         return sum(r["kwh"] or 0 for r in rows_m), sum(r["revenue_jmd"] or 0 for r in rows_m), sum(r["customer_count"] or 0 for r in rows_m)
 
     pp = [prepaid_totals(mn, rc) for mn in (5, 6, 7)]
+    # Headline = postpaid + prepaid (prepaid=0 for months with no file, e.g. May)
+    cyi = [(v[0] + (p[0] if p else 0), v[1] + (p[1] if p else 0), v[2] + (p[2] if p else 0)) for v, p in zip(cy, pp)]
 
     metrics = [
-        ("kWh", [v[0] for v in cy], [v[0] for v in py], NUMFMT),
-        ("Revenue (J$)", [v[1] for v in cy], [v[1] for v in py], MONEYFMT),
-        ("Customer-months", [v[2] for v in cy], [v[2] for v in py], NUMFMT),
-        ("Rev/kWh (J$)", [v[1] / v[0] if v[0] else 0 for v in cy], [v[1] / v[0] if v[0] else 0 for v in py], "0.00"),
-        ("Rev/customer (J$)", [v[1] / v[2] if v[2] else 0 for v in cy], [v[1] / v[2] if v[2] else 0 for v in py], MONEYFMT),
+        ("kWh", [v[0] for v in cyi], [v[0] for v in py], NUMFMT),
+        ("Revenue (J$)", [v[1] for v in cyi], [v[1] for v in py], MONEYFMT),
+        ("Customer-months", [v[2] for v in cyi], [v[2] for v in py], NUMFMT),
+        ("Rev/kWh (J$)", [v[1] / v[0] if v[0] else 0 for v in cyi], [v[1] / v[0] if v[0] else 0 for v in py], "0.00"),
+        ("Rev/customer (J$)", [v[1] / v[2] if v[2] else 0 for v in cyi], [v[1] / v[2] if v[2] else 0 for v in py], MONEYFMT),
     ]
     for name, vals, pyvals, fmt in metrics:
         ws.cell(row=row, column=2, value=name).font = BOLD
@@ -291,33 +302,25 @@ for rc, label in [("RT10", "RT10 - Residential"), ("RT20", "RT20 - General Servi
             c = ws.cell(row=row, column=7 + i, value=yoy); c.number_format = PCTFMT
         row += 1
 
-    # Explicit incl.-Prepaid reconciliation rows -- Overview above is postpaid-only by
-    # source design (CIS Billing Details Report never carries PAYG meters). Shown here
-    # so this sheet also gives a true combined total, not just a documented gap.
-    ws.cell(row=row, column=2, value="Prepaid (PAYG) kWh").font = Font(name=FONT, italic=True, color="7F7F7F")
+    # Breakout, for transparency -- how much of the headline total above is Prepaid.
+    ws.cell(row=row, column=2, value="  of which: Postpaid kWh").font = Font(name=FONT, italic=True, color="7F7F7F")
+    for i, v in enumerate(cy):
+        c = ws.cell(row=row, column=3 + i, value=round(v[0], 2)); c.number_format = NUMFMT
+    row += 1
+    ws.cell(row=row, column=2, value="  of which: Prepaid (PAYG) kWh").font = Font(name=FONT, italic=True, color="7F7F7F")
     for i, p in enumerate(pp):
         c = ws.cell(row=row, column=3 + i, value=round(p[0], 2) if p else "N/A (file not supplied)")
         if p:
             c.number_format = NUMFMT
     row += 1
-    ws.cell(row=row, column=2, value="Prepaid (PAYG) Revenue (J$)").font = Font(name=FONT, italic=True, color="7F7F7F")
+    ws.cell(row=row, column=2, value="  of which: Postpaid Revenue (J$)").font = Font(name=FONT, italic=True, color="7F7F7F")
+    for i, v in enumerate(cy):
+        c = ws.cell(row=row, column=3 + i, value=round(v[1], 2)); c.number_format = MONEYFMT
+    row += 1
+    ws.cell(row=row, column=2, value="  of which: Prepaid (PAYG) Revenue (J$)").font = Font(name=FONT, italic=True, color="7F7F7F")
     for i, p in enumerate(pp):
         c = ws.cell(row=row, column=3 + i, value=round(p[1], 2) if p else "N/A (file not supplied)")
         if p:
-            c.number_format = MONEYFMT
-    row += 1
-    ws.cell(row=row, column=2, value="TOTAL kWh incl. Prepaid").font = BOLD
-    for i, (v, p) in enumerate(zip(cy, pp)):
-        total = v[0] + p[0] if p else None
-        c = ws.cell(row=row, column=3 + i, value=round(total, 2) if total is not None else "N/A")
-        if total is not None:
-            c.number_format = NUMFMT
-    row += 1
-    ws.cell(row=row, column=2, value="TOTAL Revenue incl. Prepaid (J$)").font = BOLD
-    for i, (v, p) in enumerate(zip(cy, pp)):
-        total = v[1] + p[1] if p else None
-        c = ws.cell(row=row, column=3 + i, value=round(total, 2) if total is not None else "N/A")
-        if total is not None:
             c.number_format = MONEYFMT
     row += 1
 
