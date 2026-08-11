@@ -1628,69 +1628,163 @@ function renderCompare(){
   const me=document.getElementById('cmMet'); if(me)me.onchange=e=>{cmMet=e.target.value;renderCompare();};
 }
 
-let nbA=null,nbB=null,nbClass='ALL',nbSearch='',nbSort='rev',nbDir=-1;
+let nbA=null,nbB=null,nbClass='ALL',nbSearch='',nbSort='iCur',nbDir=-1,nbMode='monthly';
 function setNbSort(k){ if(nbSort===k){ nbDir = nbDir<=0 ? 1 : -1; } else { nbSort=k; nbDir=-1; } renderNotBilled(); }
 window.setNbSort=setNbSort;
-// "Not billed" — accounts with a row in Period A but NO row at all in Period B
-// (a.pres[iA]===true && a.pres[iB]===false). Scoped to D.accts, i.e. RT40/RT50/
-// RT60/RT70 premise accounts — same industrial-account grain as the Customers tab;
-// RT10/RT20 aren't in this app's data (mass-market bucket grain, see D.accts note
-// on the Customers tab). A dropped row can mean closure, rate-class change, or a
-// load timing gap — not proof of churn on its own; worth a raw-file check before acting.
-function renderNotBilled(){
+// "Not billed" — accounts with a row in one month but NO row at all the next
+// (a.pres[i-1]===true && a.pres[i]===false). Base grain is D.accts (RT40/RT50/
+// RT60/RT70 premise accounts, same as the Customers tab) plus RT20's 'Commercial'
+// premise-level rows, lazily fetched below -- RT10 stays out entirely because it
+// has NO account-level rows in jps_actuals at all (pure 50kWh-bucket histogram,
+// no jps_ac), so there's no customer identity to diff.
+let _rt20Accts=null,_rt20Loading=false;
+async function _fetchRT20Commercial(){
+  if(_rt20Accts)return _rt20Accts;
+  const PAGE=1000;
+  const{count,error:countErr}=await _SB.from('jps_actuals').select('*',{count:'exact',head:true}).eq('rate_class','RT20').eq('consumption_bucket','Commercial');
+  if(countErr||!count){_rt20Accts=[];return _rt20Accts;}
+  const pages=Math.ceil(count/PAGE);
+  const results=await Promise.all(Array.from({length:pages},(_,p)=>
+    _sbRetry(()=>_SB.from('jps_actuals').select('jps_ac,year,month,name,parish,kwh,revenue_jmd').eq('rate_class','RT20').eq('consumption_bucket','Commercial').order('id',{ascending:true}).range(p*PAGE,p*PAGE+PAGE-1))));
+  const all=[];results.forEach(({data,error})=>{if(!error&&data)all.push(...data);});
+  const mIdx={};D.months.forEach((m,i)=>mIdx[m]=i);
+  const acctMap={};
+  all.forEach(r=>{
+    const j=mIdx[r.year+'-'+String(r.month).padStart(2,'0')];if(j==null)return;
+    const key=r.jps_ac+'~RT20';
+    let a=acctMap[key];
+    if(!a){a={id:key,n:r.name,c:'RT20',pg:r.parish||'UNMAPPED',kam:'',
+      // dem stays all-zero -- RT10/RT20 mass-market has no demand-charge component,
+      // and openAcctModal's breakdown reads a.dem[i] directly (must exist, not be undefined).
+      kwh:new Array(D.months.length).fill(0),rev:new Array(D.months.length).fill(0),dem:new Array(D.months.length).fill(0),
+      pres:new Array(D.months.length).fill(false)};acctMap[key]=a;}
+    a.kwh[j]+=(+r.kwh||0);a.rev[j]+=(+r.revenue_jmd||0);a.pres[j]=true;
+  });
+  _rt20Accts=Object.values(acctMap);
+  return _rt20Accts;
+}
+function _nbSource(){
+  if(nbClass==='RT20')return _rt20Accts||[];
+  if(nbClass==='ALL')return D.accts.concat(_rt20Accts||[]);
+  return D.accts.filter(a=>a.c===nbClass);
+}
+// Account_Status lookup, backfilled from the raw Billing Details Report (jps_actuals
+// itself has no status field) — see build_account_status.py. Only covers months where
+// a raw file exists locally; STATUS_COVERED_MONTHS lists exactly which ones, so a
+// missing lookup can be told apart from "no source for this month at all".
+const STATUS_COVERED_MONTHS=new Set(['2025-05','2025-10','2025-11','2025-12','2026-01','2026-02','2026-03','2026-04','2026-05','2026-06','2026-07']);
+const _statusCache={};
+async function _fetchAccountStatus(jpsAcList){
+  const need=[...new Set(jpsAcList)].filter(ac=>!(ac in _statusCache));
+  if(!need.length)return _statusCache;
+  const CH=100, chunks=[];
+  for(let i=0;i<need.length;i+=CH)chunks.push(need.slice(i,i+CH));
+  const results=await Promise.all(chunks.map(c=>_SB.from('jps_account_status').select('jps_ac,year,month,status').in('jps_ac',c)));
+  need.forEach(ac=>{_statusCache[ac]=_statusCache[ac]||{};});
+  results.forEach(({data,error})=>{if(error||!data)return;data.forEach(r=>{
+    _statusCache[r.jps_ac]=_statusCache[r.jps_ac]||{};
+    _statusCache[r.jps_ac][r.year+'-'+String(r.month).padStart(2,'0')]=r.status;
+  });});
+  return _statusCache;
+}
+function _statusFor(ac,ym){
+  const rec=_statusCache[ac];
+  const code=rec?rec[ym]:undefined;
+  if(code)return{code,label:code==='A'?'Active — check pipeline':code==='I'?'Inactive':'Status '+code};
+  return{code:null,label:STATUS_COVERED_MONTHS.has(ym)?'Not in raw file (renumbered?)':'No raw file this month'};
+}
+async function renderNotBilled(){
   const nIdx=selIdx();
   if(nbA==null||!sel.has(nbA))nbA=D.months[nIdx[0]];
   if(nbB==null||!sel.has(nbB))nbB=D.months[nIdx[nIdx.length-1]];
   const iA=D.months.indexOf(nbA), iB=D.months.indexOf(nbB);
   const nOpt=(cur)=>nIdx.map(i=>'<option value="'+D.months[i]+'"'+(cur===D.months[i]?' selected':'')+'>'+D.mlabels[i]+'</option>').join('');
-  let h='<div class="ctrl">'+
-    '<div class="seg">'+['ALL','RT40','RT50','RT60','RT70'].map(x=>'<button data-nbf="'+x+'" class="'+(nbClass===x?'on':'')+'">'+(x==='ALL'?'All':x)+'</button>').join('')+'</div>'+
-    '<span class="lbl">Billed in</span><select id="nbA">'+nOpt(nbA)+'</select>'+
-    '<span class="lbl">missing by</span><select id="nbB">'+nOpt(nbB)+'</select>'+
-    '<input class="search" id="nbsearch" placeholder="Search customer or cust code…" value="'+esc(nbSearch)+'">'+
+  const rt20Needed=(nbClass==='ALL'||nbClass==='RT20');
+  let h='<div class="ctrl"><div class="seg">'+[['monthly','Monthly log'],['custom','Custom range']].map(o=>'<button data-nbm="'+o[0]+'" class="'+(nbMode===o[0]?'on':'')+'">'+o[1]+'</button>').join('')+'</div>'+
+    '<div class="seg">'+['ALL','RT20','RT40','RT50','RT60','RT70'].map(x=>'<button data-nbf="'+x+'" class="'+(nbClass===x?'on':'')+'">'+(x==='ALL'?'All':x)+'</button>').join('')+'</div>';
+  if(nbMode==='custom')h+='<span class="lbl">Billed in</span><select id="nbA">'+nOpt(nbA)+'</select><span class="lbl">missing by</span><select id="nbB">'+nOpt(nbB)+'</select>';
+  h+='<input class="search" id="nbsearch" placeholder="Search customer or cust code…" value="'+esc(nbSearch)+'">'+
     '<button class="chip" id="nbexport" style="border-color:var(--yel);color:var(--yel);font-weight:700">⬇ Excel</button></div>';
+  h+='<div id="nbBody"><div class="card" style="text-align:center;padding:30px;color:var(--mut)">'+(rt20Needed&&!_rt20Accts?'Loading RT20 accounts (~77K premise rows, first load only)…':'Loading…')+'</div></div>';
+  document.getElementById('app').innerHTML=h;
+  document.getElementById('nbsearch').oninput=e=>{nbSearch=e.target.value;renderNotBilled();const el=document.getElementById('nbsearch');el.focus();el.setSelectionRange(el.value.length,el.value.length);};
+  document.querySelectorAll('[data-nbf]').forEach(b=>b.onclick=()=>{nbClass=b.dataset.nbf;renderNotBilled();});
+  document.querySelectorAll('[data-nbm]').forEach(b=>b.onclick=()=>{nbMode=b.dataset.nbm;if(nbMode==='monthly')nbSort='iCur';else nbSort='rev';nbDir=-1;renderNotBilled();});
+  const nbAEl=document.getElementById('nbA'),nbBEl=document.getElementById('nbB');
+  if(nbAEl)nbAEl.onchange=e=>{nbA=e.target.value;renderNotBilled();};
+  if(nbBEl)nbBEl.onchange=e=>{nbB=e.target.value;renderNotBilled();};
+
+  if(rt20Needed&&!_rt20Accts&&!_rt20Loading){_rt20Loading=true;await _fetchRT20Commercial();_rt20Loading=false;}
+  if(view!=='notbilled')return; // user navigated away while RT20 was loading
+  const src=_nbSource();
   const q=nbSearch.toLowerCase();
-  const rows=(iA===iB?[]:D.accts).filter(a=>(nbClass==='ALL'||a.c===nbClass)&&a.pres[iA]&&!a.pres[iB]&&(a.n.toLowerCase().includes(q)||acctNum(a.id).toLowerCase().includes(q)))
-    .map(a=>({id:a.id,name:a.n,acct:acctNum(a.id),cls:a.c,pg:a.pg||'',kam:a.kam||'',kwh:a.kwh[iA],rev:a.rev[iA],dem:a.dem[iA]}))
-    .sort((x,y)=>{const va=x[nbSort],vb=y[nbSort];
-      if(nbSort==='name'||nbSort==='cls'||nbSort==='acct'||nbSort==='pg'||nbSort==='kam') return nbDir>0?String(va).localeCompare(String(vb)):String(vb).localeCompare(String(va));
-      return nbDir>0?((va||0)-(vb||0)):((vb||0)-(va||0));});
+  const passQ=a=>!q||a.n.toLowerCase().includes(q)||acctNum(a.id).toLowerCase().includes(q);
+
+  let rows;
+  if(nbMode==='monthly'){
+    rows=[];
+    for(let k=1;k<nIdx.length;k++){
+      const iPrev=nIdx[k-1],iCur=nIdx[k];
+      src.forEach(a=>{
+        if(!(a.pres[iPrev]&&!a.pres[iCur]))return;
+        if(!passQ(a))return;
+        rows.push({id:a.id,name:a.n,acct:acctNum(a.id),cls:a.c,pg:a.pg||'',kam:a.kam||'',
+          kwh:a.kwh[iPrev],rev:a.rev[iPrev],mFrom:D.mlabels[iPrev],mTo:D.mlabels[iCur],mToKey:D.months[iCur],iPrev,iCur});
+      });
+    }
+  } else {
+    rows=iA===iB?[]:src.filter(a=>a.pres[iA]&&!a.pres[iB]&&passQ(a)).map(a=>({id:a.id,name:a.n,acct:acctNum(a.id),cls:a.c,pg:a.pg||'',kam:a.kam||'',
+      kwh:a.kwh[iA],rev:a.rev[iA],mFrom:D.mlabels[iA],mTo:D.mlabels[iB],mToKey:D.months[iB],iPrev:iA,iCur:iB}));
+  }
+  rows.sort((x,y)=>{const va=x[nbSort],vb=y[nbSort];
+    if(nbSort==='name'||nbSort==='cls'||nbSort==='acct'||nbSort==='pg'||nbSort==='kam') return nbDir>0?String(va).localeCompare(String(vb)):String(vb).localeCompare(String(va));
+    return nbDir>0?((va||0)-(vb||0)):((vb||0)-(va||0));});
+
+  await _fetchAccountStatus(rows.map(r=>r.acct));
+  if(view!=='notbilled')return;
+
   const totRev=rows.reduce((s,r)=>s+r.rev,0), totKwh=rows.reduce((s,r)=>s+r.kwh,0);
-  h+='<div style="margin:0 2px 8px;color:var(--mut);font-size:12px">'+(iA===iB?'Pick two different periods.':rows.length+' account'+(rows.length===1?'':'s')+' billed in '+D.mlabels[iA]+' with no row at all in '+D.mlabels[iB]+' — last known J$'+(totRev/1e6).toFixed(2)+'M / '+(totKwh/1e6).toFixed(2)+' GWh')+'</div>';
+  const activeGap=rows.filter(r=>_statusFor(r.acct,r.mToKey).code==='A').length;
+  const body=document.getElementById('nbBody');
   const arr=k=>nbSort===k?(nbDir>0?' ▲':' ▼'):'';
   const TH=(k,lab,cl)=>'<th'+(cl?' class="'+cl+'"':'')+' onclick="setNbSort(\''+k+'\')" title="click to sort">'+lab+arr(k)+'</th>';
-  h+='<div class="grid"><div class="card" style="padding:10px"><div class="tbl"><table><thead><tr>'+
-     TH('name','Customer','l')+TH('acct','Cust Code','l')+TH('cls','Cls')+TH('pg','Parish','l')+TH('kam','KAM','l')+TH('kwh','Last kWh')+TH('rev','Last Rev J$')+
+  let bh='<div style="margin:0 2px 8px;color:var(--mut);font-size:12px">'+
+    (nbMode==='monthly'?rows.length+' gap'+(rows.length===1?'':'s')+' across '+D.mlabels[nIdx[0]]+' → '+D.mlabels[nIdx[nIdx.length-1]]:
+      (iA===iB?'Pick two different periods.':rows.length+' account'+(rows.length===1?'':'s')+' billed in '+D.mlabels[iA]+' with no row at all in '+D.mlabels[iB]))+
+    (rows.length?' — last known J$'+(totRev/1e6).toFixed(2)+'M / '+(totKwh/1e6).toFixed(2)+' GWh':'')+'</div>';
+  bh+='<div class="grid"><div class="card" style="padding:10px"><div class="tbl"><table><thead><tr>'+
+     (nbMode==='monthly'?TH('iCur','Month'):'')+TH('name','Customer','l')+TH('acct','Cust Code','l')+TH('cls','Cls')+TH('pg','Parish','l')+TH('kam','KAM','l')+TH('kwh','Last kWh')+TH('rev','Last Rev J$')+'<th class="l">Status</th>'+
      '</tr></thead><tbody id="tb"></tbody></table></div></div><div class="kpis" id="kp"></div></div>';
-  document.getElementById('app').innerHTML=h;
-  document.getElementById('tb').innerHTML=rows.length?rows.map(r=>
-    '<tr onclick="pickAt(\''+r.id+'\','+iA+','+iB+')">'+
+  body.innerHTML=bh;
+  document.getElementById('tb').innerHTML=rows.length?rows.map(r=>{
+    const st=_statusFor(r.acct,r.mToKey);
+    return '<tr onclick="pickAt(\''+r.id+'\','+r.iPrev+','+r.iCur+')">'+
+    (nbMode==='monthly'?'<td class="l" style="color:var(--mut)">'+r.mTo+'</td>':'')+
     '<td class="l">'+esc(r.name).slice(0,30)+'</td>'+
     '<td class="l" style="font-family:monospace;font-size:11px;color:var(--mut)">'+esc(r.acct)+'</td>'+
     '<td><span class="badge">'+r.cls+'</span></td>'+
     '<td class="l">'+esc(r.pg)+'</td>'+
     '<td class="l">'+esc(r.kam)+'</td>'+
     '<td>'+r.kwh.toLocaleString(undefined,{maximumFractionDigits:0})+'</td>'+
-    '<td>'+r.rev.toLocaleString(undefined,{maximumFractionDigits:0})+'</td></tr>').join('')
-    :'<tr><td colspan="7" style="text-align:center;color:var(--mut);padding:20px">'+(iA===iB?'':'No accounts dropped out for this class/window.')+'</td></tr>';
+    '<td>'+r.rev.toLocaleString(undefined,{maximumFractionDigits:0})+'</td>'+
+    '<td class="l"'+(st.code==='A'?' style="color:#B87800;font-weight:700"':'')+'>'+(st.code==='A'?'⚑ ':'')+esc(st.label)+'</td></tr>';
+  }).join('')
+    :'<tr><td colspan="'+(nbMode==='monthly'?9:8)+'" style="text-align:center;color:var(--mut);padding:20px">'+(nbMode==='custom'&&iA===iB?'':'No gaps for this class/window.')+'</td></tr>';
   const byCls={};rows.forEach(r=>{byCls[r.cls]=(byCls[r.cls]||0)+r.rev;});
   const clsBreak=Object.entries(byCls).sort((a,b)=>b[1]-a[1]).map(([c,v])=>'<div style="display:flex;justify-content:space-between;gap:8px"><span class="muted">'+c+'</span><span>J$'+(v/1e6).toFixed(2)+'M</span></div>').join('')||'<span class="muted">—</span>';
   document.getElementById('kp').innerHTML=
-    kpi('Accounts dropped',rows.length,D.mlabels[iA]+' → '+D.mlabels[iB])+
+    kpi(nbMode==='monthly'?'Gaps in window':'Accounts dropped',rows.length,nbMode==='monthly'?D.mlabels[nIdx[0]]+' → '+D.mlabels[nIdx[nIdx.length-1]]:D.mlabels[iA]+' → '+D.mlabels[iB])+
+    kpi('Still Active — pipeline gap',activeGap,activeGap?'raw file shows Active; check why it dropped':'none flagged','dn')+
     kpi('Last-known revenue',rows.length?'J$'+(totRev/1e6).toFixed(2)+'M':'—','at risk if not billed again','dn')+
     kpi('Biggest single loss',rows.length?esc(rows.slice().sort((a,b)=>b.rev-a.rev)[0].name).slice(0,20):'—',rows.length?'J$'+(rows.slice().sort((a,b)=>b.rev-a.rev)[0].rev/1e6).toFixed(2)+'M':'')+
     '<div class="kpi"><div class="l">By class</div><div style="font-size:12px;line-height:1.7;margin-top:4px">'+clsBreak+'</div></div>';
-  document.getElementById('nbA').onchange=e=>{nbA=e.target.value;renderNotBilled();};
-  document.getElementById('nbB').onchange=e=>{nbB=e.target.value;renderNotBilled();};
-  document.querySelectorAll('[data-nbf]').forEach(b=>b.onclick=()=>{nbClass=b.dataset.nbf;renderNotBilled();});
-  document.getElementById('nbsearch').oninput=e=>{nbSearch=e.target.value;renderNotBilled();const el=document.getElementById('nbsearch');el.focus();el.setSelectionRange(el.value.length,el.value.length);};
-  document.getElementById('nbexport').onclick=()=>exportNotBilled(iA,iB,rows);
+  document.getElementById('nbexport').onclick=()=>exportNotBilled(rows);
 }
-function exportNotBilled(iA,iB,rows){
-  const hdr=['Customer','Cust Code','Class','Parish','KAM','Last kWh ('+D.mlabels[iA]+')','Last Revenue J$ ('+D.mlabels[iA]+')'];
-  const body=rows.map(r=>[r.name,r.acct,r.cls,r.pg,r.kam,+r.kwh.toFixed(1),+r.rev.toFixed(0)]);
+function exportNotBilled(rows){
+  const hdr=['Month dropped','Customer','Cust Code','Class','Parish','KAM','Last kWh','Last Revenue J$','Status'];
+  const body=rows.map(r=>{const st=_statusFor(r.acct,r.mToKey);return[r.mTo,r.name,r.acct,r.cls,r.pg,r.kam,+r.kwh.toFixed(1),+r.rev.toFixed(0),st.label];});
   const aoa=[hdr].concat(body);
-  const fname='JPS_NotBilled_'+D.months[iA]+'_to_'+D.months[iB];
+  const fname='JPS_NotBilled_'+(nbMode==='monthly'?'monthly_log':D.months[D.months.indexOf(nbA)]+'_to_'+D.months[D.months.indexOf(nbB)]);
   if(window.XLSX){
     const ws=XLSX.utils.aoa_to_sheet(aoa);
     const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Not billed'); XLSX.writeFile(wb,fname+'.xlsx');
@@ -2317,7 +2411,7 @@ function render(){
   else if(view==='compare'){renderCompare();
     document.getElementById('note').innerHTML='<b>Compare</b> any two periods side by side — by rate class, revenue components (fuel/IPP/energy/demand/customer), or top-moving customers. Pick Period A and Period B; the table shows the J$ values and Δ%.';}
   else if(view==='notbilled'){renderNotBilled();
-    document.getElementById('note').innerHTML='<b>Not billed</b> &mdash; accounts that had a billing row in the first period and none at all in the second (not just $0 usage). RT40/RT50/RT60/RT70 premise accounts only (this app has no RT10/RT20 account-level data). A missing row can mean a real closure, a rate-class change, or a load-timing gap &mdash; check the raw Billing Details file for any large account before treating it as churn.';}
+    document.getElementById('note').innerHTML='<b>Not billed</b> &mdash; <b>Monthly log</b> flags every consecutive month-to-month gap across the loaded window; <b>Custom range</b> compares any two periods directly. RT20 (Commercial)/RT40/RT50/RT60/RT70 premise accounts (RT10 has no account-level rows in jps_actuals at all, so it can\'t be tracked here). <b>Status</b> comes from the raw Billing Details Report\'s Account_Status field (jps_actuals has none) &mdash; <span style="color:#B87800;font-weight:700">⚑ Active</span> means the account is still Active in JPS\'s own file and simply didn\'t process that month (a real pipeline gap, worth chasing), vs Inactive (closed) or "not in raw file" (often a premise renumber/consolidation, not a lost customer). Status is only backfilled for months with a raw file on disk.';}
   else if(view==='residential'){renderResidential();N.innerHTML='<b>RT10 / RT20</b> &mdash; residential and general-service/SME. These two classes are excluded from the rest of this app (jps_actuals segmentation rule not yet understood for them), so this tab sources them directly: consumption-tier mix (the official all-meter population), prepaid/parish detail, RT20&rsquo;s real premise population split by NAICS code, and budget comparison at class grain.';}
   else {renderCustomers();
     document.getElementById('note').innerHTML='<b>Customers</b> — '+D.accts.length+' industrial accounts (RT40/50/70). Search/filter, sort by Δ over the selected window, click any row to chart its trend. Switch to <b>By rate class</b> to compare class trajectories.';}
