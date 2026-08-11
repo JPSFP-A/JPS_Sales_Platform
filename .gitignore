@@ -13,6 +13,7 @@ analysis/*
 !analysis/*.bat
 !analysis/*.js
 !analysis/app2_template.html
+!analysis/sales_explorer.html
 salesanalysis_deploy/
 *.pre-submit.bak.html
 
