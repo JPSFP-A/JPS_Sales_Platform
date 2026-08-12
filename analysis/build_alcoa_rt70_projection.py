@@ -7,14 +7,18 @@
 # jps_actuals' kwh/revenue already have the multiplier applied; the Drivers-tab
 # multiplier is an ADDITIONAL override for scenario testing, not a re-application.
 #
-# IMPORTANT: jps_actuals' 5 named components (demand/fuel/energy/ipp/customer
-# charge) only explain ~39% of this account's actual billed revenue -- the
-# remaining ~61% is a large, $/kWh-consistent residual (avg $26.01/kWh vs.
-# revenue/kWh swings of $23-32/kWh across all 19 months) not broken out in the
-# DB schema (likely base energy tariff + Tariff_Adj/FEX/EEIF/rint from the raw
-# billing file, which HAS those columns but jps_actuals doesn't). Modeled here
-# as its own tracked "Other/Base Tariff" component so Total Revenue reconciles
-# to real historical actuals instead of silently understating it by ~2/3.
+# jps_actuals.fuel_jmd was $0 in all 19 months for this account (unlike every
+# other RT40/50/70 account, all with fuel ~60-70% of revenue) -- Alcoa's own raw
+# extracts never populate the Fuel/FuelOffPeak/FuelPartialPeak/FuelOnPeak columns,
+# but the true fuel charge is embedded in Revenue: the Aug-2025 reversal-of-July
+# row itemizes real TOU fuel that matches July's unexplained residual almost
+# exactly. Recomputed and backfilled fuel_jmd (Revenue-Demand-Energy-IPP-
+# CustCharge-GCT-FEX) for the 13 of 19 months with a raw file available
+# (2026-08-12) -- those now reconcile to ~96-99.7% of revenue via 6 named
+# components. Jan/Feb/Mar/Apr/Jun/Sep-2025 have no raw file anywhere on this
+# machine to verify, so fuel stays $0 there and "Other/Base Tariff" (still
+# tracked as its own component, so Total Revenue always reconciles) carries the
+# full unexplained residual for those 6 months only.
 #
 # Demand/Energy/IPP/Fuel/Other are all modeled as $/kWh rates derived from
 # history and escalated by driver %, since no per-month kVA history is
@@ -56,7 +60,7 @@ hs.merge_cells('A1:O1')
 hs['A1'].fill = NAVY
 hs['A1'].alignment = Alignment(vertical='center', indent=1)
 hs.row_dimensions[1].height = 22
-hs['A2'] = 'Account 100185-607213 · Source: jps_actuals (Supabase bhrswnbenkvflpdjhfpa), pulled 2026-08-11 · GCT-exempt (0 in all 19 months) · Fuel $0 in all 19 months'
+hs['A2'] = 'Account 100185-607213 · Source: jps_actuals (Supabase bhrswnbenkvflpdjhfpa), pulled 2026-08-11 · GCT-exempt (0 in all 19 months) · Fuel corrected 2026-08-12 for 13 of 19 months (see note below) — Jan/Feb/Mar/Apr/Jun/Sep-2025 still show $0, raw file unavailable to verify'
 hs['A2'].font = Font(name=FONT, italic=True, size=9, color='6B7A99')
 hs.merge_cells('A2:O2')
 
@@ -77,21 +81,21 @@ ROWS = [
     (2025, 2, 7558914, 338431883, 98780063, 0, 36963087, 15370340, 9067, 0),
     (2025, 3, 9220246, 347997726, 62116062, 0, 45087002, 6840302, 9067, 0),
     (2025, 4, 6776457, 306339672, 99821400, 0, 33136874, 14980429, 9067, 0),
-    (2025, 5, 6360004, 304760808, 96646281, 0, 31100421, 12528312, 9067, 0),
+    (2025, 5, 6360004, 304760808, 96646281, 159584943, 31100421, 12528312, 9067, 0),
     (2025, 6, 6112234, 254803373, 58048083, 0, 29888823, 7104539, 9067, 0),
-    (2025, 7, 7807153, 285797656, 56361244, 0, 38176979, 9708956, 9067, 0),
-    (2025, 8, 6836301, 257804420, 57679201, 0, 33429511, 9124644, 9066, 0),
+    (2025, 7, 7807153, 285797656, 56361244, 178924341, 38176979, 9708956, 9067, 0),
+    (2025, 8, 6836301, 257804420, 57679201, 154623450, 33429511, 9124644, 9066, 0),
     (2025, 9, 6921867, 273820535, 55312236, 0, 33847930, 7948863, 9067, 0),
-    (2025, 10, 7047477, 322020733, 84597439, 0, 34462161, 11382804, 9067, 0),
-    (2025, 11, 3374336, 201961923, 81023034, 0, 16500501, 11610645, 9067, 0),
-    (2025, 12, 1864266, 92527465, 26065364, 0, 9116260, 2813669, 9067, 0),
-    (2026, 1, 3618112, 154329498, 36146527, 0, 17692567, 7872014, 9067, 0),
-    (2026, 2, 6153753, 252683564, 38373999, 0, 30091855, 7675975, 9067, 0),
-    (2026, 3, 8480800, 401358542, 75273321, 0, 41471114, 14501754, 9067, 0),
-    (2026, 4, 8347849, 313688892, 51555757, 0, 40820984, 4411433, 9067, 0),
-    (2026, 5, 9056910, 344070135, 50765228, 0, 44288292, 6643840, 9067, None),
-    (2026, 6, 8590490, 388387586, 99821400, 0, 42007496, 15274424, 9067, 0),
-    (2026, 7, 9004421, 347336115, 59964170, 0, 44031617, 9457813, 9067, None),
+    (2025, 10, 7047477, 322020733, 84597439, 187744778, 34462161, 11382804, 9067, 0),
+    (2025, 11, 3374336, 201961923, 81023034, 89564989, 16500501, 11610645, 9067, 0),
+    (2025, 12, 1864266, 92527465, 26065364, 53396300, 9116260, 2813669, 9067, 0),
+    (2026, 1, 3618112, 154329498, 36146527, 91292198, 17692567, 7872014, 9067, 0),
+    (2026, 2, 6153753, 252683564, 38373999, 175634278, 30091855, 7675975, 9067, 0),
+    (2026, 3, 8480800, 401358542, 75273321, 268739604, 41471114, 14501754, 9067, 0),
+    (2026, 4, 8347849, 313688892, 51555757, 215182515, 40820984, 4411433, 9067, 0),
+    (2026, 5, 9056910, 344070135, 50765228, 240814189, 44288292, 6643840, 9067, None),
+    (2026, 6, 8590490, 388387586, 99821400, 228756157, 42007496, 15274424, 9067, 0),
+    (2026, 7, 9004421, 347336115, 59964170, 225515413, 44031617, 9457813, 9067, None),
 ]
 MNAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 r = r0 + 1
@@ -140,8 +144,10 @@ hs['A' + str(r + 2)] = ('Note: Jul/Aug-2025 corrected 2026-08-11. Jul-2025 (7,80
                          'The Aug-2025 raw extract separately carried BOTH a positive 14,643,454 kWh / $543,602,076 charge AND an exact reversal of the Jul bill (-7,807,153 kWh / -$285,797,656, comma-formatted Cust_Code) -- '
                          'the reversal was silently dropped by the same bug, so jps_actuals kept Aug\'s raw positive figure un-netted, double-counting Jul\'s consumption on top of the real Jul bill. '
                          'Aug-2025 is now the net of both rows: 6,836,301 kWh / $257,804,420 (demand/energy/IPP/customer-charge components netted the same way; the customer-charge net of 9,066 vs. every other month\'s ~9,067 corroborates this reading). '
-                         '"Other/Base $" = Revenue - (Demand+Fuel+Energy+IPP+CustChg+GCT) — the 5 named components explain only ~39% of actual revenue; the residual is remarkably $/kWh-consistent ($23-32/kWh across all months), '
-                         'consistent with a base energy tariff + Tariff_Adj/FEX/EEIF/rint that the raw billing file carries but jps_actuals does not break out separately.')
+                         'FUEL FIX (2026-08-12): jps_actuals.fuel_jmd was $0 in all 19 months, unlike every other RT40/50/70 account (all showing fuel as 60-70% of revenue). Alcoa\'s own raw-file extracts NEVER populate the Fuel/FuelOffPeak/FuelPartialPeak/FuelOnPeak columns (confirmed across all 13 raw files checked) -- '
+                         'but the true fuel charge IS embedded in Revenue: the Aug-2025 reversal-of-July row itemizes real TOU fuel (-$178,924,339) that exactly matches July\'s unexplained residual (off by $2). Recomputed fuel for every month with a locally available raw file as Revenue-Demand-Energy-IPP-CustCharge-GCT-FEX(-revenue_adj where present), '
+                         'and updated jps_actuals + this model for 13 of 19 months (2025 May/Jul/Aug/Oct/Nov/Dec + all of 2026). Jan/Feb/Mar/Apr/Jun/Sep-2025 have no raw file available anywhere on this machine -- fuel is unverified and left at $0 for those 6 months; "Other/Base $" there still carries the full unexplained residual. '
+                         '"Other/Base $" = Revenue - (Demand+Fuel+Energy+IPP+CustChg+GCT) — for the 13 corrected months this is now small (~0.3-3.5% of revenue, matching FEX/revenue_adj); for the 6 unverified months it remains large (~50-60% of revenue).')
 hs['A' + str(r + 2)].font = Font(name=FONT, italic=True, size=8.5, color='B87800')
 hs['A' + str(r + 2)].alignment = Alignment(wrap_text=True, vertical='top')
 hs.merge_cells(f'A{r+2}:O{r+2}')
@@ -260,8 +266,8 @@ ds.cell(31, 2).border = BORDER; ds.cell(31, 1).border = BORDER
 
 ds['A33'] = ('MODELING NOTES: (1) Demand is billed on peak kVA in reality; per-month kVA history isn\'t available for this single account '
              '(jps_demand_actuals is rate-class-level, not account-level), so Demand $ is modeled as a $/kWh rate consistent with history — flex the Demand escalation driver to stress-test. '
-             '(2) jps_actuals\' Demand+Fuel+Energy+IPP+Cust Charge columns explain only ~39% of this account\'s actual historical revenue; the remaining ~61% ("Other/Base Tariff") is a real, '
-             'consistent $/kWh charge (see History tab note) not broken out in the DB schema — tracked here as its own component so the projection reconciles to actual revenue.')
+             '(2) Fuel was reclassified out of "Other/Base Tariff" for 13 of 19 months on 2026-08-12 (see History tab note) — those months now reconcile to ~96-99.7% via the 6 named components. '
+             'The remaining 6 months (Jan/Feb/Mar/Apr/Jun/Sep-2025) have no raw file available to verify, so "Other/Base Tariff" there still carries the full unexplained residual (mostly fuel, unconfirmed) — tracked as its own component either way so the projection reconciles to actual revenue.')
 ds['A33'].font = Font(name=FONT, italic=True, size=8.5, color='B87800')
 ds.merge_cells('A33:E33')
 ds.row_dimensions[33].height = 44
