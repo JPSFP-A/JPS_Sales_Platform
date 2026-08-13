@@ -11,6 +11,10 @@ import csv, time
 from python_calamine import CalamineWorkbook
 
 FILES = {
+    '2024-01': 'Jan 24.csv', '2024-02': 'Feb 24.csv', '2024-03': 'Mar 24.csv',
+    '2024-04': 'Apr 24.csv', '2024-05': 'May 24.csv', '2024-06': 'Jun 24.csv',
+    '2024-07': 'Jul 24.csv', '2024-08': 'Aug 24.csv', '2024-09': 'Sep 24.csv',
+    '2024-10': 'Oct 24.csv', '2024-11': 'Nov 24.csv', '2024-12': 'Dec 24.csv',
     '2025-05': 'Billing Details Report May 2025.xlsx',
     '2025-07': 'Jul 25.csv',
     '2025-08': 'Aug 25.csv',
@@ -126,6 +130,20 @@ def get(hdr, r, k):
     return r[I[k]] if k in I and I[k] < len(r) else None
 
 
+def breakdown(hdr, r):
+    vals = {k: NUM(get(hdr, r, k)) for k in NEED}
+    kwh = NUM(get(hdr, r, 'net_kwh_billed_consump'))
+    rev = NUM(get(hdr, r, 'net_billed_revenue'))
+    cb = get(hdr, r, 'cust_billed')
+    demand = vals['KVAP_KVA_Demand'] + vals['KVAL_Demand'] + vals['KVAO_Demand']
+    energy = vals['KWHP_KWH_Energy'] + vals['KWHL_Energy'] + vals['KWHO_Energy']
+    fuel = vals['fuel'] + vals['FuelOffPeak'] + vals['FuelPartialPeak'] + vals['FuelOnPeak']
+    known = demand + fuel + energy + vals['IPP_Charge'] + vals['Cust_Charge'] + vals['GCT'] + vals['FEX'] + vals['Tariff_Adj'] + vals['rint'] + vals['EEIF'] + vals['Net_Billing_Adj'] + vals['revenue_adj']
+    other = rev - known
+    return dict(kwh=kwh, rev=rev, demand=demand, energy=energy, fuel=fuel, ipp=vals['IPP_Charge'],
+                cust=vals['Cust_Charge'], gct=vals['GCT'], fex=vals['FEX'], unexplained=other, cust_billed=cb)
+
+
 results = {}
 for mo, fn in FILES.items():
     t0 = time.time()
@@ -134,25 +152,25 @@ for mo, fn in FILES.items():
         hdr, rows = csv_row(fn)
         if not rows:
             print('  NOT FOUND', flush=True); continue
+        agg = None
         for r in rows:
-            cb = get(hdr, r, 'cust_billed')
-            kwh = NUM(get(hdr, r, 'net_kwh_billed_consump'))
-            print(f'  row cust_billed={cb} kwh={kwh} ({time.time()-t0:.0f}s)', flush=True)
+            d = breakdown(hdr, r)
+            print(f'  row cust_billed={d["cust_billed"]} kwh={d["kwh"]:,.0f} rev={d["rev"]:,.0f} demand={d["demand"]:,.0f} energy={d["energy"]:,.0f} fuel={d["fuel"]:,.0f} ipp={d["ipp"]:,.0f} cust={d["cust"]:,.0f} gct={d["gct"]:,.0f} fex={d["fex"]:,.0f} unexplained={d["unexplained"]:,.0f} ({time.time()-t0:.0f}s)', flush=True)
+            if agg is None:
+                agg = {k: 0.0 for k in d if k != 'cust_billed'}
+            for k in agg:
+                agg[k] += d[k]
+        if len(rows) > 1:
+            print(f'  SUM of {len(rows)} rows: kwh={agg["kwh"]:,.0f} rev={agg["rev"]:,.0f} demand={agg["demand"]:,.0f} fuel={agg["fuel"]:,.0f} unexplained={agg["unexplained"]:,.0f}', flush=True)
+        results[mo] = agg
     else:
         row = xlsx_row(fn) if is_zip(fn) else tsv_row(fn)
         if not row:
             print(f'  NOT FOUND ({time.time()-t0:.0f}s)', flush=True); continue
         hdr, r = row
-        vals = {k: NUM(get(hdr, r, k)) for k in NEED}
-        kwh = NUM(get(hdr, r, 'net_kwh_billed_consump'))
-        rev = NUM(get(hdr, r, 'net_billed_revenue'))
-        demand = vals['KVAP_KVA_Demand'] + vals['KVAL_Demand'] + vals['KVAO_Demand']
-        energy = vals['KWHP_KWH_Energy'] + vals['KWHL_Energy'] + vals['KWHO_Energy']
-        fuel = vals['fuel'] + vals['FuelOffPeak'] + vals['FuelPartialPeak'] + vals['FuelOnPeak']
-        known = demand + fuel + energy + vals['IPP_Charge'] + vals['Cust_Charge'] + vals['GCT'] + vals['FEX'] + vals['Tariff_Adj'] + vals['rint'] + vals['EEIF'] + vals['Net_Billing_Adj'] + vals['revenue_adj']
-        other = rev - known
-        print(f'  kwh={kwh:,.0f} rev={rev:,.0f} demand={demand:,.0f} energy={energy:,.0f} fuel={fuel:,.0f} ipp={vals["IPP_Charge"]:,.0f} cust={vals["Cust_Charge"]:,.0f} gct={vals["GCT"]:,.0f} fex={vals["FEX"]:,.0f} tariff_adj={vals["Tariff_Adj"]:,.0f} rint={vals["rint"]:,.0f} eeif={vals["EEIF"]:,.0f} unexplained={other:,.0f} ({time.time()-t0:.0f}s)', flush=True)
-        results[mo] = dict(kwh=kwh, rev=rev, demand=demand, energy=energy, fuel=fuel, ipp=vals['IPP_Charge'], cust=vals['Cust_Charge'], gct=vals['GCT'], fex=vals['FEX'], unexplained=other)
+        d = breakdown(hdr, r)
+        print(f'  kwh={d["kwh"]:,.0f} rev={d["rev"]:,.0f} demand={d["demand"]:,.0f} energy={d["energy"]:,.0f} fuel={d["fuel"]:,.0f} ipp={d["ipp"]:,.0f} cust={d["cust"]:,.0f} gct={d["gct"]:,.0f} fex={d["fex"]:,.0f} unexplained={d["unexplained"]:,.0f} ({time.time()-t0:.0f}s)', flush=True)
+        results[mo] = d
 
 print(flush=True)
 print('SUMMARY (month, raw_fuel_field_total, unexplained_after_all_known_fields):', flush=True)
