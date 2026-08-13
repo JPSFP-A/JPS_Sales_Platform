@@ -327,24 +327,30 @@ ds['A38'].alignment = Alignment(wrap_text=True, vertical='top')
 
 # ============================================================ PROJECTION =========
 # Given future demand (KVA) schedule, Aug-2025 to Jul-2028 — user-provided 2026-08-12.
+# Aug-2025 to Jul-2026 (12 months) replaced 2026-08-12 with KVA implied by ACTUAL
+# billed demand_jmd / $2,852.04 -- the user's originally-given schedule matched actual
+# billing exactly for only 3 of these 12 months (Oct-2025, Nov-2025, Mar-2026); the
+# other 9 differed (some substantially, e.g. Dec-2025 implied 9,139.20 vs given
+# 23,729.66). Aug-2026 onward (24 months) is still the user's given future schedule --
+# no actual billing exists yet for that period to reconcile against.
 KVA_SCHEDULE = [
-    28320, 28320, 29662.08, 28408.8, 23729.66,               # Aug-Dec 2025
-    23729.66, 23729.66, 26392.8, 22727.04, 21114.24,
-    36946.14, 29556.91, 29556.91, 29556.91, 29556.91,
-    29556.91, 15263.1,                                        # Jan-Dec 2026
-] + [25] * 19                                                 # Jan-2027 to Jul-2028
+    20223.84, 19393.92, 29662.08, 28408.80, 9139.20,          # Aug-Dec 2025 (actual)
+    12673.92, 13454.93, 26392.80, 18076.80, 17799.62,
+    35000.00, 21025.01,                                       # Jan-Jul 2026 (actual)
+    29556.91, 29556.91, 29556.91, 29556.91, 15263.1,          # Aug-Dec 2026 (given, future)
+] + [25] * 19                                                 # Jan-2027 to Jul-2028 (given, future)
 
 ps = wb.create_sheet('Projection')
 ps.sheet_view.showGridLines = False
 PW = [6, 6, 10, 12, 13, 15, 14, 15, 13, 13, 13, 13, 13, 15, 14, 15, 13, 16]
 for c, w in zip('ABCDEFGHIJKLMNOPQR', PW):
     ps.column_dimensions[c].width = w
-ps['A1'] = '3-YEAR PROJECTION — ALCOA RT70 (36 months, given KVA schedule + kWh-seasonality drivers)'
+ps['A1'] = '3-YEAR PROJECTION — ALCOA RT70 (36 months, calendar year, given KVA schedule + kWh-seasonality drivers)'
 ps['A1'].font = TITLE
 ps.merge_cells('A1:R1')
 ps['A1'].fill = NAVY
 ps.row_dimensions[1].height = 22
-hdrs3 = ['Per#', 'FY', 'Month', 'Cal Mo#', 'Given KVA', 'Seasonal kWh', 'Volume-Adj kWh', 'Final kWh\n(x multiplier)',
+hdrs3 = ['Per#', 'CY', 'Month', 'Cal Mo#', 'Given KVA', 'Seasonal kWh', 'Volume-Adj kWh', 'Final kWh\n(x multiplier)',
          'Demand $', 'Energy $', 'IPP Variable $', 'IPP Fixed $', 'Fuel $', 'Other/Base $', 'Cust Chg $', 'Subtotal $', 'GCT $', 'Total Revenue $']
 for j, h in enumerate(hdrs3):
     c = ps.cell(3, j + 1, h); c.font = HDR; c.fill = NAVY; c.border = BORDER
@@ -354,9 +360,9 @@ ps.row_dimensions[3].height = 30
 pr0 = 4
 for i in range(36):
     rr = pr0 + i
-    fy = i // 12 + 1
     ps.cell(rr, 1, i + 1).font = BLACK
-    ps.cell(rr, 2, f'FY{fy}').font = BLACK
+    ps.cell(rr, 2).value = f'=YEAR(C{rr})'
+    ps.cell(rr, 2).font = BLACK
     ps.cell(rr, 2).alignment = Alignment(horizontal='center')
     ps.cell(rr, 3).value = f'=EDATE(DATEVALUE(Drivers!$B$23&"-01"),{i})'
     ps.cell(rr, 3).number_format = 'mmm-yy'
@@ -402,17 +408,19 @@ for i in range(36):
     y_i, m_i = (2025 + (7 + i) // 12, (7 + i) % 12 + 1)
     if (y_i, m_i) in ((2025, 11), (2025, 12)):
         band = PatternFill('solid', start_color='FDE7D0')
-    elif fy % 2 == 0:
+    elif y_i % 2 == 0:
         band = PatternFill('solid', start_color='F8FAFC')
     if band:
         for col in range(1, 19):
             ps.cell(rr, col).fill = band
 ps.freeze_panes = 'C4'
 last_proj_row = pr0 + 35
-ps['A41'] = 'Given KVA (col E) sourced from the user-provided demand schedule, 2026-08-12 — drives Demand $ and IPP Fixed $ directly. Nov/Dec-2025 (shaded) use the given KVA as-is (that figure is real, not hurricane-affected) but their kWh-driven columns (Seasonal/Volume-Adj/Final kWh onward) reflect the hurricane-normalized Seasonality tab values, not the storm-depressed actuals.'
+ps['A41'] = ('KVA (col E) drives Demand $ and IPP Fixed $ directly. Aug-2025 to Jul-2026 (12 months, updated 2026-08-12) is now the KVA IMPLIED by actual billed demand_jmd / $2,852.04 -- the user\'s originally-given schedule matched actual billing for only 3 of those 12 months (Oct-2025/Nov-2025/Mar-2026 exact); the other 9 are now corrected to the real billed figure. '
+              'Aug-2026 onward (24 months) is still the user-given future schedule -- no actual billing exists yet to check it against. '
+              'Nov/Dec-2025 (shaded) use their real billed KVA as-is (that figure is unaffected by the hurricane) but their kWh-driven columns (Seasonal/Volume-Adj/Final kWh onward) reflect the hurricane-normalized Seasonality tab values, not the storm-depressed actuals.')
 ps['A41'].font = Font(name=FONT, italic=True, size=8.5, color='B87800')
 ps.merge_cells('A41:R41')
-ps.row_dimensions[41].height = 28
+ps.row_dimensions[41].height = 56
 ps['A41'].alignment = Alignment(wrap_text=True, vertical='top')
 
 # ============================================================ SUMMARY ============
@@ -436,64 +444,85 @@ for j, h in enumerate(hdrs4):
 sm.row_dimensions[4].height = 26
 
 ttm_start = first_data_row + 19  # Aug-25 (12 rows of 2024 + Jan-Jul-25 = 19-row offset from first_data_row=Jan-24)
-sm.cell(5, 1, 'Actual (Aug-2025 to Jul-2026, already billed)').font = BOLD
-sm.cell(5, 2).value = 'n/a'
-sm.cell(5, 2).font = BLACK
-sm.cell(5, 3).value = f'=SUM(History!D{ttm_start}:D{last_data_row})'
-sm.cell(5, 4).value = f'=SUM(History!F{ttm_start}:F{last_data_row})'
-sm.cell(5, 5).value = f'=SUM(History!H{ttm_start}:H{last_data_row})'
-sm.cell(5, 6).value = f'=SUM(History!I{ttm_start}:I{last_data_row})'
-sm.cell(5, 7).value = 0
-sm.cell(5, 8).value = f'=SUM(History!G{ttm_start}:G{last_data_row})'
-sm.cell(5, 9).value = f'=SUM(History!N{ttm_start}:N{last_data_row})'
-sm.cell(5, 10).value = f'=SUM(History!J{ttm_start}:J{last_data_row})'
-sm.cell(5, 11).value = f'=SUM(History!K{ttm_start}:K{last_data_row})'
-sm.cell(5, 12).value = f'=SUM(History!E{ttm_start}:E{last_data_row})'
-for col in range(3, 13):
-    sm.cell(5, col).font = GREEN
-    sm.cell(5, col).number_format = KWHFMT if col == 3 else MONEY
 
-fy_rows = {1: (pr0, pr0 + 11), 2: (pr0 + 12, pr0 + 23), 3: (pr0 + 24, pr0 + 35)}
-fy_labels = ('Aug-25 to Jul-26', 'Aug-26 to Jul-27', 'Aug-27 to Jul-28')
-for k, fy in enumerate([1, 2, 3]):
-    rr = 6 + k
-    a, b = fy_rows[fy]
-    sm.cell(rr, 1, f'Projected FY{fy} ({fy_labels[k]})').font = BOLD
-    sm.cell(rr, 2).value = f'=AVERAGE(Projection!E{a}:E{b})'
-    sm.cell(rr, 3).value = f'=SUM(Projection!H{a}:H{b})'
-    sm.cell(rr, 4).value = f'=SUM(Projection!I{a}:I{b})'
-    sm.cell(rr, 5).value = f'=SUM(Projection!J{a}:J{b})'
-    sm.cell(rr, 6).value = f'=SUM(Projection!K{a}:K{b})'
-    sm.cell(rr, 7).value = f'=SUM(Projection!L{a}:L{b})'
-    sm.cell(rr, 8).value = f'=SUM(Projection!M{a}:M{b})'
-    sm.cell(rr, 9).value = f'=SUM(Projection!N{a}:N{b})'
-    sm.cell(rr, 10).value = f'=SUM(Projection!O{a}:O{b})'
-    sm.cell(rr, 11).value = f'=SUM(Projection!Q{a}:Q{b})'
-    sm.cell(rr, 12).value = f'=SUM(Projection!R{a}:R{b})'
+# ACTUAL, by calendar year (from History) — 2024/2025 are full years, 2026 is partial (Jan-Jul only)
+actual_years = [(2024, 'Actual CY2024 (Jan-Dec, full year)'), (2025, 'Actual CY2025 (Jan-Dec, full year)'), (2026, 'Actual CY2026 (Jan-Jul only, partial)')]
+for k, (yr, label) in enumerate(actual_years):
+    rr = 5 + k
+    sm.cell(rr, 1, label).font = BOLD
+    sm.cell(rr, 2).value = 'n/a'; sm.cell(rr, 2).font = BLACK
+    sm.cell(rr, 3).value = f'=SUMIF(History!$A${first_data_row}:$A${last_data_row},{yr},History!$D${first_data_row}:$D${last_data_row})'
+    sm.cell(rr, 4).value = f'=SUMIF(History!$A${first_data_row}:$A${last_data_row},{yr},History!$F${first_data_row}:$F${last_data_row})'
+    sm.cell(rr, 5).value = f'=SUMIF(History!$A${first_data_row}:$A${last_data_row},{yr},History!$H${first_data_row}:$H${last_data_row})'
+    sm.cell(rr, 6).value = f'=SUMIF(History!$A${first_data_row}:$A${last_data_row},{yr},History!$I${first_data_row}:$I${last_data_row})'
+    sm.cell(rr, 7).value = 0
+    sm.cell(rr, 8).value = f'=SUMIF(History!$A${first_data_row}:$A${last_data_row},{yr},History!$G${first_data_row}:$G${last_data_row})'
+    sm.cell(rr, 9).value = f'=SUMIF(History!$A${first_data_row}:$A${last_data_row},{yr},History!$N${first_data_row}:$N${last_data_row})'
+    sm.cell(rr, 10).value = f'=SUMIF(History!$A${first_data_row}:$A${last_data_row},{yr},History!$J${first_data_row}:$J${last_data_row})'
+    sm.cell(rr, 11).value = f'=SUMIF(History!$A${first_data_row}:$A${last_data_row},{yr},History!$K${first_data_row}:$K${last_data_row})'
+    sm.cell(rr, 12).value = f'=SUMIF(History!$A${first_data_row}:$A${last_data_row},{yr},History!$E${first_data_row}:$E${last_data_row})'
+    for col in range(3, 13):
+        sm.cell(rr, col).font = GREEN
+        sm.cell(rr, col).number_format = KWHFMT if col == 3 else MONEY
+
+# PROJECTED, by calendar year (from Projection, col B = YEAR(date)) — CY2025 partial (Aug-Dec),
+# CY2026/CY2027 full, CY2028 partial (Jan-Jul, matches the given KVA schedule's own end point)
+proj_years = [(2025, 'Projected CY2025 (Aug-Dec only, partial)'), (2026, 'Projected CY2026 (Jan-Dec, full year)'),
+              (2027, 'Projected CY2027 (Jan-Dec, full year)'), (2028, 'Projected CY2028 (Jan-Jul only, partial)')]
+for k, (yr, label) in enumerate(proj_years):
+    rr = 9 + k
+    sm.cell(rr, 1, label).font = BOLD
+    sm.cell(rr, 2).value = f'=AVERAGEIF(Projection!$B${pr0}:$B${last_proj_row},{yr},Projection!$E${pr0}:$E${last_proj_row})'
+    sm.cell(rr, 3).value = f'=SUMIF(Projection!$B${pr0}:$B${last_proj_row},{yr},Projection!$H${pr0}:$H${last_proj_row})'
+    sm.cell(rr, 4).value = f'=SUMIF(Projection!$B${pr0}:$B${last_proj_row},{yr},Projection!$I${pr0}:$I${last_proj_row})'
+    sm.cell(rr, 5).value = f'=SUMIF(Projection!$B${pr0}:$B${last_proj_row},{yr},Projection!$J${pr0}:$J${last_proj_row})'
+    sm.cell(rr, 6).value = f'=SUMIF(Projection!$B${pr0}:$B${last_proj_row},{yr},Projection!$K${pr0}:$K${last_proj_row})'
+    sm.cell(rr, 7).value = f'=SUMIF(Projection!$B${pr0}:$B${last_proj_row},{yr},Projection!$L${pr0}:$L${last_proj_row})'
+    sm.cell(rr, 8).value = f'=SUMIF(Projection!$B${pr0}:$B${last_proj_row},{yr},Projection!$M${pr0}:$M${last_proj_row})'
+    sm.cell(rr, 9).value = f'=SUMIF(Projection!$B${pr0}:$B${last_proj_row},{yr},Projection!$N${pr0}:$N${last_proj_row})'
+    sm.cell(rr, 10).value = f'=SUMIF(Projection!$B${pr0}:$B${last_proj_row},{yr},Projection!$O${pr0}:$O${last_proj_row})'
+    sm.cell(rr, 11).value = f'=SUMIF(Projection!$B${pr0}:$B${last_proj_row},{yr},Projection!$Q${pr0}:$Q${last_proj_row})'
+    sm.cell(rr, 12).value = f'=SUMIF(Projection!$B${pr0}:$B${last_proj_row},{yr},Projection!$R${pr0}:$R${last_proj_row})'
     for col in range(2, 13):
         sm.cell(rr, col).font = GREEN
         sm.cell(rr, col).number_format = KWHFMT if col in (2, 3) else MONEY
 
-for row in (5, 6, 7, 8):
+for row in list(range(5, 13)):
     for col in range(1, 13):
         sm.cell(row, col).border = BORDER
 
-sm.cell(9, 1, 'Δ Projected FY1 vs Actual (%) — same Aug-25/Jul-26 window; NOT an error, see note').font = BOLD
-for col in range(3, 13):
+# Precise apples-to-apples check: Actual vs Projected over the IDENTICAL Aug-25/Jul-26 window
+# (crosses the CY2025/CY2026 calendar-year split above, so kept as its own explicit comparison)
+sm.cell(14, 1, 'Actual, Aug-2025 to Jul-2026 (exact 12-mo overlap window)').font = BOLD
+sm.cell(14, 2).value = 'n/a'; sm.cell(14, 2).font = BLACK
+sm.cell(14, 3).value = f'=SUM(History!D{ttm_start}:D{last_data_row})'
+sm.cell(14, 12).value = f'=SUM(History!E{ttm_start}:E{last_data_row})'
+for col in (3, 12):
+    sm.cell(14, col).font = GREEN
+    sm.cell(14, col).number_format = KWHFMT if col == 3 else MONEY
+sm.cell(15, 1, 'Projected, Aug-2025 to Jul-2026 (same window)').font = BOLD
+sm.cell(15, 3).value = f'=SUM(Projection!H{pr0}:H{pr0+11})'
+sm.cell(15, 12).value = f'=SUM(Projection!R{pr0}:R{pr0+11})'
+for col in (3, 12):
+    sm.cell(15, col).font = GREEN
+    sm.cell(15, col).number_format = KWHFMT if col == 3 else MONEY
+sm.cell(16, 1, 'Δ (%) — NOT an error, see note').font = BOLD
+for col in (3, 12):
     cl = get_column_letter(col)
-    sm.cell(9, col).value = f'=IF({cl}5=0,"n/a",{cl}6/{cl}5-1)'
-    sm.cell(9, col).font = BLACK
-    sm.cell(9, col).number_format = PCT
-    sm.cell(9, col).border = BORDER
-sm.cell(9, 1).border = BORDER
-sm['A11'] = 'FY1 Projected and Actual cover the identical Aug-25/Jul-26 window. FY1 Projected uses the given KVA schedule and the $2,852.04/KVA, $424.14/KVA and $25.628/kWh rates (confirmed with the user 2026-08-12) — NOT a reconstruction of Alcoa\'s actual historical billing. The Δ above reflects that rate-basis difference, not a modeling error.'
-sm['A11'].font = Font(name=FONT, italic=True, size=8.5, color='B87800')
-sm.merge_cells('A11:L11')
-sm.row_dimensions[11].height = 28
-sm['A11'].alignment = Alignment(wrap_text=True, vertical='top')
+    sm.cell(16, col).value = f'=IF({cl}14=0,"n/a",{cl}15/{cl}14-1)'
+    sm.cell(16, col).font = BLACK
+    sm.cell(16, col).number_format = PCT
+for row in (14, 15, 16):
+    for col in range(1, 13):
+        sm.cell(row, col).border = BORDER
+sm['A18'] = 'The Aug-2025/Jul-2026 comparison above is the only window with a true 12-month actual/projected overlap (calendar-year buckets straddle it). Projected uses the given KVA schedule and the $2,852.04/KVA, $424.14/KVA and $25.628/kWh rates (confirmed with the user 2026-08-12) — NOT a reconstruction of Alcoa\'s actual historical billing, so the Δ reflects that rate-basis difference, not a modeling error.'
+sm['A18'].font = Font(name=FONT, italic=True, size=8.5, color='B87800')
+sm.merge_cells('A18:L18')
+sm.row_dimensions[18].height = 28
+sm['A18'].alignment = Alignment(wrap_text=True, vertical='top')
 
-sm['A13'] = 'kWh & Total Revenue by month — FY1-FY3 (see chart)'
-sm['A13'].font = BOLD
+sm['A20'] = 'kWh & Total Revenue by month — full 36-month projection (see chart)'
+sm['A20'].font = BOLD
 
 chart1 = LineChart()
 chart1.title = 'Projected Total Revenue by Month (J$)'
@@ -504,7 +533,7 @@ data = Reference(ps, min_col=18, min_row=3, max_row=last_proj_row)
 cats = Reference(ps, min_col=3, min_row=pr0, max_row=last_proj_row)
 chart1.add_data(data, titles_from_data=True)
 chart1.set_categories(cats)
-sm.add_chart(chart1, 'A15')
+sm.add_chart(chart1, 'A22')
 
 chart2 = LineChart()
 chart2.title = 'Given KVA vs Projected Final kWh by Month'
@@ -516,7 +545,7 @@ data2b = Reference(ps, min_col=8, min_row=3, max_row=last_proj_row)
 chart2.add_data(data2, titles_from_data=True)
 chart2.add_data(data2b, titles_from_data=True)
 chart2.set_categories(cats)
-sm.add_chart(chart2, 'A32')
+sm.add_chart(chart2, 'A39')
 
 wb._sheets = [wb['Drivers'], wb['History'], wb['Seasonality'], wb['Projection'], wb['Summary']]
 
