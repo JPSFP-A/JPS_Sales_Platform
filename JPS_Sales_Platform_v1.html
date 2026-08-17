@@ -2766,7 +2766,7 @@ function esc(s){const d=document.createElement('div');d.textContent=String(s??''
 async function dbUpsert(table,row){
   const sb=getSB();if(!sb)return;
   const CONFLICT={
-    jps_user_notes:'acct_num',
+    jps_user_notes:'acct_num,period',
     jps_exec_narratives:'year,month',
     jps_pivot_commentary:'period,acct_num',
     jps_def_actions:'acct_num',
@@ -2792,19 +2792,23 @@ async function dbSelect(table,match={}){
 }
 
 /* ── Notes / account commentary ── */
-async function saveNote(acctNum,customer,text){
-  S.set(`note_${acctNum}`,text);
+// Monthly per-account KAM notes -- one row per (acct_num, period), period =
+// "YYYY-MM" matching curYear/curMonth's format everywhere else in this app.
+// Was single-note-per-account (no history) until the deck-notes bulk import
+// needed to preserve each month's commentary instead of overwriting it.
+async function saveNote(acctNum,customer,text,period){
+  S.set(`note_${acctNum}_${period}`,text);
   if(text){
-    await dbUpsert('jps_user_notes',{acct_num:acctNum,customer,note_text:text,author:CU.name,updated_at:new Date().toISOString()});
+    await dbUpsert('jps_user_notes',{acct_num:acctNum,period,customer,note_text:text,author:CU.name,updated_at:new Date().toISOString()});
     toast('📝 Note saved','ok');
   } else {
-    await dbDelete('jps_user_notes',{acct_num:acctNum});
+    await dbDelete('jps_user_notes',{acct_num:acctNum,period});
     toast('Note cleared','ok');
   }
 }
 async function loadNotes(){
   const rows=await dbSelect('jps_user_notes');
-  rows.forEach(r=>{if(r.note_text)S.set(`note_${r.acct_num}`,r.note_text);});
+  rows.forEach(r=>{if(r.note_text)S.set(`note_${r.acct_num}_${r.period||''}`,r.note_text);});
 }
 
 /* ── Exec narrative ── */
@@ -4610,10 +4614,11 @@ function renderCmCust(){
     return true;
   });
   document.getElementById('cm_count').textContent=d.length+' customers';
+  const notePeriod=`${curYear}-${String(curMonth).padStart(2,'0')}`;
   document.getElementById('cm_cust_tbl').innerHTML=`<table class="dt" id="cm_dt">
-    <thead><tr><th>Acct #</th><th>Customer</th><th>Rate</th><th>KAM</th><th>Industry</th><th>Parish</th><th>${py} (${ph})</th><th>${cy} (${ph})</th><th>Budget</th><th>vs Budget</th><th>YoY</th><th>Note</th></tr></thead>
+    <thead><tr><th>Acct #</th><th>Customer</th><th>Rate</th><th>KAM</th><th>Industry</th><th>Parish</th><th>${py} (${ph})</th><th>${cy} (${ph})</th><th>Budget</th><th>vs Budget</th><th>YoY</th><th>Note (${notePeriod})</th></tr></thead>
     <tbody>${d.map(c=>{
-      const saved=S.get(`note_${c.num}`,'');
+      const saved=S.get(`note_${c.num}_${notePeriod}`,'');
       const kamName=c.kam||'--';
       const pCY=periCY(c),pPY=pyMap[c.num]||0,pB=budMap[c.num]||0;
       return`<tr>
@@ -5342,10 +5347,11 @@ function editMrNote(num,name,cid){
   openModal(`Review Note: ${name}`,`<textarea id="mrn_ta">${S.get(`mr_note_${mrPeriod}_${num}`,'')}</textarea>`,()=>{S.set(`mr_note_${mrPeriod}_${num}`,document.getElementById('mrn_ta').value);closeModal();renderMrSection();});
 }
 function editNote(num,name,cid){
-  openModal(`Customer Note: ${name}`,`<textarea id="gn_ta">${S.get(`note_${num}`,'')}</textarea>`,()=>{
+  const period=`${curYear}-${String(curMonth).padStart(2,'0')}`;
+  openModal(`Customer Note: ${name} (${period})`,`<textarea id="gn_ta">${S.get(`note_${num}_${period}`,'')}</textarea>`,()=>{
     const v=document.getElementById('gn_ta').value;
-    S.set(`note_${num}`,v);
-    saveNote(num,name,v).catch(e=>console.warn('DB note save:',e));
+    S.set(`note_${num}_${period}`,v);
+    saveNote(num,name,v,period).catch(e=>console.warn('DB note save:',e));
     closeModal();renderCmCust();
   });
 }
@@ -8456,17 +8462,21 @@ create policy "Managers can write EV data"
 -- STEP 7: Intelligence & commentary tables
 -- ══════════════════════════════════════════════════════════
 
--- KAM / rep notes per account
+-- KAM / rep notes per account, one row per (acct_num, period) -- period is
+-- "YYYY-MM". Was unique on acct_num only (single current note, no history)
+-- until the deck-notes bulk import needed to preserve every month's commentary.
 create table if not exists public.jps_user_notes (
   id         bigserial primary key,
   acct_num   text not null,
+  period     text,
   customer   text default '',
   note_text  text default '',
   author     text default '',
   updated_at timestamptz default now(),
-  created_at timestamptz default now(),
-  unique (acct_num)
+  created_at timestamptz default now()
 );
+create unique index if not exists jps_user_notes_acct_period_idx on public.jps_user_notes (acct_num, period);
+create index if not exists jps_user_notes_period_idx on public.jps_user_notes (period);
 alter table public.jps_user_notes enable row level security;
 do $$ declare r record; begin
   for r in select policyname from pg_policies where schemaname='public' and tablename='jps_user_notes'
