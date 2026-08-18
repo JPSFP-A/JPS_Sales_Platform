@@ -11320,16 +11320,23 @@ function _frCollectData(){
   const modeledIndustries=new Set(sbMacroAssum.filter(r=>r.driver_type==='industry').map(r=>r.segment));
   const rcMonth={};              // rc -> {1..12: kwh_le}
   const indMonth={};             // industry (or 'No KAM / Cohort') -> {1..12: kwh_le} -- full Jan-Dec, actual+forecast, mirrors rcMonth but by industry
+  const rcIndMonth={};           // rc -> industry (or 'No KAM / Cohort') -> {1..12: kwh_le} -- same attribution as indMonth, kept per rate class too, for Top 5 Industries by Rate Class
   const custFy={}, custRcKwh={}; // customer name -> FY kwh, and -> {rc:kwh} for rate-class labeling
 
   const bumpMonth=(rc,m,v)=>{const k=rc||'Unassigned';rcMonth[k]=rcMonth[k]||{};rcMonth[k][m]=(rcMonth[k][m]||0)+v;};
   const bumpIndMonth=(industry,m,v)=>{const k=industry||'No KAM / Cohort';indMonth[k]=indMonth[k]||{};indMonth[k][m]=(indMonth[k][m]||0)+v;};
+  const bumpRcIndMonth=(rc,industry,m,v)=>{
+    const rk=rc||'Unassigned',ik=industry||'No KAM / Cohort';
+    const bucket=(rcIndMonth[rk]=rcIndMonth[rk]||{});
+    bucket[ik]=bucket[ik]||{};bucket[ik][m]=(bucket[ik][m]||0)+v;
+  };
   const walkChain=(chain,rc,custName,industry)=>{
     let fyTotal=0;
     for(let m=1;m<=12;m++){
       const c=chain[m];if(!c)continue;
       bumpMonth(rc,m,c.total);
       bumpIndMonth(industry,m,c.total);
+      bumpRcIndMonth(rc,industry,m,c.total);
       fyTotal+=c.total;
     }
     if(custName){
@@ -11384,7 +11391,7 @@ function _frCollectData(){
     if(m<=repCurMonth)budH1[rc]=(budH1[rc]||0)+kwh;else budH2[rc]=(budH2[rc]||0)+kwh;
   });
 
-  return {year,curMonth:repCurMonth,rcMonth,indMonth,custFy,custRcKwh,fy25Rc,fy25Cust,budRc,budH1,budH2,modeledIndustries};
+  return {year,curMonth:repCurMonth,rcMonth,indMonth,rcIndMonth,custFy,custRcKwh,fy25Rc,fy25Cust,budRc,budH1,budH2,modeledIndustries};
 }
 
 function _frRcLabel(custRcKwh,name){
@@ -11589,6 +11596,37 @@ function _frRenderPDF(d){
     columnStyles:{0:{cellWidth:100}},
     didParseCell:(hook)=>{if(hook.row.index===indRows.length-1&&hook.section==='body'){hook.cell.styles.fontStyle='bold';hook.cell.styles.fillColor=[238,243,248];}}});
   y=doc.lastAutoTable.finalY+8;
+
+  // ---- TOP 5 INDUSTRIES BY RATE CLASS ----
+  const _tiRcs=Object.keys(d.rcIndMonth).sort(_rcSort);
+  if(_tiRcs.length){
+    ensure(150);
+    h1('Top 5 Industries by Rate Class (GWh)');
+    body('Ranked once by FY total per rate class (fixed membership across months); rest folded into "Other". "No KAM / Cohort" pools every account without an assigned industry -- expect it to dominate residential rate classes since industry is only tracked for KAM-owned commercial accounts.',{size:8.2,color:GREY});
+    _tiRcs.forEach(rc=>{
+      const entries=Object.entries(d.rcIndMonth[rc]).sort((a,b)=>indAnnualTotal(b[1])-indAnnualTotal(a[1]));
+      const top5=entries.slice(0,5);
+      const rest=entries.slice(5);
+      if(rest.length){
+        const other={};for(let m=1;m<=12;m++)other[m]=rest.reduce((s,[,v])=>s+(v[m]||0),0);
+        top5.push(['Other ('+rest.length+')',other]);
+      }
+      const rcTotal={};for(let m=1;m<=12;m++)rcTotal[m]=Object.values(d.rcIndMonth[rc]).reduce((s,v)=>s+(v[m]||0),0);
+      const tiRows=top5.map(([name,vals])=>{
+        const monthVals=[];for(let m=1;m<=12;m++)monthVals.push((vals[m]||0)/1e6);
+        return [name,...monthVals.map(v=>_frFmt(v))];
+      });
+      tiRows.push(['All industries',...allMonthsLbl.map((_,i)=>_frFmt((rcTotal[i+1]||0)/1e6))]);
+      ensure(110);
+      h2(rc);
+      doc.autoTable({startY:y,margin:{left:MARGIN,right:MARGIN},
+        head:[['Industry',...allMonthsLbl]],
+        body:tiRows,headStyles:{fillColor:STEEL,fontSize:7.4},bodyStyles:{fontSize:7.6},styles:{cellPadding:3.5},
+        columnStyles:{0:{cellWidth:100}},
+        didParseCell:(hook)=>{if(hook.row.index===tiRows.length-1&&hook.section==='body'){hook.cell.styles.fontStyle='bold';hook.cell.styles.fillColor=[238,243,248];}}});
+      y=doc.lastAutoTable.finalY+8;
+    });
+  }
 
   // ---- PEAK DEMAND ----
   const _dfPD=_frDemandData();
@@ -11949,6 +11987,30 @@ async function _frRenderDOCX(d){
   children.push(new Table({width:{size:CONTENT_W,type:WidthType.DXA},columnWidths:[CONTENT_W/2,CONTENT_W/2],rows:indChartRows}));
 
   children.push(spacer());
+  const _tiRcs=Object.keys(d.rcIndMonth).sort(_rcSort);
+  if(_tiRcs.length){
+    children.push(h1('Top 5 Industries by Rate Class (GWh)'));
+    children.push(body('Ranked once by FY total per rate class (fixed membership across months); rest folded into "Other". "No KAM / Cohort" pools every account without an assigned industry — expect it to dominate residential rate classes since industry is only tracked for KAM-owned commercial accounts.',{size:14,color:GREY}));
+    _tiRcs.forEach(rc=>{
+      const entries=Object.entries(d.rcIndMonth[rc]).sort((a,b)=>indAnnualTotal(b[1])-indAnnualTotal(a[1]));
+      const top5=entries.slice(0,5);
+      const rest=entries.slice(5);
+      if(rest.length){
+        const other={};for(let m=1;m<=12;m++)other[m]=rest.reduce((s,[,v])=>s+(v[m]||0),0);
+        top5.push(['Other ('+rest.length+')',other]);
+      }
+      const rcTotal={};for(let m=1;m<=12;m++)rcTotal[m]=Object.values(d.rcIndMonth[rc]).reduce((s,v)=>s+(v[m]||0),0);
+      const tiRows=top5.map(([name,vals])=>{
+        const monthVals=[];for(let m=1;m<=12;m++)monthVals.push((vals[m]||0)/1e6);
+        return [name,...monthVals.map(v=>_frFmt(v))];
+      });
+      tiRows.push(['All industries',...allMonthsLbl.map((_,i)=>_frFmt((rcTotal[i+1]||0)/1e6))]);
+      children.push(h2(rc));
+      children.push(mkTable(['Industry',...allMonthsLbl],tiRows,[1600,...Array(12).fill(645)],{boldLastRow:true}));
+      children.push(spacer());
+    });
+  }
+
   const _dfPD=_frDemandData();
   if(_dfPD.months.length){
     children.push(h1('Peak Demand — Billed kVA by Rate Class'));
