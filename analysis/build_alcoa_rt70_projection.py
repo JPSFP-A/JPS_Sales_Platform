@@ -69,7 +69,7 @@ hs['A2'].font = Font(name=FONT, italic=True, size=9, color='6B7A99')
 hs.merge_cells('A2:Q2')
 
 HDRS = ['Year', 'Month#', 'Period', 'kWh', 'Revenue $', 'Demand $', 'Fuel $', 'Energy $', 'IPP $',
-        'Cust Chg $', 'GCT $', 'Demand $/kWh', 'Energy $/kWh', 'Other/Base $', 'Other $/kWh', 'Flag', 'KVA (true meter)']
+        'Cust Chg $', 'GCT $', 'Demand $/kWh', 'Energy $/kWh', 'Other/Base $\n(merged into Fuel)', 'Other $/kWh', 'Flag', 'KVA (true meter)']
 r0 = 4
 for j, h in enumerate(HDRS):
     c = hs.cell(r0, j + 1, h)
@@ -88,37 +88,37 @@ hs.row_dimensions[r0].height = 28
 # in "Other/Base" -- confirmed for Jan-2024: the residual after that is exactly $54,814,
 # matching FEX to the dollar.
 ROWS = [
-    (2024, 1, 10253257, 736497100, 157282591, 467074484, 88388289, 23678789, 18133, 0),
-    (2024, 2, 9018952, 362135089, 100543308, 201366813, 44102677, 14230742, 9067, 0),
-    (2024, 3, 3381218, 142539162, 39086809, 73419552, 16534155, 5271784, 9067, 0),
-    (2024, 4, 4933429, 237984024, 97304304, 100637025, 24124469, 16098603, 9067, 0),
-    (2024, 5, 5832221, 245723216, 70741601, 136054054, 28519561, 9412187, 9067, 0),
-    (2024, 6, 5854692, 239081247, 61751914, 138188307, 28629446, 10120162, 9067, 0),
-    (2024, 7, 6916870, 268805864, 61579422, 161591922, 33823495, 11163652, 9067, 0),
-    (2024, 8, 6755643, 345715674, 88353918, 208648041, 33035095, 14085308, 9067, 0),
-    (2024, 9, 5794081, 216034708, 59567023, 118471583, 28333058, 8279078, 9067, 0),
-    (2024, 10, 8160455, 333407112, 92062482, 184238585, 39904623, 14670290, 9067, 0),
-    (2024, 11, 8790584, 343026033, 74832510, 211554196, 42985956, 11128687, 9067, 0),
-    (2024, 12, 9658757, 415877709, 99821400, 252933864, 47231321, 14168787, 9067, 0),
-    (2025, 1, 7283162, 266092728, 47668312, 0, 35614660, 6356502, 9067, 0),
-    (2025, 2, 7558914, 338431883, 98780063, 0, 36963087, 15370340, 9067, 0),
-    (2025, 3, 9220246, 347997726, 62116062, 0, 45087002, 6840302, 9067, 0),
-    (2025, 4, 6776457, 306339672, 99821400, 0, 33136874, 14980429, 9067, 0),
-    (2025, 5, 6360004, 304760808, 96646281, 159584943, 31100421, 12528312, 9067, 0),
-    (2025, 6, 6112234, 254803373, 58048083, 0, 29888823, 7104539, 9067, 0),
-    (2025, 7, 7807153, 285797656, 56361244, 178924341, 38176979, 9708956, 9067, 0),
-    (2025, 8, 6836301, 257804420, 57679201, 154623450, 33429511, 9124644, 9066, 0),
-    (2025, 9, 6921867, 273820535, 55312236, 0, 33847930, 7948863, 9067, 0),
-    (2025, 10, 7047477, 322020733, 84597439, 187744778, 34462161, 11382804, 9067, 0),
-    (2025, 11, 3374336, 201961923, 81023034, 89564989, 16500501, 11610645, 9067, 0),
-    (2025, 12, 1864266, 92527465, 26065364, 53396300, 9116260, 2813669, 9067, 0),
-    (2026, 1, 3618112, 154329498, 36146527, 91292198, 17692567, 7872014, 9067, 0),
-    (2026, 2, 6153753, 252683564, 38373999, 175634278, 30091855, 7675975, 9067, 0),
-    (2026, 3, 8480800, 401358542, 75273321, 268739604, 41471114, 14501754, 9067, 0),
-    (2026, 4, 8347849, 313688892, 51555757, 215182515, 40820984, 4411433, 9067, 0),
-    (2026, 5, 9056910, 344070135, 50765228, 240814189, 44288292, 6643840, 9067, None),
-    (2026, 6, 8590490, 388387586, 99821400, 228756157, 42007496, 15274424, 9067, 0),
-    (2026, 7, 9004421, 347336115, 59964170, 225515413, 44031617, 9457813, 9067, None),
+    (2024, 1, 10253257, 736497100, 157282591, 467129298, 88388289, 23678789, 18133, 0),
+    (2024, 2, 9018952, 362135089, 100543308, 203249295, 44102677, 14230742, 9067, 0),
+    (2024, 3, 3381218, 142539162, 39086809, 81637347, 16534155, 5271784, 9067, 0),
+    (2024, 4, 4933429, 237984024, 97304304, 100447581, 24124469, 16098603, 9067, 0),
+    (2024, 5, 5832221, 245723216, 70741601, 137040800, 28519561, 9412187, 9067, 0),
+    (2024, 6, 5854692, 239081247, 61751914, 138570658, 28629446, 10120162, 9067, 0),
+    (2024, 7, 6916870, 268805864, 61579422, 162230228, 33823495, 11163652, 9067, 0),
+    (2024, 8, 6755643, 345715674, 88353918, 210232286, 33035095, 14085308, 9067, 0),
+    (2024, 9, 5794081, 216034708, 59567023, 119846482, 28333058, 8279078, 9067, 0),
+    (2024, 10, 8160455, 333407112, 92062482, 186760650, 39904623, 14670290, 9067, 0),
+    (2024, 11, 8790584, 343026033, 74832510, 214069813, 42985956, 11128687, 9067, 0),
+    (2024, 12, 9658757, 415877709, 99821400, 254647134, 47231321, 14168787, 9067, 0),
+    (2025, 1, 7283162, 266092728, 47668312, 176444187, 35614660, 6356502, 9067, 0),
+    (2025, 2, 7558914, 338431883, 98780063, 187309326, 36963087, 15370340, 9067, 0),
+    (2025, 3, 9220246, 347997726, 62116062, 233945293, 45087002, 6840302, 9067, 0),
+    (2025, 4, 6776457, 306339672, 99821400, 158391902, 33136874, 14980429, 9067, 0),
+    (2025, 5, 6360004, 304760808, 96646281, 164476727, 31100421, 12528312, 9067, 0),
+    (2025, 6, 6112234, 254803373, 58048083, 159752861, 29888823, 7104539, 9067, 0),
+    (2025, 7, 7807153, 285797656, 56361244, 181541410, 38176979, 9708956, 9067, 0),
+    (2025, 8, 6836301, 257804420, 57679201, 157561998, 33429511, 9124644, 9066, 0),
+    (2025, 9, 6921867, 273820535, 55312236, 176702439, 33847930, 7948863, 9067, 0),
+    (2025, 10, 7047477, 322020733, 84597439, 191569262, 34462161, 11382804, 9067, 0),
+    (2025, 11, 3374336, 201961923, 81023034, 92818676, 16500501, 11610645, 9067, 0),
+    (2025, 12, 1864266, 92527465, 26065364, 54523105, 9116260, 2813669, 9067, 0),
+    (2026, 1, 3618112, 154329498, 36146527, 92609323, 17692567, 7872014, 9067, 0),
+    (2026, 2, 6153753, 252683564, 38373999, 176532668, 30091855, 7675975, 9067, 0),
+    (2026, 3, 8480800, 401358542, 75273321, 270103286, 41471114, 14501754, 9067, 0),
+    (2026, 4, 8347849, 313688892, 51555757, 216891651, 40820984, 4411433, 9067, 0),
+    (2026, 5, 9056910, 344070135, 50765228, 242363708, 44288292, 6643840, 9067, None),
+    (2026, 6, 8590490, 388387586, 99821400, 231275199, 42007496, 15274424, 9067, 0),
+    (2026, 7, 9004421, 347336115, 59964170, 233873448, 44031617, 9457813, 9067, None),
 ]
 # True metered KVA (kva_billed_consump), pulled 2026-08-12 from the same raw files used
 # for the Fuel fix -- NOT the same as demand_jmd / $2,852.04: that division only matches
@@ -198,8 +198,8 @@ hs['A' + str(r + 2)] = ('Note: Jul/Aug-2025 corrected 2026-08-11. Jul-2025 (7,80
                          'Aug-2025 is now the net of both rows: 6,836,301 kWh / $257,804,420 (demand/energy/IPP/customer-charge components netted the same way; the customer-charge net of 9,066 vs. every other month\'s ~9,067 corroborates this reading). '
                          'FUEL FIX (2026-08-12): jps_actuals.fuel_jmd was $0 in all 19 months, unlike every other RT40/50/70 account (all showing fuel as 60-70% of revenue). Alcoa\'s own raw-file extracts NEVER populate the Fuel/FuelOffPeak/FuelPartialPeak/FuelOnPeak columns (confirmed across all 13 raw files checked) -- '
                          'but the true fuel charge IS embedded in Revenue: the Aug-2025 reversal-of-July row itemizes real TOU fuel (-$178,924,339) that exactly matches July\'s unexplained residual (off by $2). Recomputed fuel for every month with a locally available raw file as Revenue-Demand-Energy-IPP-CustCharge-GCT-FEX(-revenue_adj where present), '
-                         'and updated jps_actuals + this model for 13 of 19 2025/2026 months (2025 May/Jul/Aug/Oct/Nov/Dec + all of 2026). 2025 Jan/Feb/Mar/Apr/Jun/Sep have no raw file available anywhere on this machine -- fuel is unverified and left at $0 for those 6 months; "Other/Base $" there still carries the full unexplained residual. '
-                         '"Other/Base $" = Revenue - (Demand+Fuel+Energy+IPP+CustChg+GCT) — for the 25 corrected months this is now small (~0.02-3.5% of revenue, matching FEX/revenue_adj); for the 6 unverified 2025 months it remains large (~50-60% of revenue). '
+                         'and updated jps_actuals + this model for 13 of 19 2025/2026 months (2025 May/Jul/Aug/Oct/Nov/Dec + all of 2026). 2025 Jan/Feb/Mar/Apr/Jun/Sep have no raw file available anywhere on this machine -- for those 6 months, Fuel is the full Revenue-Demand-Energy-IPP-CustChg-GCT residual (unverified against a raw TOU breakdown, but not left at $0 either). '
+                         'FUEL/OTHER MERGED (2026-08-13, user request): "Fuel $" now equals Revenue-Demand-Energy-IPP-CustChg-GCT for ALL 31 months (previously the smaller reversal-verified TOU figure for 25 of them, with the remainder sitting in a separate "Other/Base $" line) — Other/Base is now ~$0 everywhere (a few dollars of FEX-scale rounding at most), fully folded into Fuel. '
                          '2024 ADDED (2026-08-12): all 12 months pulled directly from the raw "<Mon> 24.csv" CIS export files the user placed in this folder — jps_actuals has zero 2024 rows for this account, so these are sourced straight from the raw files, not the DB, using the same Fuel reclassification as the 2025/2026 fix above. Each month is a single clean row (no comma-parsing duplicates like Jul/Aug-2025). '
                          'HURRICANE FLAG (2026-08-12, user-confirmed): Nov/Dec-2025 (shaded) were storm-impacted months — kWh/revenue are left as actually billed (real numbers, not fabricated), but the AVERAGE row above and every rate/seasonality calc that feeds the projection now excludes these 2 rows via AVERAGEIF on the Flag column. With 2024 now providing real Nov/Dec observations, Seasonality no longer needs to interpolate those two calendar months. '
                          'KVA ADDED (2026-08-12): pulled from the true kva_billed_consump field in the raw files (NOT the same as Demand $ / $2,852.04 — that division matches the true meter reading in only ~60% of months, likely a demand ratchet/minimum-demand clause; e.g. Aug-2025\'s true net KVA is 41,823.57 vs 20,223.84 implied by simple division). Blank for the same 6 unverified 2025 months as the Fuel fix.')
@@ -346,6 +346,9 @@ ds.merge_cells('A38:E38')
 ds.row_dimensions[38].height = 72
 ds['A38'].alignment = Alignment(wrap_text=True, vertical='top')
 
+section(40, 'CURRENCY')
+drow(41, 'USD Exchange Rate (JMD per USD)', 157.00, '#,##0.00', 'User-provided 2026-08-13 — applied to Total Revenue on Projection and Summary')
+
 # ============================================================ PROJECTION =========
 # 60 months, Jan-2024 to Dec-2028, per the user's 2026-08-12 request: one continuous
 # timeline showing ACTUALS where we have actuals (Jan-2024 to Jul-2026, 31 months,
@@ -366,16 +369,16 @@ TOTAL_ROWS = ACTUAL_ROWS + PROJ_ROWS  # 60
 
 ps = wb.create_sheet('Projection')
 ps.sheet_view.showGridLines = False
-PW = [6, 6, 10, 10, 10, 13, 15, 14, 15, 13, 13, 13, 13, 13, 15, 14, 15, 13, 16]
-for c, w in zip('ABCDEFGHIJKLMNOPQRS', PW):
+PW = [6, 6, 10, 10, 10, 13, 15, 14, 15, 13, 13, 13, 13, 13, 15, 14, 15, 13, 16, 15]
+for c, w in zip('ABCDEFGHIJKLMNOPQRST', PW):
     ps.column_dimensions[c].width = w
 ps['A1'] = 'PROJECTION — ALCOA RT70 (60 months, Jan-2024 to Dec-2028; Actual through Jul-2026, then modeled)'
 ps['A1'].font = TITLE
-ps.merge_cells('A1:S1')
+ps.merge_cells('A1:T1')
 ps['A1'].fill = NAVY
 ps.row_dimensions[1].height = 22
 hdrs3 = ['Per#', 'CY', 'Month', 'Cal Mo#', 'A/P', 'KVA', 'Seasonal kWh', 'Volume-Adj kWh', 'Final kWh\n(x multiplier)',
-         'Demand $', 'Energy $', 'IPP Variable $', 'IPP Fixed $', 'Fuel $', 'Other/Base $', 'Cust Chg $', 'Subtotal $', 'GCT $', 'Total Revenue $']
+         'Demand $', 'Energy $', 'IPP Variable $', 'IPP Fixed $', 'Fuel $\n(incl. Other/Base)', 'Other/Base $\n(merged into Fuel)', 'Cust Chg $', 'Subtotal $', 'GCT $', 'Total Revenue $ (JMD)', 'Total Revenue $ (USD)']
 for j, h in enumerate(hdrs3):
     c = ps.cell(3, j + 1, h); c.font = HDR; c.fill = NAVY; c.border = BORDER
     c.alignment = Alignment(horizontal='center', wrap_text=True)
@@ -446,9 +449,13 @@ for i in range(TOTAL_ROWS):
         ps.cell(rr, 12).font = BLACK; ps.cell(rr, 12).number_format = MONEY
         ps.cell(rr, 13).value = f'=$F{rr}*Drivers!$B$10*(1+Drivers!$B$11)^{yexp}'
         ps.cell(rr, 13).font = BLACK; ps.cell(rr, 13).number_format = MONEY
-        ps.cell(rr, 14).value = f'=$I{rr}*IF(Drivers!$B$18>0,Drivers!$B$18,Drivers!$B$34)*(1+Drivers!$B$17)^{yexp}'
+        # Fuel now absorbs Other/Base (2026-08-13, user request: "combine other with fuel") --
+        # Other/Base was found to be mostly unreclassified fuel (see History tab note), so its
+        # rate is added directly into Fuel $ here rather than kept as a separate line; col O
+        # stays in the layout (Subtotal still sums J:P) but is hardcoded to 0 for Projected rows.
+        ps.cell(rr, 14).value = f'=$I{rr}*(IF(Drivers!$B$18>0,Drivers!$B$18,Drivers!$B$34)*(1+Drivers!$B$17)^{yexp}+Drivers!$B$33*(1+Drivers!$B$16)^{yexp})'
         ps.cell(rr, 14).font = BLACK; ps.cell(rr, 14).number_format = MONEY
-        ps.cell(rr, 15).value = f'=$I{rr}*Drivers!$B$33*(1+Drivers!$B$16)^{yexp}'
+        ps.cell(rr, 15).value = 0
         ps.cell(rr, 15).font = BLACK; ps.cell(rr, 15).number_format = MONEY
         ps.cell(rr, 16).value = f'=Drivers!$B$35*(1+Drivers!$B$19)^{yexp}'
         ps.cell(rr, 16).font = BLACK; ps.cell(rr, 16).number_format = MONEY
@@ -459,7 +466,10 @@ for i in range(TOTAL_ROWS):
         ps.cell(rr, 19).value = f'=Q{rr}+R{rr}'
         ps.cell(rr, 19).font = BOLD; ps.cell(rr, 19).number_format = MONEY
 
-    for col in range(1, 20):
+    ps.cell(rr, 20).value = f'=S{rr}/Drivers!$B$41'
+    ps.cell(rr, 20).font = GREEN; ps.cell(rr, 20).number_format = MONEY
+
+    for col in range(1, 21):
         ps.cell(rr, col).border = BORDER
     band = None
     y_i, m_i = (2024 + i // 12, i % 12 + 1)
@@ -470,34 +480,36 @@ for i in range(TOTAL_ROWS):
     elif is_actual and y_i % 2 == 1:
         band = PatternFill('solid', start_color='EFF6FF')
     if band:
-        for col in range(1, 20):
+        for col in range(1, 21):
             ps.cell(rr, col).fill = band
 ps.freeze_panes = 'C4'
 last_proj_row = pr0 + TOTAL_ROWS - 1
 ps['A62'] = ('Jan-2024 to Jul-2026 (31 rows, "Actual") are pulled directly from the History tab, row for row — not re-derived through the seasonality/KVA-rate machinery, so they exactly match actual billing. IPP Fixed is $0 for these rows since it wasn\'t itemized historically. '
              'Aug-2026 to Dec-2028 (29 rows, "Projected") use the given/extended KVA schedule for Demand $ and IPP Fixed $, and the Drivers-tab rates for everything kWh-driven. '
              'Aug-2028 to Dec-2028 (5 months) has no user-provided KVA figure — extended flat at 25 KVA to match the established 2027/Jan-Jul-2028 pattern; treat as an assumption, not given data. '
-             'Nov/Dec-2025 (shaded, still Actual) show real billed figures; their KVA is unaffected by the hurricane, but note the Seasonality tab (which only feeds the Projected rows) excludes these two months from its baseline averages.')
+             'Nov/Dec-2025 (shaded, still Actual) show real billed figures; their KVA is unaffected by the hurricane, but note the Seasonality tab (which only feeds the Projected rows) excludes these two months from its baseline averages. '
+             'FUEL/OTHER MERGED (2026-08-13, user request): Fuel $ now includes what was previously a separate "Other/Base $" line (col O, now hardcoded/derived to $0) — see History tab note on why Other was mostly unreclassified fuel to begin with. '
+             'USD (col T) = col S / Drivers!$B$41 (157.00 JMD/USD, user-provided 2026-08-13).')
 ps['A62'].font = Font(name=FONT, italic=True, size=8.5, color='B87800')
-ps.merge_cells('A62:S62')
-ps.row_dimensions[62].height = 56
+ps.merge_cells('A62:T62')
+ps.row_dimensions[62].height = 70
 ps['A62'].alignment = Alignment(wrap_text=True, vertical='top')
 
 # ============================================================ SUMMARY ============
 sm = wb.create_sheet('Summary')
 sm.sheet_view.showGridLines = False
-for c, w in zip('ABCDEFGHIJKL', [28, 13, 13, 14, 14, 14, 14, 14, 14, 14, 12, 16]):
+for c, w in zip('ABCDEFGHIJKLM', [28, 13, 13, 14, 14, 14, 14, 14, 14, 14, 12, 16, 16]):
     sm.column_dimensions[c].width = w
 sm['A1'] = 'SUMMARY — ANNUAL ROLLUP & ACTUAL COMPARISON'
 sm['A1'].font = TITLE
-sm.merge_cells('A1:L1')
+sm.merge_cells('A1:M1')
 sm['A1'].fill = NAVY
 sm.row_dimensions[1].height = 22
 sm['A2'] = 'Alcoa Mins Of Ja Ltd · Account 100185-607213 · RT70 · Scenario: see Drivers tab'
 sm['A2'].font = Font(name=FONT, italic=True, size=9, color='6B7A99')
-sm.merge_cells('A2:L2')
+sm.merge_cells('A2:M2')
 
-hdrs4 = ['', 'Avg KVA', 'kWh', 'Demand $', 'Energy $', 'IPP Var $', 'IPP Fixed $', 'Fuel $', 'Other/Base $', 'Cust Chg $', 'GCT $', 'Total Revenue $']
+hdrs4 = ['', 'Avg KVA', 'kWh', 'Demand $', 'Energy $', 'IPP Var $', 'IPP Fixed $', 'Fuel $ (incl. Other)', 'Other/Base $', 'Cust Chg $', 'GCT $', 'Total Revenue $ (JMD)', 'Total Revenue $ (USD)']
 for j, h in enumerate(hdrs4):
     c = sm.cell(4, j + 1, h); c.font = HDR; c.fill = NAVY; c.border = BORDER
     c.alignment = Alignment(horizontal='center', wrap_text=True)
@@ -526,18 +538,20 @@ for k, yr in enumerate([2024, 2025, 2026, 2027, 2028]):
     sm.cell(rr, 10).value = f'=SUMIF(Projection!$B${pr0}:$B${last_proj_row},{yr},Projection!$P${pr0}:$P${last_proj_row})'
     sm.cell(rr, 11).value = f'=SUMIF(Projection!$B${pr0}:$B${last_proj_row},{yr},Projection!$R${pr0}:$R${last_proj_row})'
     sm.cell(rr, 12).value = f'=SUMIF(Projection!$B${pr0}:$B${last_proj_row},{yr},Projection!$S${pr0}:$S${last_proj_row})'
-    for col in range(2, 13):
+    sm.cell(rr, 13).value = f'=L{rr}/Drivers!$B$41'
+    for col in range(2, 14):
         sm.cell(rr, col).font = GREEN
         sm.cell(rr, col).number_format = KWHFMT if col in (2, 3) else MONEY
 
 for row in range(5, 10):
-    for col in range(1, 13):
+    for col in range(1, 14):
         sm.cell(row, col).border = BORDER
 
-sm['A12'] = 'CY2026\'s Avg KVA blends 7 real billed months (Jan-Jul) with 5 given/assumed months (Aug-Dec) — not a single consistent basis, shown for reference only. Every $ column reconciles exactly to Projection: Actual rows (Jan-2024/Jul-2026) are pulled straight from History, not re-derived; Projected rows (Aug-2026/Dec-2028) use the given KVA schedule and the $2,852.04/KVA, $424.14/KVA and $25.628/kWh rates (confirmed with the user 2026-08-12).'
+sm['A12'] = ('CY2026\'s Avg KVA blends 7 real billed months (Jan-Jul) with 5 given/assumed months (Aug-Dec) — not a single consistent basis, shown for reference only. Every $ column reconciles exactly to Projection: Actual rows (Jan-2024/Jul-2026) are pulled straight from History, not re-derived; Projected rows (Aug-2026/Dec-2028) use the given KVA schedule and the $2,852.04/KVA, $424.14/KVA and $25.628/kWh rates (confirmed with the user 2026-08-12). '
+             'Fuel $ includes what was previously a separate Other/Base $ line (2026-08-13). USD (col M) = JMD / 157.00 (Drivers!$B$41, user-provided 2026-08-13).')
 sm['A12'].font = Font(name=FONT, italic=True, size=8.5, color='B87800')
-sm.merge_cells('A12:L12')
-sm.row_dimensions[12].height = 40
+sm.merge_cells('A12:M12')
+sm.row_dimensions[12].height = 52
 sm['A12'].alignment = Alignment(wrap_text=True, vertical='top')
 
 sm['A14'] = 'kWh & Total Revenue by month — full Jan-2024 to Dec-2028 timeline (see chart)'
