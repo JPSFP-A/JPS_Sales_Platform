@@ -2387,6 +2387,12 @@ order by ordinal_position;</pre>
         <div id="rcfr_ind_table" style="overflow-x:auto;margin-top:14px"></div>
       </div>
       <div class="card" style="margin-top:12px">
+        <div class="ch">Top 5 Industries by Rate Class
+          <span style="font-size:10px;color:var(--text3);font-weight:400">Ranked by FY total, fixed membership across months</span>
+        </div>
+        <div id="rcfr_topind_rc_table" style="overflow-x:auto"></div>
+      </div>
+      <div class="card" style="margin-top:12px">
         <div class="ch">Peak Demand — Billed kVA by Rate Class
           <span style="font-size:10px;color:var(--text3);font-weight:400">Trailing 6 months · RT40/RT50/RT70 (demand-metered) · Source: jps_demand_actuals</span>
         </div>
@@ -10961,7 +10967,19 @@ function renderRcForecastReport(){
     const e=(indMonthly[k]=indMonthly[k]||{});
     e[m]=(e[m]||0)+val;
   };
-  const addIndChain=(industry,chain)=>{for(let m=1;m<=12;m++){const c=chain[m];if(c)bumpInd(industry,m,c.total||0);}};
+  // Same industry attribution as indMonthly above, but kept per rate class too --
+  // feeds "Top 5 Industries by Rate Class" below. rateClass falls back to
+  // 'Unassigned' to match bump()'s own fallback (so the two breakdowns never
+  // disagree on what a blank rate_class gets bucketed as).
+  const rcIndMonthly={};
+  const bumpRcInd=(rateClass,industry,m,val)=>{
+    const rk=rateClass||'Unassigned';
+    const ik=industry||'No KAM / Cohort';
+    const bucket=(rcIndMonthly[rk]=rcIndMonthly[rk]||{});
+    const e=(bucket[ik]=bucket[ik]||{});
+    e[m]=(e[m]||0)+val;
+  };
+  const addIndChain=(rateClass,industry,chain)=>{for(let m=1;m<=12;m++){const c=chain[m];if(c){bumpInd(industry,m,c.total||0);bumpRcInd(rateClass,industry,m,c.total||0);}}};
   const bump=(rateClass)=>{
     const k=rateClass||'Unassigned';
     if(!rc[k])rc[k]={actual:0,base:0,macro:0,weather:0,oper:0,total:0};
@@ -10971,23 +10989,23 @@ function renderRcForecastReport(){
     const chain=_dfcGetChain(idx,a.ac,true,{rate_class:a.rate_class,industry:a.industry},a.ac,year,null);
     _rcfrAccumulate(bump(a.rate_class),chain);
     _rcfrTrackDrivers(a.rate_class,a,chain,rcIndustryImpact,rcOpAccounts);
-    addIndChain(a.industry,chain);
+    addIndChain(a.rate_class,a.industry,chain);
   });
   newCusts.forEach(c=>{
     const ctx={rate_class:c.rate_class,industry:c.industry,startYear:Number(c.start_year),startMonth:Number(c.start_month),expectedKwh:Number(c.expected_kwh)||0};
     const chain=_dfcGetChain(idx,c.jps_ac,true,{rate_class:c.rate_class,industry:c.industry},c.jps_ac,year,ctx);
     _rcfrAccumulate(bump(c.rate_class),chain);
     _rcfrTrackDrivers(c.rate_class,{name:c.customer||c.jps_ac,ac:c.jps_ac,industry:c.industry},chain,rcIndustryImpact,rcOpAccounts);
-    addIndChain(c.industry,chain);
+    addIndChain(c.rate_class,c.industry,chain);
   });
   commCohorts.forEach(co=>{
     const chain=_dfcGetChain(idx,co.key,false,{rate_class:co.rate_class,industry:null},null,year,null);
     _rcfrAccumulate(bump(co.rate_class),chain);
-    addIndChain(null,chain);
+    addIndChain(co.rate_class,null,chain);
   });
   resCohorts.forEach(co=>{
     const chain=_dfcGetChain(idx,co.key,false,{rate_class:co.rate_class,industry:null},null,year,null);
-    addIndChain(null,chain);
+    addIndChain(co.rate_class,null,chain);
     _rcfrAccumulate(bump(co.rate_class),chain);
   });
 
@@ -11059,7 +11077,42 @@ function renderRcForecastReport(){
       </ul>`;
   }
   _rcfrRenderIndustryTrend(indMonthly,lockedThru);
+  _rcfrRenderTopIndByRC(rcIndMonthly,lockedThru);
   _rcfrRenderDemand();
+}
+// Top 5 industries per rate class, ranked once by FY total (fixed membership across
+// months, same convention as _rcfrRenderIndustryTrend) -- rest folded into "Other".
+function _rcfrRenderTopIndByRC(rcIndMonthly,lockedThru){
+  const wrap=document.getElementById('rcfr_topind_rc_table');if(!wrap)return;
+  const months=[1,2,3,4,5,6,7,8,9,10,11,12];
+  const annualTotal=(vals)=>months.reduce((s,m)=>s+(vals[m]||0),0);
+  const rcs=Object.keys(rcIndMonthly).sort(_rcSort);
+  if(!rcs.length){wrap.innerHTML='<div style="padding:10px 0;color:var(--text3);font-size:11px">No data.</div>';return;}
+  const cell=(v,m)=>{const isFcst=lockedThru&&m>lockedThru;return `<td style="text-align:right;padding:5px 4px;${isFcst?'background:rgba(0,194,168,.08);color:var(--teal)':''}">${_dfcFmtGwh(v||0)}</td>`;};
+  let html='';
+  rcs.forEach(rc=>{
+    const entries=Object.entries(rcIndMonthly[rc]).sort((a,b)=>annualTotal(b[1])-annualTotal(a[1]));
+    const top5=entries.slice(0,5);
+    const rest=entries.slice(5);
+    if(rest.length){
+      const other={};months.forEach(m=>{other[m]=rest.reduce((s,[,v])=>s+(v[m]||0),0);});
+      top5.push(['Other ('+rest.length+')',other]);
+    }
+    const rcTotal={};months.forEach(m=>{rcTotal[m]=Object.values(rcIndMonthly[rc]).reduce((s,v)=>s+(v[m]||0),0);});
+    const rows=top5.map(([name,vals])=>`<tr><td style="padding:5px 8px;font-weight:500">${esc(name)}</td>${months.map(m=>cell(vals[m],m)).join('')}<td style="text-align:right;padding:5px 8px;font-weight:600;border-left:0.5px solid var(--border)">${_dfcFmtGwh(annualTotal(vals))}</td></tr>`).join('');
+    html+=`<div style="font-size:11px;font-weight:600;color:var(--text2);margin:14px 0 4px">${esc(rc)}</div>
+    <table style="width:100%;min-width:820px;border-collapse:collapse;font-size:11px">
+      <thead><tr style="border-bottom:0.5px solid var(--border-strong)">
+        <th style="text-align:left;padding:5px 8px;font-weight:500;color:var(--text3)">Industry</th>
+        ${months.map(m=>`<th style="text-align:right;padding:5px 4px;font-weight:500;color:var(--text3)">${MONTHS_SHORT[m-1]}</th>`).join('')}
+        <th style="text-align:right;padding:5px 8px;font-weight:500;color:var(--text3);border-left:0.5px solid var(--border)">FY GWh</th>
+      </tr></thead>
+      <tbody>${rows}
+      <tr style="border-top:1px solid var(--border-strong);font-weight:600"><td style="padding:5px 8px">All industries</td>${months.map(m=>cell(rcTotal[m],m)).join('')}<td style="text-align:right;padding:5px 8px;border-left:0.5px solid var(--border)">${_dfcFmtGwh(annualTotal(rcTotal))}</td></tr>
+      </tbody>
+    </table>`;
+  });
+  wrap.innerHTML=html+`<div style="font-size:10px;color:var(--text3);margin-top:8px">Top 5 industries per rate class, ranked by FY total; rest folded into "Other". Teal-tinted cells are forecast months. "No KAM / Cohort" pools every account without an assigned industry (no-KAM cohorts + residential) -- expect it to dominate RT10/RT20 since industry is only tracked for KAM-owned commercial accounts.</div>`;
 }
 // Monthly Trend by Industry -- one line per top-8 industries by annual total (the
 // rest folded into "Other industries" so the chart stays readable instead of one
