@@ -10340,6 +10340,18 @@ function dfcLoadCohortMembers(ri){
   bodyEl.dataset.loaded='1';
 }
 
+// Expand/collapse a rate-class/parish/industry group in the Driver Forecast
+// "Group by..." views -- shows/hides every member row tagged with this group
+// (see entityHtml's groupTag param). Member rows were rendered up-front (not
+// lazily like dfcLoadCohortMembers) since group sizes here are entity counts
+// (tens-hundreds), not raw meter counts, so eager render doesn't repeat the
+// 1,600-row freeze the customer view's lazy cohort loading was built to avoid.
+function dfcToggleGroup(tag,spanEl){
+  const open=spanEl.textContent==='▾';
+  document.querySelectorAll(`tbody[data-dfcgrp="${tag}"]`).forEach(el=>{el.style.display=open?'none':'table-row-group';});
+  spanEl.textContent=open?'▸':'▾';
+}
+
 // Bulk expand/collapse — a real KAM roster is 1,600+ rows, so this can toggle a
 // lot of tbodies at once. Pure style.display flips, no recompute, stays fast.
 function dfcExpandCollapseAll(expand){
@@ -10457,10 +10469,16 @@ function renderDriverForecast(){
     return months.map(m=>`<td colspan="2" style="text-align:right;padding:5px;border-left:0.5px solid var(--border);font-weight:${bold?500:400}">${_dfcFmtGwh(chain[m]?chain[m].total:0)}</td>`).join('');
   }
 
-  function entityHtml(e,entIdx,defaultExpanded){
+  function entityHtml(e,entIdx,defaultExpanded,groupTag){
     const gid=`dfc_e${entIdx}`;
     const hid=`dfc_h${entIdx}`;
-    let h=`<tbody><tr style="border-bottom:0.5px solid var(--border);cursor:pointer" onclick="const g=document.getElementById('${gid}'),h=document.getElementById('${hid}');const open=g.style.display==='table-row-group';g.style.display=open?'none':'table-row-group';h.textContent=open?'▸':'▾';">
+    // groupTag: this entity is a member row inside a collapsed rate-class/parish/
+    // industry group (see the grp==='rate_class' etc. branch below) -- its header
+    // row starts hidden and is tagged so dfcToggleGroup can show/hide every member
+    // at once. Its OWN detail tbody (gid) is a separate, independent toggle either
+    // way -- expanding the group doesn't also expand each member's driver detail.
+    const headerAttrs=groupTag?` data-dfcgrp="${groupTag}" style="display:none"`:'';
+    let h=`<tbody${headerAttrs}><tr style="border-bottom:0.5px solid var(--border);cursor:pointer" onclick="const g=document.getElementById('${gid}'),h=document.getElementById('${hid}');const open=g.style.display==='table-row-group';g.style.display=open?'none':'table-row-group';h.textContent=open?'▸':'▾';">
         <td style="padding:7px 8px;font-weight:500" colspan="${1+months.length*2}">
           <span id="${hid}">${defaultExpanded?'▾':'▸'}</span> ${esc(e.label)} <span style="color:var(--text3);font-weight:400">· ${esc(e.sub)}</span>
           <strong style="margin-left:10px">${_dfcFmtGwh(fyTotal(e.chain))} GWh</strong>
@@ -10524,24 +10542,40 @@ function renderDriverForecast(){
     bodyHtml+=`<tbody><tr><td colspan="${2+months.length*2}" style="padding:14px 8px 4px;font-weight:700;color:var(--red);font-size:11px;text-transform:uppercase;letter-spacing:.4px">Bottom 10 — smallest by FY total</td></tr></tbody>`;
     bottom10.forEach((e,i)=>{bodyHtml+=entityHtml(e,'bot'+i,true);});
   }else{
+    // Group-by-rate-class/parish/industry: each group row expands (▸/▾, same
+    // mechanic as the customer view's rows) to reveal its member entities, each of
+    // which is itself a normal entityHtml() row -- so drilling into a rate class
+    // gives full per-customer driver detail, not just a flat name+total list.
+    // A single group used to be a dead-end summary row with no way in at all.
     const keyFn=grp==='rate_class'?e=>e.ref.rate_class:grp==='parish'?e=>e.ref.parish||'—':e=>e.ref.industry||'Residential / unassigned';
     const groups={};
     entities.forEach(e=>{
       const k=keyFn(e)||'—';
-      if(!groups[k])groups[k]={key:k,chain:{}};
+      if(!groups[k])groups[k]={key:k,chain:{},members:[]};
       months.forEach(m=>{groups[k].chain[m]=groups[k].chain[m]||{total:0};groups[k].chain[m].total+=e.chain[m]?e.chain[m].total:0;});
+      groups[k].members.push(e);
     });
     let groupRows='';
     // Rate class rows follow the canonical RC_DISPLAY_ORDER (RT10,RT20,RT40,...) used
     // everywhere else rate classes are listed; parish/industry have no such canon, so
     // those stay sorted by FY total, largest first.
     const groupSort=grp==='rate_class'?(a,b)=>_rcSort(a.key,b.key):(a,b)=>fyTotal(b.chain)-fyTotal(a.chain);
+    const GROUP_MEMBER_CAP=150; // these are already-aggregated entities (accounts/cohorts), not raw meters -- a higher cap than DFC_MEMBER_CAP is safe
+    let gIdx=0,memberEntIdx=0;
     Object.values(groups).sort(groupSort).forEach(g=>{
-      groupRows+=`<tr style="border-bottom:0.5px solid var(--border)"><td style="padding:6px 8px;font-weight:500">${esc(g.key)}</td>${totalRowCells(g.chain,false)}<td style="text-align:right;padding:6px 8px;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(g.chain))}</td></tr>`;
+      const gtag='dfcg'+(gIdx++);
+      groupRows+=`<tbody><tr style="border-bottom:0.5px solid var(--border);cursor:pointer" onclick="dfcToggleGroup('${gtag}',this.querySelector('span'))">
+        <td style="padding:6px 8px;font-weight:500"><span>▸</span> ${esc(g.key)} <span style="color:var(--text3);font-weight:400">· ${g.members.length} ${g.members.length===1?'entry':'entries'}</span></td>
+        ${totalRowCells(g.chain,false)}<td style="text-align:right;padding:6px 8px;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(g.chain))}</td></tr></tbody>`;
+      const sortedMembers=g.members.slice().sort((a,b)=>fyTotal(b.chain)-fyTotal(a.chain));
+      sortedMembers.slice(0,GROUP_MEMBER_CAP).forEach(e=>{groupRows+=entityHtml(e,'dfcm'+(memberEntIdx++),false,gtag);});
+      if(sortedMembers.length>GROUP_MEMBER_CAP){
+        groupRows+=`<tbody data-dfcgrp="${gtag}" style="display:none"><tr><td colspan="${2+months.length*2}" style="padding:6px 8px 6px 26px;color:var(--text3);font-size:10px">+${sortedMembers.length-GROUP_MEMBER_CAP} more in this group — search above to find a specific one</td></tr></tbody>`;
+      }
     });
     const grand={};months.forEach(m=>{grand[m]={total:entities.reduce((s,e)=>s+(e.chain[m]?e.chain[m].total:0),0)};});
-    groupRows+=`<tr style="border-top:0.5px solid var(--border-strong)"><td style="padding:8px 8px;font-weight:700">Grand total</td>${totalRowCells(grand,true)}<td style="text-align:right;padding:8px 8px;font-weight:700;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(grand))}</td></tr>`;
-    bodyHtml+=`<tbody>${groupRows}</tbody>`;
+    groupRows+=`<tbody><tr style="border-top:0.5px solid var(--border-strong)"><td style="padding:8px 8px;font-weight:700">Grand total</td>${totalRowCells(grand,true)}<td style="text-align:right;padding:8px 8px;font-weight:700;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(grand))}</td></tr></tbody>`;
+    bodyHtml+=groupRows;
   }
 
   const warnHtml=(!sbMacroAssumExists&&!sbOpAdjExists)
