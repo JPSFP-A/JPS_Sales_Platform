@@ -10889,6 +10889,11 @@ function renderRcForecastReport(){
   const newCusts=sbNewCustomers.filter(c=>Number(c.start_year)<=year&&c.rate_class!=='EV');
 
   const rc={};
+  // Per-industry and per-account driver breakdowns, so the insight line below can
+  // name WHO/WHAT is behind a driver instead of just its aggregate GWh -- only
+  // KAM-owned accounts carry a real industry/op-adjustment (cohorts get industry:
+  // null per _dfcCommCohortsForNonKam, so they can't be individually attributed).
+  const rcIndustryImpact={}, rcOpAccounts={};
   const bump=(rateClass)=>{
     const k=rateClass||'Unassigned';
     if(!rc[k])rc[k]={actual:0,base:0,macro:0,weather:0,oper:0,total:0};
@@ -10897,11 +10902,13 @@ function renderRcForecastReport(){
   keyAccounts.forEach(a=>{
     const chain=_dfcGetChain(idx,a.ac,true,{rate_class:a.rate_class,industry:a.industry},a.ac,year,null);
     _rcfrAccumulate(bump(a.rate_class),chain);
+    _rcfrTrackDrivers(a.rate_class,a,chain,rcIndustryImpact,rcOpAccounts);
   });
   newCusts.forEach(c=>{
     const ctx={rate_class:c.rate_class,industry:c.industry,startYear:Number(c.start_year),startMonth:Number(c.start_month),expectedKwh:Number(c.expected_kwh)||0};
     const chain=_dfcGetChain(idx,c.jps_ac,true,{rate_class:c.rate_class,industry:c.industry},c.jps_ac,year,ctx);
     _rcfrAccumulate(bump(c.rate_class),chain);
+    _rcfrTrackDrivers(c.rate_class,{name:c.customer||c.jps_ac,ac:c.jps_ac,industry:c.industry},chain,rcIndustryImpact,rcOpAccounts);
   });
   commCohorts.forEach(co=>{
     const chain=_dfcGetChain(idx,co.key,false,{rate_class:co.rate_class,industry:null},null,year,null);
@@ -10939,7 +10946,7 @@ function renderRcForecastReport(){
       <td style="text-align:right;padding:6px 4px;color:${r.weather>=0?'var(--green)':'var(--red)'}">${r.weather>=0?'+':''}${_dfcFmtGwh(r.weather)}</td>
       <td style="text-align:right;padding:6px 8px;color:${r.oper>=0?'var(--green)':'var(--red)'}">${r.oper>=0?'+':''}${_dfcFmtGwh(r.oper)}</td>
     </tr>`;
-    insights.push(_rcfrInsight(rateClass,fy,bud,r.macro,r.weather,r.oper));
+    insights.push(_rcfrInsight(rateClass,fy,bud,r.macro,r.weather,r.oper,rcIndustryImpact[rateClass],rcOpAccounts[rateClass]));
   });
   const totDelta=totBud>0?(totFy-totBud)/totBud*100:null;
   body+=`<tr style="border-top:1px solid var(--border-strong);font-weight:600">
@@ -10992,7 +10999,36 @@ function _rcfrAccumulate(acc,chain){
     acc.total+=base+macroImpact+weatherImpact+operImpact;
   }
 }
-function _rcfrInsight(rateClass,fy,bud,macro,weather,oper){
+// Per-account breakdown feeding _rcfrInsight's "who/what" attribution -- only called
+// for individually-tracked accounts (KAM-owned + new customers); cohorts have no
+// single industry/account to name, so they're intentionally left out of both maps.
+function _rcfrTrackDrivers(rateClass,a,chain,indImpact,opAccounts){
+  let indSum=0,opSum=0;
+  for(let m=1;m<=12;m++){
+    const c=chain[m];if(!c||c.isActual)continue;
+    const base=c.base||0;
+    indSum+=base*(c.seasInd||0)/100;
+    opSum+=base*(c.oper||0)/100+(c.manual||0);
+  }
+  if(a.industry&&Math.abs(indSum)>0.01){
+    const bucket=(indImpact[rateClass]=indImpact[rateClass]||{});
+    const e=(bucket[a.industry]=bucket[a.industry]||{impact:0,n:0,names:[]});
+    e.impact+=indSum;e.n++;if(e.names.length<5)e.names.push(a.name);
+  }
+  if(Math.abs(opSum)>0.01){
+    (opAccounts[rateClass]=opAccounts[rateClass]||[]).push({name:a.name,ac:a.ac,impact:opSum});
+  }
+}
+// Looks up the human reason behind an account's operational override from
+// sbOpAdj (jps_operational_adjustments_current) -- prefers the most recent
+// forecast-window row so the insight quotes whatever justification is current.
+function _rcfrOpReason(ac){
+  const rows=sbOpAdj.filter(r=>String(r.jps_ac||'')===ac).sort((a,b)=>Number(b.year)*100+Number(b.month)-(Number(a.year)*100+Number(a.month)));
+  if(!rows.length)return null;
+  const r=rows[0];
+  return {reason:r.reason_code||'',note:r.justification||''};
+}
+function _rcfrInsight(rateClass,fy,bud,macro,weather,oper,indImpact,opAccounts){
   const delta=bud>0?(fy-bud)/bud*100:null;
   const drivers=[
     {label:'macro assumptions',v:macro},
@@ -11003,8 +11039,26 @@ function _rcfrInsight(rateClass,fy,bud,macro,weather,oper){
   let s=bud>0
     ?`${rateClass}: forecast ${_dfcFmtGwh(fy)} GWh, ${Math.abs(delta).toFixed(1)}% ${delta>=0?'above':'below'} budget (${_dfcFmtGwh(bud)} GWh).`
     :`${rateClass}: forecast ${_dfcFmtGwh(fy)} GWh — no budget loaded for comparison.`;
-  if(Math.abs(top.v)>0.01){
-    s+=` Largest driver: ${top.label} (${top.v>=0?'+':''}${_dfcFmtGwh(top.v)} GWh).`;
+  if(Math.abs(top.v)<=0.01)return s;
+  s+=` Largest driver: ${top.label} (${top.v>=0?'+':''}${_dfcFmtGwh(top.v)} GWh)`;
+  if(top.label==='operational adjustments'&&opAccounts&&opAccounts.length){
+    const sorted=opAccounts.slice().sort((a,b)=>Math.abs(b.impact)-Math.abs(a.impact));
+    const namedBits=sorted.slice(0,2).map(o=>{
+      const rn=_rcfrOpReason(o.ac);
+      const why=rn&&rn.note?`${rn.reason?rn.reason+': ':''}${rn.note}`:(rn&&rn.reason?rn.reason:'');
+      return `${o.name} (${o.impact>=0?'+':''}${_dfcFmtGwh(o.impact)} GWh${why?' — '+why:''})`;
+    });
+    s+=` — primarily ${namedBits.join(' and ')}.`;
+  } else if(top.label==='weather/seasonality'&&indImpact){
+    const inds=Object.entries(indImpact).sort((a,b)=>Math.abs(b[1].impact)-Math.abs(a[1].impact));
+    if(inds.length){
+      const[name,e]=inds[0];
+      s+=`, concentrated in ${name} (${e.n} account${e.n===1?'':'s'}, ${e.impact>=0?'+':''}${_dfcFmtGwh(e.impact)} GWh)${e.names.length?' — '+e.names.slice(0,3).join(', '):''}.`;
+    } else {
+      s+='.';
+    }
+  } else {
+    s+='.';
   }
   return s;
 }
@@ -11298,6 +11352,25 @@ function _frRenderPDF(d){
   y=doc.lastAutoTable.finalY+8;
   body('Figures rounded to 1 decimal for display; TOTAL is calculated from unrounded values.',{size:7.6,color:GREY});
 
+  // ---- PAGE: MONTHLY BREAKOUT ----
+  doc.addPage();y=54;
+  h1('Monthly Breakout by Rate Class (GWh)');
+  body('Actual through month '+(d.curMonth||6)+'; * = forecast month (Driver Forecast engine, same chains as every other table in this report).',{size:8.2,color:GREY});
+  const allMonthsLbl=[];for(let m=1;m<=12;m++)allMonthsLbl.push(new Date(2000,m-1,1).toLocaleString('en-US',{month:'short'})+(m>(d.curMonth||6)?'*':''));
+  const monthlyRows=rcs.map(rc=>{
+    const vals=[];for(let m=1;m<=12;m++)vals.push(((d.rcMonth[rc]&&d.rcMonth[rc][m])||0)/1e6);
+    return [rc,...vals.map(v=>_frFmt(v))];
+  });
+  const totalsByMonth=[];for(let m=1;m<=12;m++)totalsByMonth.push(rcs.reduce((s,rc)=>s+(((d.rcMonth[rc]&&d.rcMonth[rc][m])||0)/1e6),0));
+  monthlyRows.push(['TOTAL',...totalsByMonth.map(v=>_frFmt(v))]);
+  ensure(30);
+  doc.autoTable({startY:y,margin:{left:MARGIN,right:MARGIN},
+    head:[['Rate Class',...allMonthsLbl]],
+    body:monthlyRows,headStyles:{fillColor:NAVY,fontSize:7.4},bodyStyles:{fontSize:7.6},styles:{cellPadding:3.5},
+    columnStyles:{0:{cellWidth:60}},
+    didParseCell:(hook)=>{if(hook.row.index===monthlyRows.length-1&&hook.section==='body'){hook.cell.styles.fontStyle='bold';hook.cell.styles.fillColor=[238,243,248];}}});
+  y=doc.lastAutoTable.finalY+8;
+
   // ---- PAGE: H1/H2 DETAIL ----
   doc.addPage();y=54;
   h1('First-Half & Second-Half Detail');
@@ -11570,6 +11643,19 @@ async function _frRenderDOCX(d){
     rcRows,[1560,1560,1560,1560,1560,1560],{boldLastRow:true}));
   children.push(spacer());
   children.push(body('Figures rounded to 1 decimal for display; TOTAL is calculated from unrounded values.',{size:14,color:GREY}));
+
+  children.push(spacer());
+  children.push(h1('Monthly Breakout by Rate Class (GWh)'));
+  children.push(body('Actual through month '+(d.curMonth||6)+'; * = forecast month (Driver Forecast engine, same chains as every other table in this report).',{size:14,color:GREY}));
+  const allMonthsLbl=[];for(let m=1;m<=12;m++)allMonthsLbl.push(new Date(2000,m-1,1).toLocaleString('en-US',{month:'short'})+(m>(d.curMonth||6)?'*':''));
+  const monthlyRows=rcs.map(rc=>{
+    const vals=[];for(let m=1;m<=12;m++)vals.push(((d.rcMonth[rc]&&d.rcMonth[rc][m])||0)/1e6);
+    return [rc,...vals.map(v=>_frFmt(v))];
+  });
+  const totalsByMonth=[];for(let m=1;m<=12;m++)totalsByMonth.push(rcs.reduce((s,rc)=>s+(((d.rcMonth[rc]&&d.rcMonth[rc][m])||0)/1e6),0));
+  monthlyRows.push(['TOTAL',...totalsByMonth.map(v=>_frFmt(v))]);
+  children.push(mkTable(['Rate Class',...allMonthsLbl],monthlyRows,[1200,...Array(12).fill(680)],{boldLastRow:true}));
+
   children.push(spacer());
   children.push(h2('Monthly Trend — Actual vs Forecast '+d.year));
   children.push(body('Solid line = actual; dashed line = forecast.',{size:14,color:GREY}));
