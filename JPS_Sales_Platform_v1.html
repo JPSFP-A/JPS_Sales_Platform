@@ -396,18 +396,44 @@ document.getElementById('schema_stale_banner').style.display='none';
   <div class="login-card" id="loginCard">
     <div style="font-size:28px;margin-bottom:10px">⚡</div>
     <h2>JPS Sales Analytics</h2>
-    <p>Sign in with your JPS email address</p>
-    <div class="lf">
-      <label>Email</label>
-      <input type="email" id="lEmail" placeholder="you@jps.com" autocomplete="email" onkeydown="if(event.key==='Enter')document.getElementById('lPass').focus()"/>
+    <!-- Step 1: email -> emailed code (passwordless, matches the Inventory app's login).
+         Length is NOT 6 -- this Supabase project's Auth OTP is configured for 8 digits
+         (shared across every JPS app on this project, confirmed against the actual
+         email + Inventory's own input, which uses maxlength=10 for the same reason).
+         Anyone can request a code -- access itself is gated separately after verify
+         (pending-approval screen if no sales_role assigned yet, see _applyLogin). -->
+    <div id="lsStep1">
+      <p>Sign in with your JPS email address</p>
+      <div class="lf">
+        <label>Email</label>
+        <input type="email" id="lEmail" placeholder="you@jps.com" autocomplete="email" onkeydown="if(event.key==='Enter')sendLoginCode()"/>
+      </div>
+      <button class="login-btn" id="lBtn" onclick="sendLoginCode()">Send code →</button>
+      <div class="lerr" id="lErr">Invalid email or password.</div>
     </div>
-    <div class="lf">
-      <label>Password</label>
-      <input type="password" id="lPass" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"/>
+    <div id="lsStep2" style="display:none">
+      <p>Enter the code sent to <strong id="lsCodeEmail"></strong></p>
+      <div class="lf">
+        <label>Code</label>
+        <input type="text" id="lCode" placeholder="Enter code" inputmode="numeric" pattern="[0-9]*" maxlength="10" autocomplete="one-time-code" onkeydown="if(event.key==='Enter')verifyLoginCode()"/>
+      </div>
+      <button class="login-btn" id="lCodeBtn" onclick="verifyLoginCode()">Verify →</button>
+      <div class="lerr" id="lCodeErr" style="display:none"></div>
+      <div style="margin-top:10px;font-size:10px;color:var(--text3)">
+        Didn't get it? <span id="lResend" style="color:var(--teal);cursor:pointer" onclick="resendLoginCode()">Resend code</span>
+      </div>
+      <div style="margin-top:6px;font-size:10px;color:var(--text3);cursor:pointer" onclick="_lsBackToEmail()">← Use a different email</div>
     </div>
-    <button class="login-btn" id="lBtn" onclick="doLogin()">Sign In →</button>
-    <div class="lerr" id="lErr">Invalid email or password.</div>
-    <div style="margin-top:14px;font-size:9px;color:var(--text3)">Contact Admin to create an account.</div>
+    <div style="margin-top:14px;font-size:9px;color:var(--text3)">New here? Just enter your JPS email — an admin approves access and sets your role afterward.</div>
+  </div>
+  <!-- Shown once sign-in succeeds but the profile has no sales_role yet (brand-new
+       self-serve signup, or an existing user an admin hasn't assigned a role to). -->
+  <div class="login-card" id="pendingScreen" style="display:none;text-align:center">
+    <div style="font-size:28px;margin-bottom:10px">⏳</div>
+    <h2>Access pending approval</h2>
+    <p style="margin-bottom:4px">You're signed in as <strong id="pendingEmail"></strong>.</p>
+    <p style="font-size:12px;color:var(--text3)">An admin needs to approve your access and assign a role before you can see the dashboard. You'll be able to sign in normally once that's done — no action needed on your end.</p>
+    <button class="login-btn" style="margin-top:16px" onclick="doLogout()">Sign out</button>
   </div>
   <!-- Shown instead of the login form while an existing session is being restored and
        data synced — without this the form just sits there looking frozen for however
@@ -2624,6 +2650,16 @@ function can(action){
   return (p[action]||[]).includes(CU.role);
 }
 
+// A KAM note can be overwritten by admin/manager(supervisor) unconditionally, or by
+// a rep only for accounts assigned to their own linked KAM name (profiles.kam_name,
+// set by an admin in Admin -> Users & Roles). Anyone else -- including a rep looking
+// at a different KAM's account, or an unlinked rep -- gets read-only.
+function canEditNote(accountKam){
+  if(CU.role==='admin'||CU.role==='manager')return true;
+  if(CU.role==='rep')return !!(CU.kam_name&&accountKam&&CU.kam_name.trim().toLowerCase()===String(accountKam).trim().toLowerCase());
+  return false;
+}
+
 /* ── Apply role-based UI visibility ── */
 function initRoleUI(){
   // admin-only elements
@@ -2638,19 +2674,71 @@ function initRoleUI(){
   }
 }
 
-/* ── Supabase Auth login ── */
-async function doLogin(){
+/* ── Supabase Auth login — passwordless email code (OTP), matching the Inventory
+   app. Anyone can request a code; access itself is a separate gate (see
+   _applyLogin's pending/inactive checks) so a fresh signup doesn't equal access. ── */
+let _lsPendingEmail='';
+let _lsResendTimer=null;
+function _lsBackToEmail(){
+  document.getElementById('lsStep1').style.display='';
+  document.getElementById('lsStep2').style.display='none';
+  const err=document.getElementById('lCodeErr'); if(err){err.style.display='none';err.textContent='';}
+  clearInterval(_lsResendTimer);
+}
+// Resend is gated behind a cooldown rather than firing instantly on click --
+// stops accidental double-sends and matches Supabase's own OTP rate limit.
+function _lsStartResendCooldown(seconds){
+  const el=document.getElementById('lResend'); if(!el)return;
+  clearInterval(_lsResendTimer);
+  let left=seconds;
+  const tick=()=>{
+    if(left<=0){el.textContent='Resend code';el.style.pointerEvents='';el.style.opacity='';clearInterval(_lsResendTimer);return;}
+    el.textContent=`Resend code (${left}s)`;el.style.pointerEvents='none';el.style.opacity='0.5';left--;
+  };
+  tick();
+  _lsResendTimer=setInterval(tick,1000);
+}
+async function resendLoginCode(){
+  if(!_lsPendingEmail)return;
+  try{
+    const sb=getSB(); if(!sb)return;
+    const{error}=await sb.auth.signInWithOtp({email:_lsPendingEmail,options:{shouldCreateUser:true}});
+    if(error){toast('Could not resend: '+error.message,'err');return;}
+    toast('New code sent','ok');
+    _lsStartResendCooldown(30);
+  }catch(e){toast('Could not resend: '+e.message,'err');}
+}
+async function sendLoginCode(){
   const email=(document.getElementById('lEmail')?.value||'').trim();
-  const pwd  =(document.getElementById('lPass')?.value||'');
   if(!email){showErr('Please enter your email.');return;}
-  if(!pwd)  {showErr('Please enter your password.');return;}
   const btn=document.getElementById('lBtn');
-  if(btn){btn.textContent='Signing in…';btn.disabled=true;}
+  if(btn){btn.textContent='Sending…';btn.disabled=true;}
   try{
     const sb=getSB();
-    if(!sb){showErr('Supabase not configured — contact your administrator.');if(btn){btn.textContent='Sign In →';btn.disabled=false;}return;}
-    const{data,error}=await sb.auth.signInWithPassword({email,password:pwd});
-    if(error){showErr(error.message);if(btn){btn.textContent='Sign In →';btn.disabled=false;}return;}
+    if(!sb){showErr('Supabase not configured — contact your administrator.');if(btn){btn.textContent='Send code →';btn.disabled=false;}return;}
+    const{error}=await sb.auth.signInWithOtp({email,options:{shouldCreateUser:true}});
+    if(error){showErr(error.message);if(btn){btn.textContent='Send code →';btn.disabled=false;}return;}
+    _lsPendingEmail=email;
+    document.getElementById('lsCodeEmail').textContent=email;
+    document.getElementById('lsStep1').style.display='none';
+    document.getElementById('lsStep2').style.display='';
+    document.getElementById('lCode')?.focus();
+    _lsStartResendCooldown(30);
+    if(btn){btn.textContent='Send code →';btn.disabled=false;}
+  }catch(e){showErr('Could not send code: '+e.message);if(btn){btn.textContent='Send code →';btn.disabled=false;}}
+}
+async function verifyLoginCode(){
+  const email=_lsPendingEmail;
+  const token=(document.getElementById('lCode')?.value||'').trim();
+  const errEl=document.getElementById('lCodeErr');
+  const showCodeErr=msg=>{if(errEl){errEl.textContent=msg;errEl.style.display='';}};
+  if(!token){showCodeErr('Enter the 6-digit code.');return;}
+  const btn=document.getElementById('lCodeBtn');
+  if(btn){btn.textContent='Verifying…';btn.disabled=true;}
+  try{
+    const sb=getSB();
+    const{data,error}=await sb.auth.verifyOtp({email,token,type:'email'});
+    if(error){showCodeErr(error.message);if(btn){btn.textContent='Verify →';btn.disabled=false;}return;}
     // Fetch profile for role
     let profile=null;
     try{
@@ -2661,7 +2749,11 @@ async function doLogin(){
         try{const cnt=await sb.from('profiles').select('id',{count:'exact',head:true});isFirst=(cnt.count||0)===0;}catch(e2){
           if(window.JpsMonitor)JpsMonitor.warning('auth:profile-count',e2?.message||String(e2));
         }
-        const salesRole=isFirst?'admin':'view';
+        // New self-serve signups land with NO sales_role (= pending in _applyLogin's
+        // gate) instead of the old default of 'view' — an admin must assign a role in
+        // Admin → Users before they see anything, which is also the approval action.
+        // The very first-ever user still auto-bootstraps as admin (nobody to approve them).
+        const salesRole=isFirst?'admin':null;
         const fpaRole  =isFirst?'admin':'viewer';
         const nm=data.user.email.split('@')[0];
         try{await sb.from('profiles').upsert({id:data.user.id,name:nm,email:data.user.email,role:fpaRole,sales_role:salesRole,territory:'All',is_active:true,created_at:new Date().toISOString()},{onConflict:'id'});}catch(e3){
@@ -2670,23 +2762,27 @@ async function doLogin(){
         }
         profile={id:data.user.id,name:nm,email:data.user.email,sales_role:salesRole,role:fpaRole,territory:'All'};
         if(isFirst)toast('First-time setup: your account has been set as Admin','ok');
-        else toast('Profile created with View access — Admin can upgrade your role in Admin → Users','w');
       } else {
         profile=r.data;
       }
-    }catch(e){toast('Could not load your profile — using view-only access','w');}
+    }catch(e){toast('Could not load your profile','w');}
+    // Fire-and-forget -- answers "who has signed in" in Admin -> Users & Roles.
+    // Not awaited so a slow write never delays getting into the dashboard.
+    sb.from('profiles').update({last_login_at:new Date().toISOString()}).eq('id',data.user.id).then(()=>{},()=>{});
     _applyLogin({
       id:data.user.id,email:data.user.email,
       name:profile?.name||data.user.email.split('@')[0],
-      role:profile?.sales_role||'view',
+      role:profile?.sales_role||null,
       fpa_role:profile?.role||'viewer',
       territory:profile?.territory||'All',
+      kam_name:profile?.kam_name||'',
+      is_active:profile?.is_active!==false,
     });
     // Listen for session expiry — only react to events from this app's own session
     sb.auth.onAuthStateChange((ev,session)=>{
       if(ev==='SIGNED_OUT'&&CU&&CU.id) doLogout();
     });
-  }catch(e){showErr('Sign in failed: '+e.message);if(btn){btn.textContent='Sign In →';btn.disabled=false;}}
+  }catch(e){showCodeErr('Verification failed: '+e.message);if(btn){btn.textContent='Verify →';btn.disabled=false;}}
 }
 
 /* ── Demo / offline login ── REMOVED (production build) ── */
@@ -2705,7 +2801,18 @@ function _initIdleTimeout(signOutFn) {
   _reset();
 }
 
+// Approval gate: a signed-in user with no sales_role (self-serve signup an admin
+// hasn't touched yet) or is_active===false (revoked/rejected) never reaches the
+// dashboard — shown the pending-approval screen and nothing else runs.
+function _isApproved(u){ return !!(u && u.role) && u.is_active!==false; }
+function _showPendingScreen(email){
+  const restore=document.getElementById('restoreLoading'); if(restore)restore.style.display='none';
+  const card=document.getElementById('loginCard'); if(card)card.style.display='none';
+  const pend=document.getElementById('pendingScreen');
+  if(pend){pend.style.display='';const e=document.getElementById('pendingEmail');if(e)e.textContent=email||'';}
+}
 function _applyLogin(user){
+  if(!_isApproved(user)){ _showPendingScreen(user && user.email); return; }
   CU=user;
   if (window.JpsMonitor) JpsMonitor.setUser(CU.id || CU.email, CU.name || CU.email);
   if (window.posthog) posthog.identify(CU.id || CU.email, { email: CU.email, name: CU.name });
@@ -2729,6 +2836,12 @@ async function doLogout(){
   try{localStorage.removeItem(_DCACHE_KEY);}catch(_){}
   CU={id:'',role:'',name:'',email:'',territory:'All'};
   document.getElementById('loginScreen').style.display='flex';
+  // Reset back to the email-entry form -- matters when signing out from the
+  // pending-approval screen (which hides loginCard) or a restored session.
+  const pend=document.getElementById('pendingScreen'); if(pend)pend.style.display='none';
+  const restore=document.getElementById('restoreLoading'); if(restore)restore.style.display='none';
+  const card=document.getElementById('loginCard'); if(card)card.style.display='';
+  _lsBackToEmail();
   document.getElementById('uMenu').classList.remove('sh');
 }
 function toggleMenu(){document.getElementById('uMenu').classList.toggle('sh');}
@@ -4621,6 +4734,10 @@ function renderCmCust(){
       const saved=S.get(`note_${c.num}_${notePeriod}`,'');
       const kamName=c.kam||'--';
       const pCY=periCY(c),pPY=pyMap[c.num]||0,pB=budMap[c.num]||0;
+      const editable=canEditNote(c.kam);
+      const noteCell=editable
+        ?`<span style="font-size:10px;color:${saved?'var(--teal)':'var(--text3)'};cursor:pointer" title="${saved?esc(saved):''}" onclick="editNote('${c.num}','${c.name.replace(/'/g,"\\'")}','cm_cust_tbl','${(c.kam||'').replace(/'/g,"\\'")}')">${saved?'📝 '+esc(saved.substring(0,28))+(saved.length>28?'…':''):'✏ Add note'}</span>`
+        :`<span style="font-size:10px;color:${saved?'var(--text2)':'var(--text3)'}" title="${saved?esc(saved)+' — ':''}Only ${kamName||'the assigned KAM'}, a supervisor, or admin can edit this note">${saved?'🔒 '+esc(saved.substring(0,28))+(saved.length>28?'…':''):'--'}</span>`;
       return`<tr>
         <td style="font-size:10px;color:var(--text3)">${esc(c.num)}</td>
         <td style="font-weight:500">${esc(c.name)}</td>
@@ -4631,7 +4748,7 @@ function renderCmCust(){
         <td style="color:var(--text3)">${pB>0?pB.toFixed(1):'--'}</td>
         <td>${pB>0?`<span class="heat ${hc(pct(pCY,pB))}">${pct(pCY,pB)>=0?'+':''}${pct(pCY,pB).toFixed(1)}%</span>`:'--'}</td>
         <td>${vbar(pCY,pPY)}</td>
-        <td><span style="font-size:10px;color:${saved?'var(--teal)':'var(--text3)'};cursor:pointer" title="${saved?saved:''}" onclick="editNote('${c.num}','${c.name.replace(/'/g,"\\'")}','cm_cust_tbl')">${saved?'📝 '+saved.substring(0,28)+(saved.length>28?'…':''):'✏ Add note'}</span></td>
+        <td>${noteCell}</td>
       </tr>`;}).join('')}
     </tbody></table>`;
   makeSortable('cm_dt');
@@ -5346,7 +5463,13 @@ function renderMrPar(){
 function editMrNote(num,name,cid){
   openModal(`Review Note: ${name}`,`<textarea id="mrn_ta">${S.get(`mr_note_${mrPeriod}_${num}`,'')}</textarea>`,()=>{S.set(`mr_note_${mrPeriod}_${num}`,document.getElementById('mrn_ta').value);closeModal();renderMrSection();});
 }
-function editNote(num,name,cid){
+function editNote(num,name,cid,accountKam){
+  // Re-check server-side-equivalent permission here too, not just at the click
+  // handler that's hidden/shown -- this is the actual write path.
+  if(!canEditNote(accountKam)){
+    toast(`Only ${accountKam||'the assigned KAM'}, a supervisor, or admin can edit this note`,'err');
+    return;
+  }
   const period=`${curYear}-${String(curMonth).padStart(2,'0')}`;
   openModal(`Customer Note: ${name} (${period})`,`<textarea id="gn_ta">${S.get(`note_${num}_${period}`,'')}</textarea>`,()=>{
     const v=document.getElementById('gn_ta').value;
@@ -7936,47 +8059,81 @@ function renderAdm(){
     const el=document.getElementById('adm_users_tbl');if(!el)return;
     if(!PLATFORM_USERS.length){
       el.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">
-        No users found in <code>profiles</code>.<br>Run the DB Schema SQL, then register or invite users below.
-        <div style="margin-top:12px"><button class="btn btn-t" onclick="showInviteUser()">+ Invite First User</button></div></div>`;
+        No users found in <code>profiles</code>.<br>Anyone can sign in with the platform link below — you approve access here once they show up.
+        <div style="margin-top:12px"><button class="btn btn-t" onclick="showInviteUser()">🔗 Get platform link</button></div></div>`;
       return;
     }
-    el.innerHTML=`<table class="dt" id="users_dt">
-      <thead><tr><th>Name</th><th>Email</th><th>Sales Role</th><th>Finance Role</th><th>Territory</th><th>Status</th><th>Actions</th></tr></thead>
+    // Pending = a real profile row exists (they've actually signed in via the OTP code
+    // once) but no sales_role has been assigned yet -- that assignment IS the approval.
+    const pending=PLATFORM_USERS.filter(u=>!u.sales_role);
+    const isAdmin=can('manage_users');
+    const kamOptions=[...new Set((typeof sbKAM!=='undefined'?sbKAM:[]).map(r=>r.kam).filter(Boolean))].sort();
+    const fmtLogin=ts=>ts?new Date(ts).toLocaleString():'Never';
+    let h='';
+    if(pending.length){
+      h+=`<div style="margin-bottom:12px;padding:9px 13px;background:rgba(255,171,64,.08);border-left:3px solid var(--amber);border-radius:4px;font-size:11px;color:var(--text2)">
+        <strong style="color:var(--amber)">${pending.length} account${pending.length===1?'':'s'} pending approval</strong> — signed in but no role assigned yet, so they can't see the dashboard. Assign a role below to approve.
+      </div>`;
+    }
+    h+=`<table class="dt" id="users_dt">
+      <thead><tr><th>Name</th><th>Email</th><th>Sales Role</th><th>Finance Role</th><th>KAM link</th><th>Territory</th><th>Status</th><th>Last signed in</th><th>Actions</th></tr></thead>
       <tbody>${PLATFORM_USERS.map(u=>{
-        const isPending=u._pending===true;
-        const isAdmin=can('manage_users');
+        const isPending=!u.sales_role;
         const safeId=String(u.id||'').replace(/'/g,"\\'");
         const safeName=String(u.name||u.email||'User').replace(/'/g,"\\'");
-        return`<tr style="${isPending?'opacity:0.6':''}">
-        <td style="font-weight:600">${esc(u.name||'')}${isPending?' <span style="font-size:9px;color:var(--amber)">(pending registration)</span>':''}</td>
+        return`<tr style="${isPending?'background:rgba(255,171,64,.05)':''}">
+        <td style="font-weight:600">${esc(u.name||'')}${isPending?' <span style="font-size:9px;color:var(--amber)">(pending approval)</span>':''}</td>
         <td style="font-size:11px;color:var(--text3)">${esc(u.email||'--')}</td>
-        <td>${(!isPending&&isAdmin)
+        <td>${isAdmin
           ?`<select class="sel" style="font-size:10px;padding:3px" onchange="changeUserRole('${safeId}',this.value)">
-              ${['admin','manager','rep','view'].map(r=>`<option${(u.sales_role||u.role||'view')===r?' selected':''}>${r}</option>`).join('')}
+              ${isPending?`<option value="" selected disabled>-- assign role --</option>`:''}
+              ${['admin','manager','rep','view'].map(r=>`<option${u.sales_role===r?' selected':''}>${r}</option>`).join('')}
             </select>`
-          :`<span class="pill ${(u.sales_role==='admin'||u.sales_role==='manager')?'pa':'pt'}">${u.sales_role||'view'}</span>`}</td>
+          :`<span class="pill ${(u.sales_role==='admin'||u.sales_role==='manager')?'pa':'pt'}">${u.sales_role||'pending'}</span>`}</td>
         <td><span class="pill pgr" style="font-size:9px">${u.role||'viewer'}</span></td>
+        <td>${isAdmin
+          ?`<input class="si" list="kam_names_dl" style="font-size:10px;padding:3px;width:110px" value="${esc(u.kam_name||'')}" placeholder="none" onchange="setUserKam('${safeId}',this.value)">`
+          :esc(u.kam_name||'--')}</td>
         <td style="font-size:11px">${u.territory||'All'}</td>
-        <td><span class="pill ${isPending?'pa':u.is_active!==false?'pg':'pr'}">${isPending?'Invited':u.is_active!==false?'Active':'Inactive'}</span></td>
+        <td><span class="pill ${isPending?'pa':u.is_active!==false?'pg':'pr'}">${isPending?'Pending':u.is_active!==false?'Active':'Inactive'}</span></td>
+        <td style="font-size:10px;color:var(--text3)">${fmtLogin(u.last_login_at)}</td>
         <td style="display:flex;gap:4px;flex-wrap:wrap">${isAdmin
-          ?`<button class="btn btn-o" style="font-size:9px;padding:2px 8px" onclick="toggleUserActive('${safeId}',${u.is_active!==false})">${u.is_active!==false?'Deactivate':'Activate'}</button>
+          ?`${!isPending?`<button class="btn btn-o" style="font-size:9px;padding:2px 8px" onclick="toggleUserActive('${safeId}',${u.is_active!==false})">${u.is_active!==false?'Deactivate':'Activate'}</button>`:''}
              <button class="btn" style="font-size:9px;padding:2px 8px;background:rgba(232,64,64,.12);color:var(--red);border-color:rgba(232,64,64,.3)" onclick="deleteUser('${safeId}','${safeName}')">🗑 Delete</button>`
           :'--'}</td>
-      </tr>`;}).join('')}</tbody></table>`;
+      </tr>`;}).join('')}</tbody></table>
+      <datalist id="kam_names_dl">${kamOptions.map(k=>`<option value="${esc(k)}">`).join('')}</datalist>`;
+    el.innerHTML=h;
     makeSortable('users_dt');
   });
+}
+async function setUserKam(userId,kamName){
+  if(!can('manage_users')){toast('Admin access required','err');return;}
+  const sb=getSB();if(!sb){toast('Supabase required','err');return;}
+  const v=(kamName||'').trim();
+  try{
+    await sb.from('profiles').update({kam_name:v||null,updated_at:new Date().toISOString()}).eq('id',userId);
+    const u=PLATFORM_USERS.find(x=>x.id===userId);if(u)u.kam_name=v;
+    await writeAudit('USER_KAM_LINK',{user_id:userId,user_name:u?.name||u?.email||userId,kam_name:v||'(removed)'});
+    toast('KAM link updated ✓','ok');
+  }catch(e){toast('Failed: '+e.message,'err');}
 }
 
 async function changeUserRole(userId,newRole){
   if(!can('manage_users')){toast('Admin access required','err');return;}
   const sb=getSB();if(!sb){toast('Supabase required','err');return;}
   try{
-    await sb.from('profiles').update({sales_role:newRole,updated_at:new Date().toISOString()}).eq('id',userId);
+    const u0=PLATFORM_USERS.find(x=>x.id===userId);
+    const wasPending=!u0?.sales_role;
+    // First-ever role assignment on a pending signup IS the approval action -- also
+    // force is_active true so a previously-deactivated account doesn't stay blocked
+    // after being re-approved with a new role.
+    await sb.from('profiles').update({sales_role:newRole,is_active:true,updated_at:new Date().toISOString()}).eq('id',userId);
     const u=PLATFORM_USERS.find(x=>x.id===userId);
     const oldRole=u?.sales_role||'unknown';
-    if(u)u.sales_role=newRole;
-    await writeAudit('USER_ROLE_CHANGE',{user_id:userId,user_name:u?.name||u?.email||userId,from_role:oldRole,to_role:newRole});
-    toast('Role updated ✓','ok');renderAdm();
+    if(u){u.sales_role=newRole;u.is_active=true;}
+    await writeAudit(wasPending?'USER_APPROVED':'USER_ROLE_CHANGE',{user_id:userId,user_name:u?.name||u?.email||userId,from_role:oldRole,to_role:newRole});
+    toast(wasPending?`Approved as ${newRole} ✓`:'Role updated ✓','ok');renderAdm();
   }catch(e){toast('Failed: '+e.message,'err');}
 }
 
@@ -8021,57 +8178,19 @@ function deleteUser(userId,userName){
 function showInviteUser(){
   if(!can('invite_user')){toast('Admin access required to invite users','err');return;}
   const platformUrl=window.location.href.split('?')[0];
+  // Login is self-serve (email + emailed code) -- there's nothing to "create" ahead
+  // of time. Sharing the link is the whole invite; the person shows up for real in
+  // the Pending list below the moment they verify their code, and assigning them a
+  // role there is the approval.
   openModal('Add New User',`
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-      <div class="lf"><label>Full Name</label><input class="si" id="inv_name" placeholder="Jane Smith"/></div>
-      <div class="lf"><label>Email</label><input class="si" id="inv_email" type="email" placeholder="jane@jps.com"/></div>
-      <div class="lf"><label>Intended Role</label>
-        <select class="sel" style="width:100%" id="inv_role">
-          <option value="rep">Sales Rep</option><option value="manager">Manager</option>
-          <option value="view">View Only</option><option value="admin">Admin</option>
-        </select>
-      </div>
-      <div class="lf"><label>Territory</label>
-        <select class="sel" style="width:100%" id="inv_territory">
-          <option>All</option><option>Commercial</option><option>Residential</option><option>Large Commercial</option>
-        </select>
-      </div>
+    <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:10px">
+      Anyone can sign in with just their email — no account setup needed on your end. Share the platform link below; once they enter their email and verify the 6-digit code, they'll show up in the <strong>pending approval</strong> list above, and assigning them a role there is what grants access.
     </div>
-    <div style="background:rgba(0,194,168,.07);border:1px solid rgba(0,194,168,.25);border-radius:8px;padding:10px;margin-bottom:10px">
-      <div style="font-size:10px;font-weight:700;color:var(--teal);margin-bottom:6px">📋 How to add a user</div>
-      <div style="font-size:10px;color:var(--text2);line-height:1.7">
-        1. Fill in the name and email above, then click <strong>Save</strong>.<br>
-        2. Share the platform URL with the user:<br>
-        <div style="display:flex;align-items:center;gap:6px;margin:5px 0">
-          <code style="font-size:9px;background:var(--navy3);padding:4px 7px;border-radius:4px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="inv_url">${platformUrl}</code>
-          <button class="btn btn-t" style="font-size:9px;padding:3px 9px;white-space:nowrap" onclick="navigator.clipboard.writeText('${platformUrl}').then(()=>toast('URL copied ✓','ok'))">Copy URL</button>
-        </div>
-        3. They click <strong>"First time? Register →"</strong> and sign up with the email above.<br>
-        4. Come back to <strong>Admin → Users</strong> and set their role to <strong id="inv_role_preview">Sales Rep</strong>.
-      </div>
-    </div>
-    <div style="font-size:9px;color:var(--text3)">💡 Tip: You can also send invites directly from your <a href="https://supabase.com/dashboard" target="_blank" style="color:var(--teal)">Supabase Dashboard</a> → Authentication → Users → Invite User.</div>`,
-  async()=>{
-    const name=(document.getElementById('inv_name')?.value||'').trim();
-    const email=(document.getElementById('inv_email')?.value||'').trim();
-    const role=document.getElementById('inv_role')?.value||'rep';
-    const roleLabels={admin:'Admin',manager:'Manager',rep:'Sales Rep',view:'View Only'};
-    if(!name||!email){toast('Name and email required','err');return;}
-    // Store as a pending invite note (no auth user yet — FK prevents profile insert without auth.users row)
-    // Record is kept in memory so admin can reference it; role set after user self-registers
-    PLATFORM_USERS.push({id:'pending_'+Date.now(),name,email,sales_role:role,territory:document.getElementById('inv_territory')?.value||'All',is_active:false,_pending:true});
-    toast(`Instructions ready — share the platform URL with ${name} (${email}). After they register, set their role to ${roleLabels[role]||role}.`,'ok');
-    closeModal();renderAdm();
-  });
-  // Wire role label preview
-  setTimeout(()=>{
-    const sel=document.getElementById('inv_role');
-    const prev=document.getElementById('inv_role_preview');
-    if(sel&&prev){
-      const labels={admin:'Admin',manager:'Manager',rep:'Sales Rep',view:'View Only'};
-      sel.onchange=()=>{prev.textContent=labels[sel.value]||sel.value;};
-    }
-  },50);
+    <div style="display:flex;align-items:center;gap:6px">
+      <code style="font-size:10px;background:var(--navy3);padding:6px 8px;border-radius:4px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="inv_url">${platformUrl}</code>
+      <button class="btn btn-t" style="font-size:10px;padding:4px 10px;white-space:nowrap" onclick="navigator.clipboard.writeText('${platformUrl}').then(()=>toast('URL copied ✓','ok'))">Copy URL</button>
+    </div>`,
+  ()=>{closeModal();},'Done');
 }
 
 /* ── Period close ── */
@@ -8207,6 +8326,14 @@ alter table public.profiles add column if not exists sales_role text default 'vi
 alter table public.profiles add column if not exists territory  text default 'All';
 alter table public.profiles add column if not exists is_active  boolean default true;
 alter table public.profiles add column if not exists updated_at timestamptz default now();
+-- kam_name links a signed-in user to a KAM identity (jps_kam.kam values) -- a 'rep'
+-- can only overwrite jps_user_notes rows for accounts assigned to their own kam_name;
+-- admin/manager can always overwrite (see canEditNote() in the app). Free text, not
+-- an FK, since KAM names live in jps_kam.kam rather than a dedicated table.
+alter table public.profiles add column if not exists kam_name    text;
+-- Set on every successful OTP verify -- lets an admin see who has actually signed in
+-- vs. who is still pending, in Admin -> Users & Roles.
+alter table public.profiles add column if not exists last_login_at timestamptz;
 
 -- Enable RLS (idempotent)
 alter table public.profiles enable row level security;
@@ -12626,9 +12753,17 @@ function _showRestoreLoading(show){
     }
     const {data:profile,error}=profileResult.value||{};
     // Only apply login if we got a real profile with a real role
-    if(error||!profile||!profile.sales_role){
+    if(error){
       _showRestoreLoading(false);
-      showErr(error?('Could not load your profile: '+error.message):'Your account has no sales role assigned yet — contact an admin.');
+      showErr('Could not load your profile: '+error.message);
+      return;
+    }
+    // No profile row, no role, or explicitly deactivated -- pending/blocked, not an
+    // error. Same gate _applyLogin enforces on the fresh-login path, so a returning
+    // pending user sees the same waiting screen instead of a confusing error banner.
+    if(!profile||!profile.sales_role||profile.is_active===false){
+      _showRestoreLoading(false);
+      _showPendingScreen(session.user.email);
       return;
     }
     // _applyLogin → initAll → syncSupabase, but mutex prevents double-sync
@@ -12638,6 +12773,8 @@ function _showRestoreLoading(show){
       role:profile.sales_role,
       fpa_role:profile.role||'viewer',
       territory:profile.territory||'All',
+      kam_name:profile.kam_name||'',
+      is_active:profile.is_active!==false,
     });
   }catch(e){
     console.warn('Session restore:',e.message);
