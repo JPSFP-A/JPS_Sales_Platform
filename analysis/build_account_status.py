@@ -32,6 +32,21 @@ def discover_billing_files():
             continue
         key = '%s-%02d' % (m.group(2), MONNUM[m.group(1)])
         files.setdefault(key, fp if os.path.exists(fp) else os.path.join(DL, base))
+    # Secondary source: short-named raw CIS exports "<Mon> <YY>.csv" (e.g. "Jul 26.csv"),
+    # comma-delimited with quoted fields -- same column schema, used by corrected_scan.py
+    # for the same months. Only fills months the xlsx/xls source above didn't already
+    # find, same precedence corrected_scan.py uses, so an existing xlsx month is never
+    # silently swapped for a csv one.
+    csv_cands = sorted(set(glob.glob(os.path.join(DL, '*.csv')) + glob.glob('*.csv')))
+    for fp in csv_cands:
+        base = os.path.basename(fp)
+        m = re.match(r'(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+(\d{2})\.CSV$', base.upper())
+        if not m:
+            continue
+        key = '20%s-%02d' % (m.group(2), MONNUM[m.group(1)])
+        if key in files:
+            continue
+        files[key] = fp if os.path.exists(fp) else os.path.join(DL, base)
     return dict(sorted(files.items()))
 
 def norm(s): return str(s).strip().upper()
@@ -74,8 +89,16 @@ def rows_tsv(path):
         for line in f:
             yield tuple(line.rstrip('\r\n').split('\t'))
 
+def rows_csv(path):
+    with open(path, encoding='utf-8', errors='replace', newline='') as f:
+        for r in csv.reader(f):
+            yield tuple(r)
+
 def proc(path, y, mo):
-    rows = rows_xlsx(path) if is_zip_xlsx(path) else rows_tsv(path)
+    if path.lower().endswith('.csv'):
+        rows = rows_csv(path)
+    else:
+        rows = rows_xlsx(path) if is_zip_xlsx(path) else rows_tsv(path)
     hdr = None
     for r in rows:
         if r and r[0] == 'Cust_Code':
