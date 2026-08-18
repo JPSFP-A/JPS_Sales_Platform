@@ -2379,6 +2379,13 @@ order by ordinal_position;</pre>
         <div id="rcfr_table" style="overflow-x:auto"></div>
         <div id="rcfr_insights" style="margin-top:16px"></div>
       </div>
+      <div class="card" style="margin-top:12px">
+        <div class="ch">Monthly Trend by Industry
+          <span style="font-size:10px;color:var(--text3);font-weight:400">Solid = actual (locked), dashed = forecast</span>
+        </div>
+        <div style="height:320px"><canvas id="rcfr_ind_chart"></canvas></div>
+        <div id="rcfr_ind_table" style="overflow-x:auto;margin-top:14px"></div>
+      </div>
     </div>
 
     <!-- === PEAK DEMAND === -->
@@ -10907,6 +10914,7 @@ function renderRcForecastReport(){
     for(let y=FC_BUD_YEAR;y<=FC_BUD_YEAR+4;y++)yrSel.innerHTML+=`<option value="${y}">${y}</option>`;
   }
   const year=parseInt(yrSel?.value)||FC_BUD_YEAR;
+  const lockedThru=year===FC_BUD_YEAR?curMonth:0; // only the real current year has any closed/actual months
   // See _dfcToLERows for why this matters — without it, this can get stuck on
   // chains cached from an earlier, incomplete render and silently diverge from
   // what Driver Forecast itself currently shows.
@@ -10928,6 +10936,18 @@ function renderRcForecastReport(){
   // KAM-owned accounts carry a real industry/op-adjustment (cohorts get industry:
   // null per _dfcCommCohortsForNonKam, so they can't be individually attributed).
   const rcIndustryImpact={}, rcOpAccounts={};
+  // Monthly total by industry, GWh -- feeds the "Monthly Trend by Industry" chart/table
+  // below. Only KAM-owned accounts + new customers carry a real industry (same scoping
+  // as rcIndustryImpact above); everyone else (no-KAM cohorts, residential) is pooled
+  // into one "No KAM / Cohort" bucket per rate_class's segment so their volume shows up
+  // somewhere instead of silently vanishing from the total.
+  const indMonthly={};
+  const bumpInd=(industry,m,val)=>{
+    const k=industry||'No KAM / Cohort';
+    const e=(indMonthly[k]=indMonthly[k]||{});
+    e[m]=(e[m]||0)+val;
+  };
+  const addIndChain=(industry,chain)=>{for(let m=1;m<=12;m++){const c=chain[m];if(c)bumpInd(industry,m,c.total||0);}};
   const bump=(rateClass)=>{
     const k=rateClass||'Unassigned';
     if(!rc[k])rc[k]={actual:0,base:0,macro:0,weather:0,oper:0,total:0};
@@ -10937,19 +10957,23 @@ function renderRcForecastReport(){
     const chain=_dfcGetChain(idx,a.ac,true,{rate_class:a.rate_class,industry:a.industry},a.ac,year,null);
     _rcfrAccumulate(bump(a.rate_class),chain);
     _rcfrTrackDrivers(a.rate_class,a,chain,rcIndustryImpact,rcOpAccounts);
+    addIndChain(a.industry,chain);
   });
   newCusts.forEach(c=>{
     const ctx={rate_class:c.rate_class,industry:c.industry,startYear:Number(c.start_year),startMonth:Number(c.start_month),expectedKwh:Number(c.expected_kwh)||0};
     const chain=_dfcGetChain(idx,c.jps_ac,true,{rate_class:c.rate_class,industry:c.industry},c.jps_ac,year,ctx);
     _rcfrAccumulate(bump(c.rate_class),chain);
     _rcfrTrackDrivers(c.rate_class,{name:c.customer||c.jps_ac,ac:c.jps_ac,industry:c.industry},chain,rcIndustryImpact,rcOpAccounts);
+    addIndChain(c.industry,chain);
   });
   commCohorts.forEach(co=>{
     const chain=_dfcGetChain(idx,co.key,false,{rate_class:co.rate_class,industry:null},null,year,null);
     _rcfrAccumulate(bump(co.rate_class),chain);
+    addIndChain(null,chain);
   });
   resCohorts.forEach(co=>{
     const chain=_dfcGetChain(idx,co.key,false,{rate_class:co.rate_class,industry:null},null,year,null);
+    addIndChain(null,chain);
     _rcfrAccumulate(bump(co.rate_class),chain);
   });
 
@@ -11020,6 +11044,67 @@ function renderRcForecastReport(){
         ${insights.map(s=>`<li>${esc(s)}</li>`).join('')}
       </ul>`;
   }
+  _rcfrRenderIndustryTrend(indMonthly,lockedThru);
+}
+// Monthly Trend by Industry -- one line per top-8 industries by annual total (the
+// rest folded into "Other industries" so the chart stays readable instead of one
+// line per ~15-20 distinct industry), solid for actual/locked months and dashed
+// for forecast months via Chart.js segment styling (same continuous line, not a
+// separate series, so the actual->forecast handoff reads as one trend).
+let _rcfrIndChart=null;
+const RCFR_IND_COLORS=['#2E86DE','#EE5A24','#10AC84','#8854D0','#F79F1F','#EA2027','#0652DD','#009432','#B33771','#575fcf'];
+function _rcfrRenderIndustryTrend(indMonthly,lockedThru){
+  const canvas=document.getElementById('rcfr_ind_chart');
+  const tblWrap=document.getElementById('rcfr_ind_table');
+  if(!canvas||!tblWrap)return;
+  const months=[1,2,3,4,5,6,7,8,9,10,11,12];
+  const annualTotal=(vals)=>months.reduce((s,m)=>s+(vals[m]||0),0);
+  const entries=Object.entries(indMonthly).sort((a,b)=>annualTotal(b[1])-annualTotal(a[1]));
+  const TOPN=8;
+  const top=entries.slice(0,TOPN);
+  const rest=entries.slice(TOPN);
+  if(rest.length){
+    const other={};months.forEach(m=>{other[m]=rest.reduce((s,[,v])=>s+(v[m]||0),0);});
+    top.push(['Other industries ('+rest.length+')',other]);
+  }
+  if(_rcfrIndChart){_rcfrIndChart.destroy();_rcfrIndChart=null;}
+  _rcfrIndChart=new Chart(canvas,{
+    type:'line',
+    data:{
+      labels:months.map(m=>MONTHS_SHORT[m-1]),
+      datasets:top.map(([name,vals],i)=>({
+        label:name,
+        data:months.map(m=>+((vals[m]||0)/1e6).toFixed(3)),
+        borderColor:RCFR_IND_COLORS[i%RCFR_IND_COLORS.length],
+        backgroundColor:RCFR_IND_COLORS[i%RCFR_IND_COLORS.length],
+        borderWidth:2,tension:0.25,pointRadius:2,fill:false,
+        // segment.borderDash keys off the SEGMENT's start index -- p0DataIndex is
+        // the month index (0-based) the segment starts from, so a segment starting
+        // at or after lockedThru (0-based month count already elapsed) is forecast.
+        segment:{borderDash:ctx=>(lockedThru&&ctx.p0DataIndex>=lockedThru)?[6,4]:undefined},
+      })),
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10}}},
+        tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)} GWh`}}},
+      scales:{y:{title:{display:true,text:'GWh',font:{size:10}}}},
+    },
+  });
+  const rows=top.map(([name,vals])=>`<tr><td style="padding:5px 8px;font-weight:500">${esc(name)}</td>${months.map(m=>{
+    const isFcst=lockedThru&&m>lockedThru;
+    return `<td style="text-align:right;padding:5px 4px;${isFcst?'background:rgba(0,194,168,.08);color:var(--teal)':''}">${_dfcFmtGwh(vals[m]||0)}</td>`;
+  }).join('')}<td style="text-align:right;padding:5px 8px;font-weight:600;border-left:0.5px solid var(--border)">${_dfcFmtGwh(annualTotal(vals))}</td></tr>`).join('');
+  tblWrap.innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:11px">
+    <thead><tr style="border-bottom:0.5px solid var(--border-strong)">
+      <th style="text-align:left;padding:5px 8px;font-weight:500;color:var(--text3)">Industry</th>
+      ${months.map(m=>`<th style="text-align:right;padding:5px 4px;font-weight:500;color:var(--text3)">${MONTHS_SHORT[m-1]}</th>`).join('')}
+      <th style="text-align:right;padding:5px 8px;font-weight:500;color:var(--text3);border-left:0.5px solid var(--border)">FY GWh</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div style="font-size:10px;color:var(--text3);margin-top:6px">Teal-tinted cells are forecast months. "No KAM / Cohort" pools every account without an assigned industry (no-KAM cohorts + residential) so its volume isn't silently excluded from the total.</div>`;
 }
 function _rcfrAccumulate(acc,chain){
   for(let m=1;m<=12;m++){
