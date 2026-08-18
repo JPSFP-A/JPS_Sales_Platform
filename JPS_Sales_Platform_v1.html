@@ -2386,6 +2386,12 @@ order by ordinal_position;</pre>
         <div style="height:320px"><canvas id="rcfr_ind_chart"></canvas></div>
         <div id="rcfr_ind_table" style="overflow-x:auto;margin-top:14px"></div>
       </div>
+      <div class="card" style="margin-top:12px">
+        <div class="ch">Peak Demand — Billed kVA by Rate Class
+          <span style="font-size:10px;color:var(--text3);font-weight:400">Trailing 6 months · RT40/RT50/RT70 (demand-metered) · Source: jps_demand_actuals</span>
+        </div>
+        <div id="rcfr_demand_table" style="overflow-x:auto"></div>
+      </div>
     </div>
 
     <!-- === PEAK DEMAND === -->
@@ -10761,7 +10767,7 @@ async function macroSaveCell(type,seg,year,month,val){
   else sbMacroAssum.push(row);
   sbMacroAssumExists=true;
   _dfcResetYearChainCache();
-  renderMacroAssumptions();
+  renderSection(document.querySelector('.sec.on')?.id);
 }
 
 /* ==========================================
@@ -11053,6 +11059,7 @@ function renderRcForecastReport(){
       </ul>`;
   }
   _rcfrRenderIndustryTrend(indMonthly,lockedThru);
+  _rcfrRenderDemand();
 }
 // Monthly Trend by Industry -- one line per top-8 industries by annual total (the
 // rest folded into "Other industries" so the chart stays readable instead of one
@@ -11519,6 +11526,35 @@ function _frRenderPDF(d){
     didParseCell:(hook)=>{if(hook.row.index===indRows.length-1&&hook.section==='body'){hook.cell.styles.fontStyle='bold';hook.cell.styles.fillColor=[238,243,248];}}});
   y=doc.lastAutoTable.finalY+8;
 
+  // ---- PEAK DEMAND ----
+  const _dfPD=_frDemandData();
+  if(_dfPD.months.length){
+    ensure(150);
+    h1('Peak Demand — Billed kVA by Rate Class');
+    body('Trailing 6 months of billed demand (kVA), RT40/RT50/RT70 only — the demand-metered commercial rate classes. Source: jps_demand_actuals.',{size:8.2,color:GREY});
+    const pdMonthsLbl=_dfPD.months.map(ym=>{const[py,pm]=ym.split('_');return new Date(2000,Number(pm)-1,1).toLocaleString('en-US',{month:'short'})+' '+py.slice(2);});
+    const pdRcRows=_dfPD.rcs.map(rc=>[rc,..._dfPD.months.map(ym=>Math.round(_dfPD.sumFor(ym,rc)).toLocaleString())]);
+    pdRcRows.push(['TOTAL',..._dfPD.months.map(ym=>Math.round(_dfPD.rcs.reduce((s,rc)=>s+_dfPD.sumFor(ym,rc),0)).toLocaleString())]);
+    ensure(30);
+    doc.autoTable({startY:y,margin:{left:MARGIN,right:MARGIN},
+      head:[['Rate Class',...pdMonthsLbl]],
+      body:pdRcRows,headStyles:{fillColor:NAVY,fontSize:8.6},bodyStyles:{fontSize:9},styles:{cellPadding:5},
+      didParseCell:(hook)=>{if(hook.row.index===pdRcRows.length-1&&hook.section==='body'){hook.cell.styles.fontStyle='bold';hook.cell.styles.fillColor=[238,243,248];}}});
+    y=doc.lastAutoTable.finalY+10;
+
+    _dfPD.rcs.forEach(rc=>{
+      ensure(110);
+      h2(rc+' — Load Shape (kVA)');
+      const typeRows=DEMAND_TYPE_ORDER.map(dt=>[DEMAND_TYPE_LABEL[dt],..._dfPD.months.map(ym=>Math.round(_dfPD.sumFor(ym,rc,dt)).toLocaleString())]);
+      typeRows.push(['Total',..._dfPD.months.map(ym=>Math.round(_dfPD.sumFor(ym,rc)).toLocaleString())]);
+      doc.autoTable({startY:y,margin:{left:MARGIN,right:MARGIN},
+        head:[['Demand Type',...pdMonthsLbl]],
+        body:typeRows,headStyles:{fillColor:STEEL,fontSize:8},bodyStyles:{fontSize:8.4},styles:{cellPadding:4},
+        didParseCell:(hook)=>{if(hook.row.index===typeRows.length-1&&hook.section==='body')hook.cell.styles.fontStyle='bold';}});
+      y=doc.lastAutoTable.finalY+8;
+    });
+  }
+
   // ---- H1/H2 DETAIL ----
   ensure(200);
   h1('First-Half & Second-Half Detail');
@@ -11846,6 +11882,25 @@ async function _frRenderDOCX(d){
   children.push(new Table({width:{size:CONTENT_W,type:WidthType.DXA},columnWidths:[CONTENT_W/2,CONTENT_W/2],rows:indChartRows}));
 
   children.push(spacer());
+  const _dfPD=_frDemandData();
+  if(_dfPD.months.length){
+    children.push(h1('Peak Demand — Billed kVA by Rate Class'));
+    children.push(body('Trailing 6 months of billed demand (kVA), RT40/RT50/RT70 only — the demand-metered commercial rate classes. Source: jps_demand_actuals.',{size:14,color:GREY}));
+    const pdMonthsLbl=_dfPD.months.map(ym=>{const[py,pm]=ym.split('_');return new Date(2000,Number(pm)-1,1).toLocaleString('en-US',{month:'short'})+' '+py.slice(2);});
+    const pdColW=Math.floor((CONTENT_W-1600)/_dfPD.months.length);
+    const pdRcRows=_dfPD.rcs.map(rc=>[rc,..._dfPD.months.map(ym=>Math.round(_dfPD.sumFor(ym,rc)).toLocaleString())]);
+    pdRcRows.push(['TOTAL',..._dfPD.months.map(ym=>Math.round(_dfPD.rcs.reduce((s,rc)=>s+_dfPD.sumFor(ym,rc),0)).toLocaleString())]);
+    children.push(mkTable(['Rate Class',...pdMonthsLbl],pdRcRows,[1600,...Array(_dfPD.months.length).fill(pdColW)],{boldLastRow:true}));
+    children.push(spacer());
+    _dfPD.rcs.forEach(rc=>{
+      children.push(h2(rc+' — Load Shape (kVA)'));
+      const typeRows=DEMAND_TYPE_ORDER.map(dt=>[DEMAND_TYPE_LABEL[dt],..._dfPD.months.map(ym=>Math.round(_dfPD.sumFor(ym,rc,dt)).toLocaleString())]);
+      typeRows.push(['Total',..._dfPD.months.map(ym=>Math.round(_dfPD.sumFor(ym,rc)).toLocaleString())]);
+      children.push(mkTable(['Demand Type',...pdMonthsLbl],typeRows,[1600,...Array(_dfPD.months.length).fill(pdColW)],{boldLastRow:true}));
+      children.push(spacer());
+    });
+  }
+
   children.push(h1('First-Half & Second-Half Detail'));
   children.push(h2('H1 (through month '+d.curMonth+') Actual vs Budget'));
   const h1Rows=rcs.map(rc=>{const f=h1Tot(rc)/1e6,b=(d.budH1[rc]||0)/1e6;return [rc,_frFmt(f),_frFmt(b),b>0?_frPct((f/b-1)*100):'—'];});
@@ -11910,6 +11965,51 @@ const DEMAND_TYPE_ORDER=['standard','on_peak','partial_peak','off_peak'];
 const DEMAND_TYPE_LABEL={standard:'Standard',on_peak:'On-Peak',partial_peak:'Partial-Peak',off_peak:'Off-Peak'};
 const DEMAND_TYPE_COLOR={standard:'#5a7a96',on_peak:'#e25c4b',partial_peak:'#f0ad4e',off_peak:'#00c2a8'};
 function _demandYm(r){return `${r.year}_${String(r.month).padStart(2,'0')}`;}
+// Shared by the RC Forecast Report's Peak Demand section (live tab card + PDF + DOCX)
+// -- same demand-metered rate classes and trailing-6-month window as the standalone
+// Peak Demand tab above, just packaged for reuse instead of duplicating the filter.
+function _frDemandData(){
+  const DEMAND_RCS=['RT40','RT50','RT70'];
+  const rows=(typeof sbDemandActuals!=='undefined'?sbDemandActuals:[]).filter(r=>DEMAND_RCS.includes(r.rate_class));
+  const months=[...new Set(rows.map(_demandYm))].sort().slice(-6);
+  const sumFor=(ym,rc,type)=>rows.filter(r=>_demandYm(r)===ym&&r.rate_class===rc&&(!type||r.demand_type===type)).reduce((s,r)=>s+Number(r.demand_kva||0),0);
+  return {rcs:DEMAND_RCS,months,sumFor};
+}
+function _rcfrRenderDemand(){
+  const wrap=document.getElementById('rcfr_demand_table');if(!wrap)return;
+  const {rcs,months,sumFor}=_frDemandData();
+  if(!months.length){wrap.innerHTML='<div style="padding:10px 0;color:var(--text3);font-size:11px">No demand actuals loaded (jps_demand_actuals) — run the demand loader, then Sync.</div>';return;}
+  const mLbl=ym=>{const[y,m]=ym.split('_');return `${MONTHS_SHORT[Number(m)-1]} ${y.slice(2)}`;};
+  const fmtKva=v=>v?Math.round(v).toLocaleString():'—';
+
+  let html=`<table style="width:100%;min-width:600px;border-collapse:collapse;font-size:11px;margin-bottom:14px">
+    <thead><tr style="border-bottom:0.5px solid var(--border-strong)">
+      <th style="text-align:left;padding:5px 8px;font-weight:500;color:var(--text3)">Rate Class</th>
+      ${months.map(ym=>`<th style="text-align:right;padding:5px 4px;font-weight:500;color:var(--text3)">${mLbl(ym)}</th>`).join('')}
+    </tr></thead><tbody>`;
+  rcs.forEach(rc=>{
+    html+=`<tr><td style="padding:5px 8px;font-weight:500">${rc}</td>${months.map(ym=>`<td style="text-align:right;padding:5px 4px">${fmtKva(sumFor(ym,rc))}</td>`).join('')}</tr>`;
+  });
+  html+=`<tr style="border-top:1px solid var(--border-strong);font-weight:600"><td style="padding:5px 8px">Total</td>${months.map(ym=>`<td style="text-align:right;padding:5px 4px">${fmtKva(rcs.reduce((s,rc)=>s+sumFor(ym,rc),0))}</td>`).join('')}</tr>`;
+  html+=`</tbody></table>`;
+
+  html+=rcs.map(rc=>{
+    let t=`<div style="font-size:11px;font-weight:600;color:var(--text2);margin:10px 0 4px">${rc} — Load Shape (kVA)</div>
+    <table style="width:100%;min-width:600px;border-collapse:collapse;font-size:11px;margin-bottom:10px">
+      <thead><tr style="border-bottom:0.5px solid var(--border-strong)">
+        <th style="text-align:left;padding:5px 8px;font-weight:500;color:var(--text3)">Demand Type</th>
+        ${months.map(ym=>`<th style="text-align:right;padding:5px 4px;font-weight:500;color:var(--text3)">${mLbl(ym)}</th>`).join('')}
+      </tr></thead><tbody>`;
+    DEMAND_TYPE_ORDER.forEach(dt=>{
+      t+=`<tr><td style="padding:5px 8px;font-weight:500;color:${DEMAND_TYPE_COLOR[dt]}">${DEMAND_TYPE_LABEL[dt]}</td>${months.map(ym=>`<td style="text-align:right;padding:5px 4px">${fmtKva(sumFor(ym,rc,dt))}</td>`).join('')}</tr>`;
+    });
+    t+=`<tr style="border-top:1px solid var(--border-strong);font-weight:600"><td style="padding:5px 8px">Total</td>${months.map(ym=>`<td style="text-align:right;padding:5px 4px">${fmtKva(sumFor(ym,rc))}</td>`).join('')}</tr>`;
+    t+=`</tbody></table>`;
+    return t;
+  }).join('');
+
+  wrap.innerHTML=html;
+}
 function renderPeakDemand(){
   const tblWrap=document.getElementById('demand_table');if(!tblWrap)return;
   const rcSel=document.getElementById('demand_rc')?.value||'';
