@@ -10149,12 +10149,18 @@ function _dfcDriverPcts(rc,industry,year,month){
 // never add a second entity for the same key or it double-counts.
 const _DFC_PLACEHOLDER_ACS=new Set(['Postpaid','Zero-Postpaid']);
 function _dfcBuildCommAccounts(year){
+  // Only FC_BUD_YEAR (the real current year) ever has actual rows -- a render year
+  // further out (FC_BUD_YEAR+2, +3, +4) has no actuals of its OWN or its own "year-1"
+  // to discover accounts from, so anchoring the lookback to the raw render year went
+  // empty two years out and the forecast silently stopped populating. Anchor to the
+  // latest real year instead so the account population never drifts out of range.
+  const refYear=Math.min(year,FC_BUD_YEAR);
   const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
   const indMap={};sbIndustries.forEach(i=>indMap[String(i.jps_ac||'').trim()]=i.industry||'');
   const seen={};
   _sbAllActuals().forEach(r=>{
     if(!_isComm(r))return;
-    if(Number(r.year)!==year&&Number(r.year)!==year-1)return;
+    if(Number(r.year)!==refYear&&Number(r.year)!==refYear-1)return;
     const ac=r.jps_ac;if(!ac||seen[ac]||_DFC_PLACEHOLDER_ACS.has(ac))return;
     seen[ac]={ac,name:r.name||ac,rate_class:r.rate_class,parish:r.parish,consumption_bucket:r.consumption_bucket};
   });
@@ -10169,10 +10175,11 @@ function _dfcBuildCommAccounts(year){
   }));
 }
 function _dfcBuildResCohorts(year){
+  const refYear=Math.min(year,FC_BUD_YEAR); // see _dfcBuildCommAccounts -- same out-of-range fix
   const cohorts={};
   const add=(r,isAct)=>{
     if(_isComm(r))return;
-    if(isAct&&Number(r.year)!==year&&Number(r.year)!==year-1)return;
+    if(isAct&&Number(r.year)!==refYear&&Number(r.year)!==refYear-1)return;
     if(!isAct&&Number(r.year)!==year)return;
     const key=`${r.rate_class}|${r.parish}|${r.consumption_bucket}`;
     if(!cohorts[key])cohorts[key]={key,rate_class:r.rate_class,parish:r.parish,consumption_bucket:r.consumption_bucket,label:`${r.rate_class} · ${r.parish} · ${r.consumption_bucket}`};
@@ -10198,12 +10205,13 @@ function _dfcCommCohortsForNonKam(accounts,year){
   // change) — actByCohort is keyed per-row, so a cohort built from a stale
   // account-level snapshot looks up the WRONG key for any month whose bucket
   // differs from that snapshot, and its kwh silently never shows up anywhere.
+  const refYear=Math.min(year,FC_BUD_YEAR); // see _dfcBuildCommAccounts -- same out-of-range fix
   const nonKamAcs=new Set(accounts.filter(a=>!a.kam&&!a.isNew).map(a=>a.ac));
   const cohorts={};
   const memberSets={};
   const addRow=(r,isAct)=>{
     if(!_isComm(r))return;
-    if(isAct&&Number(r.year)!==year&&Number(r.year)!==year-1)return;
+    if(isAct&&Number(r.year)!==refYear&&Number(r.year)!==refYear-1)return;
     if(!isAct&&Number(r.year)!==year)return;
     const isPlaceholder=_DFC_PLACEHOLDER_ACS.has(r.jps_ac);
     if(!isPlaceholder&&!nonKamAcs.has(r.jps_ac))return; // KAM-assigned — counted via actByAc/keyAccounts instead
@@ -11243,17 +11251,18 @@ function _frCollectData(){
 
   const modeledIndustries=new Set(sbMacroAssum.filter(r=>r.driver_type==='industry').map(r=>r.segment));
   const rcMonth={};              // rc -> {1..12: kwh_le}
+  const indMonth={};             // industry (or 'No KAM / Cohort') -> {1..12: kwh_le} -- full Jan-Dec, actual+forecast, mirrors rcMonth but by industry
   const custFy={}, custRcKwh={}; // customer name -> FY kwh, and -> {rc:kwh} for rate-class labeling
-  const indH2Fc={};              // industry -> H2 2026 forecast kwh (KAM/new-cust only)
 
   const bumpMonth=(rc,m,v)=>{rcMonth[rc]=rcMonth[rc]||{};rcMonth[rc][m]=(rcMonth[rc][m]||0)+v;};
+  const bumpIndMonth=(industry,m,v)=>{const k=industry||'No KAM / Cohort';indMonth[k]=indMonth[k]||{};indMonth[k][m]=(indMonth[k][m]||0)+v;};
   const walkChain=(chain,rc,custName,industry)=>{
     let fyTotal=0;
     for(let m=1;m<=12;m++){
       const c=chain[m];if(!c)continue;
       bumpMonth(rc,m,c.total);
+      bumpIndMonth(industry,m,c.total);
       fyTotal+=c.total;
-      if(m>=7&&industry&&modeledIndustries.has(industry))indH2Fc[industry]=(indH2Fc[industry]||0)+c.total;
     }
     if(custName){
       custFy[custName]=(custFy[custName]||0)+fyTotal;
@@ -11286,23 +11295,16 @@ function _frCollectData(){
 
   // Prior-year actuals (year-1, matching the FY${d.year-1} label the report renders) —
   // by rate class (raw, ex-EV) and by customer name (same account population as
-  // custFy, via acToName) and by industry H2 (KAM only).
+  // custFy, via acToName).
   const priorYear=year-1;
-  const fy25Rc={}, fy25Cust={}, indH2Actual25={};
-  const kamAcSet=new Set(keyAccounts.map(a=>a.ac));
-  const indMap={};sbIndustries.forEach(i=>{indMap[String(i.jps_ac||'').trim()]=i.industry||'';});
+  const fy25Rc={}, fy25Cust={};
   _sbAllActuals().forEach(r=>{
     if(r.rate_class==='EV')return;
+    if(Number(r.year)!==priorYear)return;
     const kwh=Number(r.kwh)||0;
-    if(Number(r.year)===priorYear){
-      fy25Rc[r.rate_class]=(fy25Rc[r.rate_class]||0)+kwh;
-      const nm=acToName[r.jps_ac];
-      if(nm)fy25Cust[nm]=(fy25Cust[nm]||0)+kwh;
-    }
-    if(Number(r.year)===priorYear&&Number(r.month)>=7&&Number(r.month)<=12&&kamAcSet.has(r.jps_ac)){
-      const ind=_kl(indMap,r.jps_ac);
-      if(ind&&modeledIndustries.has(ind))indH2Actual25[ind]=(indH2Actual25[ind]||0)+kwh;
-    }
+    fy25Rc[r.rate_class]=(fy25Rc[r.rate_class]||0)+kwh;
+    const nm=acToName[r.jps_ac];
+    if(nm)fy25Cust[nm]=(fy25Cust[nm]||0)+kwh;
   });
 
   // Budget — full year + H1/H2 split, by rate class.
@@ -11314,7 +11316,7 @@ function _frCollectData(){
     if(m<=curMonth)budH1[rc]=(budH1[rc]||0)+kwh;else budH2[rc]=(budH2[rc]||0)+kwh;
   });
 
-  return {year,curMonth,rcMonth,custFy,custRcKwh,fy25Rc,fy25Cust,indH2Fc,indH2Actual25,budRc,budH1,budH2,modeledIndustries};
+  return {year,curMonth,rcMonth,indMonth,custFy,custRcKwh,fy25Rc,fy25Cust,budRc,budH1,budH2,modeledIndustries};
 }
 
 function _frRcLabel(custRcKwh,name){
@@ -11455,8 +11457,8 @@ function _frRenderPDF(d){
   });
   if(unsourced.length)body('Unsourced: '+unsourced.join(', ')+' — no source_note on file (add one on the Macro Assumptions tab).',{size:8,color:GREY,leading:10.5});
 
-  // ---- PAGE: RATE CLASS PERFORMANCE ----
-  doc.addPage();y=54;
+  // ---- RATE CLASS PERFORMANCE ----
+  ensure(150);
   h1('Rate Class Performance: Forecast vs Budget vs Prior Year');
   const rcRows=rcs.map(rc=>{
     const f=fy26(rc)/1e6,b=(d.budRc[rc]||0)/1e6,p=(d.fy25Rc[rc]||0)/1e6;
@@ -11471,8 +11473,8 @@ function _frRenderPDF(d){
   y=doc.lastAutoTable.finalY+8;
   body('Figures rounded to 1 decimal for display; TOTAL is calculated from unrounded values.',{size:7.6,color:GREY});
 
-  // ---- PAGE: MONTHLY BREAKOUT ----
-  doc.addPage();y=54;
+  // ---- MONTHLY BREAKOUT ----
+  ensure(170);
   h1('Monthly Breakout by Rate Class (GWh)');
   body('Actual through month '+(d.curMonth||6)+'; * = forecast month (Driver Forecast engine, same chains as every other table in this report).',{size:8.2,color:GREY});
   const allMonthsLbl=[];for(let m=1;m<=12;m++)allMonthsLbl.push(new Date(2000,m-1,1).toLocaleString('en-US',{month:'short'})+(m>(d.curMonth||6)?'*':''));
@@ -11490,8 +11492,35 @@ function _frRenderPDF(d){
     didParseCell:(hook)=>{if(hook.row.index===monthlyRows.length-1&&hook.section==='body'){hook.cell.styles.fontStyle='bold';hook.cell.styles.fillColor=[238,243,248];}}});
   y=doc.lastAutoTable.finalY+8;
 
-  // ---- PAGE: H1/H2 DETAIL ----
-  doc.addPage();y=54;
+  // ---- MONTHLY BREAKOUT BY INDUSTRY ----
+  ensure(190);
+  h1('Monthly Trend by Industry (GWh)');
+  body('Actual through month '+(d.curMonth||6)+'; * = forecast month. KAM-assigned key accounts only, grouped by industry; everything without an assigned industry (no-KAM cohorts, residential) rolls into "No KAM / Cohort" rather than being excluded from the total. Top 10 industries by FY total shown individually, the rest folded into "Other industries".',{size:8.2,color:GREY});
+  const indAnnualTotal=(vals)=>{let t=0;for(let m=1;m<=12;m++)t+=(vals[m]||0);return t;};
+  const indEntries=Object.entries(d.indMonth).sort((a,b)=>indAnnualTotal(b[1])-indAnnualTotal(a[1]));
+  const IND_TOPN=10;
+  const indTop=indEntries.slice(0,IND_TOPN);
+  const indRest=indEntries.slice(IND_TOPN);
+  if(indRest.length){
+    const other={};for(let m=1;m<=12;m++)other[m]=indRest.reduce((s,[,v])=>s+(v[m]||0),0);
+    indTop.push(['Other industries ('+indRest.length+')',other]);
+  }
+  const indRows=indTop.map(([name,vals])=>{
+    const monthVals=[];for(let m=1;m<=12;m++)monthVals.push((vals[m]||0)/1e6);
+    return [name,...monthVals.map(v=>_frFmt(v))];
+  });
+  const indTotalsByMonth=[];for(let m=1;m<=12;m++)indTotalsByMonth.push(indTop.reduce((s,[,v])=>s+((v[m]||0)/1e6),0));
+  indRows.push(['TOTAL',...indTotalsByMonth.map(v=>_frFmt(v))]);
+  ensure(30);
+  doc.autoTable({startY:y,margin:{left:MARGIN,right:MARGIN},
+    head:[['Industry',...allMonthsLbl]],
+    body:indRows,headStyles:{fillColor:NAVY,fontSize:7.4},bodyStyles:{fontSize:7.6},styles:{cellPadding:3.5},
+    columnStyles:{0:{cellWidth:100}},
+    didParseCell:(hook)=>{if(hook.row.index===indRows.length-1&&hook.section==='body'){hook.cell.styles.fontStyle='bold';hook.cell.styles.fillColor=[238,243,248];}}});
+  y=doc.lastAutoTable.finalY+8;
+
+  // ---- H1/H2 DETAIL ----
+  ensure(200);
   h1('First-Half & Second-Half Detail');
   h2(`H1 (through month ${d.curMonth}) Actual vs Budget`);
   const h1Rows=rcs.map(rc=>{
@@ -11520,22 +11549,8 @@ function _frRenderPDF(d){
     didParseCell:(hook)=>{if(hook.row.index===h2Rows.length-1&&hook.section==='body')hook.cell.styles.fontStyle='bold';}});
   y=doc.lastAutoTable.finalY+8;
 
-  // ---- PAGE: INDUSTRY H2 ACTUAL VS FORECAST ----
-  doc.addPage();y=54;
-  h1('Industry H2 Actual vs. Forecast (GWh)');
-  body('H2 prior-year actual vs H2 current-year forecast, KAM-assigned accounts tagged to each modeled industry only — not the full rate-class total.',{size:8.6,color:GREY});
-  const indOrder=[...new Set([...Object.keys(d.indH2Actual25),...Object.keys(d.indH2Fc)])].sort((a,b)=>(d.indH2Fc[b]||0)-(d.indH2Fc[a]||0));
-  doc.autoTable({startY:y,margin:{left:MARGIN,right:MARGIN},
-    head:[['Industry','H2 Prior-Year Actual (GWh)','H2 Forecast (GWh)','Δ %']],
-    body:indOrder.map(ind=>{
-      const a=(d.indH2Actual25[ind]||0)/1e6,f=(d.indH2Fc[ind]||0)/1e6;
-      return [ind,_frFmt(a),_frFmt(f),a>0?_frPct((f/a-1)*100):'—'];
-    }),headStyles:{fillColor:STEEL,fontSize:8.6},bodyStyles:{fontSize:8.8},styles:{cellPadding:5},
-    columnStyles:{0:{cellWidth:220}}});
-  y=doc.lastAutoTable.finalY+8;
-
-  // ---- PAGE: TOP 10 ----
-  doc.addPage();y=54;
+  // ---- TOP 10 ----
+  ensure(230);
   h1('Top 10 Customers by Volume (FY'+d.year+')');
   body('Ranked by FY'+d.year+' kWh (H1 actual + H2 forecast), aggregated by customer name across all billing accounts. Excludes EV rate class and bulk-billed placeholder accounts.');
   const custRecs=Object.keys(d.custFy).map(n=>{
@@ -11551,8 +11566,8 @@ function _frRenderPDF(d){
   y=doc.lastAutoTable.finalY+8;
   if(top10.length>=2)body(`${top10[0].n} (${_frFmt(top10[0].f)} GWh) and ${top10[1].n} (${_frFmt(top10[1].f)} GWh, ${top10[1].chg==null?'new':_frPct(top10[1].chg)} YoY) are the two largest metered customers by this measure. Rolled up to customer (not individual account) level.`,{size:8.2,color:GREY});
 
-  // ---- PAGE: BOTTOM 10 ----
-  doc.addPage();y=54;
+  // ---- BOTTOM 10 ----
+  ensure(230);
   h1('Bottom 10 Customers — Largest YoY Declines');
   body('Among material accounts (FY'+(d.year-1)+' volume > 0.3 GWh), ranked by steepest YoY decline, aggregated by customer name.');
   const declines=custRecs.filter(r=>r.p>0.3&&r.chg!=null).sort((a,b)=>a.chg-b.chg).slice(0,10);
@@ -11745,15 +11760,6 @@ async function _frRenderDOCX(d){
   indList.forEach(ind=>{const notes=_frSourceNotes('industry',ind);if(notes.length)children.push(body(ind+' — '+notes.join(' / '),{size:16,color:GREY}));});
   if(unsourced.length)children.push(body('Unsourced: '+unsourced.join(', ')+' — no source_note on file.',{size:16,color:GREY}));
 
-  children.push(pageBreak());
-  children.push(h1('Industry H2 Actual vs. Forecast (GWh)'));
-  children.push(body('H2 prior-year actual vs H2 current-year forecast, KAM-assigned accounts tagged to each modeled industry only.',{size:16,color:GREY}));
-  const indOrder=[...new Set([...Object.keys(d.indH2Actual25),...Object.keys(d.indH2Fc)])].sort((a,b)=>(d.indH2Fc[b]||0)-(d.indH2Fc[a]||0));
-  children.push(mkTable(['Industry','H2 Prior-Year Actual (GWh)','H2 Forecast (GWh)','Δ %'],
-    indOrder.map(ind=>{const a=(d.indH2Actual25[ind]||0)/1e6,f=(d.indH2Fc[ind]||0)/1e6;return [ind,_frFmt(a),_frFmt(f),a>0?_frPct((f/a-1)*100):'—'];}),
-    [4200,1720,1720,1720],{}));
-
-  children.push(pageBreak());
   children.push(h1('Rate Class Performance: Forecast vs Budget vs Prior Year'));
   const rcRows=rcs.map(rc=>{const f=fy26(rc)/1e6,b=(d.budRc[rc]||0)/1e6,p=(d.fy25Rc[rc]||0)/1e6;
     return [rc,_frFmt(p),_frFmt(b),_frFmt(f),b>0?_frPct((f/b-1)*100):'—',p>0?_frPct((f/p-1)*100):'—'];});
@@ -11797,7 +11803,49 @@ async function _frRenderDOCX(d){
   }
   children.push(new Table({width:{size:CONTENT_W,type:WidthType.DXA},columnWidths:[CONTENT_W/2,CONTENT_W/2],rows:chartRows}));
 
-  children.push(pageBreak());
+  children.push(spacer());
+  children.push(h1('Monthly Trend by Industry (GWh)'));
+  children.push(body('Actual through month '+(d.curMonth||6)+'; * = forecast month. KAM-assigned key accounts only, grouped by industry; everything without an assigned industry (no-KAM cohorts, residential) rolls into "No KAM / Cohort". Top 10 by FY total shown individually, the rest folded into "Other industries".',{size:14,color:GREY}));
+  const indAnnualTotal=(vals)=>{let t=0;for(let m=1;m<=12;m++)t+=(vals[m]||0);return t;};
+  const indEntries=Object.entries(d.indMonth).sort((a,b)=>indAnnualTotal(b[1])-indAnnualTotal(a[1]));
+  const IND_TOPN=10;
+  const indTop=indEntries.slice(0,IND_TOPN);
+  const indRest=indEntries.slice(IND_TOPN);
+  if(indRest.length){
+    const other={};for(let m=1;m<=12;m++)other[m]=indRest.reduce((s,[,v])=>s+(v[m]||0),0);
+    indTop.push(['Other industries ('+indRest.length+')',other]);
+  }
+  const indRows=indTop.map(([name,vals])=>{
+    const monthVals=[];for(let m=1;m<=12;m++)monthVals.push((vals[m]||0)/1e6);
+    return [name,...monthVals.map(v=>_frFmt(v))];
+  });
+  const indTotalsByMonth=[];for(let m=1;m<=12;m++)indTotalsByMonth.push(indTop.reduce((s,[,v])=>s+((v[m]||0)/1e6),0));
+  indRows.push(['TOTAL',...indTotalsByMonth.map(v=>_frFmt(v))]);
+  children.push(mkTable(['Industry',...allMonthsLbl],indRows,[1600,...Array(12).fill(645)],{boldLastRow:true}));
+
+  children.push(spacer());
+  children.push(h2('Industry Trend — Actual vs Forecast '+d.year));
+  children.push(body('Solid line = actual; dashed line = forecast. Top '+Math.min(8,indTop.length)+' industries by FY total.',{size:14,color:GREY}));
+  const indChartSet=indTop.slice(0,8);
+  const indChartPngs={};
+  for(const [name,vals] of indChartSet){
+    const hist=[];for(let m=1;m<=(d.curMonth||6);m++)hist.push((vals[m]||0)/1e6);
+    const fc=[];for(let m=(d.curMonth||6)+1;m<=12;m++)fc.push((vals[m]||0)/1e6);
+    indChartPngs[name]=await _frChartPNG(name,hist,fc);
+  }
+  const indChartRows=[];
+  for(let i=0;i<indChartSet.length;i+=2){
+    const pair=indChartSet.slice(i,i+2);
+    indChartRows.push(new TableRow({children:pair.map(([name])=>new TableCell({
+      width:{size:CONTENT_W/2,type:WidthType.DXA},
+      borders:{top:{style:BorderStyle.NONE},bottom:{style:BorderStyle.NONE},left:{style:BorderStyle.NONE},right:{style:BorderStyle.NONE}},
+      children:[new Paragraph({alignment:AlignmentType.CENTER,children:[new ImageRun({type:"png",data:indChartPngs[name],
+        transformation:{width:220,height:150},altText:{title:name,description:name+' trend chart',name}})]})]
+    }))}));
+  }
+  children.push(new Table({width:{size:CONTENT_W,type:WidthType.DXA},columnWidths:[CONTENT_W/2,CONTENT_W/2],rows:indChartRows}));
+
+  children.push(spacer());
   children.push(h1('First-Half & Second-Half Detail'));
   children.push(h2('H1 (through month '+d.curMonth+') Actual vs Budget'));
   const h1Rows=rcs.map(rc=>{const f=h1Tot(rc)/1e6,b=(d.budH1[rc]||0)/1e6;return [rc,_frFmt(f),_frFmt(b),b>0?_frPct((f/b-1)*100):'—'];});
@@ -11811,7 +11859,7 @@ async function _frRenderDOCX(d){
   h2Rows.push(['TOTAL',_frFmt(tH2F),_frFmt(tH2B),tH2B>0?_frPct((tH2F/tH2B-1)*100):'—']);
   children.push(mkTable(['Rate Class','H2 Forecast (GWh)','H2 Budget (GWh)','Var vs Budget'],h2Rows,[2340,2340,2340,2340],{boldLastRow:true}));
 
-  children.push(pageBreak());
+  children.push(spacer());
   children.push(h1('Top 10 Customers by Volume (FY'+d.year+')'));
   children.push(body('Ranked by FY'+d.year+' kWh (H1 actual + H2 forecast), aggregated by customer name across all billing accounts. Excludes EV rate class and bulk-billed placeholder accounts.'));
   const custRecs=Object.keys(d.custFy).map(n=>{const f=d.custFy[n]/1e6,p=(d.fy25Cust[n]||0)/1e6;return {n,rc:_frRcLabel(d.custRcKwh,n),f,p,chg:p>1e-6?(f/p-1)*100:null};}).filter(r=>r.f>1e-6||r.p>1e-6);
@@ -11821,7 +11869,7 @@ async function _frRenderDOCX(d){
     [500,3560,1500,1300,1300,1200],{}));
   if(top10.length>=2){children.push(spacer());children.push(body(`${top10[0].n} (${_frFmt(top10[0].f)} GWh) and ${top10[1].n} (${_frFmt(top10[1].f)} GWh, ${top10[1].chg==null?'new':_frPct(top10[1].chg)} YoY) are the two largest metered customers by this measure.`,{size:16,color:GREY}));}
 
-  children.push(pageBreak());
+  children.push(spacer());
   children.push(h1('Bottom 10 Customers — Largest YoY Declines'));
   children.push(body('Among material accounts (FY'+(d.year-1)+' volume > 0.3 GWh), ranked by steepest YoY decline, aggregated by customer name.'));
   const declines=custRecs.filter(r=>r.p>0.3&&r.chg!=null).sort((a,b)=>a.chg-b.chg).slice(0,10);
