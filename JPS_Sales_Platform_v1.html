@@ -2919,6 +2919,13 @@ async function verifyLoginCode(){
     // slow fetch never sits behind an animation that's already finished, and a
     // fast fetch never cuts the animation off before it's had time to be seen.
     const _otpSuccessAnim=_otpPlaySuccess();
+    // restoreSession() (page-refresh path) awaits syncSupabase(true) before calling
+    // _applyLogin so the dashboard's first render already has data -- this fresh-login
+    // path was calling _applyLogin/initAll with none of the sbActuals/sbBudget/etc.
+    // arrays ever populated, so Overview rendered blank until a manual refresh took
+    // the (correct) restore-session path. Fire it now, in parallel with the profile
+    // fetch and success animation below, so it doesn't add extra serial wait time.
+    const _loginSyncP=syncSupabase(true).catch(e=>{if(window.JpsMonitor)JpsMonitor.warning('auth:login-sync-failed',e?.message||String(e));});
     // Fetch profile for role
     let profile=null;
     try{
@@ -2974,6 +2981,7 @@ async function verifyLoginCode(){
     // Not awaited so a slow write never delays getting into the dashboard.
     sb.from('profiles').update({last_login_at:new Date().toISOString()}).eq('id',data.user.id).then(()=>{},()=>{});
     await _otpSuccessAnim;
+    await _loginSyncP;
     _applyLogin({
       id:data.user.id,email:data.user.email,
       name:profile?.name||data.user.email.split('@')[0],
