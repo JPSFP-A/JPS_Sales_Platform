@@ -2919,13 +2919,6 @@ async function verifyLoginCode(){
     // slow fetch never sits behind an animation that's already finished, and a
     // fast fetch never cuts the animation off before it's had time to be seen.
     const _otpSuccessAnim=_otpPlaySuccess();
-    // restoreSession() (page-refresh path) awaits syncSupabase(true) before calling
-    // _applyLogin so the dashboard's first render already has data -- this fresh-login
-    // path was calling _applyLogin/initAll with none of the sbActuals/sbBudget/etc.
-    // arrays ever populated, so Overview rendered blank until a manual refresh took
-    // the (correct) restore-session path. Fire it now, in parallel with the profile
-    // fetch and success animation below, so it doesn't add extra serial wait time.
-    const _loginSyncP=syncSupabase(true).catch(e=>{if(window.JpsMonitor)JpsMonitor.warning('auth:login-sync-failed',e?.message||String(e));});
     // Fetch profile for role
     let profile=null;
     try{
@@ -2981,7 +2974,18 @@ async function verifyLoginCode(){
     // Not awaited so a slow write never delays getting into the dashboard.
     sb.from('profiles').update({last_login_at:new Date().toISOString()}).eq('id',data.user.id).then(()=>{},()=>{});
     await _otpSuccessAnim;
-    await _loginSyncP;
+    // Sync runs AFTER the profile is known and confirmed not-blocked, not in
+    // parallel with the profile fetch -- syncSupabase() populates the global
+    // sbActuals/sbBudget/etc arrays as a side effect just by being called, so
+    // firing it before this check meant even a blocked user's browser pulled all
+    // that data into memory regardless of what the UI went on to render (visible
+    // via devtools console even though the screen correctly showed "Access
+    // revoked"). restoreSession() (page-refresh path) has the same fix applied.
+    // A merely-pending user (no role yet, still active) is NOT blocked here --
+    // sync still runs for them, matching _isApproved()'s view-access semantics.
+    if(profile?.is_active!==false){
+      try{ await syncSupabase(true); }catch(e){ if(window.JpsMonitor)JpsMonitor.warning('auth:login-sync-failed',e?.message||String(e)); }
+    }
     _applyLogin({
       id:data.user.id,email:data.user.email,
       name:profile?.name||data.user.email.split('@')[0],
@@ -13407,34 +13411,40 @@ function _showRestoreLoading(show){
       p,
       new Promise((_,rej)=>setTimeout(()=>rej(new Error(label+' timed out after '+(ms/1000)+'s')),ms))
     ]);
-    // Kick off data sync AND profile fetch at the same time — no waiting in line.
-    // Profile lookup gets a hard timeout: a hung DB used to leave restoreSession()
-    // waiting forever with no feedback, so the login screen just sat there blank
-    // with no indication anything was wrong — even though auth itself was fine.
-    const [syncResult, profileResult] = await Promise.allSettled([
-      syncSupabase(true),
-      withTimeout(sb.from('profiles').select('*').eq('id',userId).single(),15000,'Profile lookup')
-    ]);
-    if(profileResult.status==='rejected'){
+    // Profile lookup runs BEFORE any data sync -- syncSupabase() populates the
+    // global sbActuals/sbBudget/etc arrays as a side effect just by being called,
+    // so firing it in parallel with this check (the old approach) meant a blocked
+    // user's browser pulled all that data into memory regardless of what the UI
+    // went on to render -- recoverable via devtools console even though the screen
+    // correctly showed "Access revoked". Gate first, sync second. Profile lookup
+    // still gets a hard timeout: a hung DB used to leave restoreSession() waiting
+    // forever with no feedback, so the login screen just sat there blank with no
+    // indication anything was wrong — even though auth itself was fine.
+    let profileResult;
+    try{
+      profileResult=await withTimeout(sb.from('profiles').select('*').eq('id',userId).single(),15000,'Profile lookup');
+    }catch(e){
       _showRestoreLoading(false);
-      showErr('Signed in as '+session.user.email+', but the database is slow to respond right now ('+profileResult.reason.message+'). Click Sign In to retry once it recovers.');
+      showErr('Signed in as '+session.user.email+', but the database is slow to respond right now ('+e.message+'). Click Sign In to retry once it recovers.');
       return;
     }
-    const {data:profile,error}=profileResult.value||{};
-    // Only apply login if we got a real profile with a real role
+    const {data:profile,error}=profileResult||{};
     if(error){
       _showRestoreLoading(false);
       showErr('Could not load your profile: '+error.message);
       return;
     }
-    // No profile row, no role, or explicitly deactivated -- pending/blocked, not an
-    // error. Same gate _applyLogin enforces on the fresh-login path, so a returning
-    // pending user sees the same waiting screen instead of a confusing error banner.
-    if(!profile||!profile.sales_role||profile.is_active===false){
+    // Missing profile row or explicitly blocked (is_active===false) -- same gate
+    // _applyLogin enforces on the fresh-login path. A merely-pending user (no role
+    // yet, still active) is NOT blocked -- they fall through to the normal sync +
+    // read-only dashboard below, matching _isApproved()'s semantics exactly (view
+    // access needs only is_active, not a role).
+    if(!profile||profile.is_active===false){
       _showRestoreLoading(false);
       _showPendingScreen(session.user.email);
       return;
     }
+    try{ await syncSupabase(true); }catch(e){ if(window.JpsMonitor)JpsMonitor.warning('auth:restore-sync-failed',e?.message||String(e)); }
     // _applyLogin → initAll → syncSupabase, but mutex prevents double-sync
     _applyLogin({
       id:userId, email:session.user.email,
