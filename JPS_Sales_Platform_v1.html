@@ -11643,14 +11643,14 @@ function _frRenderPDF(d){
   if(_dfPD.months.length){
     ensure(150);
     h1('Peak Demand — Billed kVA by Rate Class');
-    body('Trailing 6 months of billed demand (kVA), RT40/RT50/RT70 only — the demand-metered commercial rate classes. Source: jps_demand_actuals.',{size:8.2,color:GREY});
-    const pdMonthsLbl=_dfPD.months.map(ym=>{const[py,pm]=ym.split('_');return new Date(2000,Number(pm)-1,1).toLocaleString('en-US',{month:'short'})+' '+py.slice(2);});
+    body(`Full-year billed demand (kVA), RT40/RT50/RT70 only — the demand-metered commercial rate classes. Actual through ${new Date(2000,_dfPD.lockedThru-1,1).toLocaleString('en-US',{month:'short'})} ${_dfPD.forecastYear}; * = forecast month (rolling 3-month average scaled by the commercial macro driver — jps_demand_actuals has no per-account grain to run the full Driver Forecast engine against). Source: jps_demand_actuals.`,{size:8.2,color:GREY});
+    const pdMonthsLbl=_dfPD.months.map(ym=>{const[py,pm]=ym.split('_');return new Date(2000,Number(pm)-1,1).toLocaleString('en-US',{month:'short'})+(Number(pm)>_dfPD.lockedThru?'*':'');});
     const pdRcRows=_dfPD.rcs.map(rc=>[rc,..._dfPD.months.map(ym=>Math.round(_dfPD.sumFor(ym,rc)).toLocaleString())]);
     pdRcRows.push(['TOTAL',..._dfPD.months.map(ym=>Math.round(_dfPD.rcs.reduce((s,rc)=>s+_dfPD.sumFor(ym,rc),0)).toLocaleString())]);
     ensure(30);
     doc.autoTable({startY:y,margin:{left:MARGIN,right:MARGIN},
       head:[['Rate Class',...pdMonthsLbl]],
-      body:pdRcRows,headStyles:{fillColor:NAVY,fontSize:8.6},bodyStyles:{fontSize:9},styles:{cellPadding:5},
+      body:pdRcRows,headStyles:{fillColor:NAVY,fontSize:7.6},bodyStyles:{fontSize:8},styles:{cellPadding:3.5},
       didParseCell:(hook)=>{if(hook.row.index===pdRcRows.length-1&&hook.section==='body'){hook.cell.styles.fontStyle='bold';hook.cell.styles.fillColor=[238,243,248];}}});
     y=doc.lastAutoTable.finalY+10;
 
@@ -12024,8 +12024,8 @@ async function _frRenderDOCX(d){
   const _dfPD=_frDemandData();
   if(_dfPD.months.length){
     children.push(h1('Peak Demand — Billed kVA by Rate Class'));
-    children.push(body('Trailing 6 months of billed demand (kVA), RT40/RT50/RT70 only — the demand-metered commercial rate classes. Source: jps_demand_actuals.',{size:14,color:GREY}));
-    const pdMonthsLbl=_dfPD.months.map(ym=>{const[py,pm]=ym.split('_');return new Date(2000,Number(pm)-1,1).toLocaleString('en-US',{month:'short'})+' '+py.slice(2);});
+    children.push(body(`Full-year billed demand (kVA), RT40/RT50/RT70 only — the demand-metered commercial rate classes. Actual through ${new Date(2000,_dfPD.lockedThru-1,1).toLocaleString('en-US',{month:'short'})} ${_dfPD.forecastYear}; * = forecast month (rolling 3-month average scaled by the commercial macro driver — jps_demand_actuals has no per-account grain to run the full Driver Forecast engine against). Source: jps_demand_actuals.`,{size:14,color:GREY}));
+    const pdMonthsLbl=_dfPD.months.map(ym=>{const[py,pm]=ym.split('_');return new Date(2000,Number(pm)-1,1).toLocaleString('en-US',{month:'short'})+(Number(pm)>_dfPD.lockedThru?'*':'');});
     const pdColW=Math.floor((CONTENT_W-1600)/_dfPD.months.length);
     const pdRcRows=_dfPD.rcs.map(rc=>[rc,..._dfPD.months.map(ym=>Math.round(_dfPD.sumFor(ym,rc)).toLocaleString())]);
     pdRcRows.push(['TOTAL',..._dfPD.months.map(ym=>Math.round(_dfPD.rcs.reduce((s,rc)=>s+_dfPD.sumFor(ym,rc),0)).toLocaleString())]);
@@ -12104,45 +12104,92 @@ const DEMAND_TYPE_ORDER=['standard','on_peak','partial_peak','off_peak'];
 const DEMAND_TYPE_LABEL={standard:'Standard',on_peak:'On-Peak',partial_peak:'Partial-Peak',off_peak:'Off-Peak'};
 const DEMAND_TYPE_COLOR={standard:'#5a7a96',on_peak:'#e25c4b',partial_peak:'#f0ad4e',off_peak:'#00c2a8'};
 function _demandYm(r){return `${r.year}_${String(r.month).padStart(2,'0')}`;}
-// Shared by the RC Forecast Report's Peak Demand section (live tab card + PDF + DOCX)
-// -- same demand-metered rate classes and trailing-6-month window as the standalone
-// Peak Demand tab above, just packaged for reuse instead of duplicating the filter.
+// Shared by the standalone Peak Demand tab, the RC Forecast Report's Peak Demand
+// card (live tab + PDF + DOCX) -- one data source so "the demand forecast isn't in
+// the report" can't happen again by one consumer having it and another not.
+//
+// jps_demand_actuals has no jps_ac column (it's pre-aggregated at rate_class ×
+// demand_type × month) -- there is no per-account demand data to run the real
+// KAM-individual/cohort-pooled Driver Forecast engine against. What CAN be built
+// honestly from this grain: a rolling-3-month-average forecast per (rate_class,
+// demand_type), scaled by the same commercial macro driver already applied to kWh
+// (RT40/RT50/RT70 are all "commercial" segment; there is no demand-specific driver
+// in jps_macro_assumptions to use instead). That's a real, disclosed assumption --
+// not a separately-invented one -- but it is coarser than the kWh forecast, and
+// callers should say so rather than imply per-customer precision.
 function _frDemandData(){
   const DEMAND_RCS=['RT40','RT50','RT70'];
   const rows=(typeof sbDemandActuals!=='undefined'?sbDemandActuals:[]).filter(r=>DEMAND_RCS.includes(r.rate_class));
-  const months=[...new Set(rows.map(_demandYm))].sort().slice(-6);
-  const sumFor=(ym,rc,type)=>rows.filter(r=>_demandYm(r)===ym&&r.rate_class===rc&&(!type||r.demand_type===type)).reduce((s,r)=>s+Number(r.demand_kva||0),0);
-  return {rcs:DEMAND_RCS,months,sumFor};
+  const actualYms=[...new Set(rows.map(_demandYm))].sort();
+  if(!actualYms.length)return{rcs:DEMAND_RCS,months:[],sumFor:()=>0,lockedThru:0,forecastYear:null};
+
+  const series={};
+  DEMAND_RCS.forEach(rc=>{series[rc]={};DEMAND_TYPE_ORDER.forEach(t=>{series[rc][t]={};});});
+  rows.forEach(r=>{series[r.rate_class][r.demand_type][_demandYm(r)]=(series[r.rate_class][r.demand_type][_demandYm(r)]||0)+Number(r.demand_kva||0);});
+
+  const lastActualYm=actualYms[actualYms.length-1];
+  const [lastY,lastM]=lastActualYm.split('_').map(Number);
+  const forecastYms=[];
+  for(let m=lastM+1;m<=12;m++)forecastYms.push(`${lastY}_${String(m).padStart(2,'0')}`);
+  const chrono=[...actualYms,...forecastYms];
+
+  const macroPctFor=(ym)=>{
+    const[y,m]=ym.split('_').map(Number);
+    const row=(typeof sbMacroAssum!=='undefined'?sbMacroAssum:[]).find(r=>r.driver_type==='macro'&&r.segment==='commercial'&&Number(r.year)===y&&Number(r.month)===m);
+    return row?Number(row.value_pct)||0:0;
+  };
+
+  DEMAND_RCS.forEach(rc=>DEMAND_TYPE_ORDER.forEach(type=>{
+    const s=series[rc][type];
+    forecastYms.forEach(ym=>{
+      const idx=chrono.indexOf(ym);
+      const priorVals=chrono.slice(Math.max(0,idx-3),idx).map(pym=>s[pym]).filter(v=>v!=null&&v>0);
+      const base=priorVals.length?priorVals.reduce((a,b)=>a+b,0)/priorVals.length:0;
+      s[ym]=base*(1+macroPctFor(ym)/100);
+    });
+  }));
+
+  // Full Jan-Dec of the latest demand year, actual through lastM then forecast --
+  // same "whole calendar year, forecast months marked" shape as every kWh table in
+  // this report, instead of the old actuals-only trailing-6-month window.
+  const months=Array.from({length:12},(_,i)=>`${lastY}_${String(i+1).padStart(2,'0')}`);
+  const sumFor=(ym,rc,type)=>{
+    if(type)return series[rc]?.[type]?.[ym]||0;
+    return DEMAND_TYPE_ORDER.reduce((s,t)=>s+(series[rc]?.[t]?.[ym]||0),0);
+  };
+  return {rcs:DEMAND_RCS,months,sumFor,lockedThru:lastM,forecastYear:lastY};
 }
 function _rcfrRenderDemand(){
   const wrap=document.getElementById('rcfr_demand_table');if(!wrap)return;
-  const {rcs,months,sumFor}=_frDemandData();
+  const {rcs,months,sumFor,lockedThru}=_frDemandData();
   if(!months.length){wrap.innerHTML='<div style="padding:10px 0;color:var(--text3);font-size:11px">No demand actuals loaded (jps_demand_actuals) — run the demand loader, then Sync.</div>';return;}
-  const mLbl=ym=>{const[y,m]=ym.split('_');return `${MONTHS_SHORT[Number(m)-1]} ${y.slice(2)}`;};
+  const mLbl=ym=>{const[y,m]=ym.split('_');return `${MONTHS_SHORT[Number(m)-1]}${Number(m)>lockedThru?'*':''}`;};
   const fmtKva=v=>v?Math.round(v).toLocaleString():'—';
+  const cell=(v,ym)=>{const isFcst=Number(ym.split('_')[1])>lockedThru;return `<td style="text-align:right;padding:5px 4px;${isFcst?'background:rgba(0,194,168,.08);color:var(--teal)':''}">${fmtKva(v)}</td>`;};
 
-  let html=`<table style="width:100%;min-width:600px;border-collapse:collapse;font-size:11px;margin-bottom:14px">
+  let html=`<div style="font-size:10px;color:var(--text3);margin-bottom:8px">* forecast month — rolling 3-month average scaled by the commercial macro driver (no per-account demand data exists to run the full Driver Forecast engine at this grain).</div>`;
+  html+=`<table style="width:100%;min-width:900px;border-collapse:collapse;font-size:11px;margin-bottom:14px">
     <thead><tr style="border-bottom:0.5px solid var(--border-strong)">
       <th style="text-align:left;padding:5px 8px;font-weight:500;color:var(--text3)">Rate Class</th>
       ${months.map(ym=>`<th style="text-align:right;padding:5px 4px;font-weight:500;color:var(--text3)">${mLbl(ym)}</th>`).join('')}
     </tr></thead><tbody>`;
   rcs.forEach(rc=>{
-    html+=`<tr><td style="padding:5px 8px;font-weight:500">${rc}</td>${months.map(ym=>`<td style="text-align:right;padding:5px 4px">${fmtKva(sumFor(ym,rc))}</td>`).join('')}</tr>`;
+    html+=`<tr><td style="padding:5px 8px;font-weight:500">${rc}</td>${months.map(ym=>cell(sumFor(ym,rc),ym)).join('')}</tr>`;
   });
-  html+=`<tr style="border-top:1px solid var(--border-strong);font-weight:600"><td style="padding:5px 8px">Total</td>${months.map(ym=>`<td style="text-align:right;padding:5px 4px">${fmtKva(rcs.reduce((s,rc)=>s+sumFor(ym,rc),0))}</td>`).join('')}</tr>`;
+  html+=`<tr style="border-top:1px solid var(--border-strong);font-weight:600"><td style="padding:5px 8px">Total</td>${months.map(ym=>cell(rcs.reduce((s,rc)=>s+sumFor(ym,rc),0),ym)).join('')}</tr>`;
   html+=`</tbody></table>`;
 
   html+=rcs.map(rc=>{
     let t=`<div style="font-size:11px;font-weight:600;color:var(--text2);margin:10px 0 4px">${rc} — Load Shape (kVA)</div>
-    <table style="width:100%;min-width:600px;border-collapse:collapse;font-size:11px;margin-bottom:10px">
+    <table style="width:100%;min-width:900px;border-collapse:collapse;font-size:11px;margin-bottom:10px">
       <thead><tr style="border-bottom:0.5px solid var(--border-strong)">
         <th style="text-align:left;padding:5px 8px;font-weight:500;color:var(--text3)">Demand Type</th>
         ${months.map(ym=>`<th style="text-align:right;padding:5px 4px;font-weight:500;color:var(--text3)">${mLbl(ym)}</th>`).join('')}
       </tr></thead><tbody>`;
     DEMAND_TYPE_ORDER.forEach(dt=>{
-      t+=`<tr><td style="padding:5px 8px;font-weight:500;color:${DEMAND_TYPE_COLOR[dt]}">${DEMAND_TYPE_LABEL[dt]}</td>${months.map(ym=>`<td style="text-align:right;padding:5px 4px">${fmtKva(sumFor(ym,rc,dt))}</td>`).join('')}</tr>`;
+      t+=`<tr><td style="padding:5px 8px;font-weight:500;color:${DEMAND_TYPE_COLOR[dt]}">${DEMAND_TYPE_LABEL[dt]}</td>${months.map(ym=>cell(sumFor(ym,rc,dt),ym)).join('')}</tr>`;
     });
-    t+=`<tr style="border-top:1px solid var(--border-strong);font-weight:600"><td style="padding:5px 8px">Total</td>${months.map(ym=>`<td style="text-align:right;padding:5px 4px">${fmtKva(sumFor(ym,rc))}</td>`).join('')}</tr>`;
+    t+=`<tr style="border-top:1px solid var(--border-strong);font-weight:600"><td style="padding:5px 8px">Total</td>${months.map(ym=>cell(sumFor(ym,rc),ym)).join('')}</tr>`;
     t+=`</tbody></table>`;
     return t;
   }).join('');
@@ -12152,133 +12199,66 @@ function _rcfrRenderDemand(){
 function renderPeakDemand(){
   const tblWrap=document.getElementById('demand_table');if(!tblWrap)return;
   const rcSel=document.getElementById('demand_rc')?.value||'';
-  const rcs=rcSel?[rcSel]:['RT40','RT50','RT70'];
-  const rows=sbDemandActuals.filter(r=>rcs.includes(r.rate_class));
-  const months=[...new Set(rows.map(_demandYm))].sort();
-  const sumFor=(ym,type,rc)=>rows.filter(r=>_demandYm(r)===ym&&(!type||r.demand_type===type)&&(!rc||r.rate_class===rc)).reduce((s,r)=>s+Number(r.demand_kva||0),0);
-
-  const latest=months[months.length-1],prev=months[months.length-2];
-  const latestTotal=latest?sumFor(latest,null):0;
-  const prevTotal=prev?sumFor(prev,null):0;
-  const latestPeak=latest?sumFor(latest,'on_peak'):0;
+  const {rcs:allRcs,months,sumFor,lockedThru,forecastYear}=_frDemandData();
+  const rcs=rcSel?[rcSel]:allRcs;
+  const fmtKva=v=>v?Math.round(v).toLocaleString():'—';
+  const kw=document.getElementById('demand_kpis');
+  if(!months.length){
+    if(kw)kw.innerHTML='';
+    tblWrap.innerHTML='<div style="padding:20px;text-align:center;font-size:11px;color:var(--text3)">No demand actuals loaded (jps_demand_actuals) — run the demand loader, then Sync.</div>';
+    const chWrap0=document.getElementById('demand_chart_wrap');if(chWrap0)chWrap0.innerHTML='';
+    return;
+  }
+  const latestYm=`${forecastYear}_${String(lockedThru).padStart(2,'0')}`;
+  const prevYm=lockedThru>1?`${forecastYear}_${String(lockedThru-1).padStart(2,'0')}`:null;
+  const latestTotal=rcs.reduce((s,rc)=>s+sumFor(latestYm,rc),0);
+  const prevTotal=prevYm?rcs.reduce((s,rc)=>s+sumFor(prevYm,rc),0):0;
+  const latestPeak=rcs.reduce((s,rc)=>s+sumFor(latestYm,rc,'on_peak'),0);
   const peakShare=latestTotal>0?latestPeak/latestTotal*100:0;
   const mom=prevTotal>0?(latestTotal/prevTotal-1)*100:null;
-  const fmtKva=v=>Math.round(v).toLocaleString();
-  const kw=document.getElementById('demand_kpis');
+  const fyForecastTotal=months.reduce((s,ym)=>s+rcs.reduce((s2,rc)=>s2+sumFor(ym,rc),0),0);
   if(kw){
     kw.innerHTML=`<div class="krow">
-      <div class="kpi kt"><div class="kl">Total kVA &middot; ${latest?latest.replace('_',' '):'&mdash;'}</div><div class="kv">${fmtKva(latestTotal)}</div><div class="ks ${mom==null?'nt':mom>=0?'dn':'up'}">${mom==null?'No prior month':`${mom>=0?'+':''}${mom.toFixed(1)}% vs prior month`}</div></div>
-      <div class="kpi kr"><div class="kl">On-Peak Share</div><div class="kv">${peakShare.toFixed(1)}%</div><div class="ks nt">of total billed kVA</div></div>
-      <div class="kpi ka"><div class="kl">Months loaded</div><div class="kv">${months.length}</div><div class="ks nt">${months[0]?.replace('_',' ')||'—'} &ndash; ${latest?.replace('_',' ')||'—'}</div></div>
+      <div class="kpi kt"><div class="kl">Total kVA &middot; ${MONTHS_SHORT[lockedThru-1]} ${forecastYear}</div><div class="kv">${fmtKva(latestTotal)}</div><div class="ks ${mom==null?'nt':mom>=0?'dn':'up'}">${mom==null?'No prior month':`${mom>=0?'+':''}${mom.toFixed(1)}% vs prior month`}</div></div>
+      <div class="kpi kr"><div class="kl">On-Peak Share</div><div class="kv">${peakShare.toFixed(1)}%</div><div class="ks nt">of total billed kVA, latest month</div></div>
+      <div class="kpi ka"><div class="kl">FY ${forecastYear} Forecast Total</div><div class="kv">${fmtKva(fyForecastTotal)}</div><div class="ks nt">actual through ${MONTHS_SHORT[lockedThru-1]}, forecast beyond</div></div>
     </div>`;
   }
 
-  const last6=months.slice(-6);
-  const mLbl=ym=>{const[y,m]=ym.split('_');return `${MONTHS_SHORT[Number(m)-1]} ${y.slice(2)}`;};
+  const mLbl=ym=>{const[y,m]=ym.split('_');return `${MONTHS_SHORT[Number(m)-1]}${Number(m)>lockedThru?'*':''}`;};
+  const cell=(v,ym)=>{const isFcst=Number(ym.split('_')[1])>lockedThru;return `<td style="text-align:right;padding:6px 4px;${isFcst?'background:rgba(0,194,168,.08);color:var(--teal)':''}">${fmtKva(v)}</td>`;};
   let body='';
   if(!rcSel){
     // "All" scope — one row per demand-metered rate class, total kVA per month
     rcs.forEach(rc=>{
-      body+=`<tr><td style="padding:6px 8px;font-weight:500">${rc}</td>${last6.map(ym=>{
-        const v=sumFor(ym,null,rc);
-        return `<td style="text-align:right;padding:6px 4px">${v?fmtKva(v):'—'}</td>`;
-      }).join('')}</tr>`;
+      body+=`<tr><td style="padding:6px 8px;font-weight:500">${rc}</td>${months.map(ym=>cell(sumFor(ym,rc),ym)).join('')}</tr>`;
     });
-    body+=`<tr style="border-top:1px solid var(--border-strong);font-weight:600"><td style="padding:6px 8px">Total</td>${last6.map(ym=>`<td style="text-align:right;padding:6px 4px">${fmtKva(sumFor(ym,null))}</td>`).join('')}</tr>`;
+    body+=`<tr style="border-top:1px solid var(--border-strong);font-weight:600"><td style="padding:6px 8px">Total</td>${months.map(ym=>cell(rcs.reduce((s,rc)=>s+sumFor(ym,rc),0),ym)).join('')}</tr>`;
   }else{
     // Single rate class — one row per demand type (the load-shape breakdown)
     DEMAND_TYPE_ORDER.forEach(dt=>{
-      body+=`<tr><td style="padding:6px 8px;font-weight:500;color:${DEMAND_TYPE_COLOR[dt]}">${DEMAND_TYPE_LABEL[dt]}</td>${last6.map(ym=>{
-        const v=sumFor(ym,dt);
-        return `<td style="text-align:right;padding:6px 4px">${v?fmtKva(v):'—'}</td>`;
-      }).join('')}</tr>`;
+      body+=`<tr><td style="padding:6px 8px;font-weight:500;color:${DEMAND_TYPE_COLOR[dt]}">${DEMAND_TYPE_LABEL[dt]}</td>${months.map(ym=>cell(sumFor(ym,rcSel,dt),ym)).join('')}</tr>`;
     });
-    body+=`<tr style="border-top:1px solid var(--border-strong);font-weight:600"><td style="padding:6px 8px">Total</td>${last6.map(ym=>`<td style="text-align:right;padding:6px 4px">${fmtKva(sumFor(ym,null))}</td>`).join('')}</tr>`;
+    body+=`<tr style="border-top:1px solid var(--border-strong);font-weight:600"><td style="padding:6px 8px">Total</td>${months.map(ym=>cell(sumFor(ym,rcSel),ym)).join('')}</tr>`;
   }
-  tblWrap.innerHTML=`<table id="demand_tbl_el" style="width:100%;min-width:600px;border-collapse:collapse;font-size:12px">
+  tblWrap.innerHTML=`<div style="font-size:10px;color:var(--text3);margin-bottom:6px">* forecast month — rolling 3-month average scaled by the commercial macro driver (jps_demand_actuals has no per-account grain to run the full Driver Forecast engine against).</div>
+  <table id="demand_tbl_el" style="width:100%;min-width:900px;border-collapse:collapse;font-size:12px">
     <thead><tr style="border-bottom:0.5px solid var(--border-strong)">
       <th style="text-align:left;padding:6px 8px;font-weight:500;color:var(--text3)">${rcSel?rcSel:'Rate Class'}</th>
-      ${last6.map(ym=>`<th style="text-align:right;padding:6px 4px;font-weight:500;color:var(--text3)">${mLbl(ym)}</th>`).join('')}
+      ${months.map(ym=>`<th style="text-align:right;padding:6px 4px;font-weight:500;color:var(--text3)">${mLbl(ym)}</th>`).join('')}
     </tr></thead>
     <tbody>${body}</tbody>
   </table>`;
 
   const chWrap=document.getElementById('demand_chart_wrap');
   if(chWrap){
-    chWrap.innerHTML=`<div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">Demand Mix Trend${rcSel?' &mdash; '+rcSel:' — RT40+RT50+RT70'}</div><div style="height:260px"><canvas id="c_demand_mix"></canvas></div>`;
-    const dsets=DEMAND_TYPE_ORDER.map(dt=>({label:DEMAND_TYPE_LABEL[dt],data:last6.map(ym=>Math.round(sumFor(ym,dt))),backgroundColor:DEMAND_TYPE_COLOR[dt],borderRadius:2}));
-    mkChart('c_demand_mix',{type:'bar',data:{labels:last6.map(mLbl),datasets:dsets},
+    chWrap.innerHTML=`<div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">Demand Mix Trend${rcSel?' &mdash; '+rcSel:' — RT40+RT50+RT70'} <span style="font-size:10px;color:var(--text3);font-weight:400">(months after ${MONTHS_SHORT[lockedThru-1]} are forecast)</span></div><div style="height:260px"><canvas id="c_demand_mix"></canvas></div>`;
+    const dsets=DEMAND_TYPE_ORDER.map(dt=>({label:DEMAND_TYPE_LABEL[dt],data:months.map(ym=>Math.round(rcs.reduce((s,rc)=>s+sumFor(ym,rc,dt),0))),backgroundColor:DEMAND_TYPE_COLOR[dt],borderRadius:2}));
+    mkChart('c_demand_mix',{type:'bar',data:{labels:months.map(mLbl),datasets:dsets},
       options:co({plugins:{legend:{display:true,position:'bottom',labels:{color:TC,font:{size:10},boxWidth:10}}},scales:{x:{stacked:true,ticks:{color:TC,font:{size:10}},grid:{color:CC}},y:{stacked:true,ticks:{color:TC,font:{size:10}},grid:{color:CC}}}})});
   }
 }
 
-/* ==========================================
-   SALES FORECAST SUMMARY REPORT — boss-facing export, built live from the
-   same Driver Forecast chains / macro assumptions / actuals the app already
-   has in memory, so it always reflects current numbers (no static snapshot).
-========================================== */
-const _SFS_PLACEHOLDER_ACS=new Set(['Postpaid','Zero-Postpaid','Prepaid']); // bulk-billed, not real customers
-
-// Rate class -> [12 monthly kwh totals for `year`], actual+forecast blended exactly
-// like renderRcForecastReport, just keeping the monthly breakdown instead of collapsing
-// straight to a full-year sum.
-function _sfsMonthlySeries(year){
-  _dfcResetYearChainCache();
-  const idx=_dfcBuildIndices();
-  const commAccounts=_dfcBuildCommAccounts(year).filter(a=>a.rate_class!=='EV');
-  const keyAccounts=commAccounts.filter(a=>a.kam);
-  const commCohorts=_dfcCommCohortsForNonKam(commAccounts,year).filter(co=>co.rate_class!=='EV');
-  const resCohorts=_dfcBuildResCohorts(year).filter(co=>co.rate_class!=='EV');
-  const newCusts=sbNewCustomers.filter(c=>Number(c.start_year)<=year&&c.rate_class!=='EV');
-  const monthly={};
-  const bump=rc=>{const k=rc||'Unassigned';if(!monthly[k])monthly[k]=Array(12).fill(0);return monthly[k];};
-  const acc=(rc,chain)=>{const arr=bump(rc);for(let m=1;m<=12;m++){const c=chain[m];if(c)arr[m-1]+=c.total||0;}};
-  keyAccounts.forEach(a=>acc(a.rate_class,_dfcGetChain(idx,a.ac,true,{rate_class:a.rate_class,industry:a.industry},a.ac,year,null)));
-  newCusts.forEach(c=>{
-    const ctx={rate_class:c.rate_class,industry:c.industry,startYear:Number(c.start_year),startMonth:Number(c.start_month),expectedKwh:Number(c.expected_kwh)||0};
-    acc(c.rate_class,_dfcGetChain(idx,c.jps_ac,true,{rate_class:c.rate_class,industry:c.industry},c.jps_ac,year,ctx));
-  });
-  commCohorts.forEach(co=>acc(co.rate_class,_dfcGetChain(idx,co.key,false,{rate_class:co.rate_class,industry:null},null,year,null)));
-  resCohorts.forEach(co=>acc(co.rate_class,_dfcGetChain(idx,co.key,false,{rate_class:co.rate_class,industry:null},null,year,null)));
-  return monthly;
-}
-function _sfsFyActual(year){
-  const out={};
-  _sbAllActuals().forEach(r=>{
-    if(Number(r.year)!==year||!r.rate_class||r.rate_class==='EV')return;
-    out[r.rate_class]=(out[r.rate_class]||0)+(Number(r.kwh)||0);
-  });
-  return out;
-}
-function _sfsBudget(year){
-  const out={};
-  _budAll(year).forEach(b=>{
-    const k=b.rate_class||b['Rate category']||'';
-    if(!k||k==='EV')return;
-    out[k]=(out[k]||0)+Number(b.kwh_budget||0);
-  });
-  return out;
-}
-// Customer-name aggregation for H1(year) vs H1(year-1) — grouped by name, not
-// jps_ac, because accounts get renumbered mid-year in the billing feed and a
-// per-account view misreports a still-active customer as churned.
-function _sfsCustomers(year){
-  const byName={};
-  _sbAllActuals().forEach(r=>{
-    if(!r.rate_class||r.rate_class==='EV'||!r.jps_ac||_SFS_PLACEHOLDER_ACS.has(r.jps_ac)||!r.name)return;
-    const y=Number(r.year),m=Number(r.month);
-    if(!((y===year||y===year-1)&&m>=1&&m<=6))return;
-    const n=r.name;
-    if(!byName[n])byName[n]={cur:0,prior:0,rc:{}};
-    const kwh=Number(r.kwh)||0;
-    if(y===year){byName[n].cur+=kwh;byName[n].rc[r.rate_class]=(byName[n].rc[r.rate_class]||0)+kwh;}
-    else byName[n].prior+=kwh;
-  });
-  return Object.entries(byName).map(([name,v])=>{
-    const rc=Object.entries(v.rc).sort((a,b)=>b[1]-a[1])[0]?.[0]||'—';
-    return{name,rc,curGwh:v.cur/1e6,priorGwh:v.prior/1e6,yoy:v.prior>0?(v.cur/v.prior-1)*100:null};
-  });
-}
 
 // ─── Finance COMMIT ─────────────────────────────────────────────────────────────
 let _leCommitVersionId = null;
