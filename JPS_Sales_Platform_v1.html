@@ -2869,7 +2869,17 @@ async function resendLoginCode(){
   if(!_lsPendingEmail)return;
   try{
     const sb=getSB(); if(!sb)return;
-    const{error}=await sb.auth.signInWithOtp({email:_lsPendingEmail,options:{shouldCreateUser:true}});
+    // emailRedirectTo matters even though this app only reads the 6-digit code --
+    // if the shared Supabase project's "Confirm email" setting is on, a brand-new
+    // signer's FIRST OTP request gets treated as a signup requiring confirmation
+    // first, and Supabase sends its link-based "Confirm signup" template instead
+    // of the numeric-code template. Without this, that link's fallback redirect is
+    // the project's default Site URL -- confirmed live as JPS Finance Hub, not
+    // this app -- so a brand-new user who clicks it lands in the wrong app
+    // entirely. This doesn't fix the root cause (needs a Supabase Dashboard check:
+    // Authentication -> Providers -> Email -> Confirm email, shared across every
+    // app on this project), but it stops the wrong-destination half of it.
+    const{error}=await sb.auth.signInWithOtp({email:_lsPendingEmail,options:{shouldCreateUser:true,emailRedirectTo:window.location.origin+window.location.pathname}});
     if(error){toast('Could not resend: '+error.message,'err');return;}
     toast('New code sent','ok');
     _lsStartResendCooldown(30);
@@ -2883,7 +2893,11 @@ async function sendLoginCode(){
   try{
     const sb=getSB();
     if(!sb){showErr('Supabase not configured — contact your administrator.');if(btn){btn.textContent='Send code →';btn.disabled=false;}return;}
-    const{error}=await sb.auth.signInWithOtp({email,options:{shouldCreateUser:true}});
+    // See resendLoginCode() for why emailRedirectTo is here -- mitigates the
+    // wrong-app redirect if a brand-new signer gets Supabase's link-based
+    // "Confirm signup" email instead of the numeric code (shared-project setting,
+    // not something this call can fully control).
+    const{error}=await sb.auth.signInWithOtp({email,options:{shouldCreateUser:true,emailRedirectTo:window.location.origin+window.location.pathname}});
     if(error){showErr(error.message);if(btn){btn.textContent='Send code →';btn.disabled=false;}return;}
     _lsPendingEmail=email;
     document.getElementById('lsCodeEmail').textContent=email;
