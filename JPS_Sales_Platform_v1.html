@@ -2922,6 +2922,29 @@ async function verifyLoginCode(){
         }
         profile={id:data.user.id,name:nm,email:data.user.email,sales_role:salesRole,role:fpaRole,territory:'All'};
         if(isFirst)toast('First-time setup: your account has been set as Admin','ok');
+        // Notify the admin the moment a brand-new signup lands pending — otherwise
+        // the only way to know someone's waiting is to happen to open Admin -> Users.
+        // Fire-and-forget: a failed/slow email must never block this person's own
+        // login. Only fires once, right here at profile creation, not on every
+        // repeat login attempt while still pending. Uses the new user's own fresh
+        // session token against the shared send-notification function (already
+        // live for every other JPS FP&A app) rather than exposing a service key.
+        if(!isFirst&&data.session?.access_token){
+          fetch(SB_URL+'/functions/v1/send-notification',{
+            method:'POST',
+            headers:{'Authorization':'Bearer '+data.session.access_token,'Content-Type':'application/json'},
+            body:JSON.stringify({
+              type:'approval_required',
+              to:'jwilson@jpsco.com',
+              subject:'Sales Platform — new signup pending approval: '+data.user.email,
+              data:{
+                recipient_name:'Jordache',
+                message:data.user.email+' just signed in to the Sales Analytics Platform for the first time and is waiting for you to assign a role (and optionally link them to a KAM) in Admin → Users & Roles.',
+                report_url:window.location.origin+window.location.pathname,
+              },
+            }),
+          }).catch(e=>{if(window.JpsMonitor)JpsMonitor.warning('auth:pending-notify-failed',e?.message||String(e));});
+        }
       } else {
         profile=r.data;
       }
@@ -11627,7 +11650,7 @@ function _frRenderPDF(d){
   const totBud=rcs.reduce((s,rc)=>s+(d.budRc[rc]||0)/1e6,0);
   const totFy25=rcs.reduce((s,rc)=>s+(d.fy25Rc[rc]||0)/1e6,0);
   doc.autoTable({startY:y,margin:{left:MARGIN,right:MARGIN},
-    head:[['Total (ex-EV)',`FY${d.year-1} Actual`,`FY${d.year} Budget`,`FY${d.year} Forecast`,'Var vs Budget','Var vs Prior Year']],
+    head:[['Total',`FY${d.year-1} Actual`,`FY${d.year} Budget`,`FY${d.year} Forecast`,'Var vs Budget','Var vs Prior Year']],
     body:[['All Rate Classes',_frFmt(totFy25),_frFmt(totBud),_frFmt(totFy),_frPct((totFy/totBud-1)*100),_frPct((totFy/totFy25-1)*100)]],
     headStyles:{fillColor:NAVY,fontSize:8.6},bodyStyles:{fontSize:9,fontStyle:'bold'},styles:{cellPadding:5}});
   y=doc.lastAutoTable.finalY+14;
@@ -11641,7 +11664,7 @@ function _frRenderPDF(d){
   y+=4;
   body('Methodology: forecast is computed live by the Driver Forecast engine — each KAM account or non-KAM cohort (rate_class|parish|consumption_bucket) '+
     'projects each remaining month as its own rolling 3-month trailing average × (1 + macro% + weather% + industry-or-seasonality% + operational%) + manual kWh override. '+
-    'Industry % applies only to KAM-assigned key accounts. All figures exclude the EV rate class; bulk-billed placeholder accounts (Postpaid/Zero-Postpaid) are excluded '+
+    'Industry % applies only to KAM-assigned key accounts. Bulk-billed placeholder accounts (Postpaid/Zero-Postpaid) are excluded '+
     'from individual-account attribution and still roll up into their rate-class cohort totals. This PDF and the table above it read the exact same computed chains — '+
     'they cannot disagree.',{size:8.2,color:GREY,leading:11});
 
@@ -11842,7 +11865,7 @@ function _frRenderPDF(d){
   // ---- TOP 10 ----
   ensure(230);
   h1('Top 10 Customers by Volume (FY'+d.year+')');
-  body('Ranked by FY'+d.year+' kWh (H1 actual + H2 forecast), aggregated by customer name across all billing accounts. Excludes EV rate class and bulk-billed placeholder accounts.');
+  body('Ranked by FY'+d.year+' kWh (H1 actual + H2 forecast), aggregated by customer name across all billing accounts. Excludes bulk-billed placeholder accounts.');
   const custRecs=Object.keys(d.custFy).map(n=>{
     const f=d.custFy[n]/1e6,p=(d.fy25Cust[n]||0)/1e6;
     return {n,rc:_frRcLabel(d.custRcKwh,n),f,p,chg:p>1e-6?(f/p-1)*100:null};
@@ -12009,7 +12032,7 @@ async function _frRenderDOCX(d){
 
   children.push(h1('Executive Summary'));
   const totFy=rcs.reduce((s,rc)=>s+fy26(rc)/1e6,0),totBud=rcs.reduce((s,rc)=>s+(d.budRc[rc]||0)/1e6,0),totFy25=rcs.reduce((s,rc)=>s+(d.fy25Rc[rc]||0)/1e6,0);
-  children.push(mkTable(['Total (ex-EV)',`FY${d.year-1} Actual`,`FY${d.year} Budget`,`FY${d.year} Forecast`,'Var vs Budget','Var vs Prior Year'],
+  children.push(mkTable(['Total',`FY${d.year-1} Actual`,`FY${d.year} Budget`,`FY${d.year} Forecast`,'Var vs Budget','Var vs Prior Year'],
     [['All Rate Classes',_frFmt(totFy25),_frFmt(totBud),_frFmt(totFy),_frPct((totFy/totBud-1)*100),_frPct((totFy/totFy25-1)*100)]],
     [1600,1550,1550,1600,1530,1530],{boldLastRow:true}));
   children.push(spacer());
@@ -12022,7 +12045,7 @@ async function _frRenderDOCX(d){
   children.push(body('Methodology: forecast is computed live by the Driver Forecast engine — each KAM account or non-KAM cohort '+
     '(rate_class|parish|consumption_bucket) projects each remaining month as its own rolling 3-month trailing average × '+
     '(1 + macro% + weather% + industry-or-seasonality% + operational%) + manual kWh override. Industry % applies only to '+
-    'KAM-assigned key accounts. All figures exclude the EV rate class; bulk-billed placeholder accounts (Postpaid/'+
+    'KAM-assigned key accounts. Bulk-billed placeholder accounts (Postpaid/'+
     'Zero-Postpaid) are excluded from individual-account attribution and still roll up into their rate-class cohort totals. '+
     'This Word document and the PDF export read the exact same computed chains as the table above — they cannot disagree.',
     {size:16,color:GREY}));
@@ -12197,7 +12220,7 @@ async function _frRenderDOCX(d){
 
   children.push(spacer());
   children.push(h1('Top 10 Customers by Volume (FY'+d.year+')'));
-  children.push(body('Ranked by FY'+d.year+' kWh (H1 actual + H2 forecast), aggregated by customer name across all billing accounts. Excludes EV rate class and bulk-billed placeholder accounts.'));
+  children.push(body('Ranked by FY'+d.year+' kWh (H1 actual + H2 forecast), aggregated by customer name across all billing accounts. Excludes bulk-billed placeholder accounts.'));
   const custRecs=Object.keys(d.custFy).map(n=>{const f=d.custFy[n]/1e6,p=(d.fy25Cust[n]||0)/1e6;return {n,rc:_frRcLabel(d.custRcKwh,n),f,p,chg:p>1e-6?(f/p-1)*100:null};}).filter(r=>r.f>1e-6||r.p>1e-6);
   const top10=custRecs.slice().sort((a,b)=>b.f-a.f).slice(0,10);
   children.push(mkTable(['#','Customer','Rate Class','FY'+d.year+' (GWh)','FY'+(d.year-1)+' (GWh)','YoY %'],
