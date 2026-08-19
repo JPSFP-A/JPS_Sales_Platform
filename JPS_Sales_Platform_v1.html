@@ -2956,30 +2956,12 @@ async function verifyLoginCode(){
         }
         profile={id:data.user.id,name:nm,email:data.user.email,sales_role:salesRole,role:fpaRole,territory:'All'};
         if(isFirst)toast('First-time setup: your account has been set as Admin','ok');
-        // Notify the admin the moment a brand-new signup lands -- they already have
-        // full read-only access (see _isApproved), so this isn't "someone's locked
-        // out," it's "someone can see everything and can't edit yet, go grant them
-        // write access or link them to a KAM." Fire-and-forget: a failed/slow email
-        // must never block this person's own login. Only fires once, right here at
-        // profile creation, not on every repeat login. Uses the new user's own fresh
-        // session token against the shared send-notification function (already live
-        // for every other JPS FP&A app) rather than exposing a service key.
-        if(!isFirst&&data.session?.access_token){
-          fetch(SB_URL+'/functions/v1/send-notification',{
-            method:'POST',
-            headers:{'Authorization':'Bearer '+data.session.access_token,'Content-Type':'application/json'},
-            body:JSON.stringify({
-              type:'approval_required',
-              to:'jwilson@jpsco.com',
-              subject:'Sales Platform — new login, needs write access: '+data.user.email,
-              data:{
-                recipient_name:'Jordache',
-                message:data.user.email+' just signed in to the Sales Analytics Platform for the first time. They already have full read-only access — go to Admin → Users & Roles to grant them write access (assign a role) and, if they\'re a KAM, link them to their KAM name.',
-                report_url:window.location.origin+window.location.pathname,
-              },
-            }),
-          }).catch(e=>{if(window.JpsMonitor)JpsMonitor.warning('auth:pending-notify-failed',e?.message||String(e));});
-        }
+        // Admin notification on new signup moved to a Postgres trigger on auth.users
+        // (on_auth_user_created_notify_admin, via pg_net -> send-notification) --
+        // this client-side version depended on reaching this exact line, which a
+        // brand-new signer who hits Supabase's "Confirm signup" email detour (a
+        // project-level setting) never does. The DB trigger fires the instant the
+        // account row is created, independent of which client-side path completes.
       } else {
         profile=r.data;
       }
