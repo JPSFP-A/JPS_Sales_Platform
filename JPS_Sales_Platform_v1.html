@@ -462,15 +462,16 @@ document.getElementById('schema_stale_banner').style.display='none';
         <div style="margin-top:6px;font-size:10px;color:var(--text3);cursor:pointer" onclick="_lsBackToEmail()">← Use a different email</div>
       </div>
     </div>
-    <div style="margin-top:14px;font-size:9px;color:var(--text3)">New here? Just enter your JPS email — an admin approves access and sets your role afterward.</div>
+    <div style="margin-top:14px;font-size:9px;color:var(--text3)">New here? Just enter your JPS email — you'll see the dashboard right away. An admin grants edit access afterward.</div>
   </div>
-  <!-- Shown once sign-in succeeds but the profile has no sales_role yet (brand-new
-       self-serve signup, or an existing user an admin hasn't assigned a role to). -->
+  <!-- Shown only when is_active===false (an admin blocked/revoked this account).
+       A brand-new signup with no role yet does NOT land here anymore — they go
+       straight into the read-only dashboard; see the viewOnlyBanner instead. -->
   <div class="login-card" id="pendingScreen" style="display:none;text-align:center">
-    <div style="font-size:28px;margin-bottom:10px">⏳</div>
-    <h2>Access pending approval</h2>
+    <div style="font-size:28px;margin-bottom:10px">🚫</div>
+    <h2>Access revoked</h2>
     <p style="margin-bottom:4px">You're signed in as <strong id="pendingEmail"></strong>.</p>
-    <p style="font-size:12px;color:var(--text3)">An admin needs to approve your access and assign a role before you can see the dashboard. You'll be able to sign in normally once that's done — no action needed on your end.</p>
+    <p style="font-size:12px;color:var(--text3)">An admin has blocked this account. Contact Jordache Wilson (FP&amp;A) if you believe this is a mistake.</p>
     <button class="login-btn" style="margin-top:16px" onclick="doLogout()">Sign out</button>
   </div>
   <!-- Shown instead of the login form while an existing session is being restored and
@@ -567,6 +568,15 @@ document.getElementById('schema_stale_banner').style.display='none';
         <div class="umi" onclick="doLogout()">🚪 Sign Out</div>
       </div>
     </div>
+  </div>
+
+  <!-- Shown whenever CU.role is null -- signed in, full read-only dashboard, but no
+       edit access yet. Toggled by initRoleUI(), which runs at login -- an admin
+       granting a role while this tab is already open won't clear it until the
+       user reloads/re-logs-in (no live cross-tab role subscription exists). -->
+  <div id="viewOnlyBanner" style="display:none;align-items:center;gap:10px;padding:9px 16px;background:rgba(245,166,35,.12);border-bottom:1px solid rgba(245,166,35,.35);font-size:12px;color:var(--text)">
+    <span style="font-size:14px">👁</span>
+    <span><strong>View-only access.</strong> You can see all data, but editing (notes, forecast overrides, uploads) needs a role assigned by an admin — Jordache Wilson (FP&amp;A) has been notified.</span>
   </div>
 
   <!-- PERIOD BAR -->
@@ -2725,10 +2735,20 @@ function initRoleUI(){
   document.querySelectorAll('.manager-only').forEach(e=>e.style.display=can('upload_data')?'':'none');
   // rep-and-above write controls
   document.querySelectorAll('.rep-only').forEach(e=>e.style.display=can('edit_narrative')?'':'none');
-  // disable all write controls for view-only users
-  if(CU.role==='view'){
-    document.querySelectorAll('.btn-t,.cbox').forEach(e=>{e.style.opacity='0.35';e.style.pointerEvents='none';});
-  }
+  // Disable all write controls for view-only users -- includes a null role (brand
+  // new signup, view access granted immediately but no role assigned yet), not
+  // just the explicit 'view' role, since can() already treats both identically.
+  // Explicitly resets the opposite way too (not just an if-dim with no else) --
+  // this runs again on every _applyLogin, and without the reset branch a stale
+  // dimmed state survives a sign-out/sign-in as a different, approved user in the
+  // same tab (no full page reload happens on manual sign-out).
+  const restricted=!CU.role||CU.role==='view';
+  document.querySelectorAll('.btn-t,.cbox').forEach(e=>{
+    e.style.opacity=restricted?'0.35':'';
+    e.style.pointerEvents=restricted?'none':'';
+  });
+  const banner=document.getElementById('viewOnlyBanner');
+  if(banner)banner.style.display=CU.role?'none':'flex';
 }
 
 /* ── Supabase Auth login — passwordless email code (OTP), matching the Inventory
@@ -2922,13 +2942,14 @@ async function verifyLoginCode(){
         }
         profile={id:data.user.id,name:nm,email:data.user.email,sales_role:salesRole,role:fpaRole,territory:'All'};
         if(isFirst)toast('First-time setup: your account has been set as Admin','ok');
-        // Notify the admin the moment a brand-new signup lands pending — otherwise
-        // the only way to know someone's waiting is to happen to open Admin -> Users.
-        // Fire-and-forget: a failed/slow email must never block this person's own
-        // login. Only fires once, right here at profile creation, not on every
-        // repeat login attempt while still pending. Uses the new user's own fresh
-        // session token against the shared send-notification function (already
-        // live for every other JPS FP&A app) rather than exposing a service key.
+        // Notify the admin the moment a brand-new signup lands -- they already have
+        // full read-only access (see _isApproved), so this isn't "someone's locked
+        // out," it's "someone can see everything and can't edit yet, go grant them
+        // write access or link them to a KAM." Fire-and-forget: a failed/slow email
+        // must never block this person's own login. Only fires once, right here at
+        // profile creation, not on every repeat login. Uses the new user's own fresh
+        // session token against the shared send-notification function (already live
+        // for every other JPS FP&A app) rather than exposing a service key.
         if(!isFirst&&data.session?.access_token){
           fetch(SB_URL+'/functions/v1/send-notification',{
             method:'POST',
@@ -2936,10 +2957,10 @@ async function verifyLoginCode(){
             body:JSON.stringify({
               type:'approval_required',
               to:'jwilson@jpsco.com',
-              subject:'Sales Platform — new signup pending approval: '+data.user.email,
+              subject:'Sales Platform — new login, needs write access: '+data.user.email,
               data:{
                 recipient_name:'Jordache',
-                message:data.user.email+' just signed in to the Sales Analytics Platform for the first time and is waiting for you to assign a role (and optionally link them to a KAM) in Admin → Users & Roles.',
+                message:data.user.email+' just signed in to the Sales Analytics Platform for the first time. They already have full read-only access — go to Admin → Users & Roles to grant them write access (assign a role) and, if they\'re a KAM, link them to their KAM name.',
                 report_url:window.location.origin+window.location.pathname,
               },
             }),
@@ -2985,10 +3006,13 @@ function _initIdleTimeout(signOutFn) {
   _reset();
 }
 
-// Approval gate: a signed-in user with no sales_role (self-serve signup an admin
-// hasn't touched yet) or is_active===false (revoked/rejected) never reaches the
-// dashboard — shown the pending-approval screen and nothing else runs.
-function _isApproved(u){ return !!(u && u.role) && u.is_active!==false; }
+// Access gate: is_active===false is the ONLY thing that blocks reaching the
+// dashboard at all -- that's an admin explicitly blocking/revoking the account
+// (Admin -> Users & Roles -> Deactivate). A signed-in user with no sales_role yet
+// (brand-new self-serve signup) still gets the full read-only dashboard; role
+// assignment is what unlocks editing, not viewing -- see initRoleUI's can()-driven
+// write-control disabling and the viewOnlyBanner it toggles.
+function _isApproved(u){ return !!u && u.is_active!==false; }
 function _showPendingScreen(email){
   const restore=document.getElementById('restoreLoading'); if(restore)restore.style.display='none';
   const card=document.getElementById('loginCard'); if(card)card.style.display='none';
@@ -8279,10 +8303,10 @@ function renderAdm(){
           ?`<input class="si" list="kam_names_dl" style="font-size:10px;padding:3px;width:110px" value="${esc(u.kam_name||'')}" placeholder="none" onchange="setUserKam('${safeId}',this.value)">`
           :esc(u.kam_name||'--')}</td>
         <td style="font-size:11px">${u.territory||'All'}</td>
-        <td><span class="pill ${isPending?'pa':u.is_active!==false?'pg':'pr'}">${isPending?'Pending':u.is_active!==false?'Active':'Inactive'}</span></td>
+        <td><span class="pill ${u.is_active===false?'pr':isPending?'pa':'pg'}">${u.is_active===false?'Blocked':isPending?'View-only (pending role)':'Active'}</span></td>
         <td style="font-size:10px;color:var(--text3)">${fmtLogin(u.last_login_at)}</td>
         <td style="display:flex;gap:4px;flex-wrap:wrap">${isAdmin
-          ?`${!isPending?`<button class="btn btn-o" style="font-size:9px;padding:2px 8px" onclick="toggleUserActive('${safeId}',${u.is_active!==false})">${u.is_active!==false?'Deactivate':'Activate'}</button>`:''}
+          ?`<button class="btn btn-o" style="font-size:9px;padding:2px 8px" onclick="toggleUserActive('${safeId}',${u.is_active!==false})">${u.is_active!==false?'Block':'Unblock'}</button>
              <button class="btn" style="font-size:9px;padding:2px 8px;background:rgba(232,64,64,.12);color:var(--red);border-color:rgba(232,64,64,.3)" onclick="deleteUser('${safeId}','${safeName}')">🗑 Delete</button>`
           :'--'}</td>
       </tr>`;}).join('')}</tbody></table>
@@ -8328,7 +8352,7 @@ async function toggleUserActive(userId,currently){
     await sb.from('profiles').update({is_active:!currently,updated_at:new Date().toISOString()}).eq('id',userId);
     const u=PLATFORM_USERS.find(x=>x.id===userId);if(u)u.is_active=!currently;
     await writeAudit(currently?'USER_DEACTIVATE':'USER_ACTIVATE',{user_id:userId,user_name:u?.name||u?.email||userId});
-    toast(`User ${!currently?'activated':'deactivated'}`,'ok');renderAdm();
+    toast(`User ${!currently?'unblocked':'blocked'}`,'ok');renderAdm();
   }catch(e){toast('Failed: '+e.message,'err');}
 }
 
