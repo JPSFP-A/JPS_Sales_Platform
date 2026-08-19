@@ -78,6 +78,13 @@ body{background:var(--navy);color:var(--text);font-family:'IBM Plex Sans',system
 .lf input:focus,.lf select:focus{outline:none;border-color:var(--teal)}
 .login-btn{width:100%;background:var(--teal);color:#000;border:none;border-radius:8px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;margin-top:4px}
 .login-btn:hover{background:var(--teal2)}
+/* Mirrored card-flip between the email step and the code step: a single panel
+   sweeps left-to-right (always the same direction, forward or back) and fully
+   covers this wrap at the sweep's midpoint -- that's the instant the JS swaps
+   which step is visible, so the swap itself is never seen. Only transform is
+   animated (no fade/rotate), so it's cheap and dependency-free. */
+#lsStepWrap{position:relative;overflow:hidden;border-radius:8px}
+.ls-flip-cover{position:absolute;inset:0;background:var(--navy2);z-index:5;transform:translateX(-100%);pointer-events:none}
 .lerr{color:var(--red);font-size:11px;margin-top:7px;display:none}
 
 /* SIDEBAR */
@@ -346,6 +353,7 @@ body{background:var(--navy);color:var(--text);font-family:'IBM Plex Sans',system
 [data-theme="light"] .umenu{background:#ffffff}
 [data-theme="light"] .login-screen{background:var(--navy)}
 [data-theme="light"] .login-card{background:#ffffff;box-shadow:0 4px 24px rgba(0,0,0,.10)}
+[data-theme="light"] .ls-flip-cover{background:#ffffff}
 [data-theme="light"] .period-cell{background:#eef1f5}
 [data-theme="light"] .period-cell.locked{background:rgba(198,40,40,.05)}
 [data-theme="light"] .period-cell.open{background:rgba(0,150,167,.05)}
@@ -402,27 +410,30 @@ document.getElementById('schema_stale_banner').style.display='none';
          email + Inventory's own input, which uses maxlength=10 for the same reason).
          Anyone can request a code -- access itself is gated separately after verify
          (pending-approval screen if no sales_role assigned yet, see _applyLogin). -->
-    <div id="lsStep1">
-      <p>Sign in with your JPS email address</p>
-      <div class="lf">
-        <label>Email</label>
-        <input type="email" id="lEmail" placeholder="you@jps.com" autocomplete="email" onkeydown="if(event.key==='Enter')sendLoginCode()"/>
+    <div id="lsStepWrap">
+      <div class="ls-flip-cover" id="lsFlipCover" aria-hidden="true"></div>
+      <div id="lsStep1">
+        <p>Sign in with your JPS email address</p>
+        <div class="lf">
+          <label>Email</label>
+          <input type="email" id="lEmail" placeholder="you@jps.com" autocomplete="email" onkeydown="if(event.key==='Enter')sendLoginCode()"/>
+        </div>
+        <button class="login-btn" id="lBtn" onclick="sendLoginCode()">Send code →</button>
+        <div class="lerr" id="lErr">Invalid email or password.</div>
       </div>
-      <button class="login-btn" id="lBtn" onclick="sendLoginCode()">Send code →</button>
-      <div class="lerr" id="lErr">Invalid email or password.</div>
-    </div>
-    <div id="lsStep2" style="display:none">
-      <p>Enter the code sent to <strong id="lsCodeEmail"></strong></p>
-      <div class="lf">
-        <label>Code</label>
-        <input type="text" id="lCode" placeholder="Enter code" inputmode="numeric" pattern="[0-9]*" maxlength="10" autocomplete="one-time-code" onkeydown="if(event.key==='Enter')verifyLoginCode()"/>
+      <div id="lsStep2" style="display:none">
+        <p>Enter the code sent to <strong id="lsCodeEmail"></strong></p>
+        <div class="lf">
+          <label>Code</label>
+          <input type="text" id="lCode" placeholder="Enter code" inputmode="numeric" pattern="[0-9]*" maxlength="10" autocomplete="one-time-code" onkeydown="if(event.key==='Enter')verifyLoginCode()"/>
+        </div>
+        <button class="login-btn" id="lCodeBtn" onclick="verifyLoginCode()">Verify →</button>
+        <div class="lerr" id="lCodeErr" style="display:none"></div>
+        <div style="margin-top:10px;font-size:10px;color:var(--text3)">
+          Didn't get it? <span id="lResend" style="color:var(--teal);cursor:pointer" onclick="resendLoginCode()">Resend code</span>
+        </div>
+        <div style="margin-top:6px;font-size:10px;color:var(--text3);cursor:pointer" onclick="_lsBackToEmail()">← Use a different email</div>
       </div>
-      <button class="login-btn" id="lCodeBtn" onclick="verifyLoginCode()">Verify →</button>
-      <div class="lerr" id="lCodeErr" style="display:none"></div>
-      <div style="margin-top:10px;font-size:10px;color:var(--text3)">
-        Didn't get it? <span id="lResend" style="color:var(--teal);cursor:pointer" onclick="resendLoginCode()">Resend code</span>
-      </div>
-      <div style="margin-top:6px;font-size:10px;color:var(--text3);cursor:pointer" onclick="_lsBackToEmail()">← Use a different email</div>
     </div>
     <div style="margin-top:14px;font-size:9px;color:var(--text3)">New here? Just enter your JPS email — an admin approves access and sets your role afterward.</div>
   </div>
@@ -2698,11 +2709,34 @@ function initRoleUI(){
    _applyLogin's pending/inactive checks) so a fresh signup doesn't equal access. ── */
 let _lsPendingEmail='';
 let _lsResendTimer=null;
+// Mirrored card-flip: a cover panel sweeps translateX -100% -> 100% (always the
+// same direction, whichever way the step is actually changing) over the wrap's
+// own bounds. At the sweep's exact midpoint (translateX 0%, panel fully covering
+// the wrap) swapFn() runs -- that's the only moment content changes, so the swap
+// itself is never visible, only the panel sweeping past. Resets to -100% with no
+// transition once finished so the next flip (either direction) starts clean.
+let _lsFlipping=false;
+function _lsFlip(swapFn){
+  const cover=document.getElementById('lsFlipCover');
+  if(!cover||_lsFlipping){swapFn();return;}
+  _lsFlipping=true;
+  const DUR=460;
+  cover.style.transition='none';
+  cover.style.transform='translateX(-100%)';
+  void cover.offsetWidth; // force reflow so the transition below actually animates
+  cover.style.transition=`transform ${DUR}ms cubic-bezier(.4,0,.2,1)`;
+  requestAnimationFrame(()=>{cover.style.transform='translateX(100%)';});
+  setTimeout(swapFn,DUR/2);
+  setTimeout(()=>{cover.style.transition='none';cover.style.transform='translateX(-100%)';_lsFlipping=false;},DUR+30);
+}
 function _lsBackToEmail(){
-  document.getElementById('lsStep1').style.display='';
-  document.getElementById('lsStep2').style.display='none';
   const err=document.getElementById('lCodeErr'); if(err){err.style.display='none';err.textContent='';}
   clearInterval(_lsResendTimer);
+  _lsFlip(()=>{
+    document.getElementById('lsStep1').style.display='';
+    document.getElementById('lsStep2').style.display='none';
+    document.getElementById('lEmail')?.focus();
+  });
 }
 // Resend is gated behind a cooldown rather than firing instantly on click --
 // stops accidental double-sends and matches Supabase's own OTP rate limit.
@@ -2739,9 +2773,11 @@ async function sendLoginCode(){
     if(error){showErr(error.message);if(btn){btn.textContent='Send code →';btn.disabled=false;}return;}
     _lsPendingEmail=email;
     document.getElementById('lsCodeEmail').textContent=email;
-    document.getElementById('lsStep1').style.display='none';
-    document.getElementById('lsStep2').style.display='';
-    document.getElementById('lCode')?.focus();
+    _lsFlip(()=>{
+      document.getElementById('lsStep1').style.display='none';
+      document.getElementById('lsStep2').style.display='';
+      document.getElementById('lCode')?.focus();
+    });
     _lsStartResendCooldown(30);
     if(btn){btn.textContent='Send code →';btn.disabled=false;}
   }catch(e){showErr('Could not send code: '+e.message);if(btn){btn.textContent='Send code →';btn.disabled=false;}}
