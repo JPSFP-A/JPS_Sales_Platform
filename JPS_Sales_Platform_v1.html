@@ -10170,11 +10170,21 @@ function _dfcBuildCommAccounts(year){
   const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
   const indMap={};sbIndustries.forEach(i=>indMap[String(i.jps_ac||'').trim()]=i.industry||'');
   const seen={};
+  // rate_class (and parish/bucket) must reflect the account's MOST RECENT billed
+  // month, not whichever row happened to be first in iteration order -- an account
+  // that got reclassified mid-year (e.g. RT50 -> RT70) was otherwise permanently
+  // locked to its oldest rate_class forever, since the old "first row wins" check
+  // (seen[ac] already truthy) skipped every later row including the reclassification.
+  // Same bug class as get_customers_summary's old MAX(rate_class) pick.
+  const seenYm={};
   _sbAllActuals().forEach(r=>{
     if(!_isComm(r))return;
     if(Number(r.year)!==refYear&&Number(r.year)!==refYear-1)return;
-    const ac=r.jps_ac;if(!ac||seen[ac]||_DFC_PLACEHOLDER_ACS.has(ac))return;
+    const ac=r.jps_ac;if(!ac||_DFC_PLACEHOLDER_ACS.has(ac))return;
+    const ym=Number(r.year)*100+Number(r.month);
+    if(seen[ac]&&ym<seenYm[ac])return;
     seen[ac]={ac,name:r.name||ac,rate_class:r.rate_class,parish:r.parish,consumption_bucket:r.consumption_bucket};
+    seenYm[ac]=ym;
   });
   sbBudget.forEach(r=>{
     if(!_isComm(r))return;
