@@ -14,6 +14,7 @@ analysis/*
 !analysis/*.js
 !analysis/app2_template.html
 !analysis/sales_explorer.html
+!analysis/KAM_Platform_Quick_Start.pptx
 salesanalysis_deploy/
 *.pre-submit.bak.html
 
