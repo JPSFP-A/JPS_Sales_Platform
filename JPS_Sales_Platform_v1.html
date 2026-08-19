@@ -85,6 +85,17 @@ body{background:var(--navy);color:var(--text);font-family:'IBM Plex Sans',system
    animated (no fade/rotate), so it's cheap and dependency-free. */
 #lsStepWrap{position:relative;overflow:hidden;border-radius:8px}
 .ls-flip-cover{position:absolute;inset:0;background:var(--navy2);z-index:5;transform:translateX(-100%);pointer-events:none}
+/* OTP fold-to-check: on a correct code, each digit cell scales/rotates down to
+   nothing in a left-to-right wave (.fold) instead of the row just vanishing, while
+   a single checkmark (.otp-check, absolutely centered over the whole row) scales
+   in underneath -- reads as the cells folding into one unified check, not a swap. */
+.otp-row{display:flex;gap:6px;position:relative}
+.otp-cell{flex:1 1 0;min-width:0;aspect-ratio:1/1;text-align:center;font-size:18px;font-weight:700;background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:0;transition:transform .32s cubic-bezier(.4,0,.2,1),opacity .32s cubic-bezier(.4,0,.2,1),border-color .15s}
+.otp-cell:focus{outline:none;border-color:var(--teal)}
+.otp-cell.filled{border-color:var(--teal)}
+.otp-cell.fold{transform:scale(.2) rotateX(90deg);opacity:0}
+.otp-check{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--teal);opacity:0;transform:scale(.5);transition:transform .32s cubic-bezier(.34,1.56,.64,1),opacity .32s ease;pointer-events:none}
+.otp-check.show{opacity:1;transform:scale(1)}
 .lerr{color:var(--red);font-size:11px;margin-top:7px;display:none}
 
 /* SIDEBAR */
@@ -425,7 +436,23 @@ document.getElementById('schema_stale_banner').style.display='none';
         <p>Enter the code sent to <strong id="lsCodeEmail"></strong></p>
         <div class="lf">
           <label>Code</label>
-          <input type="text" id="lCode" placeholder="Enter code" inputmode="numeric" pattern="[0-9]*" maxlength="10" autocomplete="one-time-code" onkeydown="if(event.key==='Enter')verifyLoginCode()"/>
+          <!-- 8 individual digit cells (this Supabase project's OTP is 8 digits, see the
+               note on lsStep1 above) instead of one plain input, so a correct code can
+               fold-to-check on success (see _otpPlaySuccess) instead of just swapping to
+               a text message. #lCode stays as a hidden field holding the assembled value
+               so verifyLoginCode() reads it exactly as before. -->
+          <div class="otp-row" id="otpRow">
+            <input class="otp-cell" type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" autocomplete="one-time-code" oninput="_otpInput(this)" onkeydown="_otpKeydown(event,this)" onpaste="_otpPaste(event,this)"/>
+            <input class="otp-cell" type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" oninput="_otpInput(this)" onkeydown="_otpKeydown(event,this)" onpaste="_otpPaste(event,this)"/>
+            <input class="otp-cell" type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" oninput="_otpInput(this)" onkeydown="_otpKeydown(event,this)" onpaste="_otpPaste(event,this)"/>
+            <input class="otp-cell" type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" oninput="_otpInput(this)" onkeydown="_otpKeydown(event,this)" onpaste="_otpPaste(event,this)"/>
+            <input class="otp-cell" type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" oninput="_otpInput(this)" onkeydown="_otpKeydown(event,this)" onpaste="_otpPaste(event,this)"/>
+            <input class="otp-cell" type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" oninput="_otpInput(this)" onkeydown="_otpKeydown(event,this)" onpaste="_otpPaste(event,this)"/>
+            <input class="otp-cell" type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" oninput="_otpInput(this)" onkeydown="_otpKeydown(event,this)" onpaste="_otpPaste(event,this)"/>
+            <input class="otp-cell" type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" oninput="_otpInput(this)" onkeydown="_otpKeydown(event,this)" onpaste="_otpPaste(event,this)"/>
+            <div class="otp-check" id="otpCheck" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 12.5l5 5L20 6" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          </div>
+          <input type="hidden" id="lCode"/>
         </div>
         <button class="login-btn" id="lCodeBtn" onclick="verifyLoginCode()">Verify →</button>
         <div class="lerr" id="lCodeErr" style="display:none"></div>
@@ -2729,6 +2756,72 @@ function _lsFlip(swapFn){
   setTimeout(swapFn,DUR/2);
   setTimeout(()=>{cover.style.transition='none';cover.style.transform='translateX(-100%)';_lsFlipping=false;},DUR+30);
 }
+// OTP cells: 8 individual digit boxes instead of one text input, so a correct
+// code can fold-to-check on success (see _otpPlaySuccess). #lCode is a hidden
+// field kept in sync with the assembled value -- verifyLoginCode() still just
+// reads it, unaware the visible input changed shape.
+function _otpCells(){return[...document.querySelectorAll('.otp-cell')];}
+function _otpSyncHidden(){
+  const el=document.getElementById('lCode');
+  if(el)el.value=_otpCells().map(c=>c.value).join('');
+}
+function _otpReset(){
+  _otpCells().forEach(c=>{c.value='';c.classList.remove('filled','fold');});
+  document.getElementById('otpCheck')?.classList.remove('show');
+  _otpSyncHidden();
+}
+function _otpInput(el){
+  const digits=el.value.replace(/[^0-9]/g,'');
+  const cells=_otpCells();
+  const start=cells.indexOf(el);
+  if(digits.length>1){
+    // Autofill (WebOTP/SMS) or a paste that landed as a plain input event dropped
+    // the whole code into one cell -- distribute it across this cell and the ones
+    // after it instead of clipping to a single digit.
+    digits.split('').forEach((d,i)=>{if(cells[start+i])cells[start+i].value=d;});
+    cells.forEach(c=>c.classList.toggle('filled',!!c.value));
+    (cells[start+digits.length]||cells[cells.length-1]).focus();
+  }else{
+    el.value=digits;
+    el.classList.toggle('filled',!!digits);
+    if(digits&&cells[start+1])cells[start+1].focus();
+  }
+  _otpSyncHidden();
+  const err=document.getElementById('lCodeErr'); if(err)err.style.display='none';
+  if(cells.length&&cells.every(c=>c.value))verifyLoginCode();
+}
+function _otpKeydown(e,el){
+  if(e.key==='Enter'){verifyLoginCode();return;}
+  if(e.key==='Backspace'&&!el.value){
+    const cells=_otpCells();
+    const prev=cells[cells.indexOf(el)-1];
+    if(prev){prev.value='';prev.classList.remove('filled');prev.focus();_otpSyncHidden();}
+  }
+}
+function _otpPaste(e,el){
+  const text=(e.clipboardData||window.clipboardData).getData('text').replace(/[^0-9]/g,'');
+  if(!text)return;
+  e.preventDefault();
+  const cells=_otpCells();
+  const start=cells.indexOf(el);
+  text.split('').forEach((d,i)=>{if(cells[start+i]){cells[start+i].value=d;cells[start+i].classList.add('filled');}});
+  (cells[Math.min(start+text.length,cells.length-1)]).focus();
+  _otpSyncHidden();
+  if(cells.every(c=>c.value))verifyLoginCode();
+}
+// Fold-to-check: each cell scales/rotates to nothing in a left-to-right wave
+// while a single checkmark scales in underneath, centered over the whole row --
+// reads as the cells folding into one shape, not a swap to a success message.
+// Returns a promise so the caller can hold off replacing the login screen until
+// it's actually had time to be seen.
+function _otpPlaySuccess(){
+  return new Promise(resolve=>{
+    const cells=_otpCells();
+    cells.forEach((c,i)=>setTimeout(()=>c.classList.add('fold'),i*35));
+    setTimeout(()=>document.getElementById('otpCheck')?.classList.add('show'),200);
+    setTimeout(resolve,620);
+  });
+}
 function _lsBackToEmail(){
   const err=document.getElementById('lCodeErr'); if(err){err.style.display='none';err.textContent='';}
   clearInterval(_lsResendTimer);
@@ -2736,6 +2829,7 @@ function _lsBackToEmail(){
     document.getElementById('lsStep1').style.display='';
     document.getElementById('lsStep2').style.display='none';
     document.getElementById('lEmail')?.focus();
+    _otpReset();
   });
 }
 // Resend is gated behind a cooldown rather than firing instantly on click --
@@ -2773,10 +2867,11 @@ async function sendLoginCode(){
     if(error){showErr(error.message);if(btn){btn.textContent='Send code →';btn.disabled=false;}return;}
     _lsPendingEmail=email;
     document.getElementById('lsCodeEmail').textContent=email;
+    _otpReset();
     _lsFlip(()=>{
       document.getElementById('lsStep1').style.display='none';
       document.getElementById('lsStep2').style.display='';
-      document.getElementById('lCode')?.focus();
+      _otpCells()[0]?.focus();
     });
     _lsStartResendCooldown(30);
     if(btn){btn.textContent='Send code →';btn.disabled=false;}
@@ -2793,7 +2888,17 @@ async function verifyLoginCode(){
   try{
     const sb=getSB();
     const{data,error}=await sb.auth.verifyOtp({email,token,type:'email'});
-    if(error){showCodeErr(error.message);if(btn){btn.textContent='Verify →';btn.disabled=false;}return;}
+    if(error){
+      showCodeErr(error.message);
+      if(btn){btn.textContent='Verify →';btn.disabled=false;}
+      _otpReset();_otpCells()[0]?.focus();
+      return;
+    }
+    // Fire the fold-to-check now (the code itself is confirmed correct) without
+    // awaiting it yet -- it plays out WHILE the profile fetch below runs, so a
+    // slow fetch never sits behind an animation that's already finished, and a
+    // fast fetch never cuts the animation off before it's had time to be seen.
+    const _otpSuccessAnim=_otpPlaySuccess();
     // Fetch profile for role
     let profile=null;
     try{
@@ -2824,6 +2929,7 @@ async function verifyLoginCode(){
     // Fire-and-forget -- answers "who has signed in" in Admin -> Users & Roles.
     // Not awaited so a slow write never delays getting into the dashboard.
     sb.from('profiles').update({last_login_at:new Date().toISOString()}).eq('id',data.user.id).then(()=>{},()=>{});
+    await _otpSuccessAnim;
     _applyLogin({
       id:data.user.id,email:data.user.email,
       name:profile?.name||data.user.email.split('@')[0],
