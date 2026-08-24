@@ -3240,14 +3240,23 @@ async function loadNarratives(){
 async function saveBridgeDriversToDB(drivers){
   const sb=getSB();if(!sb)return;
   try{
-    // Delete existing for this period then re-insert
-    await sb.from('jps_vb_drivers').delete().eq('year',curYear).eq('month',curMonth);
+    // Insert-safe: write the new rows first, only delete the old ones for this
+    // period once the insert has succeeded (never delete-then-insert -- a failed
+    // insert or a closed tab must not be able to wipe existing drivers).
     if(drivers.length){
-      await sb.from('jps_vb_drivers').insert(drivers.map(d=>({
+      const{data,error}=await sb.from('jps_vb_drivers').insert(drivers.map(d=>({
         year:curYear,month:curMonth,segment:d.seg,description:d.desc,
         gwh_impact:d.gwh,category:d.cat,driver_type:d.type,author:CU.name,
         updated_at:new Date().toISOString()
-      })));
+      }))).select('id');
+      if(error)throw error;
+      const newIds=(data||[]).map(r=>r.id);
+      if(newIds.length){
+        await sb.from('jps_vb_drivers').delete().eq('year',curYear).eq('month',curMonth).not('id','in',`(${newIds.join(',')})`);
+      }
+    }else{
+      // Explicit clear (no replacement rows) -- nothing to lose by deleting.
+      await sb.from('jps_vb_drivers').delete().eq('year',curYear).eq('month',curMonth);
     }
   }catch(e){console.warn('saveBridgeDriversToDB',e.message);}
 }
