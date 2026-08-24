@@ -2450,6 +2450,23 @@ order by ordinal_position;</pre>
         <div id="rcfr_table" style="overflow-x:auto"></div>
         <div id="rcfr_insights" style="margin-top:16px"></div>
       </div>
+      <div class="card" style="margin-top:12px" id="rcfr_bridge_card">
+        <div class="ch">Driver Waterfall
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <select id="rcfr_bridge_mode" class="psel" onchange="renderRcfrBridge()"></select>
+            <span id="rcfr_bridge_yb_wrap"><select id="rcfr_bridge_yb" class="psel" onchange="renderRcfrBridge()"></select></span>
+            <select id="rcfr_bridge_rc" class="psel" onchange="renderRcfrBridge()"></select>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:10px">
+          Walks the year selected above (the year picker in the header of this tab) from its Budget to its current LE, or year-over-year against any other year — decomposed into new/dropped accounts, named large-customer moves, macro/weather/industry drivers, operational adjustments, and analyst-entered attribution (hurricane normalization, solar, self-generation, off-grid bypass). Bars always sum exactly to the real gap; whatever isn't explained shows as "Unexplained / residual," never hidden.
+        </div>
+        <div style="height:280px"><canvas id="rcfr_bridge_chart"></canvas></div>
+        <div id="rcfr_bridge_tbl" style="margin-top:12px;overflow-x:auto"></div>
+        <div id="rcfr_bridge_caveat" style="margin-top:8px;font-size:10px;color:var(--amber)"></div>
+        <div style="font-size:10px;color:var(--text3);margin-top:10px;text-transform:uppercase;font-weight:600">Add manual attribution</div>
+        <div id="rcfr_bridge_form"></div>
+      </div>
       <div class="card" style="margin-top:12px">
         <div class="ch">Monthly Trend by Industry
           <span style="font-size:10px;color:var(--text3);font-weight:400">Solid = actual (locked), dashed = forecast</span>
@@ -2487,6 +2504,28 @@ order by ordinal_position;</pre>
         </div>
         <div id="y3_table" style="overflow-x:auto"></div>
         <div id="y3_note" style="margin-top:10px;font-size:10.5px;color:var(--text3)"></div>
+      </div>
+      <div class="card" style="margin-top:12px" id="y3_bridge_card">
+        <div class="ch">3-Year Driver Walk
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <select id="y3_bridge_rc" class="psel" onchange="renderY3Bridge()"></select>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:10px">
+          Chains the same Driver Waterfall across all 3 selected years above (Year A → Year B, then Year B → Year C), decomposed into the same drivers as the single-year walk on RC Forecast Report — new/dropped accounts, named large-customer moves, macro/weather/industry, operational adjustments, and manually-entered hurricane/solar/self-generation/off-grid attribution.
+        </div>
+        <div style="font-size:11px;font-weight:600;color:var(--text2);margin:10px 0 4px">Leg 1</div>
+        <div style="height:260px"><canvas id="y3_bridge_ab_chart"></canvas></div>
+        <div id="y3_bridge_ab_tbl" style="margin-top:10px;overflow-x:auto"></div>
+        <div id="y3_bridge_ab_caveat" style="margin-top:6px;font-size:10px;color:var(--amber)"></div>
+        <div style="font-size:10px;color:var(--text3);margin-top:10px;text-transform:uppercase;font-weight:600">Add manual attribution — Leg 1</div>
+        <div id="y3_bridge_ab_form"></div>
+        <div style="font-size:11px;font-weight:600;color:var(--text2);margin:18px 0 4px;border-top:0.5px solid var(--border);padding-top:14px">Leg 2</div>
+        <div style="height:260px"><canvas id="y3_bridge_bc_chart"></canvas></div>
+        <div id="y3_bridge_bc_tbl" style="margin-top:10px;overflow-x:auto"></div>
+        <div id="y3_bridge_bc_caveat" style="margin-top:6px;font-size:10px;color:var(--amber)"></div>
+        <div style="font-size:10px;color:var(--text3);margin-top:10px;text-transform:uppercase;font-weight:600">Add manual attribution — Leg 2</div>
+        <div id="y3_bridge_bc_form"></div>
       </div>
     </div>
 
@@ -4056,8 +4095,8 @@ function renderSection(id){
   else if(id==='macro'){renderMacroAssumptions();}
   else if(id==='rateassum'){renderRateAssumptions();}
   else if(id==='adjlog'){renderAdjustmentLog();}
-  else if(id==='rcfr'){renderRcForecastReport();}
-  else if(id==='y3cmp'){renderY3Comparison();}
+  else if(id==='rcfr'){renderRcForecastReport();renderRcfrBridge();}
+  else if(id==='y3cmp'){renderY3Comparison();renderY3Bridge();}
   else if(id==='demand'){renderPeakDemand();}
 }
 
@@ -9251,6 +9290,7 @@ var _sbClient=null, // var (not let) — hoisted as undefined, avoids TDZ when J
     sbOpAdjExists=false,
     sbNewCustomers=[],  // jps_forecast_new_customers — added-but-not-yet-real accounts
     sbDemandActuals=[], // jps_demand_actuals — peak/off-peak/partial-peak/standard kVA by rate class, monthly
+    sbBridgeDrivers=[], // jps_bridge_drivers — manual Driver Waterfall attribution (hurricanes, solar, self-gen, off-grid bypass, other one-off events); append-only, never upserted
     sbSystemStats=[],   // jps_system_stats      — net gen + losses for budget/le/actuals
     sbLossesForecast=[], // jps_losses_forecast  — rolling 12-month losses forecast
     sbConnected=false, sbLastSync=null,
@@ -9585,7 +9625,7 @@ async function syncSupabase(silent=false){
       custSummData,
       fcEntriesData,fcNotesData,
       macroAssumData,opAdjData,newCustData,demandActualsData,
-      rateAssumData
+      rateAssumData,bridgeDriversData
     ] = await Promise.all([
       sbTable('jps_industries',{}),
       sbTable('jps_kam',{}),
@@ -9648,7 +9688,8 @@ async function syncSupabase(silent=false){
       sbTable('jps_operational_adjustments_current',{limit:50000}),
       sbTable('jps_forecast_new_customers',{limit:5000}),
       sbTable('jps_demand_actuals',{limit:5000}),
-      sbTable('jps_rate_assumptions',{limit:20000})
+      sbTable('jps_rate_assumptions',{limit:20000}),
+      sbTable('jps_bridge_drivers',{limit:5000})
     ]);
 
     // ── Process results ────────────────────────────────────
@@ -9720,6 +9761,9 @@ async function syncSupabase(silent=false){
 
     sbRateAssum=rateAssumData||[];
     log.push(rateAssumData?`Rate Assumptions: jps_rate_assumptions (${sbRateAssum.length} rows)`:'Rate Assumptions: ⚠ jps_rate_assumptions not found — run schema SQL');
+
+    sbBridgeDrivers=bridgeDriversData||[];
+    log.push(bridgeDriversData?`Bridge Drivers: jps_bridge_drivers (${sbBridgeDrivers.length} rows)`:'Bridge Drivers: ⚠ jps_bridge_drivers not found — run schema SQL');
 
     sbNewCustomers=newCustData||[];
     log.push(newCustData?`New Customers: jps_forecast_new_customers (${sbNewCustomers.length} rows)`:'New Customers: ⚠ jps_forecast_new_customers not found — run schema SQL');
@@ -11285,22 +11329,32 @@ function _adjLogNormalize(opRows){
   _sbAllActuals().forEach(r=>{if(r.jps_ac){if(!nameMap[r.jps_ac])nameMap[r.jps_ac]=r.name;if(!rcMap[r.jps_ac])rcMap[r.jps_ac]=r.rate_class;}});
 
   const out=[];
-  opRows.filter(r=>r.operational_pct||r.manual_kwh).forEach(r=>out.push({
-    source:'operational',id:r.id,
-    label:nameMap[r.jps_ac]||r.jps_ac,year:Number(r.year),month:Number(r.month),
-    magnitude:(r.operational_pct?_dfcFmtPct(Number(r.operational_pct)):'')+(r.manual_kwh?' / '+Number(r.manual_kwh).toLocaleString()+' kWh':''),
-    magnitudeAbs:Math.abs(Number(r.operational_pct)||0),
-    reason_code:r.reason_code,justification:r.justification,created_by:r.created_by,
-    rc:rcMap[r.jps_ac]||'—',kam:_kl(kamMap,r.jps_ac)||'Unassigned',industry:_kl(indMap,r.jps_ac)||'Unassigned',
-    editArgs:[r.jps_ac,Number(r.year),Number(r.month),Number(r.operational_pct)||0,r.reason_code||''],
-  }));
-  sbMacroAssum.filter(r=>r.reason_code).forEach(r=>{
+  // Every row here was written by a real save (created_by/updated_by is always
+  // set — dfcEditOperational/macroSaveCell's "clear to 0" shortcut still calls
+  // the save function, just with reason=null). The old `r.operational_pct||
+  // r.manual_kwh` / `r.reason_code` filters dropped every one of those clears
+  // silently -- a KAM zeroing out an adjustment produced NO trace anywhere in
+  // this log, even though the write happened. Show them as "Cleared" instead.
+  opRows.forEach(r=>{
+    const cleared=!r.operational_pct&&!r.manual_kwh;
+    out.push({
+      source:'operational',id:r.id,
+      label:nameMap[r.jps_ac]||r.jps_ac,year:Number(r.year),month:Number(r.month),
+      magnitude:cleared?'Cleared':(r.operational_pct?_dfcFmtPct(Number(r.operational_pct)):'')+(r.manual_kwh?' / '+Number(r.manual_kwh).toLocaleString()+' kWh':''),
+      magnitudeAbs:Math.abs(Number(r.operational_pct)||0),
+      reason_code:r.reason_code,justification:r.justification||(cleared?'(cleared — no reason given)':''),created_by:r.created_by,
+      rc:rcMap[r.jps_ac]||'—',kam:_kl(kamMap,r.jps_ac)||'Unassigned',industry:_kl(indMap,r.jps_ac)||'Unassigned',
+      editArgs:[r.jps_ac,Number(r.year),Number(r.month),Number(r.operational_pct)||0,r.reason_code||''],
+    });
+  });
+  sbMacroAssum.filter(r=>r.updated_by).forEach(r=>{
     const label=r.driver_type==='industry'?'Industry — '+r.segment:r.driver_type==='macro'?'Macro — '+r.segment:r.driver_type==='weather'?'Weather':'Seasonality — residential';
+    const cleared=!r.reason_code&&!(Number(r.value_pct)||0);
     out.push({
       source:'macro',
       label,year:Number(r.year),month:Number(r.month),
-      magnitude:_dfcFmtPct(Number(r.value_pct)||0),magnitudeAbs:Math.abs(Number(r.value_pct)||0),
-      reason_code:r.reason_code,justification:r.justification,created_by:r.updated_by,
+      magnitude:cleared?'Cleared':_dfcFmtPct(Number(r.value_pct)||0),magnitudeAbs:Math.abs(Number(r.value_pct)||0),
+      reason_code:r.reason_code,justification:r.justification||(cleared?'(cleared — no reason given)':''),created_by:r.updated_by,
       rc:'—',kam:'Unassigned',industry:r.driver_type==='industry'?r.segment:'Unassigned',
       editArgs:[r.driver_type,r.segment,Number(r.year),Number(r.month)],
     });
@@ -12001,6 +12055,349 @@ function renderY3Comparison(){
 
   const note=document.getElementById('y3_note');
   if(note)note.textContent="Revenue isn't shown here yet — Driver Forecast only projects volume (kWh), so a year beyond the current close has no computed revenue until rate assumptions are built.";
+}
+
+/* =====================================================
+   DRIVER WATERFALL — Budget or YoY bridge, decomposed into named drivers.
+   Shared by RC Forecast Report and 3-Year Comparison so both tabs reconcile
+   to the exact same engine everything else in the app already uses.
+
+   Every automatic bucket below is real data already in the app (new/dropped
+   accounts, named large-customer movement, macro/weather/industry/operational
+   drivers from the Driver Forecast engine). Five buckets have NO existing data
+   source anywhere in this schema — hurricane normalization, other one-off
+   events, solar adoption, self-generation, and off-grid bypass — those are
+   analyst-entered estimates (jps_bridge_drivers) layered on top. They do NOT
+   feed back into the live forecast (jps_macro_assumptions / jps_operational_
+   adjustments remain the only inputs that do that); this is a read-only
+   attribution/explanation layer over numbers the forecast already produced.
+
+   Reconciliation is exact by construction: every entity in the population is
+   counted in exactly one bucket (new, one of the top named movers, or "all
+   other accounts"), the "all other accounts" delta is decomposed into macro/
+   weather/industry/operational + a residual, and that residual is what's left
+   AFTER manual entries are subtracted — so the bars always sum to the real
+   observed gap, and "Unexplained / residual" is never silently swallowed.
+===================================================== */
+const BRIDGE_MANUAL_CATS=[
+  {key:'hurricane_melissa_2025',label:'Hurricane Melissa (Oct 2025) normalization'},
+  {key:'hurricane_beryl_2024',label:'Hurricane Beryl (Jul 2024) normalization'},
+  {key:'other_event',label:'Other major event'},
+  {key:'solar',label:'Solar adoption / distributed generation'},
+  {key:'self_gen',label:'Self-generation (large industrial)'},
+  {key:'grid_deflection',label:'Grid deflection (off-grid bypass)'},
+  {key:'other',label:'Other manual adjustment'},
+];
+const BRIDGE_DEFECTION_REASONS=new Set(['Confirmed defection','Possible defection']);
+const BRIDGE_TOPN=5;
+
+function _bridgeEntities(year){
+  const commAccounts=_dfcBuildCommAccounts(year).filter(a=>a.rate_class!=='EV');
+  const keyAccounts=commAccounts.filter(a=>a.kam).map(a=>({key:a.ac,isAccount:true,rate_class:a.rate_class,industry:a.industry,opAc:a.ac,name:a.name,isNew:false}));
+  const commCohorts=_dfcCommCohortsForNonKam(commAccounts,year).filter(co=>co.rate_class!=='EV').map(co=>({key:co.key,isAccount:false,rate_class:co.rate_class,industry:null,opAc:null,name:null,isNew:false}));
+  const resCohorts=_dfcBuildResCohorts(year).filter(co=>co.rate_class!=='EV').map(co=>({key:co.key,isAccount:false,rate_class:co.rate_class,industry:null,opAc:null,name:null,isNew:false}));
+  const newCusts=sbNewCustomers.filter(c=>Number(c.start_year)<=year&&c.rate_class!=='EV').map(c=>({key:c.jps_ac,isAccount:true,rate_class:c.rate_class,industry:c.industry,opAc:c.jps_ac,name:c.name||c.jps_ac,isNew:true,newCustCtx:{startYear:Number(c.start_year),startMonth:Number(c.start_month),expectedKwh:Number(c.expected_kwh)||0}}));
+  return [...keyAccounts,...commCohorts,...resCohorts,...newCusts];
+}
+function _bridgeChain(idx,e,year){
+  return _dfcGetChain(idx,e.key,e.isAccount,{rate_class:e.rate_class,industry:e.industry},e.opAc,year,e.newCustCtx||null);
+}
+function _bridgeTotalActual(idx,e,year,rc){
+  if(rc&&e.rate_class!==rc)return 0;
+  // _dfcGetChain only special-cases year===FC_BUD_YEAR (lockedThru=curMonth) and
+  // year>FC_BUD_YEAR (cross-year cascade) -- for year<FC_BUD_YEAR neither branch
+  // fires, so lockedThru silently stays 0 and every month gets computed as if it
+  // were UNFORECAST, instead of reading the real (already-closed) actuals. Same
+  // bug _y3RcTotals already works around; use the same fix here.
+  if(year<FC_BUD_YEAR){
+    const map=(e.isAccount?idx.actByAc:idx.actByCohort)[e.key];
+    let t=0;if(map)for(let m=1;m<=12;m++)t+=map[`${year}_${m}`]||0;
+    return t;
+  }
+  const chain=_bridgeChain(idx,e,year);
+  let t=0;for(let m=1;m<=12;m++)t+=chain[m]?chain[m].total:0;
+  return t;
+}
+function _bridgeTotalBudget(idx,e,year,rc){
+  if(rc&&e.rate_class!==rc)return 0;
+  const budMap=(e.isAccount?idx.budByAc:idx.budByCohort)[e.key];
+  let t=0;if(budMap)for(let m=1;m<=12;m++)t+=budMap[`${year}_${m}`]||0;
+  return t;
+}
+// Sum of one driver component in kWh, across an entity's FORECAST months only for
+// the given year — actual (locked) months carry no % breakdown to pull from.
+function _bridgeComponentKwh(idx,e,year,comp,rc){
+  if(rc&&e.rate_class!==rc)return 0;
+  if(year<FC_BUD_YEAR)return 0; // fully historical year — no forecast months, nothing to decompose
+  const chain=_bridgeChain(idx,e,year);
+  let t=0;
+  for(let m=1;m<=12;m++){
+    const c=chain[m];if(!c||c.isActual)continue;
+    t+=comp==='oper'?(c.base*(c.oper||0)/100)+(c.manual||0):c.base*(c[comp]||0)/100;
+  }
+  return t;
+}
+function _bridgeIsDefecting(ac,year){
+  return sbOpAdj.some(r=>{
+    const rac=String(r.jps_ac||'');
+    return(rac===ac||rac===ac.split('-')[0])&&Number(r.year)===year&&BRIDGE_DEFECTION_REASONS.has(r.reason_code);
+  });
+}
+
+// mode='actual': yearA is a real actual/forecast year (YoY walk, yearA→yearB).
+// mode='budget': yearA===yearB, walking that year's ORIGINAL budget → its own
+// current LE (Driver Forecast). rc=null walks the whole company.
+function buildDriverBridge(mode,rc,yearA,yearB){
+  _dfcResetYearChainCache();
+  const idx=_dfcBuildIndices();
+  const entities=_bridgeEntities(Math.max(yearA,yearB));
+
+  const aTotal=e=>mode==='budget'?_bridgeTotalBudget(idx,e,yearA,rc):_bridgeTotalActual(idx,e,yearA,rc);
+  const bTotal=e=>_bridgeTotalActual(idx,e,yearB,rc);
+
+  const startTotal=entities.reduce((s,e)=>s+aTotal(e),0);
+  const endTotal=entities.reduce((s,e)=>s+bTotal(e),0);
+  const totalGap=endTotal-startTotal;
+
+  const newAccts=entities.filter(e=>e.isNew);
+  const newKwh=newAccts.reduce((s,e)=>s+bTotal(e),0);
+
+  const namedCandidates=entities.filter(e=>!e.isNew&&e.name);
+  const named=namedCandidates.map(e=>({
+    key:e.key,name:e.name,delta:bTotal(e)-aTotal(e),
+    dropped:_bridgeIsDefecting(e.key,yearB),
+  })).filter(x=>Math.abs(x.delta)>0).sort((x,y)=>Math.abs(y.delta)-Math.abs(x.delta)).slice(0,BRIDGE_TOPN);
+  const namedKeySet=new Set(named.map(n=>n.key));
+
+  const remaining=entities.filter(e=>!e.isNew&&!namedKeySet.has(e.key));
+  const remA=remaining.reduce((s,e)=>s+aTotal(e),0);
+  const remB=remaining.reduce((s,e)=>s+bTotal(e),0);
+  const remDelta=remB-remA;
+  const compYear=mode==='budget'?yearA:yearB;
+  let macroKwh=0,weatherKwh=0,seasIndKwh=0,operKwh=0;
+  remaining.forEach(e=>{
+    macroKwh+=_bridgeComponentKwh(idx,e,compYear,'macro',rc);
+    weatherKwh+=_bridgeComponentKwh(idx,e,compYear,'weather',rc);
+    seasIndKwh+=_bridgeComponentKwh(idx,e,compYear,'seasInd',rc);
+    operKwh+=_bridgeComponentKwh(idx,e,compYear,'oper',rc);
+  });
+  const actualCarryKwh=remDelta-macroKwh-weatherKwh-seasIndKwh-operKwh;
+
+  const manualRows=sbBridgeDrivers.filter(r=>{
+    const yrMatch=mode==='budget'?Number(r.year)===yearA:(Number(r.year)===yearA||Number(r.year)===yearB);
+    return yrMatch&&(!rc||!r.rate_class||r.rate_class===rc);
+  });
+  const manualByCategory={};
+  BRIDGE_MANUAL_CATS.forEach(c=>manualByCategory[c.key]=0);
+  manualRows.forEach(r=>{if(manualByCategory[r.category]!=null)manualByCategory[r.category]+=Number(r.value_kwh)||0;});
+  const manualTotal=Object.values(manualByCategory).reduce((s,v)=>s+v,0);
+  const residual=actualCarryKwh-manualTotal;
+
+  const bars=[
+    {label:'New accounts',value:newKwh,kind:'auto'},
+    ...named.map(n=>({label:(n.dropped?'Dropped/defected: ':'')+n.name,value:n.delta,kind:n.dropped?'dropped':'named'})),
+    {label:'Macro / economic growth — all other accounts',value:macroKwh,kind:'auto'},
+    {label:'Weather',value:weatherKwh,kind:'auto'},
+    {label:'Industry & seasonality mix — all other accounts',value:seasIndKwh,kind:'auto'},
+    {label:'Operational adjustments — all other accounts',value:operKwh,kind:'auto'},
+    ...BRIDGE_MANUAL_CATS.map(c=>({label:c.label,value:manualByCategory[c.key]||0,kind:'manual',catKey:c.key})),
+    {label:'Unexplained / residual',value:residual,kind:'residual'},
+  ];
+  return{mode,rc,yearA,yearB,startTotal,endTotal,totalGap,bars,manualRows};
+}
+
+/* ── Driver Waterfall — rendering (chart, table, manual-input editor) ── */
+function _bridgeFmtGwh(v){return(v>=0?'+':'')+(v/1e6).toFixed(2)+' GWh';}
+function _bridgeFmtGwhPlain(v){return(v/1e6).toFixed(2)+' GWh';}
+
+function renderDriverBridgeChart(canvasId,bridge,startLabel,endLabel){
+  const bars=bridge.bars;
+  const labels=[startLabel,...bars.map(b=>b.label.length>26?b.label.slice(0,24)+'…':b.label),endLabel];
+  const startG=bridge.startTotal/1e6,endG=bridge.endTotal/1e6;
+  const valsG=bars.map(b=>b.value/1e6);
+  const posData=[startG,...valsG.map(v=>v>0?v:0),0];
+  const negData=[0,...valsG.map(v=>v<0?v:0),0];
+  const baseData=[0,...valsG.map((_,i)=>{let base=startG;for(let j=0;j<i;j++)base+=valsG[j];return base;}),0];
+  const endpointBar=[0,...valsG.map(()=>0),endG];
+  destroyChart(canvasId);
+  const canvas=document.getElementById(canvasId);if(!canvas)return;
+  chartInstances[canvasId]=new Chart(canvas,{
+    type:'bar',
+    data:{labels,datasets:[
+      {label:'Base',data:baseData,backgroundColor:'transparent',borderWidth:0,stack:'s'},
+      {label:'Increase',data:posData,backgroundColor:'rgba(39,196,133,0.75)',borderRadius:2,stack:'s'},
+      {label:'Decrease',data:negData,backgroundColor:'rgba(232,64,64,0.75)',borderRadius:2,stack:'s'},
+      {label:'Endpoint',data:endpointBar,backgroundColor:'rgba(0,194,168,0.85)',borderRadius:3,stack:'a'},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>{
+        if(ctx.datasetIndex===0||ctx.raw===0)return null;
+        return`${ctx.dataset.label==='Endpoint'?labels[ctx.dataIndex]:ctx.dataset.label}: ${(ctx.raw>=0?'+':'')+ctx.raw.toFixed(2)} GWh`;
+      }}}},
+      scales:{
+        x:{ticks:{color:TC,font:{size:9},maxRotation:60,minRotation:40},grid:{color:CC},stacked:true},
+        y:{ticks:{color:TC,font:{size:10}},grid:{color:CC},stacked:true},
+      }
+    }
+  });
+}
+
+function _bridgeTableHtml(bridge,startLabel,endLabel){
+  const rowHtml=(label,v,muted)=>`<tr${muted?' style="color:var(--text3)"':''}>
+    <td style="padding:4px 8px">${esc(label)}</td>
+    <td style="text-align:right;padding:4px 8px;font-weight:${muted?400:600};color:${v>0?'var(--green)':v<0?'var(--red)':'var(--text3)'}">${_bridgeFmtGwh(v)}</td>
+    <td style="text-align:right;padding:4px 8px;color:var(--text3)">${bridge.totalGap?((v/bridge.totalGap)*100).toFixed(0)+'%':'—'}</td>
+  </tr>`;
+  let h=`<table style="width:100%;border-collapse:collapse;font-size:11px">
+    <thead><tr style="border-bottom:0.5px solid var(--border-strong)">
+      <th style="text-align:left;padding:4px 8px;color:var(--text3);font-weight:500">Driver</th>
+      <th style="text-align:right;padding:4px 8px;color:var(--text3);font-weight:500">Impact</th>
+      <th style="text-align:right;padding:4px 8px;color:var(--text3);font-weight:500">% of gap</th>
+    </tr></thead><tbody>`;
+  h+=`<tr><td style="padding:4px 8px;font-weight:600">${esc(startLabel)}</td><td style="text-align:right;padding:4px 8px;font-weight:600">${_bridgeFmtGwhPlain(bridge.startTotal)}</td><td></td></tr>`;
+  bridge.bars.forEach(b=>{h+=rowHtml(b.label,b.value,b.kind==='auto'&&b.value===0);});
+  h+=`<tr><td style="padding:4px 8px;font-weight:600">${esc(endLabel)}</td><td style="text-align:right;padding:4px 8px;font-weight:600">${_bridgeFmtGwhPlain(bridge.endTotal)}</td><td></td></tr>`;
+  h+=`<tr style="border-top:1px solid var(--border-strong)"><td style="padding:4px 8px;font-weight:700">Total gap</td><td style="text-align:right;padding:4px 8px;font-weight:700;color:${bridge.totalGap>=0?'var(--green)':'var(--red)'}">${_bridgeFmtGwh(bridge.totalGap)}</td><td></td></tr>`;
+  h+='</tbody></table>';
+  return h;
+}
+
+function _bridgeManualFormHtml(prefix,yearA,yearB){
+  const yr=yearA===yearB?yearA:yearB;
+  return`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;margin-top:10px;padding-top:10px;border-top:0.5px solid var(--border)">
+    <div><label style="font-size:9px;color:var(--text3);text-transform:uppercase;display:block">Category</label>
+      <select id="${prefix}_m_cat" class="psel" style="min-width:220px">${BRIDGE_MANUAL_CATS.map(c=>`<option value="${c.key}">${esc(c.label)}</option>`).join('')}</select></div>
+    <div><label style="font-size:9px;color:var(--text3);text-transform:uppercase;display:block">Rate class</label>
+      <select id="${prefix}_m_rc" class="psel">${_bridgeRcOptionsHtml('')}</select></div>
+    <div><label style="font-size:9px;color:var(--text3);text-transform:uppercase;display:block">Year</label>
+      <input id="${prefix}_m_year" type="number" class="psel" style="width:70px" value="${yr}"></div>
+    <div><label style="font-size:9px;color:var(--text3);text-transform:uppercase;display:block">Month</label>
+      <select id="${prefix}_m_month" class="psel">${MONTHS_SHORT.map((m,i)=>`<option value="${i+1}">${m}</option>`).join('')}</select></div>
+    <div><label style="font-size:9px;color:var(--text3);text-transform:uppercase;display:block">Impact (kWh, signed)</label>
+      <input id="${prefix}_m_kwh" type="number" class="psel" style="width:120px" placeholder="-500000"></div>
+    <div style="flex:1;min-width:180px"><label style="font-size:9px;color:var(--text3);text-transform:uppercase;display:block">Note / source</label>
+      <input id="${prefix}_m_note" class="psel" style="width:100%" placeholder="How was this estimated?"></div>
+    <button class="btn btn-t" onclick="bridgeAddManualDriver('${prefix}')">+ Add</button>
+  </div>
+  <div id="${prefix}_m_tbl" style="margin-top:8px"></div>`;
+}
+
+function _bridgeManualTableHtml(prefix,manualRows){
+  if(!manualRows.length)return'<div style="color:var(--text3);font-size:10.5px;padding:6px 0">No manual attribution entries logged for this walk yet.</div>';
+  let h='<table style="width:100%;border-collapse:collapse;font-size:10.5px"><tbody>';
+  manualRows.forEach(r=>{
+    const catLabel=(BRIDGE_MANUAL_CATS.find(c=>c.key===r.category)||{}).label||r.category;
+    h+=`<tr style="border-bottom:0.5px solid var(--border)">
+      <td style="padding:3px 8px;color:var(--text3)">${esc(catLabel)}${r.rate_class?' · '+esc(r.rate_class):''} · ${MONTHS_SHORT[Number(r.month)-1]} ${r.year}</td>
+      <td style="padding:3px 8px;text-align:right;font-weight:600;color:${Number(r.value_kwh)>=0?'var(--green)':'var(--red)'}">${(Number(r.value_kwh)>=0?'+':'')+Number(r.value_kwh).toLocaleString()} kWh</td>
+      <td style="padding:3px 8px;color:var(--text3)">${esc(r.source_note||'')} — ${esc(r.created_by||'')}</td>
+      <td style="padding:3px 8px;text-align:right">${can('delete_item')?`<span style="cursor:pointer;color:var(--red);font-size:11px" onclick="bridgeDeleteManualDriver(${r.id},'${prefix}')">🗑</span>`:''}</td>
+    </tr>`;
+  });
+  h+='</tbody></table>';
+  return h;
+}
+
+async function bridgeAddManualDriver(prefix){
+  const sb=getSB();if(!sb)return;
+  const category=document.getElementById(`${prefix}_m_cat`)?.value;
+  const rate_class=document.getElementById(`${prefix}_m_rc`)?.value||null;
+  const year=parseInt(document.getElementById(`${prefix}_m_year`)?.value);
+  const month=parseInt(document.getElementById(`${prefix}_m_month`)?.value);
+  const value_kwh=parseFloat(document.getElementById(`${prefix}_m_kwh`)?.value);
+  const source_note=(document.getElementById(`${prefix}_m_note`)?.value||'').trim();
+  if(!category||!year||!month||!value_kwh){toast('Category, year, month, and a non-zero kWh impact are required','err');return;}
+  const cu=(typeof CU!=='undefined'&&CU&&CU.name)?CU.name:'';
+  // Append-only insert, no upsert — a correction is a new row, never an edit to
+  // an existing one (see the header note on jps_bridge_drivers' own migration).
+  const{error}=await sb.from('jps_bridge_drivers').insert({category,rate_class,year,month,value_kwh,source_note,created_by:cu});
+  if(error){toast('Save failed: '+error.message,'err');return;}
+  toast('Driver added','ok');
+  document.getElementById(`${prefix}_m_kwh`).value='';
+  document.getElementById(`${prefix}_m_note`).value='';
+  await syncSupabase(true);
+  if(prefix.startsWith('rcfr'))renderRcfrBridge();else if(prefix.startsWith('y3'))renderY3Bridge();
+}
+async function bridgeDeleteManualDriver(id,prefix){
+  if(!can('delete_item')){toast('Admin only','err');return;}
+  const sb=getSB();if(!sb)return;
+  const{error}=await sb.from('jps_bridge_drivers').delete().eq('id',id);
+  if(error){toast('Delete failed: '+error.message,'err');return;}
+  await syncSupabase(true);
+  if(prefix.startsWith('rcfr'))renderRcfrBridge();else if(prefix.startsWith('y3'))renderY3Bridge();
+}
+
+function _bridgeRcOptionsHtml(sel){
+  return['','RT10','RT20','RT40','RT50','RT60-ST','RT70'].map(rc=>`<option value="${rc}" ${sel===rc?'selected':''}>${rc||'All rate classes'}</option>`).join('');
+}
+function _bridgeYearOptionsHtml(sel,lo,hi){
+  let h='';for(let y=lo;y<=hi;y++)h+=`<option value="${y}" ${Number(sel)===y?'selected':''}>${y}</option>`;
+  return h;
+}
+function _bridgeCaveatHtml(bridge){
+  const parts=[];
+  if(bridge.mode==='budget'&&bridge.yearA<FC_BUD_YEAR)parts.push('This year is fully closed — macro/weather/industry decomposition only exists for forecast months, so the whole budget-vs-actual gap falls into "Unexplained / residual."');
+  else if(bridge.mode!=='budget'&&bridge.yearB<FC_BUD_YEAR)parts.push('Both years are fully closed — macro/weather/industry decomposition only exists for forecast months, so this walk relies on new/dropped accounts, named large customers, and manually-entered drivers, with the rest in "Unexplained / residual."');
+  parts.push('Hurricane/event/solar/self-generation/off-grid figures are analyst estimates entered manually below — they explain the gap after the fact and do not change the live forecast.');
+  return parts.join(' ');
+}
+
+// Renders one full bridge (chart + table + manual editor) into the 3 containers
+// under a given DOM id prefix. Reused by both the RC Forecast Report card and
+// each leg of the 3-Year Comparison card.
+function _renderBridgeInto(prefix,bridge,startLabel,endLabel){
+  renderDriverBridgeChart(`${prefix}_chart`,bridge,startLabel,endLabel);
+  const tblEl=document.getElementById(`${prefix}_tbl`);if(tblEl)tblEl.innerHTML=_bridgeTableHtml(bridge,startLabel,endLabel);
+  const caveatEl=document.getElementById(`${prefix}_caveat`);if(caveatEl)caveatEl.textContent=_bridgeCaveatHtml(bridge);
+  const formEl=document.getElementById(`${prefix}_form`);if(formEl)formEl.innerHTML=_bridgeManualFormHtml(prefix,bridge.yearA,bridge.yearB);
+  const mTblEl=document.getElementById(`${prefix}_m_tbl`);if(mTblEl)mTblEl.innerHTML=_bridgeManualTableHtml(prefix,bridge.manualRows);
+}
+
+function renderRcfrBridge(){
+  const card=document.getElementById('rcfr_bridge_card');if(!card)return;
+  const modeSel=document.getElementById('rcfr_bridge_mode');
+  if(modeSel&&!modeSel.dataset.populated){
+    modeSel.innerHTML='<option value="budget">vs Budget (same year)</option><option value="yoy">Year over Year</option>';
+    modeSel.dataset.populated='1';
+  }
+  const rcSel=document.getElementById('rcfr_bridge_rc');
+  if(rcSel&&!rcSel.dataset.populated){rcSel.innerHTML=_bridgeRcOptionsHtml('');rcSel.dataset.populated='1';}
+  const anchorYear=parseInt(document.getElementById('rcfr_year')?.value)||FC_BUD_YEAR;
+  const ybSel=document.getElementById('rcfr_bridge_yb');
+  if(ybSel&&!ybSel.dataset.populated){
+    ybSel.innerHTML=_bridgeYearOptionsHtml(anchorYear-1,FC_BUD_YEAR-3,FC_BUD_YEAR+4);
+    ybSel.dataset.populated='1';
+  }
+  const mode=modeSel?.value||'budget';
+  const rc=rcSel?.value||null;
+  const compareYear=parseInt(ybSel?.value)||anchorYear-1;
+  const ybWrap=document.getElementById('rcfr_bridge_yb_wrap');
+  if(ybWrap)ybWrap.style.display=mode==='budget'?'none':'';
+
+  const bridge=mode==='budget'
+    ?buildDriverBridge('budget',rc||null,anchorYear,anchorYear)
+    :buildDriverBridge('actual',rc||null,compareYear,anchorYear);
+  const startLabel=mode==='budget'?`FY${anchorYear} Budget`:`FY${compareYear}`;
+  const endLabel=mode==='budget'?`FY${anchorYear} LE`:`FY${anchorYear}`;
+  _renderBridgeInto('rcfr_bridge',bridge,startLabel,endLabel);
+}
+
+// 3-Year Comparison's bridge: two consecutive legs (A→B, B→C), reusing that
+// tab's own #y3_a/#y3_b/#y3_c selectors rather than duplicating year pickers —
+// this is the "chain across 3 years" version of the same engine.
+function renderY3Bridge(){
+  const card=document.getElementById('y3_bridge_card');if(!card)return;
+  const rcSel=document.getElementById('y3_bridge_rc');
+  if(rcSel&&!rcSel.dataset.populated){rcSel.innerHTML=_bridgeRcOptionsHtml('');rcSel.dataset.populated='1';}
+  const rc=rcSel?.value||null;
+  const yA=parseInt(document.getElementById('y3_a')?.value)||FC_BUD_YEAR-1;
+  const yB=parseInt(document.getElementById('y3_b')?.value)||FC_BUD_YEAR;
+  const yC=parseInt(document.getElementById('y3_c')?.value)||FC_BUD_YEAR+1;
+
+  const legAB=buildDriverBridge('actual',rc||null,yA,yB);
+  _renderBridgeInto('y3_bridge_ab',legAB,`FY${yA}`,`FY${yB}`);
+  const legBC=buildDriverBridge('actual',rc||null,yB,yC);
+  _renderBridgeInto('y3_bridge_bc',legBC,`FY${yB}`,`FY${yC}`);
 }
 
 function _frRcLabel(custRcKwh,name){
