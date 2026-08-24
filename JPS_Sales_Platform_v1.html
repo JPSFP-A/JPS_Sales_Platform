@@ -2405,7 +2405,11 @@ order by ordinal_position;</pre>
             <select id="adjlog_reason" class="psel" onchange="renderAdjustmentLog()">
               <option value="">All reason codes</option>
               <option>Renewal</option><option>Expansion</option><option>Confirmed defection</option>
-              <option>Possible defection</option><option>Win-back</option><option>Operational disruption</option><option>Other</option>
+              <option>Possible defection</option><option>Win-back</option><option>Operational disruption</option>
+              <option>New Customer Added</option>
+              <option>Rate case update</option><option>Economic outlook revision</option><option>Weather forecast update</option>
+              <option>Seasonal pattern revision</option><option>Industry-specific event</option><option>Correction</option>
+              <option>Other</option>
             </select>
             <select id="adjlog_kam" class="psel" onchange="renderAdjustmentLog()"></select>
             <select id="adjlog_group" class="psel" onchange="renderAdjustmentLog()">
@@ -11015,11 +11019,45 @@ function renderMacroAssumptions(){
     <tbody>${body}</tbody>
   </table>`;
 }
-async function macroSaveCell(type,seg,year,month,val){
-  const sb=getSB();if(!sb)return;
+function goToMacroAssumptions(){sw('macro',document.querySelector('.ni[onclick^="sw(\'macro\'"]'));}
+const MACRO_REASON_CODES=['Rate case update','Economic outlook revision','Weather forecast update','Seasonal pattern revision','Industry-specific event','Correction','Other'];
+let _macroPendingEdit=null;
+function macroSaveCell(type,seg,year,month,val){
   const pct=parseFloat(val)||0;
+  if(pct===0){_macroCommitCell(type,seg,year,month,0,null,null);return;}
+  _macroPendingEdit={type,seg,year,month,pct};
+  const segLabel=type==='industry'?'Industry — '+seg:type==='macro'?'Macro — '+seg:type==='weather'?'Weather':'Seasonality — residential';
+  openModal(
+    'Why the change?',
+    `<div style="font-size:12px;color:var(--text2);margin-bottom:12px">
+      <strong>${esc(segLabel)}</strong>, ${MONTHS_SHORT[month-1]} ${year}, is changing to <strong>${pct>0?'+':''}${pct}%</strong>. Every non-zero change needs a reason before it saves.
+    </div>
+    <label style="font-size:10px;color:var(--text3);text-transform:uppercase">Reason code</label>
+    <select id="macro_reason_code" class="psel" style="width:100%;margin:4px 0 10px">
+      ${MACRO_REASON_CODES.map(r=>`<option value="${r}">${r}</option>`).join('')}
+    </select>
+    <label style="font-size:10px;color:var(--text3);text-transform:uppercase">Justification</label>
+    <textarea id="macro_reason_text" class="psel" rows="3" style="width:100%;margin-top:4px;box-sizing:border-box" placeholder="What changed and why"></textarea>`,
+    _macroConfirmReasonedEdit,
+    '💾 Save assumption',
+    'var(--teal)'
+  );
+  renderSection(document.querySelector('.sec.on')?.id); // repaint so a cancel doesn't leave the input showing an uncommitted value
+}
+async function _macroConfirmReasonedEdit(){
+  if(!_macroPendingEdit)return;
+  const reason=document.getElementById('macro_reason_code')?.value;
+  const just=(document.getElementById('macro_reason_text')?.value||'').trim();
+  if(!just){toast('Justification is required','err');return;}
+  const{type,seg,year,month,pct}=_macroPendingEdit;
+  closeModal();
+  await _macroCommitCell(type,seg,year,month,pct,reason,just);
+  _macroPendingEdit=null;
+}
+async function _macroCommitCell(type,seg,year,month,pct,reason,just){
+  const sb=getSB();if(!sb)return;
   const cu=(typeof CU!=='undefined'&&CU&&CU.name)?CU.name:'';
-  const row={driver_type:type,segment:seg,year,month,value_pct:pct,updated_by:cu,updated_at:new Date().toISOString()};
+  const row={driver_type:type,segment:seg,year,month,value_pct:pct,reason_code:reason,justification:just,updated_by:cu,updated_at:new Date().toISOString()};
   const{error}=await sb.from('jps_macro_assumptions').upsert(
     row,{onConflict:'driver_type,segment,year,month'}
   );
@@ -11034,6 +11072,8 @@ async function macroSaveCell(type,seg,year,month,val){
   else sbMacroAssum.push(row);
   sbMacroAssumExists=true;
   _dfcResetYearChainCache();
+  _adjLogCache=null; // macro assumption edits with a reason now feed the Adjustment Log too
+  toast('Macro assumption saved','ok');
   renderSection(document.querySelector('.sec.on')?.id);
 }
 
@@ -11232,6 +11272,53 @@ async function _doCommitBudget(year,rows){
    ADJUSTMENT LOG — reason-coded audit trail + report
 ========================================== */
 let _adjLogCache=null; // jps_operational_adjustments rows — cached until the next write (see _dfcSaveAdjustment)
+// Unifies three source tables into one audit log: account-level operational
+// adjustments (jps_operational_adjustments), macro/industry/weather driver
+// changes that were saved with a reason (jps_macro_assumptions), and new
+// customers a KAM added to the forecast (jps_forecast_new_customers, already
+// in memory via sbNewCustomers -- every addition is inherently loggable, no
+// reason code needed since the entry itself is the record of what was added).
+function _adjLogNormalize(opRows){
+  const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
+  const indMap={};sbIndustries.forEach(i=>indMap[String(i.jps_ac||'').trim()]=i.industry||'');
+  const nameMap={},rcMap={};
+  _sbAllActuals().forEach(r=>{if(r.jps_ac){if(!nameMap[r.jps_ac])nameMap[r.jps_ac]=r.name;if(!rcMap[r.jps_ac])rcMap[r.jps_ac]=r.rate_class;}});
+
+  const out=[];
+  opRows.filter(r=>r.operational_pct||r.manual_kwh).forEach(r=>out.push({
+    source:'operational',id:r.id,
+    label:nameMap[r.jps_ac]||r.jps_ac,year:Number(r.year),month:Number(r.month),
+    magnitude:(r.operational_pct?_dfcFmtPct(Number(r.operational_pct)):'')+(r.manual_kwh?' / '+Number(r.manual_kwh).toLocaleString()+' kWh':''),
+    magnitudeAbs:Math.abs(Number(r.operational_pct)||0),
+    reason_code:r.reason_code,justification:r.justification,created_by:r.created_by,
+    rc:rcMap[r.jps_ac]||'—',kam:_kl(kamMap,r.jps_ac)||'Unassigned',industry:_kl(indMap,r.jps_ac)||'Unassigned',
+    editArgs:[r.jps_ac,Number(r.year),Number(r.month),Number(r.operational_pct)||0,r.reason_code||''],
+  }));
+  sbMacroAssum.filter(r=>r.reason_code).forEach(r=>{
+    const label=r.driver_type==='industry'?'Industry — '+r.segment:r.driver_type==='macro'?'Macro — '+r.segment:r.driver_type==='weather'?'Weather':'Seasonality — residential';
+    out.push({
+      source:'macro',
+      label,year:Number(r.year),month:Number(r.month),
+      magnitude:_dfcFmtPct(Number(r.value_pct)||0),magnitudeAbs:Math.abs(Number(r.value_pct)||0),
+      reason_code:r.reason_code,justification:r.justification,created_by:r.updated_by,
+      rc:'—',kam:'Unassigned',industry:r.driver_type==='industry'?r.segment:'Unassigned',
+      editArgs:[r.driver_type,r.segment,Number(r.year),Number(r.month)],
+    });
+  });
+  sbNewCustomers.forEach(c=>{
+    out.push({
+      source:'new_customer',
+      label:c.name||c.jps_ac,year:Number(c.start_year),month:Number(c.start_month),
+      magnitude:(Number(c.expected_kwh)||0).toLocaleString()+' kWh/mo',magnitudeAbs:0,
+      reason_code:'New Customer Added',
+      justification:`${c.rate_class||''} · ${c.parish||''} · industry: ${c.industry||'unassigned'}`.replace(/^ · | · $/,''),
+      created_by:c.created_by,
+      rc:c.rate_class||'—',kam:c.kam||'Unassigned',industry:c.industry||'Unassigned',
+      editArgs:null,
+    });
+  });
+  return out;
+}
 async function renderAdjustmentLog(){
   const wrap=document.getElementById('adjlog_table');if(!wrap)return;
   if(!_adjLogCache){
@@ -11240,16 +11327,11 @@ async function renderAdjustmentLog(){
     if(error){wrap.innerHTML=`<div style="padding:16px;color:var(--amber);font-size:12px">⚠ jps_operational_adjustments not found yet — run the schema migration, then Sync.</div>`;return;}
     _adjLogCache=data;
   }
-  const data=_adjLogCache;
   const reasonFilter=document.getElementById('adjlog_reason')?.value||'';
   const kamFilter=document.getElementById('adjlog_kam')?.value||'';
   const groupBy=document.getElementById('adjlog_group')?.value||'reason_code';
   const sortBy=document.getElementById('adjlog_sort')?.value||'edits';
   const q=(document.getElementById('adjlog_search')?.value||'').toLowerCase();
-  const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
-  const indMap={};sbIndustries.forEach(i=>indMap[String(i.jps_ac||'').trim()]=i.industry||'');
-  const nameMap={},rcMap={};
-  _sbAllActuals().forEach(r=>{if(r.jps_ac){if(!nameMap[r.jps_ac])nameMap[r.jps_ac]=r.name;if(!rcMap[r.jps_ac])rcMap[r.jps_ac]=r.rate_class;}});
 
   const kamSel=document.getElementById('adjlog_kam');
   if(kamSel&&!kamSel.dataset.populated){
@@ -11258,21 +11340,21 @@ async function renderAdjustmentLog(){
     if(kams.length)kamSel.dataset.populated='1';
   }
 
-  let rows=data.filter(r=>r.operational_pct||r.manual_kwh);
+  let rows=_adjLogNormalize(_adjLogCache);
   if(reasonFilter)rows=rows.filter(r=>r.reason_code===reasonFilter);
-  if(kamFilter)rows=rows.filter(r=>_kl(kamMap,r.jps_ac)===kamFilter);
-  if(q)rows=rows.filter(r=>(nameMap[r.jps_ac]||r.jps_ac||'').toLowerCase().includes(q)||(r.justification||'').toLowerCase().includes(q));
+  if(kamFilter)rows=rows.filter(r=>r.kam===kamFilter);
+  if(q)rows=rows.filter(r=>r.label.toLowerCase().includes(q)||(r.justification||'').toLowerCase().includes(q));
 
   const groups={};
   rows.forEach(r=>{
     const k=groupBy==='reason_code'?(r.reason_code||'—')
-      :groupBy==='rate_class'?(rcMap[r.jps_ac]||'—')
-      :groupBy==='kam'?(_kl(kamMap,r.jps_ac)||'Unassigned')
-      :groupBy==='industry'?(_kl(indMap,r.jps_ac)||'Unassigned')
-      :`${MONTHS_SHORT[Number(r.month)-1]} ${r.year}`;
+      :groupBy==='rate_class'?r.rc
+      :groupBy==='kam'?r.kam
+      :groupBy==='industry'?r.industry
+      :`${MONTHS_SHORT[r.month-1]} ${r.year}`;
     if(!groups[k])groups[k]={key:k,rows:[],accounts:new Set(),pctSum:0};
-    groups[k].rows.push(r);groups[k].accounts.add(r.jps_ac);
-    groups[k].pctSum+=Math.abs(Number(r.operational_pct)||0);
+    groups[k].rows.push(r);groups[k].accounts.add(r.label);
+    groups[k].pctSum+=r.magnitudeAbs;
   });
 
   const sortedGroups=Object.values(groups).sort((a,b)=>{
@@ -11281,10 +11363,13 @@ async function renderAdjustmentLog(){
     return b.rows.length-a.rows.length; // 'edits' — default
   });
 
+  const srcTag=s=>s==='macro'?'<span style="color:var(--blue);font-size:9px;text-transform:uppercase;margin-right:5px">Macro</span>'
+    :s==='new_customer'?'<span style="color:var(--teal);font-size:9px;text-transform:uppercase;margin-right:5px">New Cust.</span>':'';
+
   let body='';
   sortedGroups.forEach((g,gi)=>{
     const gid=`adjlog_g${gi}`;
-    const sortedRows=[...g.rows].sort((a,b)=>(Number(a.year)*12+Number(a.month))-(Number(b.year)*12+Number(b.month)));
+    const sortedRows=[...g.rows].sort((a,b)=>(a.year*12+a.month)-(b.year*12+b.month));
     body+=`<tr style="border-bottom:0.5px solid var(--border);cursor:pointer" onclick="document.getElementById('${gid}').style.display=document.getElementById('${gid}').style.display==='none'?'table-row-group':'none'">
       <td style="padding:6px 8px;font-weight:500">▾ ${esc(g.key)}</td>
       <td style="text-align:right;padding:6px 4px">${g.accounts.size}</td>
@@ -11293,13 +11378,14 @@ async function renderAdjustmentLog(){
       <td></td>
     </tr>`;
     body+=`<tbody id="${gid}">`+sortedRows.map(r=>`<tr>
-      <td style="padding:4px 8px 4px 26px;color:var(--text3)">${esc(nameMap[r.jps_ac]||r.jps_ac)}</td>
-      <td style="text-align:right;padding:4px">${MONTHS_SHORT[Number(r.month)-1]} ${r.year}</td>
-      <td style="text-align:right;padding:4px">${r.operational_pct?_dfcFmtPct(Number(r.operational_pct)):''}${r.manual_kwh?' / '+Number(r.manual_kwh).toLocaleString()+' kWh':''}</td>
+      <td style="padding:4px 8px 4px 26px;color:var(--text3)">${srcTag(r.source)}${esc(r.label)}</td>
+      <td style="text-align:right;padding:4px">${MONTHS_SHORT[r.month-1]} ${r.year}</td>
+      <td style="text-align:right;padding:4px">${esc(r.magnitude)}</td>
       <td style="padding:4px 8px;color:var(--text3);font-size:11px">${esc(r.justification||'')} <span style="color:var(--text3)">— ${esc(r.created_by||'')}</span></td>
       <td style="padding:4px 8px;text-align:right;white-space:nowrap" onclick="event.stopPropagation()">
-        <button class="btn-t" style="padding:2px 8px;font-size:11px" onclick="adjLogEditRow('${esc(r.jps_ac)}',${Number(r.year)},${Number(r.month)},${Number(r.operational_pct)||0},'${esc(r.reason_code||'')}')">✏ Edit</button>
-        ${can('delete_item')?`<button class="btn-t" style="padding:2px 8px;font-size:11px;color:var(--red);margin-left:4px" onclick="adjLogDeleteRow(${Number(r.id)})">🗑</button>`:''}
+        ${r.source==='operational'?`<button class="btn-t" style="padding:2px 8px;font-size:11px" onclick="adjLogEditRow('${esc(r.editArgs[0])}',${r.editArgs[1]},${r.editArgs[2]},${r.editArgs[3]},'${esc(r.editArgs[4])}')">✏ Edit</button>`:''}
+        ${r.source==='operational'&&can('delete_item')?`<button class="btn-t" style="padding:2px 8px;font-size:11px;color:var(--red);margin-left:4px" onclick="adjLogDeleteRow(${r.id})">🗑</button>`:''}
+        ${r.source==='macro'?`<button class="btn-t" style="padding:2px 8px;font-size:11px" onclick="goToMacroAssumptions()">→ Macro Assumptions</button>`:''}
       </td>
     </tr>`).join('')+`</tbody>`;
   });
@@ -11312,7 +11398,7 @@ async function renderAdjustmentLog(){
       <th style="text-align:left;padding:6px 8px;font-weight:500;color:var(--text3)">Detail (by month)</th>
       <th style="text-align:right;padding:6px 8px;font-weight:500;color:var(--text3)">Actions</th>
     </tr></thead>
-    ${body||'<tbody><tr><td colspan="5" style="padding:16px;color:var(--text3)">No operational adjustments logged yet.</td></tr></tbody>'}
+    ${body||'<tbody><tr><td colspan="5" style="padding:16px;color:var(--text3)">No adjustments, macro changes, or new customers logged yet.</td></tr></tbody>'}
   </table>`;
 }
 function exportAdjustmentLogCSV(){exportTableCSV('adjlog_tbl_el','adjustment_log');}
