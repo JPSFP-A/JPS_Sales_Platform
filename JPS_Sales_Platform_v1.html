@@ -502,6 +502,7 @@ document.getElementById('schema_stale_banner').style.display='none';
     <div class="ni" onclick="sw('macro',this)"><span class="ni-icon">🌐</span>Macro Assumptions</div>
     <div class="ni" onclick="sw('adjlog',this)"><span class="ni-icon">📋</span>Adjustment Log</div>
     <div class="ni" onclick="sw('rcfr',this)"><span class="ni-icon">📐</span>RC Forecast Report</div>
+    <div class="ni" onclick="sw('y3cmp',this)"><span class="ni-icon">📅</span>3-Year Comparison</div>
     <div class="ni" onclick="sw('demand',this)"><span class="ni-icon">⚡</span>Peak Demand</div>
     <div class="nav-lbl" style="margin-top:8px">Intelligence</div>
     <div class="ni" onclick="sw('es',this)"><span class="ni-icon">📰</span>Exec Summary</div>
@@ -2448,6 +2449,25 @@ order by ordinal_position;</pre>
       </div>
     </div>
 
+    <!-- === 3-YEAR COMPARISON === -->
+    <div id="y3cmp" class="sec">
+      <div class="card">
+        <div class="ch">3-Year Comparison
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <select id="y3_a" class="psel" onchange="renderY3Comparison()"></select>
+            <select id="y3_b" class="psel" onchange="renderY3Comparison()"></select>
+            <select id="y3_c" class="psel" onchange="renderY3Comparison()"></select>
+            <button class="btn btn-o" onclick="exportTableCSV('y3_tbl_el','3yr_comparison')">⬇ Export</button>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:10px">
+          Volume by rate class across any 3 selected years. A year at or before the current close uses actuals (blended with Driver Forecast for any remaining open months); a year beyond that is a full Driver Forecast projection — same engine as Driver Forecast / RC Forecast Report, so these numbers always match those tabs.
+        </div>
+        <div id="y3_table" style="overflow-x:auto"></div>
+        <div id="y3_note" style="margin-top:10px;font-size:10.5px;color:var(--text3)"></div>
+      </div>
+    </div>
+
     <!-- === PEAK DEMAND === -->
     <div id="demand" class="sec">
       <div class="card">
@@ -3457,7 +3477,7 @@ function sw(id,el){
   // sbActuals+sbActualsComm (e.g. Revenue Recovery), and landing on either directly
   // without ever visiting a commercial tab previously showed a silently-undercounted
   // residential-only total with no loading indicator.
-  const _commSections=['ov','es','cm','df','ro','fc','le','dfc','adjlog','rcfr'];
+  const _commSections=['ov','es','cm','df','ro','fc','le','dfc','adjlog','rcfr','y3cmp'];
   if(_commSections.includes(id)&&!_commDetailLoaded){
     loadCommercialDetail().catch(e=>console.warn('loadCommercialDetail:',e));
   }
@@ -4014,6 +4034,7 @@ function renderSection(id){
   else if(id==='macro'){renderMacroAssumptions();}
   else if(id==='adjlog'){renderAdjustmentLog();}
   else if(id==='rcfr'){renderRcForecastReport();}
+  else if(id==='y3cmp'){renderY3Comparison();}
   else if(id==='demand'){renderPeakDemand();}
 }
 
@@ -11512,14 +11533,16 @@ function _frPct(v,d=1){if(v==null||!isFinite(v))return '—';return (v>=0?'+':''
 // Gathers every number the report needs in one pass over the SAME engine chains
 // renderRcForecastReport() uses — so the PDF can never disagree with the tab
 // it's a button on.
-function _frCollectData(){
+function _frCollectData(yearOverride){
   // Read the same year the RC Forecast Report tab has selected (#rcfr_year) --
   // defaulting to FC_BUD_YEAR only if that control isn't on the page yet.
   // Generate used to always build FC_BUD_YEAR regardless of the dropdown, so
   // switching the live tab to a future year and hitting Generate silently
   // produced a report for a different year than what was on screen.
+  // yearOverride lets other callers (3-Year Comparison) request a specific
+  // year's data without touching the #rcfr_year dropdown's own state.
   const yrSel=document.getElementById('rcfr_year');
-  const year=parseInt(yrSel?.value)||FC_BUD_YEAR;
+  const year=yearOverride||parseInt(yrSel?.value)||FC_BUD_YEAR;
   // Months-elapsed for THIS report year -- only the real current year (FC_BUD_YEAR)
   // has any actual/closed months; a future year is 100% forecast. Mirrors the
   // lockedThru rule renderRcForecastReport() already uses for the same reason.
@@ -11607,6 +11630,75 @@ function _frCollectData(){
   });
 
   return {year,curMonth:repCurMonth,rcMonth,indMonth,rcIndMonth,custFy,custRcKwh,fy25Rc,fy25Cust,budRc,budH1,budH2,modeledIndustries};
+}
+
+// 3-Year Comparison — reuses _frCollectData's live Driver Forecast chain for
+// the current year and any future year, but NEVER for a year before FC_BUD_YEAR:
+// _dfcGetChain only fills real actuals into months <= lockedThru, and
+// lockedThru is 0 for any year < FC_BUD_YEAR (the year-picker on Driver
+// Forecast/RC Forecast Report has never offered a past year, so that path is
+// untested and would silently forecast a closed year from an empty base
+// instead of reading its real actuals). A closed year is pulled straight from
+// actuals instead, which is both correct and cheaper.
+function _y3RcTotals(year){
+  const totals={};
+  RC_DISPLAY_ORDER.forEach(rc=>totals[rc]=0);
+  if(year<FC_BUD_YEAR){
+    _sbAllActuals().forEach(r=>{
+      if(Number(r.year)!==year)return;
+      const rc=r.rate_class;
+      if(rc==='EV'||!(rc in totals))return;
+      totals[rc]+=Number(r.kwh)||0;
+    });
+    return{totals,tag:'Actual'};
+  }
+  const d=_frCollectData(year);
+  RC_DISPLAY_ORDER.forEach(rc=>{
+    let t=0;for(let m=1;m<=12;m++)t+=(d.rcMonth[rc]&&d.rcMonth[rc][m])||0;
+    totals[rc]=t;
+  });
+  return{totals,tag:year===FC_BUD_YEAR?'Actual + Forecast':'Forecast'};
+}
+
+function renderY3Comparison(){
+  const wrap=document.getElementById('y3_table');if(!wrap)return;
+  const selA=document.getElementById('y3_a'),selB=document.getElementById('y3_b'),selC=document.getElementById('y3_c');
+  if(selA&&!selA.options.length){
+    const opts=[];
+    for(let y=FC_BUD_YEAR-2;y<=FC_BUD_YEAR+4;y++)opts.push(`<option value="${y}">${y}</option>`);
+    selA.innerHTML=opts.join('');selB.innerHTML=opts.join('');selC.innerHTML=opts.join('');
+    selA.value=FC_BUD_YEAR-1;selB.value=FC_BUD_YEAR;selC.value=FC_BUD_YEAR+1;
+  }
+  const yA=parseInt(selA?.value)||FC_BUD_YEAR-1;
+  const yB=parseInt(selB?.value)||FC_BUD_YEAR;
+  const yC=parseInt(selC?.value)||FC_BUD_YEAR+1;
+  const rA=_y3RcTotals(yA),rB=_y3RcTotals(yB),rC=_y3RcTotals(yC);
+
+  const fmtGwh=v=>(v/1e6).toLocaleString('en-US',{minimumFractionDigits:1,maximumFractionDigits:1});
+  const fmtDelta=(a,b)=>{
+    if(!a)return'—';
+    const p=(b-a)/a*100;
+    return`<span style="color:${p>=0?'var(--green)':'var(--red)'}">${p>=0?'+':''}${p.toFixed(1)}%</span>`;
+  };
+
+  let h='<table class="dt" id="y3_tbl_el"><thead><tr><th>Rate Class</th>';
+  [[yA,rA],[yB,rB],[yC,rC]].forEach(([y,r])=>{
+    h+=`<th style="text-align:right">${y} (GWh)<br><span style="font-weight:400;font-size:9px;color:var(--text3)">${r.tag}</span></th>`;
+  });
+  h+=`<th style="text-align:right">${yA}→${yB}</th><th style="text-align:right">${yB}→${yC}</th></tr></thead><tbody>`;
+  RC_DISPLAY_ORDER.forEach(rc=>{
+    const vA=rA.totals[rc],vB=rB.totals[rc],vC=rC.totals[rc];
+    h+=`<tr><td>${rc}</td><td style="text-align:right">${fmtGwh(vA)}</td><td style="text-align:right">${fmtGwh(vB)}</td><td style="text-align:right">${fmtGwh(vC)}</td><td style="text-align:right">${fmtDelta(vA,vB)}</td><td style="text-align:right">${fmtDelta(vB,vC)}</td></tr>`;
+  });
+  const tA=RC_DISPLAY_ORDER.reduce((s,rc)=>s+rA.totals[rc],0);
+  const tB=RC_DISPLAY_ORDER.reduce((s,rc)=>s+rB.totals[rc],0);
+  const tC=RC_DISPLAY_ORDER.reduce((s,rc)=>s+rC.totals[rc],0);
+  h+=`<tr style="font-weight:700;border-top:1px solid var(--border-strong)"><td>Total</td><td style="text-align:right">${fmtGwh(tA)}</td><td style="text-align:right">${fmtGwh(tB)}</td><td style="text-align:right">${fmtGwh(tC)}</td><td style="text-align:right">${fmtDelta(tA,tB)}</td><td style="text-align:right">${fmtDelta(tB,tC)}</td></tr>`;
+  h+='</tbody></table>';
+  wrap.innerHTML=h;
+
+  const note=document.getElementById('y3_note');
+  if(note)note.textContent="Revenue isn't shown here yet — Driver Forecast only projects volume (kWh), so a year beyond the current close has no computed revenue until rate assumptions are built.";
 }
 
 function _frRcLabel(custRcKwh,name){
