@@ -500,6 +500,7 @@ document.getElementById('schema_stale_banner').style.display='none';
     <div class="ni" onclick="sw('rs',this)"><span class="ni-icon">🏠</span>Residential</div>
     <div class="ni" onclick="sw('dfc',this)"><span class="ni-icon">🌲</span>Driver Forecast</div>
     <div class="ni" onclick="sw('macro',this)"><span class="ni-icon">🌐</span>Macro Assumptions</div>
+    <div class="ni" onclick="sw('rateassum',this)"><span class="ni-icon">💲</span>Rate Assumptions</div>
     <div class="ni" onclick="sw('adjlog',this)"><span class="ni-icon">📋</span>Adjustment Log</div>
     <div class="ni" onclick="sw('rcfr',this)"><span class="ni-icon">📐</span>RC Forecast Report</div>
     <div class="ni" onclick="sw('y3cmp',this)"><span class="ni-icon">📅</span>3-Year Comparison</div>
@@ -2379,6 +2380,22 @@ order by ordinal_position;</pre>
       </div>
     </div>
 
+    <!-- === RATE ASSUMPTIONS === -->
+    <div id="rateassum" class="sec">
+      <div class="card">
+        <div class="ch">Rate Assumptions
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <select id="rateassum_rc" class="psel" onchange="renderRateAssumptions()"></select>
+            <select id="rateassum_year" class="psel" onchange="renderRateAssumptions()"></select>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
+          JMD/kWh by component, used to turn a Driver Forecast volume (kWh) into an estimated revenue budget when you commit a forecast year to Budget. <strong>Base</strong> covers fuel, GCT, IPP surcharge and everything else <code>revenue_jmd</code> carries that isn't broken out into Energy/Demand/Customer — the four always sum to the historical all-in rate, so leaving them at their seeded defaults reproduces the trailing actual rate exactly. Changes save automatically as you edit — admin only.
+        </div>
+        <div id="rateassum_table" style="overflow-x:auto"></div>
+      </div>
+    </div>
+
     <!-- === ADJUSTMENT LOG === -->
     <div id="adjlog" class="sec">
       <div class="card">
@@ -4032,6 +4049,7 @@ function renderSection(id){
   else if(id==='le'){renderLE();}
   else if(id==='dfc'){renderDriverForecast();}
   else if(id==='macro'){renderMacroAssumptions();}
+  else if(id==='rateassum'){renderRateAssumptions();}
   else if(id==='adjlog'){renderAdjustmentLog();}
   else if(id==='rcfr'){renderRcForecastReport();}
   else if(id==='y3cmp'){renderY3Comparison();}
@@ -9223,6 +9241,7 @@ var _sbClient=null, // var (not let) — hoisted as undefined, avoids TDZ when J
     sbLE=[],            // jps_le               — latest estimate at account/parish/bucket level
     sbMacroAssum=[],    // jps_macro_assumptions — segment/industry driver % inputs, monthly
     sbMacroAssumExists=false, // true once the table has been confirmed reachable (distinct from "0 rows yet")
+    sbRateAssum=[],     // jps_rate_assumptions — JMD/kWh rate by rate_class/component/month, feeds Commit Forecast to Budget
     sbOpAdj=[],         // jps_operational_adjustments_current — latest op adj + manual kwh per account/month
     sbOpAdjExists=false,
     sbNewCustomers=[],  // jps_forecast_new_customers — added-but-not-yet-real accounts
@@ -9560,7 +9579,8 @@ async function syncSupabase(silent=false){
       rcAggData,parAggData,indAggData,
       custSummData,
       fcEntriesData,fcNotesData,
-      macroAssumData,opAdjData,newCustData,demandActualsData
+      macroAssumData,opAdjData,newCustData,demandActualsData,
+      rateAssumData
     ] = await Promise.all([
       sbTable('jps_industries',{}),
       sbTable('jps_kam',{}),
@@ -9622,7 +9642,8 @@ async function syncSupabase(silent=false){
       sbTable('jps_macro_assumptions',{limit:20000}),
       sbTable('jps_operational_adjustments_current',{limit:50000}),
       sbTable('jps_forecast_new_customers',{limit:5000}),
-      sbTable('jps_demand_actuals',{limit:5000})
+      sbTable('jps_demand_actuals',{limit:5000}),
+      sbTable('jps_rate_assumptions',{limit:20000})
     ]);
 
     // ── Process results ────────────────────────────────────
@@ -9691,6 +9712,9 @@ async function syncSupabase(silent=false){
     sbOpAdj=opAdjData||[];
     sbOpAdjExists=!!opAdjData;
     log.push(opAdjData?`Operational Adjustments: jps_operational_adjustments (${sbOpAdj.length} current rows)`:'Operational Adjustments: ⚠ jps_operational_adjustments not found — run schema SQL');
+
+    sbRateAssum=rateAssumData||[];
+    log.push(rateAssumData?`Rate Assumptions: jps_rate_assumptions (${sbRateAssum.length} rows)`:'Rate Assumptions: ⚠ jps_rate_assumptions not found — run schema SQL');
 
     sbNewCustomers=newCustData||[];
     log.push(newCustData?`New Customers: jps_forecast_new_customers (${sbNewCustomers.length} rows)`:'New Customers: ⚠ jps_forecast_new_customers not found — run schema SQL');
@@ -11010,6 +11034,72 @@ async function macroSaveCell(type,seg,year,month,val){
   sbMacroAssumExists=true;
   _dfcResetYearChainCache();
   renderSection(document.querySelector('.sec.on')?.id);
+}
+
+/* ==========================================
+   RATE ASSUMPTIONS — JMD/kWh by rate class, component, month
+   Feeds the revenue_budget estimate in Commit Forecast to Budget.
+========================================== */
+const RATE_ASSUM_COMPONENTS=[
+  {key:'base',     label:'Base (fuel, GCT, IPP, unitemized)'},
+  {key:'energy',   label:'Energy'},
+  {key:'demand',   label:'Demand'},
+  {key:'customer', label:'Customer charge'},
+];
+function renderRateAssumptions(){
+  const rcSel=document.getElementById('rateassum_rc'),yrSel=document.getElementById('rateassum_year');
+  if(rcSel&&!rcSel.options.length)rcSel.innerHTML=RC_DISPLAY_ORDER.map(rc=>`<option>${rc}</option>`).join('');
+  if(yrSel&&!yrSel.options.length){
+    for(let y=FC_BUD_YEAR;y<=FC_BUD_YEAR+4;y++)yrSel.innerHTML+=`<option value="${y}">${y}</option>`;
+  }
+  const rc=rcSel?.value||RC_DISPLAY_ORDER[0];
+  const year=parseInt(yrSel?.value)||FC_BUD_YEAR;
+  const wrap=document.getElementById('rateassum_table');if(!wrap)return;
+  const isAdmin=typeof can==='function'?can('manage_users'):false;
+  const months=[1,2,3,4,5,6,7,8,9,10,11,12];
+
+  const cellVal=(comp,m)=>{
+    const row=sbRateAssum.find(r=>r.rate_class===rc&&Number(r.year)===year&&Number(r.month)===m&&r.component===comp);
+    return row?Number(row.rate_jmd_per_kwh)||0:0;
+  };
+
+  const head=months.map(m=>`<th style="text-align:center;padding:4px;font-weight:500;color:var(--text3);border-left:0.5px solid var(--border)">${MONTHS_SHORT[m-1]}</th>`).join('');
+  let body='';
+  RATE_ASSUM_COMPONENTS.forEach(c=>{
+    const cells=months.map(m=>{
+      const v=cellVal(c.key,m);
+      if(!isAdmin){
+        return`<td style="padding:4px;text-align:right;border-left:0.5px solid var(--border);color:var(--text2)">${v.toFixed(2)}</td>`;
+      }
+      return`<td style="padding:3px;text-align:center;border-left:0.5px solid var(--border)"><input value="${v}" onchange="rateAssumSaveCell('${rc}',${year},${m},'${c.key}',this.value)" style="width:52px;height:24px;padding:0 4px;text-align:right;font-size:10px"></td>`;
+    }).join('');
+    body+=`<tr><td style="padding:5px 8px;color:var(--text)">${c.label}</td>${cells}</tr>`;
+  });
+  const totalCells=months.map(m=>{
+    const t=RATE_ASSUM_COMPONENTS.reduce((s,c)=>s+cellVal(c.key,m),0);
+    return`<td style="padding:4px;text-align:right;border-left:0.5px solid var(--border);font-weight:600">${t.toFixed(2)}</td>`;
+  }).join('');
+  body+=`<tr style="border-top:0.5px solid var(--border-strong)"><td style="padding:5px 8px;font-weight:600">All-in (JMD/kWh)</td>${totalCells}</tr>`;
+
+  wrap.innerHTML=`${!isAdmin?'<div style="padding:8px 10px;margin-bottom:8px;background:rgba(255,171,64,.08);border-left:3px solid var(--amber);border-radius:4px;font-size:11px;color:var(--text2)">View only — admin access required to edit rate assumptions.</div>':''}
+  <table style="width:988px;border-collapse:collapse;font-size:12px;table-layout:fixed">
+    <colgroup><col style="width:220px">${months.map(()=>'<col style="width:64px">').join('')}</colgroup>
+    <thead><tr style="border-bottom:0.5px solid var(--border-strong)"><th style="text-align:left;padding:6px 8px;font-weight:500;color:var(--text3)">Component</th>${head}</tr></thead>
+    <tbody>${body}</tbody>
+  </table>`;
+}
+async function rateAssumSaveCell(rateClass,year,month,component,val){
+  if(!(typeof can==='function'&&can('manage_users'))){toast('Admin access required','err');return;}
+  const sb=getSB();if(!sb)return;
+  const rate=parseFloat(val)||0;
+  const cu=(typeof CU!=='undefined'&&CU&&CU.name)?CU.name:'';
+  const row={rate_class:rateClass,year,month,component,rate_jmd_per_kwh:rate,updated_by:cu,updated_at:new Date().toISOString()};
+  const{error}=await sb.from('jps_rate_assumptions').upsert(row,{onConflict:'rate_class,year,month,component'});
+  if(error){toast('Save failed: '+error.message,'err');return;}
+  const existing=sbRateAssum.find(r=>r.rate_class===rateClass&&Number(r.year)===year&&Number(r.month)===month&&r.component===component);
+  if(existing)Object.assign(existing,row);
+  else sbRateAssum.push(row);
+  renderRateAssumptions();
 }
 
 /* ==========================================
