@@ -2658,7 +2658,11 @@ function _kl(map, ac){
 }
 // Commercial rows are identified by rate class, NOT by empty consumption_bucket.
 // Uploaded data has consumption_bucket="Commercial" on all RT40/RT50 rows.
-const _COMM_RCS=new Set(['RT40','RT50','RT60-ST','RT70','BU']);
+// RT20 added 2026-08-24: only its KAM-tagged accounts (jps_kam) get individual
+// rows in mv_actuals_agg (see the view definition) -- the ~23k untagged RT20
+// accounts stay aggregated with jps_ac='' exactly like RT10, so this does NOT
+// pull RT20's full account population into the KAM/key-account paths below.
+const _COMM_RCS=new Set(['RT20','RT40','RT50','RT60-ST','RT70','BU']);
 
 // Canonical rate-class display order — used everywhere a rate-class list is
 // shown (charts, tables, scorecards), instead of ad hoc hardcoded orderings.
@@ -10432,7 +10436,11 @@ function _dfcCommCohortsForNonKam(accounts,year){
     if(!_isComm(r))return;
     if(isAct&&Number(r.year)!==refYear&&Number(r.year)!==refYear-1)return;
     if(!isAct&&Number(r.year)!==year)return;
-    const isPlaceholder=_DFC_PLACEHOLDER_ACS.has(r.jps_ac);
+    // Aggregated rate classes (RT10, and RT20's untagged bulk) carry jps_ac=''
+    // in mv_actuals_agg -- treat that exactly like a bulk-billed placeholder
+    // (no individual account to attribute), not as "some other KAM's account"
+    // which the nonKamAcs check below would otherwise silently drop.
+    const isPlaceholder=_DFC_PLACEHOLDER_ACS.has(r.jps_ac)||!r.jps_ac;
     if(!isPlaceholder&&!nonKamAcs.has(r.jps_ac))return; // KAM-assigned — counted via actByAc/keyAccounts instead
     const key=`${r.rate_class}|${r.parish}|${r.consumption_bucket}`;
     if(!cohorts[key]){
