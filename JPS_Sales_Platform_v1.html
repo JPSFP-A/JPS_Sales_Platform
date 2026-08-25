@@ -2364,6 +2364,23 @@ order by ordinal_position;</pre>
         </div>
         <div id="dfc_table" style="overflow-x:auto"></div>
       </div>
+      <div class="card" style="margin-top:12px" id="dfc_bridge_card">
+        <div class="ch">Driver Waterfall
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <select id="dfc_bridge_mode" class="psel" onchange="renderDfcBridge()"></select>
+            <span id="dfc_bridge_yb_wrap"><select id="dfc_bridge_yb" class="psel" onchange="renderDfcBridge()"></select></span>
+            <select id="dfc_bridge_rc" class="psel" onchange="renderDfcBridge()"></select>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:10px">
+          Walks the year selected above from its Budget to its current LE, or year-over-year against any other year — decomposed into new/dropped accounts, named large-customer moves, macro/weather/industry drivers, operational adjustments, and analyst-entered attribution (hurricane normalization, solar, self-generation, off-grid bypass). Bars always sum exactly to the real gap; whatever isn't explained shows as "Unexplained / residual," never hidden. Same engine as the Driver Waterfall on RC Forecast Report and 3-Year Comparison — all three always reconcile to the same numbers.
+        </div>
+        <div style="height:280px"><canvas id="dfc_bridge_chart"></canvas></div>
+        <div id="dfc_bridge_tbl" style="margin-top:12px;overflow-x:auto"></div>
+        <div id="dfc_bridge_caveat" style="margin-top:8px;font-size:10px;color:var(--amber)"></div>
+        <div style="font-size:10px;color:var(--text3);margin-top:10px;text-transform:uppercase;font-weight:600">Add manual attribution</div>
+        <div id="dfc_bridge_form"></div>
+      </div>
     </div>
 
     <!-- === MACRO ASSUMPTIONS === -->
@@ -4100,7 +4117,7 @@ function renderSection(id){
   else if(id==='rpt'){renderReportBuilder();}
   else if(id==='ng'){renderNetGen();}
   else if(id==='le'){renderLE();}
-  else if(id==='dfc'){renderDriverForecast();}
+  else if(id==='dfc'){renderDriverForecast();renderDfcBridge();}
   else if(id==='macro'){renderMacroAssumptions();}
   else if(id==='rateassum'){renderRateAssumptions();}
   else if(id==='adjlog'){renderAdjustmentLog();}
@@ -12316,16 +12333,17 @@ async function bridgeAddManualDriver(prefix){
   const value_kwh=parseFloat(document.getElementById(`${prefix}_m_kwh`)?.value);
   const source_note=(document.getElementById(`${prefix}_m_note`)?.value||'').trim();
   if(!category||!year||!month||!value_kwh){toast('Category, year, month, and a non-zero kWh impact are required','err');return;}
+  const label=(BRIDGE_MANUAL_CATS.find(c=>c.key===category)||{}).label||category;
   const cu=(typeof CU!=='undefined'&&CU&&CU.name)?CU.name:'';
   // Append-only insert, no upsert — a correction is a new row, never an edit to
   // an existing one (see the header note on jps_bridge_drivers' own migration).
-  const{error}=await sb.from('jps_bridge_drivers').insert({category,rate_class,year,month,value_kwh,source_note,created_by:cu});
+  const{error}=await sb.from('jps_bridge_drivers').insert({category,label,rate_class,year,month,value_kwh,source_note,created_by:cu});
   if(error){toast('Save failed: '+error.message,'err');return;}
   toast('Driver added','ok');
   document.getElementById(`${prefix}_m_kwh`).value='';
   document.getElementById(`${prefix}_m_note`).value='';
   await syncSupabase(true);
-  if(prefix.startsWith('rcfr'))renderRcfrBridge();else if(prefix.startsWith('y3'))renderY3Bridge();
+  if(prefix.startsWith('rcfr'))renderRcfrBridge();else if(prefix.startsWith('y3'))renderY3Bridge();else if(prefix.startsWith('dfc'))renderDfcBridge();
 }
 async function bridgeDeleteManualDriver(id,prefix){
   if(!can('delete_item')){toast('Admin only','err');return;}
@@ -12333,7 +12351,7 @@ async function bridgeDeleteManualDriver(id,prefix){
   const{error}=await sb.from('jps_bridge_drivers').delete().eq('id',id);
   if(error){toast('Delete failed: '+error.message,'err');return;}
   await syncSupabase(true);
-  if(prefix.startsWith('rcfr'))renderRcfrBridge();else if(prefix.startsWith('y3'))renderY3Bridge();
+  if(prefix.startsWith('rcfr'))renderRcfrBridge();else if(prefix.startsWith('y3'))renderY3Bridge();else if(prefix.startsWith('dfc'))renderDfcBridge();
 }
 
 function _bridgeRcOptionsHtml(sel){
@@ -12362,17 +12380,20 @@ function _renderBridgeInto(prefix,bridge,startLabel,endLabel){
   const mTblEl=document.getElementById(`${prefix}_m_tbl`);if(mTblEl)mTblEl.innerHTML=_bridgeManualTableHtml(prefix,bridge.manualRows);
 }
 
-function renderRcfrBridge(){
-  const card=document.getElementById('rcfr_bridge_card');if(!card)return;
-  const modeSel=document.getElementById('rcfr_bridge_mode');
+// Shared by RC Forecast Report and Driver Forecast — both have their own year
+// picker (rcfr_year / dfc_year) and get an identical Driver Waterfall card keyed
+// off it, so "the forecast tab" is covered whichever one someone means.
+function _renderBridgeCardForTab(prefix,yearSelId){
+  const card=document.getElementById(prefix+'_card');if(!card)return;
+  const modeSel=document.getElementById(prefix+'_mode');
   if(modeSel&&!modeSel.dataset.populated){
     modeSel.innerHTML='<option value="budget">vs Budget (same year)</option><option value="yoy">Year over Year</option>';
     modeSel.dataset.populated='1';
   }
-  const rcSel=document.getElementById('rcfr_bridge_rc');
+  const rcSel=document.getElementById(prefix+'_rc');
   if(rcSel&&!rcSel.dataset.populated){rcSel.innerHTML=_bridgeRcOptionsHtml('');rcSel.dataset.populated='1';}
-  const anchorYear=parseInt(document.getElementById('rcfr_year')?.value)||FC_BUD_YEAR;
-  const ybSel=document.getElementById('rcfr_bridge_yb');
+  const anchorYear=parseInt(document.getElementById(yearSelId)?.value)||FC_BUD_YEAR;
+  const ybSel=document.getElementById(prefix+'_yb');
   if(ybSel&&!ybSel.dataset.populated){
     ybSel.innerHTML=_bridgeYearOptionsHtml(anchorYear-1,FC_BUD_YEAR-3,FC_BUD_YEAR+4);
     ybSel.dataset.populated='1';
@@ -12380,7 +12401,7 @@ function renderRcfrBridge(){
   const mode=modeSel?.value||'budget';
   const rc=rcSel?.value||null;
   const compareYear=parseInt(ybSel?.value)||anchorYear-1;
-  const ybWrap=document.getElementById('rcfr_bridge_yb_wrap');
+  const ybWrap=document.getElementById(prefix+'_yb_wrap');
   if(ybWrap)ybWrap.style.display=mode==='budget'?'none':'';
 
   const bridge=mode==='budget'
@@ -12388,8 +12409,10 @@ function renderRcfrBridge(){
     :buildDriverBridge('actual',rc||null,compareYear,anchorYear);
   const startLabel=mode==='budget'?`FY${anchorYear} Budget`:`FY${compareYear}`;
   const endLabel=mode==='budget'?`FY${anchorYear} LE`:`FY${anchorYear}`;
-  _renderBridgeInto('rcfr_bridge',bridge,startLabel,endLabel);
+  _renderBridgeInto(prefix,bridge,startLabel,endLabel);
 }
+function renderRcfrBridge(){_renderBridgeCardForTab('rcfr_bridge','rcfr_year');}
+function renderDfcBridge(){_renderBridgeCardForTab('dfc_bridge','dfc_year');}
 
 // 3-Year Comparison's bridge: two consecutive legs (A→B, B→C), reusing that
 // tab's own #y3_a/#y3_b/#y3_c selectors rather than duplicating year pickers —
