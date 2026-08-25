@@ -4817,13 +4817,17 @@ function renderPfCust(){
 
   // Period-filtered PY: quick single-pass scan — this table is commercial-only (CM_RCS_PF),
   // so prefer sbActualsComm (has jps_ac) over sbActuals (residential-only, no jps_ac rows)
+  // Keyed by the FULL jps_ac (not _custNum-stripped) to match CUSTOMERS[].num, which is
+  // itself the full account since get_customers_summary started grouping by full jps_ac
+  // instead of customer-number-only (see that RPC's fix) -- stripping here made every
+  // lookup below miss, showing 0 for PY/budget/vs-budget/YoY on every row.
   const pyMap={};
   const _pyCustSrc=sbActualsComm.length?sbActualsComm:sbActuals;
   if(_pyCustSrc.length){
     _pyCustSrc.forEach(r=>{
       if(Number(r[YEAR_COL]||r.year||0)!==py)return;
       if(!pmSet.has(Number(r.month||0)))return;
-      const acct=_custNum(String(r.jps_ac||r.account||''));
+      const acct=String(r.jps_ac||r.account||'').trim();
       pyMap[acct]=(pyMap[acct]||0)+Number(r.kwh||0)/1e6;
     });
   }
@@ -4834,7 +4838,7 @@ function renderPfCust(){
     sbBudget.forEach(b=>{
       if(Number(b.year||0)!==cy)return;
       if(!pmSet.has(Number(b.month||0)))return;
-      const acct=_custNum(String(b.jps_ac||''));
+      const acct=String(b.jps_ac||'').trim();
       budMap[acct]=(budMap[acct]||0)+Number(b.kwh_budget||0)/1e6;
     });
   }
@@ -5027,12 +5031,14 @@ function renderCmCust(){
   const periCY=c=>pm.reduce((a,m)=>a+(c.m[m-1]||0),0);
   // Period PY: single-pass scan — commercial rows only, so prefer sbActualsComm
   // (sbActuals is residential-only and never carries jps_ac-tagged commercial rows)
+  // Keyed by the FULL jps_ac (not _custNum-stripped) to match CUSTOMERS[].num -- see the
+  // same fix in renderPfCust() for why the stripped version silently zeroed every row.
   const pyMap={};
   (sbActualsComm.length?sbActualsComm:sbActuals).forEach(r=>{
     if(Number(r[YEAR_COL]||r.year||0)!==py)return;
     if(!pmSet.has(Number(r.month||0)))return;
     if(!_isComm(r))return;
-    const acct=_custNum(String(r.jps_ac||r.account||''));
+    const acct=String(r.jps_ac||r.account||'').trim();
     pyMap[acct]=(pyMap[acct]||0)+Number(r.kwh||0)/1e6;
   });
   // Period budget map
@@ -5041,7 +5047,7 @@ function renderCmCust(){
     if(Number(b.year||0)!==cy)return;
     if(!pmSet.has(Number(b.month||0)))return;
     if(!_isComm(b))return;              // commercial accounts only (account-level budget rows)
-    const ac=_custNum(String(b.jps_ac||''));
+    const ac=String(b.jps_ac||'').trim();
     if(!ac)return;
     budMap[ac]=(budMap[ac]||0)+Number(b.kwh_budget||0)/1e6;
   });
@@ -5518,12 +5524,14 @@ function renderFcEntry(){
   });
   // Build PY average map once — O(n) scan — replaces per-customer O(n) scans (N+1 fix)
   // Commercial rows only, so prefer sbActualsComm (sbActuals is residential-only)
+  // Keyed by the FULL jps_ac (not _custNum-stripped) to match CUSTOMERS[].num -- see the
+  // same fix in renderPfCust() for why the stripped version silently zeroed every row.
   const _fcPyMap={};
   (sbActualsComm.length?sbActualsComm:sbActuals).forEach(r=>{
     if(Number(r[YEAR_COL]||r.year||0)!==curYear-1)return;
     if(Number(r.month||0)>curMonth||Number(r.month||0)<1)return;
     if(!_isComm(r))return;
-    const acct=_custNum(String(r.jps_ac||''));
+    const acct=String(r.jps_ac||'').trim();
     if(!acct)return;
     if(!_fcPyMap[acct])_fcPyMap[acct]={sum:0,cnt:0};
     _fcPyMap[acct].sum+=Number(r.kwh||0)/1e6;
@@ -9548,8 +9556,10 @@ function buildDashboardData(){
   FC_SEGS.forEach(s=>{s.base=CUSTOMERS.filter(c=>c.rate===s.seg).reduce((sum,c)=>sum+c.yCY,0)||0;});
 
   // Enrich CUSTOMERS with KAM + industry lookups.
-  // c.num is already the customer number (e.g. '100001'), matching jps_kam.jps_ac and jps_industries.jps_ac exactly.
-  // _kl() kept as fallback in case any entries still carry full account numbers.
+  // c.num is the full jps_ac (e.g. '100001-100002') since get_customers_summary groups by
+  // full account, not customer-number-only -- jps_kam/jps_industries key by customer number
+  // only, so the exact match rarely hits and _kl()'s customer-number-prefix fallback is what
+  // actually resolves these on every row, not just as a rare edge case.
   if(sbKAM.length){
     const m={};sbKAM.forEach(k=>m[String(k.jps_ac||'').trim()]=k.kam||'');
     CUSTOMERS.forEach(c=>{const v=m[c.num]||_kl(m,c.num);if(v)c.kam=v;});
