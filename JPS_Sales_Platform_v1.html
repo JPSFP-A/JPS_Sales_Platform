@@ -12186,7 +12186,14 @@ function buildDriverBridge(mode,rc,yearA,yearB){
   const totalGap=endTotal-startTotal;
 
   const newAccts=entities.filter(e=>e.isNew);
-  const newKwh=newAccts.reduce((s,e)=>s+bTotal(e),0);
+  // bTotal alone, not bTotal-aTotal, silently broke reconciliation whenever a
+  // "new" customer's start_year was <= yearA too (e.g. walking FY2026->FY2027 for
+  // a customer added mid-2026) -- aTotal(e) is then nonzero (they already existed
+  // for part of yearA), but that nonzero yearA contribution was counted in
+  // startTotal via the full `entities` sum, excluded from every other bucket
+  // (isNew entities are filtered out of `remaining`), and never subtracted here --
+  // an amount equal to their own yearA total went uncounted in every bar.
+  const newKwh=newAccts.reduce((s,e)=>s+(bTotal(e)-aTotal(e)),0);
 
   const namedCandidates=entities.filter(e=>!e.isNew&&e.name);
   const named=namedCandidates.map(e=>({
@@ -12199,13 +12206,26 @@ function buildDriverBridge(mode,rc,yearA,yearB){
   const remA=remaining.reduce((s,e)=>s+aTotal(e),0);
   const remB=remaining.reduce((s,e)=>s+bTotal(e),0);
   const remDelta=remB-remA;
-  const compYear=mode==='budget'?yearA:yearB;
+  // Same two-sided attribution issue the manual-driver fix addresses below, just
+  // for the AUTOMATIC components: a YoY walk between two years that BOTH have
+  // forecast months (e.g. 2026 -> 2027, which the 3-Year Comparison's second leg
+  // hits by default) needs yearA's own macro/weather/industry/operational effect
+  // subtracted with the opposite sign of yearB's -- a start-year effect moves the
+  // observed gap oppositely to the same effect landing in the end year. Budget
+  // mode never hits this (yearA===yearB, single year, no two-sided case).
   let macroKwh=0,weatherKwh=0,seasIndKwh=0,operKwh=0;
   remaining.forEach(e=>{
-    macroKwh+=_bridgeComponentKwh(idx,e,compYear,'macro',rc);
-    weatherKwh+=_bridgeComponentKwh(idx,e,compYear,'weather',rc);
-    seasIndKwh+=_bridgeComponentKwh(idx,e,compYear,'seasInd',rc);
-    operKwh+=_bridgeComponentKwh(idx,e,compYear,'oper',rc);
+    const bYear=mode==='budget'?yearA:yearB;
+    macroKwh+=_bridgeComponentKwh(idx,e,bYear,'macro',rc);
+    weatherKwh+=_bridgeComponentKwh(idx,e,bYear,'weather',rc);
+    seasIndKwh+=_bridgeComponentKwh(idx,e,bYear,'seasInd',rc);
+    operKwh+=_bridgeComponentKwh(idx,e,bYear,'oper',rc);
+    if(mode!=='budget'&&yearA!==yearB){
+      macroKwh-=_bridgeComponentKwh(idx,e,yearA,'macro',rc);
+      weatherKwh-=_bridgeComponentKwh(idx,e,yearA,'weather',rc);
+      seasIndKwh-=_bridgeComponentKwh(idx,e,yearA,'seasInd',rc);
+      operKwh-=_bridgeComponentKwh(idx,e,yearA,'oper',rc);
+    }
   });
   const actualCarryKwh=remDelta-macroKwh-weatherKwh-seasIndKwh-operKwh;
 
@@ -12240,7 +12260,12 @@ function buildDriverBridge(mode,rc,yearA,yearB){
     {label:'Weather',value:weatherKwh,kind:'auto'},
     {label:'Industry & seasonality mix — all other accounts',value:seasIndKwh,kind:'auto'},
     {label:'Operational adjustments — all other accounts',value:operKwh,kind:'auto'},
-    ...BRIDGE_MANUAL_CATS.map(c=>({label:c.label,value:manualByCategory[c.key]||0,kind:'manual',catKey:c.key})),
+    // Unlike the "auto" bars above (always shown, even at $0, since a genuine
+    // zero is informative -- "this driver had no effect"), an unused manual
+    // category is just noise, not signal: most walks will have entries for at
+    // most one or two of these seven, and showing all seven as "+0.00 GWh" rows
+    // every time clutters both the chart's x-axis and the summary table.
+    ...BRIDGE_MANUAL_CATS.filter(c=>manualByCategory[c.key]).map(c=>({label:c.label,value:manualByCategory[c.key],kind:'manual',catKey:c.key})),
     {label:'Unexplained / residual',value:residual,kind:'residual'},
   ];
   return{mode,rc,yearA,yearB,startTotal,endTotal,totalGap,bars,manualRows};
@@ -12389,7 +12414,7 @@ function _bridgeYearOptionsHtml(sel,lo,hi){
 function _bridgeCaveatHtml(bridge){
   const parts=[];
   if(bridge.mode==='budget'&&bridge.yearA<FC_BUD_YEAR)parts.push('This year is fully closed — macro/weather/industry decomposition only exists for forecast months, so the whole budget-vs-actual gap falls into "Unexplained / residual."');
-  else if(bridge.mode!=='budget'&&bridge.yearB<FC_BUD_YEAR)parts.push('Both years are fully closed — macro/weather/industry decomposition only exists for forecast months, so this walk relies on new/dropped accounts, named large customers, and manually-entered drivers, with the rest in "Unexplained / residual."');
+  else if(bridge.mode!=='budget'&&bridge.yearA<FC_BUD_YEAR&&bridge.yearB<FC_BUD_YEAR)parts.push('Both years are fully closed — macro/weather/industry decomposition only exists for forecast months, so this walk relies on new/dropped accounts, named large customers, and manually-entered drivers, with the rest in "Unexplained / residual."');
   parts.push('Hurricane/event/solar/self-generation/off-grid figures are analyst estimates entered manually below — they explain the gap after the fact and do not change the live forecast.');
   return parts.join(' ');
 }
