@@ -12215,7 +12215,21 @@ function buildDriverBridge(mode,rc,yearA,yearB){
   });
   const manualByCategory={};
   BRIDGE_MANUAL_CATS.forEach(c=>manualByCategory[c.key]=0);
-  manualRows.forEach(r=>{if(manualByCategory[r.category]!=null)manualByCategory[r.category]+=Number(r.value_kwh)||0;});
+  manualRows.forEach(r=>{
+    if(manualByCategory[r.category]==null)return;
+    // A manual event tagged to the START year (yearA) suppressed/boosted the base
+    // of the walk -- its effect on the OBSERVED gap is the OPPOSITE sign of its own
+    // raw magnitude (a start-year shortfall makes the apparent end-minus-start
+    // growth look larger than it really is). An event tagged to the END year keeps
+    // its raw sign (a same-direction shortfall there shrinks the apparent gap
+    // directly). Without this, an event spanning both years of a YoY walk (e.g.
+    // Hurricane Melissa hitting late in yearA and tailing into yearB) summed both
+    // sides with the same sign, producing a wildly oversized bar and an equally
+    // oversized offsetting residual -- mathematically exact but unreadable.
+    // Budget mode has yearA===yearB, so this distinction never applies there.
+    const sign=(mode!=='budget'&&yearA!==yearB&&Number(r.year)===yearA)?-1:1;
+    manualByCategory[r.category]+=sign*(Number(r.value_kwh)||0);
+  });
   const manualTotal=Object.values(manualByCategory).reduce((s,v)=>s+v,0);
   const residual=actualCarryKwh-manualTotal;
 
@@ -12245,6 +12259,17 @@ function renderDriverBridgeChart(canvasId,bridge,startLabel,endLabel){
   const negData=[0,...valsG.map(v=>v<0?v:0),0];
   const baseData=[0,...valsG.map((_,i)=>{let base=startG;for(let j=0;j<i;j++)base+=valsG[j];return base;}),0];
   const endpointBar=[0,...valsG.map(()=>0),endG];
+
+  // The running total sits at company-wide scale (hundreds of millions to
+  // billions of kWh); individual driver deltas are usually a small fraction of
+  // that. A plain 0-based y-axis compresses every bar's visible step into a
+  // sliver near the top -- correct numbers, but reads as "no movement" and
+  // isn't a recognizable bridge/waterfall shape. Zoom the axis to the actual
+  // range the running total occupies instead of defaulting to 0.
+  let running=startG,lo=Math.min(startG,endG),hi=Math.max(startG,endG);
+  valsG.forEach(v=>{running+=v;lo=Math.min(lo,running);hi=Math.max(hi,running);});
+  const pad=(hi-lo)*0.15||Math.abs(hi)*0.05||1;
+
   destroyChart(canvasId);
   const canvas=document.getElementById(canvasId);if(!canvas)return;
   chartInstances[canvasId]=new Chart(canvas,{
@@ -12262,7 +12287,7 @@ function renderDriverBridgeChart(canvasId,bridge,startLabel,endLabel){
       }}}},
       scales:{
         x:{ticks:{color:TC,font:{size:9},maxRotation:60,minRotation:40},grid:{color:CC},stacked:true},
-        y:{ticks:{color:TC,font:{size:10}},grid:{color:CC},stacked:true},
+        y:{min:lo-pad,max:hi+pad,ticks:{color:TC,font:{size:10}},grid:{color:CC},stacked:true},
       }
     }
   });
