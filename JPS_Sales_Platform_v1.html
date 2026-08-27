@@ -3208,8 +3208,12 @@ async function dbUpsert(table,row){
   };
   const key=CONFLICT[table];
   try{
-    await sb.from(table).upsert(row,key?{onConflict:key}:{});
-  }catch(e){console.warn('dbUpsert failed:',table,e.message);}
+    // supabase-js v2 does NOT throw on query errors — it resolves with {error}.
+    // The old catch-only version silently swallowed every failed save (400s
+    // from schema drift included), so users' edits vanished with no signal.
+    const{error}=await sb.from(table).upsert(row,key?{onConflict:key}:{});
+    if(error){console.warn('dbUpsert failed:',table,error.message);toast('Save failed ('+table+'): '+error.message,'err');}
+  }catch(e){console.warn('dbUpsert failed:',table,e.message);toast('Save failed ('+table+'): '+e.message,'err');}
 }
 async function dbDelete(table,match){
   const sb=getSB();if(!sb)return;
@@ -3287,14 +3291,33 @@ async function loadBridgeDriversFromDB(){
 
 /* ── Defection actions ── */
 async function saveDefActionToDB(acctNum,data){
-  await dbUpsert('jps_def_actions',{acct_num:acctNum,...data,updated_at:new Date().toISOString()});
+  // Translate UI field names → real jps_def_actions columns and WHITELIST —
+  // the saved-fields object accumulates in localStorage and is spread whole into
+  // every upsert, so one wrong key (the old 'due' bug) poisoned every later save
+  // for that account with a silent 400. Whitelisting also cleanses any stale
+  // bad keys still sitting in users' localStorage from before this fix.
+  const COLMAP={stage:'stage',recovery_gwh:'recovery_gwh',owner:'owner',due:'due_date',note:'note_text',type:'action_type',customer:'customer'};
+  const row={acct_num:acctNum,updated_at:new Date().toISOString()};
+  Object.entries(data||{}).forEach(([k,v])=>{if(COLMAP[k])row[COLMAP[k]]=v;});
+  await dbUpsert('jps_def_actions',row);
 }
 async function loadDefActionsFromDB(){
   const rows=await dbSelect('jps_def_actions');
   if(rows.length){
     const saved={};
-    rows.forEach(r=>{saved[r.acct_num]={stage:r.stage,recovery_gwh:r.recovery_gwh,type:r.action_type,owner:r.owner,due:r.due_date,note:r.note_text};});
+    const overrides=S.get('def_overrides',{});
+    rows.forEach(r=>{
+      saved[r.acct_num]={stage:r.stage,recovery_gwh:r.recovery_gwh,type:r.action_type,owner:r.owner,due:r.due_date,note:r.note_text};
+      // hydrate the type/cause overrides too — before this they only ever
+      // lived in the editor's own localStorage and never crossed devices
+      if(r.action_type||r.cause){
+        if(!overrides[r.acct_num])overrides[r.acct_num]={};
+        if(r.action_type)overrides[r.acct_num].type=r.action_type;
+        if(r.cause)overrides[r.acct_num].cause=r.cause;
+      }
+    });
     S.set('def_actions',saved);
+    S.set('def_overrides',overrides);
   }
 }
 
@@ -3652,7 +3675,7 @@ function updateDefType(acct,val){
   if(!o[acct])o[acct]={};
   o[acct].type=val;
   S.set('def_overrides',o);
-  const sb=getSB();if(sb)sb.from('jps_def_actions').upsert({acct_num:acct,defection_type:val},{onConflict:'acct_num'}).then(({error})=>{if(error)console.warn('def type save:',error);});
+  const sb=getSB();if(sb)sb.from('jps_def_actions').upsert({acct_num:acct,action_type:val},{onConflict:'acct_num'}).then(({error})=>{if(error){console.warn('def type save:',error);toast('Defection type failed to save: '+error.message,'err');}});
 }
 
 function updateDefCause(acct,val){
@@ -3660,7 +3683,7 @@ function updateDefCause(acct,val){
   if(!o[acct])o[acct]={};
   o[acct].cause=val;
   S.set('def_overrides',o);
-  const sb=getSB();if(sb)sb.from('jps_def_actions').upsert({acct_num:acct,cause:val},{onConflict:'acct_num'}).then(({error})=>{if(error)console.warn('def cause save:',error);});
+  const sb=getSB();if(sb)sb.from('jps_def_actions').upsert({acct_num:acct,cause:val},{onConflict:'acct_num'}).then(({error})=>{if(error){console.warn('def cause save:',error);toast('Defection cause failed to save: '+error.message,'err');}});
 }
 
 function emailKAM(acct,custName,kamName,cause,severity){
@@ -4347,18 +4370,28 @@ async function loadExcel(input){
         })).filter(r=>r.jps_ac&&r.industry);
         if(rows.length)await batchUpsert('jps_industries',rows,'jps_ac');
       }
-      // ── Net Generation — columns: year, month, rate_class, count, kwh ──
-      const ngSheet=wb.Sheets['Net_Generation']||wb.Sheets['NetGen'];
-      if(ngSheet){
-        const rows=XLSX.utils.sheet_to_json(ngSheet).map(r=>({
+      // ── Net Billers / Net Generation — columns: year, month, rate_class, count, kwh ──
+      // Target is jps_net_billers (unique year,month,rate_class) — the only table
+      // matching this row shape. net_gen_historical is the SYSTEM aggregate
+      // (year,month, net_gen_mwh/peak_mw/...) and cannot take rate_class rows;
+      // upserting there 400'd on every upload AND aborted the rest of the
+      // workbook mid-way. Kept non-fatal so one bad sheet can't kill the upload.
+      const nbSheet=wb.Sheets['Net_Billers']||wb.Sheets['Net_Generation']||wb.Sheets['NetGen'];
+      if(nbSheet){
+        const rows=XLSX.utils.sheet_to_json(nbSheet).map(r=>({
           year:Number(r.year||r.Year),
           month:Number(r.month||r.Month),
           rate_class:String(r.rate_class||r['Rate Class']||r.rate||'ALL').trim(),
           count:Number(r.count||r.Count||0),
-          kwh:Number(r.kwh||r.KWh||r.net_gen_mwh||r.net_gen||0)
+          kwh:Number(r.kwh||r.KWh||r.net_gen||0)
         })).filter(r=>r.year&&r.month);
         if(rows.length){
-          await batchUpsert('net_gen_historical',rows,'year,month,rate_class');
+          try{
+            await batchUpsert('jps_net_billers',rows,'year,month,rate_class');
+          }catch(e){
+            console.warn('[upload] net billers sheet failed:',e.message);
+            toast('Net Billers sheet failed to save ('+e.message+') — rest of the workbook was still uploaded','w');
+          }
         }
       }
       // ── EV ────────────────────────────────────────────
@@ -9328,7 +9361,7 @@ var _sbClient=null, // var (not let) — hoisted as undefined, avoids TDZ when J
     sbSystemStats=[],   // jps_system_stats      — net gen + losses for budget/le/actuals
     sbLossesForecast=[], // jps_losses_forecast  — rolling 12-month losses forecast
     sbConnected=false, sbLastSync=null,
-    TARIFF_BY_RC={},    // jps_tariff_rates — rate_class → avg_tariff_usd_cents (loaded at sync)
+    TARIFF_BY_RC={},    // jps_tariff_rates — rate_class → energy_rate_jmd_kwh, latest effective_year (loaded at sync)
     sbRcAgg=[],         // mv_rc_agg  — 170 rows — feeds _rcIdx (replaces sbActuals scan)
     sbParAgg=[],        // mv_parish_agg — 1,410 rows — feeds PARISHES + renderPfPar
     sbIndAgg=[],        // mv_industry_agg — 5,694 rows — feeds INDUSTRIES + renderPfInd
@@ -9711,7 +9744,9 @@ async function syncSupabase(silent=false){
       sbTable('jps_period_locks',{}),
       sbTable('jps_forecast_versions',{order:'created_at'}),
       sbTable('jps_forecast',{limit:50000}),
-      sbTable('jps_tariff_rates',{cols:'rate_class,avg_tariff_usd_cents',order:'rate_class'}),
+      // ordered by effective_year ascending so the forEach below keeps each
+      // class's LATEST tariff (later rows overwrite earlier ones)
+      sbTable('jps_tariff_rates',{cols:'rate_class,energy_rate_jmd_kwh,effective_year',order:'effective_year'}),
       // Lean aggregates — 170/1410/5694 rows — replace sbActuals scans for _rcIdx/PARISHES/INDUSTRIES
       (async()=>{try{const{data,error}=await getSB().rpc('get_rc_agg',{year_cutoff:_actYearCutoff});if(error)throw error;return data||[];}catch(e){console.warn('[sync] get_rc_agg failed:',e.message);return [];}})(),
       (async()=>{try{const{data,error}=await getSB().rpc('get_parish_agg',{year_cutoff:_actYearCutoff});if(error)throw error;return data||[];}catch(e){console.warn('[sync] get_parish_agg failed:',e.message);return [];}})(),
@@ -9828,7 +9863,7 @@ async function syncSupabase(silent=false){
 
     if(tariffData&&tariffData.length){
       TARIFF_BY_RC={};
-      tariffData.forEach(function(r){ TARIFF_BY_RC[r.rate_class]=r.avg_tariff_usd_cents; });
+      tariffData.forEach(function(r){ TARIFF_BY_RC[r.rate_class]=Number(r.energy_rate_jmd_kwh)||0; }); // JMD/kWh; ascending effective_year order means latest year wins
       log.push(`Tariff rates: jps_tariff_rates (${tariffData.length} rate classes)`);
     } else {
       log.push('Tariff rates: ⚠ jps_tariff_rates not found — rev impact calculations will show —');
@@ -10457,7 +10492,18 @@ let _dfcPendingEdit=null; // {ac,year,month,newPct,oldPct,name}
 let _dfcCohortReg=[];     // per-render registry for lazy cohort member drill-down
 const DFC_MEMBER_CAP=50;  // cap on how many cohort members render at once
 
-function _dfcSegment(rc){ return _isComm({rate_class:rc}) ? 'commercial' : 'residential'; }
+function _dfcSegment(rc){
+  // Driver segment is pinned here INDEPENDENTLY of _COMM_RCS. RT20 belongs in
+  // _COMM_RCS for account/cohort routing (its ~23k individually-metered SME
+  // accounts show in commercial tables/waterfall), but its macro DRIVER segment
+  // is residential — the macro assumptions were entered, and the FY2026 forecast
+  // submitted (2026-08-19, 3,282.0 GWh), under "RT10, RT20 = Residential".
+  // Adding RT20 to _COMM_RCS on 2026-08-24 silently flipped its macro from
+  // residential to commercial and understated FY2026 by ~14 GWh — never derive
+  // driver economics from the routing set.
+  const c=String(rc||'').trim();
+  return (c==='RT10'||c==='RT20') ? 'residential' : 'commercial';
+}
 
 function _dfcMacroLookup(driverType,segment,year,month){
   const seg=segment||null;
