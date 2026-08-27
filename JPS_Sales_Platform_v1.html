@@ -9670,6 +9670,17 @@ async function syncSupabase(silent=false){
     if(!silent)toast('Supabase SDK not ready — check your connection','err');
     _sbSyncing=false;return;
   }
+  // An expired access token (restored session, laptop wake) makes every query
+  // below 401 until supabase-js refreshes it mid-flight — seen in prod as a
+  // full 401 cascade across all RPCs/tables followed by the lazy commercial
+  // load succeeding minutes later, leaving the page half-loaded. Refresh
+  // proactively so the parallel burst below never races the token.
+  try{
+    const{data:{session}}=await sb.auth.getSession();
+    if(session&&session.expires_at&&session.expires_at*1000<Date.now()+120000){
+      await sb.auth.refreshSession();
+    }
+  }catch(e){console.warn('[sync] token freshness check failed:',e.message);}
   const log=[];
   try{
     // Detect the year column name — skip if already confirmed from a previous sync
@@ -9777,6 +9788,15 @@ async function syncSupabase(silent=false){
     // failed (see the fetch above) — a real [] means "fetched successfully, zero
     // rows," which must NOT be treated as a failure. Do not conflate the two.
     const actOk=_useCachedActuals||actData!=null;
+    // One-shot retry for the token-race cascade: if actuals completely failed
+    // (the 401 signature) retry the whole sync once after the refresh above has
+    // had a chance to land — without this the page stays half-loaded until a
+    // manual refresh.
+    if(!actOk&&!window._syncAuthRetried){
+      window._syncAuthRetried=true;
+      console.warn('[sync] actuals fetch failed — retrying sync once in 3s (auth token race)');
+      setTimeout(()=>{_sbSyncing=false;syncSupabase(true);},3000);
+    }
     if(!_useCachedActuals&&actData!=null){
       sbActuals=actData;
       log.push(`Actuals: jps_actuals (${actData.length} rows — fresh fetch)`);
