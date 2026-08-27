@@ -10785,8 +10785,13 @@ function _dfcGetChain(idx,key,isAccount,driverCtx,opAc,year,newCustCtx){
   if(year===FC_BUD_YEAR){
     lockedThru=curMonth;
   }else if(year>FC_BUD_YEAR){
+    // Seed the new year from the PRIOR year's full-year LE average, not its Oct/Nov/Dec
+    // tail -- for winter-skewed classes (residential), Oct-Dec run well above the annual
+    // average, so carrying that 3-month tail forward flat inflated every month of the new
+    // year by that same margin before any driver (macro/weather/seasonality) even applied.
     const prior=_dfcGetChain(idx,key,isAccount,driverCtx,opAc,year-1,newCustCtx);
-    carryIn={0:prior[12]?prior[12].total:0,'-1':prior[11]?prior[11].total:0,'-2':prior[10]?prior[10].total:0};
+    const priorAvg=Object.values(prior).reduce((s,v)=>s+(v.total||0),0)/12;
+    carryIn={0:priorAvg,'-1':priorAvg,'-2':priorAvg};
   }
   const chain=_dfcComputeChain(idx,key,isAccount,driverCtx,opAc,year,lockedThru,newCustCtx,carryIn);
   _dfcYearChainCache[cacheKey]=chain;
@@ -10890,12 +10895,12 @@ function renderDriverForecast(){
   const entities=[]; // {type:'account'|'newcust'|'rescohort'|'commcohort', ...}
   keyAccounts.forEach(a=>{
     const chain=_dfcGetChain(idx,a.ac,true,{rate_class:a.rate_class,industry:a.industry,bucket:a.consumption_bucket||null},a.ac,year,null);
-    entities.push({type:'account',ref:a,chain,label:a.name,sub:`${a.rate_class} · ${a.parish} · key account`});
+    entities.push({type:'account',ref:a,chain,label:a.name,sub:`${a.ac} · ${a.rate_class} · ${a.parish} · key account`});
   });
   newCusts.forEach(c=>{
     const ctx={rate_class:c.rate_class,industry:c.industry,startYear:Number(c.start_year),startMonth:Number(c.start_month),expectedKwh:Number(c.expected_kwh)||0};
     const chain=_dfcGetChain(idx,c.jps_ac,true,{rate_class:c.rate_class,industry:c.industry},c.jps_ac,year,ctx);
-    entities.push({type:'newcust',ref:c,chain,label:c.name,sub:`${c.rate_class} · ${c.parish||''} · new, from ${MONTHS_SHORT[ctx.startMonth-1]} ${ctx.startYear}`});
+    entities.push({type:'newcust',ref:c,chain,label:c.name,sub:`${c.jps_ac} · ${c.rate_class} · ${c.parish||''} · new, from ${MONTHS_SHORT[ctx.startMonth-1]} ${ctx.startYear}`});
   });
   resCohorts.forEach(co=>{
     const chain=_dfcGetChain(idx,co.key,false,{rate_class:co.rate_class,industry:null},null,year,null);
