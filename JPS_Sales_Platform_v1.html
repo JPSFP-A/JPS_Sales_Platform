@@ -2381,7 +2381,6 @@ order by ordinal_position;</pre>
         <div style="height:280px"><canvas id="dfc_bridge_chart"></canvas></div>
         <div id="dfc_bridge_tbl" style="margin-top:12px;overflow-x:auto"></div>
         <div id="dfc_bridge_caveat" style="margin-top:8px;font-size:10px;color:var(--amber)"></div>
-        <div style="font-size:10px;color:var(--text3);margin-top:10px;text-transform:uppercase;font-weight:600">Add manual attribution</div>
         <div id="dfc_bridge_form"></div>
       </div>
     </div>
@@ -2485,7 +2484,6 @@ order by ordinal_position;</pre>
         <div style="height:280px"><canvas id="rcfr_bridge_chart"></canvas></div>
         <div id="rcfr_bridge_tbl" style="margin-top:12px;overflow-x:auto"></div>
         <div id="rcfr_bridge_caveat" style="margin-top:8px;font-size:10px;color:var(--amber)"></div>
-        <div style="font-size:10px;color:var(--text3);margin-top:10px;text-transform:uppercase;font-weight:600">Add manual attribution</div>
         <div id="rcfr_bridge_form"></div>
       </div>
       <div class="card" style="margin-top:12px">
@@ -2517,6 +2515,7 @@ order by ordinal_position;</pre>
             <select id="y3_a" class="psel" onchange="renderY3Comparison()"></select>
             <select id="y3_b" class="psel" onchange="renderY3Comparison()"></select>
             <select id="y3_c" class="psel" onchange="renderY3Comparison()"></select>
+            <button class="btn btn-t" onclick="generateExecSummary()" title="Build the executive summary from the years selected here">📄 Exec Summary</button>
             <button class="btn btn-o" onclick="exportTableCSV('y3_tbl_el','3yr_comparison')">⬇ Export</button>
           </div>
         </div>
@@ -2539,13 +2538,11 @@ order by ordinal_position;</pre>
         <div style="height:260px"><canvas id="y3_bridge_ab_chart"></canvas></div>
         <div id="y3_bridge_ab_tbl" style="margin-top:10px;overflow-x:auto"></div>
         <div id="y3_bridge_ab_caveat" style="margin-top:6px;font-size:10px;color:var(--amber)"></div>
-        <div style="font-size:10px;color:var(--text3);margin-top:10px;text-transform:uppercase;font-weight:600">Add manual attribution — Leg 1</div>
         <div id="y3_bridge_ab_form"></div>
         <div style="font-size:11px;font-weight:600;color:var(--text2);margin:18px 0 4px;border-top:0.5px solid var(--border);padding-top:14px">Leg 2</div>
         <div style="height:260px"><canvas id="y3_bridge_bc_chart"></canvas></div>
         <div id="y3_bridge_bc_tbl" style="margin-top:10px;overflow-x:auto"></div>
         <div id="y3_bridge_bc_caveat" style="margin-top:6px;font-size:10px;color:var(--amber)"></div>
-        <div style="font-size:10px;color:var(--text3);margin-top:10px;text-transform:uppercase;font-weight:600">Add manual attribution — Leg 2</div>
         <div id="y3_bridge_bc_form"></div>
       </div>
     </div>
@@ -11365,6 +11362,8 @@ function renderMacroAssumptions(){
     // Bucket migration — the lever on compositional residential growth (customers
     // crossing into higher consumption tiers, which is ~91% of residential growth).
     // 0 = continue at the pace already embedded in the base carry-forward.
+    // Projected 12-month rolling system loss -- grosses billed sales up to net generation.
+    {label:'Rolling 12-mth system loss %',type:'loss_rolling',seg:null},
     {label:'Bucket migration — RT10',type:'migration',seg:'RT10'},
     {label:'Bucket migration — RT20',type:'migration',seg:'RT20'},
     // Storm-recovery normalisation, per rate class.
@@ -12347,6 +12346,83 @@ function _y3RcTotals(year){
   return{totals,tag:year===FC_BUD_YEAR?'Actual + Forecast':'Forecast'};
 }
 
+// Executive summary, generated from whatever three years are selected on this page.
+// Every figure is pulled live from _y3RcTotals (the same engine the comparison table
+// and Driver Forecast use) and the loss assumptions in jps_macro_assumptions, so it
+// re-derives on each run rather than restating a number typed in earlier -- change an
+// assumption, regenerate, and the summary moves with it.
+function _execLossPct(year){
+  // December's rolling loss IS that fiscal year's full-year loss rate, because the
+  // trailing-12 window at December spans exactly the calendar year.
+  const r=(typeof sbMacroAssum!=='undefined'?sbMacroAssum:[])
+    .find(x=>x.driver_type==='loss_rolling'&&Number(x.year)===year&&Number(x.month)===12);
+  return r?Number(r.value_pct)/100:null;
+}
+function generateExecSummary(){
+  const yrs=['y3_a','y3_b','y3_c'].map(id=>parseInt(document.getElementById(id)?.value)).filter(y=>!isNaN(y));
+  if(yrs.length<2){alert('Select at least two years on this page first.');return;}
+  const data=yrs.map(y=>{
+    const r=_y3RcTotals(y);
+    const sales=RC_DISPLAY_ORDER.reduce((t,rc)=>t+(r.totals[rc]||0),0);
+    const lp=_execLossPct(y);
+    return {year:y,tag:r.tag,totals:r.totals,sales,lossPct:lp,
+            losses:lp==null?null:sales*lp/(1-lp), netgen:lp==null?null:sales/(1-lp)};
+  });
+  const g=v=>v==null?'&mdash;':(v/1e6).toLocaleString('en-US',{minimumFractionDigits:1,maximumFractionDigits:1});
+  const pc=(a,b)=>(!a||b==null)?'&mdash;':((b-a)/a*100>=0?'+':'')+((b-a)/a*100).toFixed(1)+'%';
+  const col=(a,b)=>(!a||b==null)?'#666':(b>=a?'#1e7a46':'#b3261e');
+  let hdr='',salesRow='',lossRow='',ngRow='';
+  data.forEach((d,i)=>{
+    const prev=i?data[i-1]:null;
+    hdr+=`<th>FY${d.year}<br><span style="font-weight:400;font-size:9px;opacity:.75">${d.tag}</span></th>`;
+    salesRow+=`<td>${g(d.sales)}${prev?`<br><span style="font-size:10px;color:${col(prev.sales,d.sales)}">${pc(prev.sales,d.sales)}</span>`:''}</td>`;
+    lossRow+=`<td>${d.lossPct==null?'&mdash;':(d.lossPct*100).toFixed(2)+'%'}</td>`;
+    ngRow+=`<td>${g(d.netgen)}${prev&&prev.netgen?`<br><span style="font-size:10px;color:${col(prev.netgen,d.netgen)}">${pc(prev.netgen,d.netgen)}</span>`:''}</td>`;
+  });
+  let rcRows='';
+  RC_DISPLAY_ORDER.forEach(rc=>{
+    let cells='';
+    data.forEach((d,i)=>{
+      const v=d.totals[rc]||0, prev=i?(data[i-1].totals[rc]||0):null;
+      cells+=`<td>${g(v)}${prev?`<br><span style="font-size:10px;color:${col(prev,v)}">${pc(prev,v)}</span>`:''}</td>`;
+    });
+    rcRows+=`<tr><td style="text-align:left">${esc(rc)}</td>${cells}</tr>`;
+  });
+  const first=data[0],last=data[data.length-1];
+  const movers=RC_DISPLAY_ORDER.map(rc=>({rc,d:(last.totals[rc]||0)-(first.totals[rc]||0)}))
+    .sort((a,b)=>Math.abs(b.d)-Math.abs(a.d)).slice(0,3)
+    .map(m=>`${m.rc} ${m.d>=0?'+':''}${(m.d/1e6).toFixed(1)} GWh`).join(', ');
+  const missing=data.filter(d=>d.lossPct==null).map(d=>d.year);
+  const w=window.open('','_blank');
+  if(!w){alert('Please allow pop-ups to generate the executive summary.');return;}
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>JPS Sales Forecast — Executive Summary FY${first.year}-FY${last.year}</title>
+<style>body{font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#1a1a1a;max-width:980px;margin:24px auto;padding:0 18px}
+h1{font-size:22px;margin-bottom:2px}h2{font-size:15px;margin-top:28px;border-bottom:2px solid #0b3d66;padding-bottom:4px;color:#0b3d66}
+.meta{color:#666;font-size:11px;margin-bottom:16px}
+table{border-collapse:collapse;width:100%;margin:10px 0 18px;font-size:12.5px}
+th{background:#0b3d66;color:#fff;padding:7px 9px;text-align:right}th:first-child{text-align:left}
+td{padding:6px 9px;border-bottom:1px solid #e4e4e4;text-align:right}td:first-child{text-align:left}
+tr:nth-child(even){background:#f7f9fb}.tot{font-weight:700;border-top:2px solid #0b3d66}
+.note{font-size:11px;color:#666;line-height:1.5;margin:6px 0 16px}
+@media print{body{margin:0}}</style></head><body>
+<h1>JPS Sales &amp; Load Forecast — Executive Summary</h1>
+<div class="meta">Sales Forecasting &amp; Analysis &middot; FY${first.year}&ndash;FY${last.year} &middot; Generated ${new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})} from the Driver Forecast engine</div>
+<h2>Billed Sales by Rate Class (GWh)</h2>
+<table><tr><th>Rate Class</th>${hdr}</tr>${rcRows}
+<tr class="tot"><td>Total billed sales</td>${salesRow}</tr></table>
+<h2>Sales to Net Generation (GWh)</h2>
+<table><tr><th>Measure</th>${hdr}</tr>
+<tr><td>Billed sales</td>${salesRow}</tr>
+<tr><td>System loss %</td>${lossRow}</tr>
+<tr class="tot"><td>Net generation</td>${ngRow}</tr></table>
+<div class="note">Net generation is billed sales grossed up for system losses, using the projected twelve-month rolling loss rate at each December &mdash; the point at which the trailing-twelve-month window spans exactly the fiscal year. Loss rates are maintained on the Macro Assumptions tab.${missing.length?` <b>No loss assumption is on file for FY${missing.join(', FY')}, so net generation is not shown for ${missing.length>1?'those years':'that year'}.</b>`:''}</div>
+<h2>Largest Movements, FY${first.year} to FY${last.year}</h2>
+<div class="note">${movers}. Full driver attribution is set out in the Driver Report.</div>
+<div class="meta">Figures in GWh. Years marked as forecast are full Driver Forecast projections; years at or before the current close blend billed actuals with forecast for any remaining open months.</div>
+</body></html>`);
+  w.document.close();
+}
+
 function renderY3Comparison(){
   const wrap=document.getElementById('y3_table');if(!wrap)return;
   const selA=document.getElementById('y3_a'),selB=document.getElementById('y3_b'),selC=document.getElementById('y3_c');
@@ -12644,23 +12720,11 @@ function _bridgeTableHtml(bridge,startLabel,endLabel){
 }
 
 function _bridgeManualFormHtml(prefix,yearA,yearB){
-  const yr=yearA===yearB?yearA:yearB;
-  return`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;margin-top:10px;padding-top:10px;border-top:0.5px solid var(--border)">
-    <div><label style="font-size:9px;color:var(--text3);text-transform:uppercase;display:block">Category</label>
-      <select id="${prefix}_m_cat" class="psel" style="min-width:220px">${BRIDGE_MANUAL_CATS.map(c=>`<option value="${c.key}">${esc(c.label)}</option>`).join('')}</select></div>
-    <div><label style="font-size:9px;color:var(--text3);text-transform:uppercase;display:block">Rate class</label>
-      <select id="${prefix}_m_rc" class="psel">${_bridgeRcOptionsHtml('')}</select></div>
-    <div><label style="font-size:9px;color:var(--text3);text-transform:uppercase;display:block">Year</label>
-      <input id="${prefix}_m_year" type="number" class="psel" style="width:70px" value="${yr}"></div>
-    <div><label style="font-size:9px;color:var(--text3);text-transform:uppercase;display:block">Month</label>
-      <select id="${prefix}_m_month" class="psel">${MONTHS_SHORT.map((m,i)=>`<option value="${i+1}">${m}</option>`).join('')}</select></div>
-    <div><label style="font-size:9px;color:var(--text3);text-transform:uppercase;display:block">Impact (kWh, signed)</label>
-      <input id="${prefix}_m_kwh" type="number" class="psel" style="width:120px" placeholder="-500000"></div>
-    <div style="flex:1;min-width:180px"><label style="font-size:9px;color:var(--text3);text-transform:uppercase;display:block">Note / source</label>
-      <input id="${prefix}_m_note" class="psel" style="width:100%" placeholder="How was this estimated?"></div>
-    <button class="btn btn-t" onclick="bridgeAddManualDriver('${prefix}')">+ Add</button>
-  </div>
-  <div id="${prefix}_m_tbl" style="margin-top:8px"></div>`;
+  // Data-entry controls removed on forecaster direction -- these pages are read as
+  // reports and the inline form was clutter. The attribution register itself stays:
+  // it is the audit trail for every manual figure sitting in the walk above.
+  // Entries are maintained on the Adjustment Log tab.
+  return`<div id="${prefix}_m_tbl" style="margin-top:8px"></div>`;
 }
 
 function _bridgeManualTableHtml(prefix,manualRows){
