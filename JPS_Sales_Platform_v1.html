@@ -9676,6 +9676,33 @@ let _sbSyncing=false; // mutex — prevents double-sync
 let _yearColConfirmed=false; // skip detectYearCol after first successful sync
 let _lastSyncAt=0; // epoch ms — used by visibility refresh cooldown
 
+// Session loss is silent by default: with no valid JWT, RLS filters every table to
+// zero rows and returns error:null, so a signed-out page renders an all-zero forecast
+// rather than an error. Anything that detects it routes through here so the user sees
+// a blocking banner instead of trusting empty numbers.
+function _sbAuthExpired(msg){
+  updateSbStatus('offline');
+  const text=msg||'Session expired - data could not be loaded. Sign in again to continue.';
+  let el=document.getElementById('_sbAuthBanner');
+  if(!el){
+    el=document.createElement('div');
+    el.id='_sbAuthBanner';
+    el.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#b3261e;color:#fff;'+
+      'padding:10px 16px;font:600 13px/1.4 Arial,Helvetica,sans-serif;text-align:center;'+
+      'box-shadow:0 2px 8px rgba(0,0,0,.3)';
+    document.body.appendChild(el);
+  }
+  el.textContent=text+'  ';
+  const a=document.createElement('a');
+  a.href=location.pathname; a.textContent='Reload';
+  a.style.cssText='color:#fff;text-decoration:underline;cursor:pointer;margin-left:8px';
+  el.appendChild(a);
+  el.style.display='';
+  try{if(typeof toast==='function')toast(text,'err');}catch(e){}
+  console.error('[auth]',text);
+}
+function _sbAuthOk(){const el=document.getElementById('_sbAuthBanner');if(el)el.style.display='none';}
+
 async function syncSupabase(silent=false){
   if(_sbSyncing){return;} // already in progress — skip
   _sbSyncing=true;
@@ -9694,7 +9721,23 @@ async function syncSupabase(silent=false){
   // proactively so the parallel burst below never races the token.
   try{
     const{data:{session}}=await sb.auth.getSession();
-    if(session&&session.expires_at&&session.expires_at*1000<Date.now()+120000){
+    if(!session){
+      // NO session at all -- a fully expired or cleared login, not just a stale token.
+      // This branch previously fell through and the parallel burst below ran
+      // unauthenticated: RLS silently filters every table to ZERO ROWS and returns
+      // error:null, so the platform rendered an all-zero forecast that is
+      // indistinguishable from real data. Fail loudly instead of quietly wrong.
+      let recovered=false;
+      try{
+        const{data:rd,error:rErr}=await sb.auth.refreshSession();
+        recovered=!rErr&&!!(rd&&rd.session);
+      }catch(e){recovered=false;}
+      if(!recovered){
+        _sbAuthExpired();
+        _sbSyncing=false;
+        return;
+      }
+    }else if(session.expires_at&&session.expires_at*1000<Date.now()+120000){
       await sb.auth.refreshSession();
     }
   }catch(e){console.warn('[sync] token freshness check failed:',e.message);}
@@ -9817,6 +9860,13 @@ async function syncSupabase(silent=false){
     if(!_useCachedActuals&&actData!=null){
       sbActuals=actData;_sbInvalidateActuals();
       log.push(`Actuals: jps_actuals (${actData.length} rows — fresh fetch)`);
+      // Second line of defence behind the pre-sync session check. A query that returns
+      // zero rows with error:null is exactly what RLS does to an unauthenticated caller,
+      // and jps_actuals is never legitimately empty in this deployment. Treat it as an
+      // auth failure rather than rendering a zero forecast.
+      if(!actData.length){
+        _sbAuthExpired('No billing data returned — your session may have expired. Figures shown may be incomplete; sign in again.');
+      }else{_sbAuthOk();}
       if(actData.length>0){
         if('year' in actData[0])          YEAR_COL='year';
         else if('cal_year' in actData[0]) YEAR_COL='cal_year';
@@ -10813,7 +10863,34 @@ function _dfcComputeChain(idx,key,isAccount,driverCtx,opAc,year,asof,newCustCtx,
 // per render pass) and carries its tail forward. Only FC_BUD_YEAR (the real
 // current year) has any locked/actual months; every later year is 100% forecast.
 let _dfcYearChainCache={};
-function _dfcResetYearChainCache(){_dfcYearChainCache={};_dfcSolarPctCache=null;}
+function _dfcResetYearChainCache(){_dfcYearChainCache={};_dfcSolarPctCache=null;_dfcCacheSig=null;}
+// A chain depends ONLY on the data and assumptions feeding it -- never on the view
+// (group-by, search text, KAM filter). Blanket-resetting on every render meant typing
+// in the search box recomputed ~1,200 chains, and for FY2028 each one recursively
+// recomputes FY2027 then FY2026. This digest covers every input the chain formula
+// reads, so the cache survives view changes but is dropped the instant an assumption,
+// adjustment, new customer or the underlying actuals move. Building it costs a ~30KB
+// string; recomputing the chains it protects costs orders of magnitude more.
+let _dfcCacheSig=null;
+function _dfcDataSig(){
+  let a='';for(let i=0;i<sbMacroAssum.length;i++){const r=sbMacroAssum[i];
+    a+=r.driver_type+'|'+r.segment+'|'+r.year+'|'+r.month+'|'+r.value_pct+';';}
+  let b='';for(let i=0;i<sbOpAdj.length;i++){const r=sbOpAdj[i];
+    b+=r.jps_ac+'|'+r.year+'|'+r.month+'|'+r.operational_pct+'|'+r.manual_kwh+';';}
+  let c='';for(let i=0;i<sbNewCustomers.length;i++){const r=sbNewCustomers[i];
+    c+=r.jps_ac+'|'+r.rate_class+'|'+r.start_year+'|'+r.start_month+'|'+r.expected_kwh+';';}
+  let d='';const bd=(typeof sbBridgeDrivers!=='undefined'&&sbBridgeDrivers)?sbBridgeDrivers:[];
+  for(let i=0;i<bd.length;i++){const r=bd[i];
+    if(r.category==='solar')d+=r.rate_class+'|'+r.year+'|'+r.month+'|'+r.value_kwh+';';}
+  return sbActuals.length+'/'+sbActualsComm.length+'/'+sbBudget.length+'/'+sbKAM.length
+    +'/'+curMonth+'/'+FC_BUD_YEAR+'#'+a+'#'+b+'#'+c+'#'+d;
+}
+// Reset only when the inputs actually changed. Safe to call on every render.
+function _dfcSyncChainCache(){
+  const sig=_dfcDataSig();
+  if(sig!==_dfcCacheSig){_dfcYearChainCache={};_dfcSolarPctCache=null;_dfcCacheSig=sig;return true;}
+  return false;
+}
 function _dfcGetChain(idx,key,isAccount,driverCtx,opAc,year,newCustCtx){
   const cacheKey=`${year}|${key}|${isAccount}|${opAc||''}`;
   if(_dfcYearChainCache[cacheKey])return _dfcYearChainCache[cacheKey];
@@ -10922,10 +10999,20 @@ function _dfcDriverRowHtml(label,pctByMonth,gwhByMonth,months,muted,lockedThru){
   return`<tr><td style="padding:4px 8px 4px 26px;color:var(--text3)">${label}</td>${cells}<td style="border-left:0.5px solid var(--border)"></td></tr>`;
 }
 
+// Customer-view display cap -- see the note at the render site. 300 covers well beyond
+// the accounts anyone reviews by eye while keeping the DOM about 25x smaller.
+let _dfcCustCap=300;
+function dfcShowMore(){_dfcCustCap+=2000;renderDriverForecast();}
+function dfcShowAll(){_dfcCustCap=Infinity;renderDriverForecast();}
+function dfcResetCap(){_dfcCustCap=300;}
+
 function renderDriverForecast(){
   const wrap=document.getElementById('dfc_table');if(!wrap)return;
   _dfcCohortReg=[];
-  _dfcResetYearChainCache();
+  // Signature-checked, not unconditional: chains depend on data and assumptions only,
+  // so changing the group-by, search text or KAM filter no longer discards ~1,200
+  // chains (each of which, for FY2028, recursively rebuilds FY2027 then FY2026).
+  _dfcSyncChainCache();
   const yrSel=document.getElementById('dfc_year');
   if(yrSel&&!yrSel.options.length){
     for(let y=FC_BUD_YEAR;y<=FC_BUD_YEAR+4;y++)yrSel.innerHTML+=`<option value="${y}">${y}</option>`;
@@ -11081,7 +11168,21 @@ function renderDriverForecast(){
     // repeated at the bottom of the list.
     const grand={};months.forEach(m=>{grand[m]={total:entities.reduce((s,e)=>s+(e.chain[m]?e.chain[m].total:0),0)};});
     bodyHtml+=`<tbody><tr style="border-bottom:0.5px solid var(--border-strong);background:var(--card)"><td style="padding:8px 8px;font-weight:700">Grand total (${entities.length} rows below)</td>${totalRowCells(grand,true)}<td style="text-align:right;padding:8px 8px;font-weight:700;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(grand))}</td></tr></tbody>`;
-    entities.forEach((e,entIdx)=>{bodyHtml+=entityHtml(e,entIdx,false);});
+    // Display cap. The customer view previously rendered every entity: against real
+    // data that is ~7,500 accounts/cohorts -> 50,784 rows, 1,049,044 cells and a 107MB
+    // innerHTML string, which locked the tab for ~34 seconds. Chains are cheap (103ms
+    // for all 7,145 accounts once cached) -- the cost was entirely DOM construction.
+    // Sorted largest-first so the material accounts are the ones you see, and the
+    // grand totals above/below are still computed over the FULL set, so capping the
+    // display never changes a number.
+    const _custSorted=[...entities].sort((a,b)=>fyTotal(b.chain)-fyTotal(a.chain));
+    const _shown=Math.min(_dfcCustCap,_custSorted.length);
+    _custSorted.slice(0,_shown).forEach((e,entIdx)=>{bodyHtml+=entityHtml(e,entIdx,false);});
+    if(_custSorted.length>_shown){
+      const _rest=_custSorted.length-_shown;
+      const _restKwh=_custSorted.slice(_shown).reduce((t,e)=>t+fyTotal(e.chain),0);
+      bodyHtml+=`<tbody><tr style="background:var(--card)"><td colspan="${1+months.length*2}" style="padding:10px 8px;color:var(--text3);font-size:11px">Showing the largest ${_shown.toLocaleString()} of ${_custSorted.length.toLocaleString()} rows &mdash; the remaining ${_rest.toLocaleString()} total <strong>${_dfcFmtGwh(_restKwh)} ${_dfcUnitLbl()}</strong> and are included in every total on this page. <a href="#" onclick="dfcShowMore();return false" style="color:var(--teal)">Show ${Math.min(2000,_rest).toLocaleString()} more</a>${_rest>2000?' &middot; <a href="#" onclick="dfcShowAll();return false" style="color:var(--text3)">show all (slow)</a>':''} &middot; or search above to find a specific account.</td><td style="text-align:right;padding:10px 8px;color:var(--text3)">${_dfcFmtGwh(_restKwh)}</td></tr></tbody>`;
+    }
     bodyHtml+=`<tbody><tr style="border-top:0.5px solid var(--border-strong)"><td style="padding:8px 8px;font-weight:700">Grand total</td>${totalRowCells(grand,true)}<td style="text-align:right;padding:8px 8px;font-weight:700;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(grand))}</td></tr></tbody>`;
   }else if(grp==='top_bottom'){
     // "Giants" and "smallest/at-risk" — full driver detail expanded by default
