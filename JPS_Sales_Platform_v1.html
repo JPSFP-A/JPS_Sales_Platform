@@ -10818,6 +10818,10 @@ function _dfcBuildIndices(){
 // (if set) enables the operational/manual adjustment lookup — only individual KAM
 // accounts and new customers pass one; cohorts pass null (their total is the sum
 // of their members' chains, computed by the caller).
+// Accounts excluded from storm-recovery normalisation: measured against the shortfall
+// evidence (Hotels and Motels, Water Supply and Irrigation), these are not storm-affected.
+const _DFC_NORM_EXCLUDE=new Set(['302571-686496']); // Caribbean Cement Co Ltd, RT50
+
 function _dfcComputeChain(idx,key,isAccount,driverCtx,opAc,year,asof,newCustCtx,carryIn){
   const actMap=(isAccount?idx.actByAc:idx.actByCohort)[key];
   const budMap=(isAccount?idx.budByAc:idx.budByCohort)[key];
@@ -10846,7 +10850,12 @@ function _dfcComputeChain(idx,key,isAccount,driverCtx,opAc,year,asof,newCustCtx,
     // cohorts self-derive from their own key; accounts pass a bucket snapshot in
     // driverCtx (may be absent — falls back to the class-wide index row).
     const bucket=driverCtx.bucket!==undefined?driverCtx.bucket:(!isAccount?(String(key).split('|')[2]||null):null);
-    const{macro,weather,seasInd,norm,migration}=_dfcDriverPcts(driverCtx.rate_class,driverCtx.industry,year,m,bucket);
+    let{macro,weather,seasInd,norm,migration}=_dfcDriverPcts(driverCtx.rate_class,driverCtx.industry,year,m,bucket);
+    // Storm-recovery normalisation is keyed by rate class, so without this it lands on
+    // every account in the class. Caribbean Cement is ~a third of RT50 and was never a
+    // storm-affected load -- its 2026 volume ROSE while the rest of RT50 fell -- so the
+    // recovery uplift does not belong on it. Excluded accounts keep every other driver.
+    if(norm&&opAc&&_DFC_NORM_EXCLUDE.has(String(opAc)))norm=0;
     const solar=_dfcSolarPct(driverCtx.rate_class,year,m);
     const op=opAc?_dfcOpAdjLookup(opAc,year,m):{pct:0,kwh:0};
     const total=base*(1+(macro+weather+seasInd+solar+(norm||0)+(migration||0)+op.pct)/100)+op.kwh;
