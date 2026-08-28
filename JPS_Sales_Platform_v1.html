@@ -2342,6 +2342,9 @@ order by ordinal_position;</pre>
         <div class="ch">Driver Forecast
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             <select id="dfc_year" class="psel" onchange="renderDriverForecast()"></select>
+            <select id="dfc_unit" class="psel" title="Display unit -- underlying values are always kWh" onchange="setDfcUnit(this.value)">
+              <option value="kwh">kWh</option><option value="mwh">MWh</option><option value="gwh">GWh</option>
+            </select>
             <button class="btn admin-only" style="background:rgba(232,64,64,.12);color:var(--red);border-color:rgba(232,64,64,.3)" onclick="openCommitBudgetModal()">📌 Commit to Budget</button>
             <select id="dfc_kam" class="psel" onchange="renderDriverForecast()"></select>
             <select id="dfc_group" class="psel" onchange="renderDriverForecast()">
@@ -3505,17 +3508,17 @@ async function loadCommercialDetail(){
   try{
     const{data,error}=await sb.rpc('get_comm_actuals',{year_cutoff:_cutoff});
     if(error)throw error;
-    sbActualsComm=data||[];
+    sbActualsComm=data||[];_sbInvalidateActuals();
   }catch(e){
     console.warn('[comm] get_comm_actuals fallback to raw table:',e.message);
     try{
       const d=await sbTable('jps_actuals',{gte:[_yrCol,_cutoff],cols:_cols,limit:100000});
       if(d==null)throw new Error('fallback query returned no result');
-      sbActualsComm=d.filter(r=>r.jps_ac&&String(r.jps_ac).trim());
+      sbActualsComm=d.filter(r=>r.jps_ac&&String(r.jps_ac).trim());_sbInvalidateActuals();
     }catch(e2){
       console.error('[comm] get_comm_actuals fallback ALSO failed — commercial data is missing, not just empty:',e2.message);
       if(window.JpsMonitor&&JpsMonitor.error)JpsMonitor.error('sync:comm_actuals_failed',e2.message||'RPC and fallback both failed');
-      sbActualsComm=[];
+      sbActualsComm=[];_sbInvalidateActuals();
       _commFailed=true;
       toast('Commercial data failed to load (both fetch paths errored) — commercial figures are missing, not zero','w');
     }
@@ -3554,7 +3557,20 @@ async function loadLEDetail(){
 }
 
 // Returns all actuals rows (residential + commercial if loaded)
-function _sbAllActuals(){return sbActualsComm.length?[...sbActuals,...sbActualsComm]:sbActuals;}
+// Memoised: this concatenates ~157k rows (10k residential + 147k commercial) and is
+// called from 15 sites, several of them inside a single Driver Forecast render --
+// rebuilding the array each time cost ~790k element allocations per render before
+// any forecasting work began. Keyed on both array lengths, which change together
+// only when sync replaces them wholesale; _sbInvalidateActuals() forces a rebuild.
+let _allActCache=null,_allActKey='';
+function _sbInvalidateActuals(){_allActCache=null;_allActKey='';}
+function _sbAllActuals(){
+  const k=sbActuals.length+'|'+sbActualsComm.length;
+  if(_allActCache&&_allActKey===k)return _allActCache;
+  _allActCache=sbActualsComm.length?[...sbActuals,...sbActualsComm]:sbActuals;
+  _allActKey=k;
+  return _allActCache;
+}
 
 /* ==========================================
    NAV & PERIOD
@@ -9799,7 +9815,7 @@ async function syncSupabase(silent=false){
       setTimeout(()=>{_sbSyncing=false;syncSupabase(true);},3000);
     }
     if(!_useCachedActuals&&actData!=null){
-      sbActuals=actData;
+      sbActuals=actData;_sbInvalidateActuals();
       log.push(`Actuals: jps_actuals (${actData.length} rows — fresh fetch)`);
       if(actData.length>0){
         if('year' in actData[0])          YEAR_COL='year';
@@ -10540,7 +10556,11 @@ function _dfcOpAdjLookup(ac,year,month){
 }
 function _dfcDriverPcts(rc,industry,year,month,bucket){
   const seg=_dfcSegment(rc);
-  const macro=_dfcMacroLookup('macro',seg,year,month);
+  // Macro resolves rate-class-first, then segment: a 'macro' row keyed to the rate
+  // class itself (segment='RT10') overrides the shared segment row (segment='residential').
+  // Without this RT10 and RT20 could only ever move together, so a forecaster setting
+  // a different growth rate per residential class had no way to express it.
+  const macro=_dfcMacroLookup('macro',rc,year,month)||_dfcMacroLookup('macro',seg,year,month);
   const weather=_dfcMacroLookup('weather',null,year,month);
   // Residential seasonality is bucket-keyed ('RT10|150>350' etc.) because bucket
   // shapes genuinely diverge — RT10 <150 is winter-peaking while over-950 swings
@@ -10553,7 +10573,20 @@ function _dfcDriverPcts(rc,industry,year,month,bucket){
   const seasInd=seg==='residential'
     ?(year>FC_BUD_YEAR?(bucket?_dfcMacroLookup('seasonality_residential',rc+'|'+bucket,year,month)||_dfcMacroLookup('seasonality_residential',null,year,month):_dfcMacroLookup('seasonality_residential',null,year,month)):0)
     :(industry?_dfcMacroLookup('industry',industry,year,month):0);
-  return{seg,macro,weather,seasInd};
+  // Storm-recovery normalisation. The rolling base carries whatever depressed level
+  // the storm left behind, so without this the chain silently assumes hurricane-hit
+  // load NEVER comes back. Rows are keyed by rate_class (segment='RT50' etc.) and
+  // gated to out-years — FY2026 must keep tying to the submitted document.
+  const norm=year>FC_BUD_YEAR?_dfcMacroLookup('normalization',rc,year,month):0;
+  // Bucket-migration lever. Residential growth is overwhelmingly compositional --
+  // customers crossing into higher consumption tiers, not consuming more within a
+  // tier (91% of the Jul-25 -> Jul-26 movement). That migration rides along inside
+  // the base carry-forward with no way to flex it, so if migration slowed the
+  // forecast would not react. This driver flexes migration ABOVE or BELOW the pace
+  // already embedded in the base: 0 = continue as embedded, negative = migration
+  // slowing, positive = accelerating. Residential classes only, out-years only.
+  const migration=(year>FC_BUD_YEAR&&(rc==='RT10'||rc==='RT20'))?_dfcMacroLookup('migration',rc,year,month):0;
+  return{seg,macro,weather,seasInd,norm,migration};
 }
 
 // Solar/DER erosion as a chain driver: jps_bridge_drivers category='solar' rows
@@ -10703,7 +10736,10 @@ function _dfcBuildIndices(){
   // those same rows, or a KAM account's kwh is counted twice: once as its own
   // entity, again folded into its rate_class|parish|bucket cohort total.
   const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
-  const hasKam=ac=>!!_kl(kamMap,ac);
+  // Memoised per account: _kl falls back to a String.split('-') on every miss, and
+  // this runs once per actuals row (~147k) when there are only ~2.4k distinct accounts.
+  const _kamHit=Object.create(null);
+  const hasKam=ac=>{const k=ac||'';let v=_kamHit[k];if(v===undefined){v=_kamHit[k]=!!_kl(kamMap,ac);}return v;};
   const actByAc={},actByCohort={},budByAc={},budByCohort={};
   _sbAllActuals().forEach(r=>{
     const ym=`${r.year}_${r.month}`;
@@ -10763,11 +10799,11 @@ function _dfcComputeChain(idx,key,isAccount,driverCtx,opAc,year,asof,newCustCtx,
     // cohorts self-derive from their own key; accounts pass a bucket snapshot in
     // driverCtx (may be absent — falls back to the class-wide index row).
     const bucket=driverCtx.bucket!==undefined?driverCtx.bucket:(!isAccount?(String(key).split('|')[2]||null):null);
-    const{macro,weather,seasInd}=_dfcDriverPcts(driverCtx.rate_class,driverCtx.industry,year,m,bucket);
+    const{macro,weather,seasInd,norm,migration}=_dfcDriverPcts(driverCtx.rate_class,driverCtx.industry,year,m,bucket);
     const solar=_dfcSolarPct(driverCtx.rate_class,year,m);
     const op=opAc?_dfcOpAdjLookup(opAc,year,m):{pct:0,kwh:0};
-    const total=base*(1+(macro+weather+seasInd+solar+op.pct)/100)+op.kwh;
-    totals[m]={total,isActual:false,base,macro,weather,seasInd,solar,oper:op.pct,manual:op.kwh};
+    const total=base*(1+(macro+weather+seasInd+solar+(norm||0)+(migration||0)+op.pct)/100)+op.kwh;
+    totals[m]={total,isActual:false,base,macro,weather,seasInd,solar,norm:norm||0,migration:migration||0,oper:op.pct,manual:op.kwh};
   }
   return totals;
 }
@@ -10785,13 +10821,25 @@ function _dfcGetChain(idx,key,isAccount,driverCtx,opAc,year,newCustCtx){
   if(year===FC_BUD_YEAR){
     lockedThru=curMonth;
   }else if(year>FC_BUD_YEAR){
-    // Seed the new year from the PRIOR year's full-year LE average, not its Oct/Nov/Dec
-    // tail -- for winter-skewed classes (residential), Oct-Dec run well above the annual
-    // average, so carrying that 3-month tail forward flat inflated every month of the new
-    // year by that same margin before any driver (macro/weather/seasonality) even applied.
+    // Carry the prior year's Oct/Nov/Dec tail forward -- that tail is what preserves a
+    // PERMANENT LEVEL SHIFT (a confirmed mid-year defection like Alcoa RT70 going 100%
+    // self-generating from Aug-2026 must stay gone in FY2027, not be averaged back in).
+    // For residential (RT10/RT20) only, deseasonalise that tail first: Oct-Dec is the
+    // winter consumption peak, so carrying it forward flat inflated every month of the new
+    // year by that margin. Dividing by the tail's own uplift vs the year's average converts
+    // it to annual-average-equivalent terms. Commercial classes are left on the raw tail --
+    // they are weakly seasonal, and a self-computed factor there would divide a
+    // defection-collapsed tail by its own collapse and resurrect the lost load.
     const prior=_dfcGetChain(idx,key,isAccount,driverCtx,opAc,year-1,newCustCtx);
-    const priorAvg=Object.values(prior).reduce((s,v)=>s+(v.total||0),0)/12;
-    carryIn={0:priorAvg,'-1':priorAvg,'-2':priorAvg};
+    const pv=m=>prior[m]?(prior[m].total||0):0;
+    const rcSeg=String(driverCtx.rate_class||'');
+    let f=1;
+    if(rcSeg==='RT10'||rcSeg==='RT20'){
+      const annualAvg=Object.values(prior).reduce((s,v)=>s+(v.total||0),0)/12;
+      const tailAvg=(pv(10)+pv(11)+pv(12))/3;
+      if(annualAvg>0&&tailAvg>0)f=tailAvg/annualAvg;
+    }
+    carryIn={0:pv(12)/f,'-1':pv(11)/f,'-2':pv(10)/f};
   }
   const chain=_dfcComputeChain(idx,key,isAccount,driverCtx,opAc,year,lockedThru,newCustCtx,carryIn);
   _dfcYearChainCache[cacheKey]=chain;
@@ -10799,7 +10847,26 @@ function _dfcGetChain(idx,key,isAccount,driverCtx,opAc,year,newCustCtx){
 }
 
 function _dfcFmtPct(v){return(v>=0?'+':'')+v.toFixed(1)+'%';}
-function _dfcFmtGwh(v){return(v/1e6).toFixed(2);}
+// Display unit for the Driver Forecast / RC Forecast energy columns. Source values
+// are always kWh; only the presentation changes. Persisted per user so the choice
+// survives a reload. kWh is the default because it matches the billing extracts and
+// the LE workbook; GWh stays available because ~3.3bn kWh is hard to scan in a table.
+let _dfcUnit=(function(){try{return localStorage.getItem('jps_dfc_unit')||'kwh';}catch(e){return 'kwh';}})();
+const _DFC_UNITS={kwh:{div:1,dp:0,lbl:'kWh'},mwh:{div:1e3,dp:1,lbl:'MWh'},gwh:{div:1e6,dp:2,lbl:'GWh'}};
+function _dfcUnitLbl(){return (_DFC_UNITS[_dfcUnit]||_DFC_UNITS.kwh).lbl;}
+function setDfcUnit(u){
+  if(!_DFC_UNITS[u])return;
+  _dfcUnit=u;
+  try{localStorage.setItem('jps_dfc_unit',u);}catch(e){}
+  if(typeof renderDriverForecast==='function')renderDriverForecast();
+  if(typeof renderRcForecastReport==='function'&&document.getElementById('rcfr_table'))renderRcForecastReport();
+}
+function _dfcFmtGwh(v){
+  const u=_DFC_UNITS[_dfcUnit]||_DFC_UNITS.kwh;
+  const n=(Number(v)||0)/u.div;
+  // kWh values run to 9 figures -- thousands separators are what make them scannable.
+  return u.dp===0?Math.round(n).toLocaleString('en-US'):n.toLocaleString('en-US',{minimumFractionDigits:u.dp,maximumFractionDigits:u.dp});
+}
 function _dfcFyTotal(chain,months){let t=0;months.forEach(m=>t+=chain[m]?chain[m].total:0);return t;}
 
 // Lazy cohort member drill-down — computes and renders only when clicked, capped
@@ -10936,9 +11003,9 @@ function renderDriverForecast(){
     const vsB=budgetTotalGwh?((fyTotalGwh-budgetTotalGwh)/budgetTotalGwh*100):0;
     const opAdjCount=sbOpAdj.filter(r=>Number(r.year)===year&&Number(r.operational_pct)).length;
     krow.innerHTML=`
-      <div class="kpi kt"><div class="kl">FY Total (${year})</div><div class="kv">${_dfcFmtGwh(fyTotalGwh)} GWh</div><div class="ks nt">${lockedThru?'Actual thru '+MONTHS_SHORT[lockedThru-1]+' + forecast':'Full-year forecast'}</div></div>
+      <div class="kpi kt"><div class="kl">FY Total (${year})</div><div class="kv">${_dfcFmtGwh(fyTotalGwh)} ${_dfcUnitLbl()}</div><div class="ks nt">${lockedThru?'Actual thru '+MONTHS_SHORT[lockedThru-1]+' + forecast':'Full-year forecast'}</div></div>
       <div class="kpi kg"><div class="kl">Actual YTD</div><div class="kv">${lockedThru?_dfcFmtGwh(actualYtdGwh):'—'}${lockedThru?' GWh':''}</div><div class="ks nt">${lockedThru?MONTHS_SHORT[0]+'–'+MONTHS_SHORT[lockedThru-1]:'No closed months yet'}</div></div>
-      <div class="kpi ${vsB>=0?'kg':'kr'}"><div class="kl">vs Budget</div><div class="kv">${vsB>=0?'+':''}${vsB.toFixed(1)}%</div><div class="ks nt">${_dfcFmtGwh(budgetTotalGwh)} GWh budget</div></div>
+      <div class="kpi ${vsB>=0?'kg':'kr'}"><div class="kl">vs Budget</div><div class="kv">${vsB>=0?'+':''}${vsB.toFixed(1)}%</div><div class="ks nt">${_dfcFmtGwh(budgetTotalGwh)} ${_dfcUnitLbl()} budget</div></div>
       <div class="kpi kp"><div class="kl">Key Accounts</div><div class="kv">${keyAccounts.length+newCusts.length}</div><div class="ks nt">${newCusts.length?newCusts.length+' new':'own row, KAM-assigned'}</div></div>
       <div class="kpi ka"><div class="kl">Operational Adj.</div><div class="kv">${opAdjCount}</div><div class="ks nt">active this year</div></div>
     `;
@@ -10947,7 +11014,7 @@ function renderDriverForecast(){
   let bodyHtml='';
   const colgroup=`<colgroup><col style="width:210px">${months.map(()=>'<col style="width:60px"><col style="width:64px">').join('')}<col style="width:76px"></colgroup>`;
   const headMonths=months.map(m=>`<th colspan="2" style="text-align:center;padding:4px;font-weight:500;color:var(--text3);border-left:0.5px solid var(--border)">${MONTHS_SHORT[m-1]}</th>`).join('');
-  const headSub=months.map(()=>`<th style="text-align:right;padding:4px;font-weight:500;color:var(--text3);border-left:0.5px solid var(--border)">%</th><th style="text-align:right;padding:4px;font-weight:500;color:var(--text3)">GWh</th>`).join('');
+  const headSub=months.map(()=>`<th style="text-align:right;padding:4px;font-weight:500;color:var(--text3);border-left:0.5px solid var(--border)">%</th><th style="text-align:right;padding:4px;font-weight:500;color:var(--text3)">${_dfcUnitLbl()}</th>`).join('');
 
   function fyTotal(chain){let t=0;months.forEach(m=>t+=chain[m]?chain[m].total:0);return t;}
   function totalRowCells(chain,bold){
@@ -10966,9 +11033,9 @@ function renderDriverForecast(){
     let h=`<tbody${headerAttrs}><tr style="border-bottom:0.5px solid var(--border);cursor:pointer" onclick="const g=document.getElementById('${gid}'),h=document.getElementById('${hid}');const open=g.style.display==='table-row-group';g.style.display=open?'none':'table-row-group';h.textContent=open?'▸':'▾';">
         <td style="padding:7px 8px;font-weight:500" colspan="${1+months.length*2}">
           <span id="${hid}">${defaultExpanded?'▾':'▸'}</span> ${esc(e.label)} <span style="color:var(--text3);font-weight:400">· ${esc(e.sub)}</span>
-          <strong style="margin-left:10px">${_dfcFmtGwh(fyTotal(e.chain))} GWh</strong>
+          <strong style="margin-left:10px">${_dfcFmtGwh(fyTotal(e.chain))} ${_dfcUnitLbl()}</strong>
         </td>
-        <td style="text-align:right;padding:7px 8px;font-weight:500;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(e.chain))} GWh</td>
+        <td style="text-align:right;padding:7px 8px;font-weight:500;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(e.chain))} ${_dfcUnitLbl()}</td>
       </tr></tbody><tbody id="${gid}" style="display:${defaultExpanded?'table-row-group':'none'}">`;
     if(e.type==='account'||e.type==='newcust'){
       const a=e.ref;
@@ -11190,8 +11257,17 @@ function renderMacroAssumptions(){
   const rows=[
     {label:'Macro — commercial',type:'macro',seg:'commercial'},
     {label:'Macro — residential',type:'macro',seg:'residential'},
+    {label:'Macro — RT10 (overrides residential)',type:'macro',seg:'RT10'},
+    {label:'Macro — RT20 (overrides residential)',type:'macro',seg:'RT20'},
     {label:'Weather',type:'weather',seg:null},
     {label:'Seasonality — residential',type:'seasonality_residential',seg:null},
+    // Bucket migration — the lever on compositional residential growth (customers
+    // crossing into higher consumption tiers, which is ~91% of residential growth).
+    // 0 = continue at the pace already embedded in the base carry-forward.
+    {label:'Bucket migration — RT10',type:'migration',seg:'RT10'},
+    {label:'Bucket migration — RT20',type:'migration',seg:'RT20'},
+    // Storm-recovery normalisation, per rate class.
+    ...['RT20','RT40','RT50','RT70'].map(rc=>({label:'Normalisation — '+rc,type:'normalization',seg:rc})),
     ...industries.map(ind=>({label:'Industry — '+ind,type:'industry',seg:ind}))
   ];
   const head=months.map(m=>`<th style="text-align:center;padding:4px;font-weight:500;color:var(--text3);border-left:0.5px solid var(--border)">${MONTHS_SHORT[m-1]}</th>`).join('');
@@ -11925,9 +12001,11 @@ function _rcfrAccumulate(acc,chain){
     const macroImpact=base*(c.macro||0)/100;
     const weatherImpact=base*((c.weather||0)+(c.seasInd||0))/100;
     const solarImpact=base*(c.solar||0)/100;
+    const normImpact=base*(c.norm||0)/100;
+    const migImpact=base*(c.migration||0)/100;
     const operImpact=base*(c.oper||0)/100+(c.manual||0);
-    acc.base+=base;acc.macro+=macroImpact;acc.weather+=weatherImpact;acc.solar=(acc.solar||0)+solarImpact;acc.oper+=operImpact;
-    acc.total+=base+macroImpact+weatherImpact+solarImpact+operImpact;
+    acc.base+=base;acc.macro+=macroImpact;acc.weather+=weatherImpact;acc.solar=(acc.solar||0)+solarImpact;acc.norm=(acc.norm||0)+normImpact;acc.migration=(acc.migration||0)+migImpact;acc.oper+=operImpact;
+    acc.total+=base+macroImpact+weatherImpact+solarImpact+normImpact+migImpact+operImpact;
   }
 }
 // Per-account breakdown feeding _rcfrInsight's "who/what" attribution -- only called
@@ -11968,23 +12046,23 @@ function _rcfrInsight(rateClass,fy,bud,macro,weather,oper,indImpact,opAccounts){
   ].sort((a,b)=>Math.abs(b.v)-Math.abs(a.v));
   const top=drivers[0];
   let s=bud>0
-    ?`${rateClass}: forecast ${_dfcFmtGwh(fy)} GWh, ${Math.abs(delta).toFixed(1)}% ${delta>=0?'above':'below'} budget (${_dfcFmtGwh(bud)} GWh).`
-    :`${rateClass}: forecast ${_dfcFmtGwh(fy)} GWh — no budget loaded for comparison.`;
+    ?`${rateClass}: forecast ${_dfcFmtGwh(fy)} ${_dfcUnitLbl()}, ${Math.abs(delta).toFixed(1)}% ${delta>=0?'above':'below'} budget (${_dfcFmtGwh(bud)} ${_dfcUnitLbl()}).`
+    :`${rateClass}: forecast ${_dfcFmtGwh(fy)} ${_dfcUnitLbl()} — no budget loaded for comparison.`;
   if(Math.abs(top.v)<=0.01)return s;
-  s+=` Largest driver: ${top.label} (${top.v>=0?'+':''}${_dfcFmtGwh(top.v)} GWh)`;
+  s+=` Largest driver: ${top.label} (${top.v>=0?'+':''}${_dfcFmtGwh(top.v)} ${_dfcUnitLbl()})`;
   if(top.label==='operational adjustments'&&opAccounts&&opAccounts.length){
     const sorted=opAccounts.slice().sort((a,b)=>Math.abs(b.impact)-Math.abs(a.impact));
     const namedBits=sorted.slice(0,2).map(o=>{
       const rn=_rcfrOpReason(o.ac);
       const why=rn&&rn.note?`${rn.reason?rn.reason+': ':''}${rn.note}`:(rn&&rn.reason?rn.reason:'');
-      return `${o.name} (${o.impact>=0?'+':''}${_dfcFmtGwh(o.impact)} GWh${why?' — '+why:''})`;
+      return `${o.name} (${o.impact>=0?'+':''}${_dfcFmtGwh(o.impact)} ${_dfcUnitLbl()}${why?' — '+why:''})`;
     });
     s+=` — primarily ${namedBits.join(' and ')}.`;
   } else if(top.label==='weather/seasonality'&&indImpact){
     const inds=Object.entries(indImpact).sort((a,b)=>Math.abs(b[1].impact)-Math.abs(a[1].impact));
     if(inds.length){
       const[name,e]=inds[0];
-      s+=`, concentrated in ${name} (${e.n} account${e.n===1?'':'s'}, ${e.impact>=0?'+':''}${_dfcFmtGwh(e.impact)} GWh)${e.names.length?' — '+e.names.slice(0,3).join(', '):''}.`;
+      s+=`, concentrated in ${name} (${e.n} account${e.n===1?'':'s'}, ${e.impact>=0?'+':''}${_dfcFmtGwh(e.impact)} ${_dfcUnitLbl()})${e.names.length?' — '+e.names.slice(0,3).join(', '):''}.`;
     } else {
       s+='.';
     }
@@ -13452,9 +13530,13 @@ function _dbkRenderHTML(years,Y){
     const operCol=rcsOf(y).reduce((s,rc)=>s+Y[y].rc[rc].oper,0);
     const unattrOp=operCol-defTot-otherOpTot;
     const row=(name,val,how)=>`<tr><td>${name}</td><td style="text-align:right;color:${val==null?'#777':col(val)}">${val==null?'n/a':gs(val)}</td><td class="note-cell">${how}</td></tr>`;
+    // Residential underlying-demand movement as a YEAR-OVER-YEAR DELTA. The taxonomy view
+    // sits alongside the bridges, so every row in it has to be a movement; reporting the
+    // raw base column here made "New Load" read as ~the entire residential book.
+    const _dbkResTotal=(yy)=>Object.keys(Y[yy].rc).filter(RES).reduce((s,rc)=>s+Y[yy].rc[rc].total,0);
     tax+=`<h2>FY${y} — Driver Taxonomy View (GWh, forecast months)</h2>
     <table><thead><tr><th style="width:230px">Taxonomy driver</th><th style="width:90px;text-align:right">GWh</th><th>What feeds it in the live engine</th></tr></thead><tbody>
-    ${row('New Load / Underlying Demand — trend (Customer Growth + Load Growth)',sumWhere(y,RES,'base'),'Residential (RT10/RT20) rolling 3-month base level. The engine does not separate customer-count growth from usage-per-customer growth — both live inside this roll-forward.')}
+    ${row('New Load / Underlying Demand — trend (Customer Growth + Load Growth)',(Y[y-1]?_dbkResTotal(y)-_dbkResTotal(y-1):null),'Residential (RT10/RT20) underlying-demand movement vs the prior year — this year\'s residential FY total minus last year\'s. Reported as a year-over-year DELTA so it belongs in a bridge; the raw base column is a level, not a driver contribution. The engine does not separate customer-count growth from usage-per-customer growth — both live inside this roll-forward.')}
     ${row('New Load / Underlying Demand — macro push',sumWhere(y,RES,'macro'),'Residential segment macro % applied to the base each forecast month.')}
     ${row('Temperature',sumWhere(y,RES,'weather'),'Weather % on residential classes (RT10/RT20).')}
     ${row('Normalized Volumes (hurricane districts/industries, FY26–27 concept)',null,'NO LIVE ENGINE INPUT. Hurricane normalization rows exist in jps_bridge_drivers for attribution displays only — the chain formula never reads that table for this. Storm recovery is embedded implicitly via billed actuals feeding the rolling base.')}
