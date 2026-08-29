@@ -3498,60 +3498,80 @@ function getFcMonths(){
    41k commercial account rows loaded on first Commercial tab open (not at startup).
    Startup only loads 12k residential + 974 customer summaries (76% reduction).
 ========================================== */
-async function loadCommercialDetail(){
-  if(_commDetailLoaded)return;
+// force=true re-fetches even when already loaded (the post-sync refresh). Rows are
+// fetched into a LOCAL and swapped in only once they arrive, so sbActualsComm is never
+// observably empty while a fetch is in flight. It used to be blanked first: an empty
+// sbActualsComm is indistinguishable from "this system genuinely has no commercial
+// rows", so for the length of the fetch the Driver Forecast, RC Forecast Report and
+// 3-Year Comparison reported RT40/RT50/RT70 as ZERO with no error raised.
+let _commLoadInFlight=null;
+async function loadCommercialDetail(force){
+  if(_commDetailLoaded&&!force)return;
+  if(_commLoadInFlight)return _commLoadInFlight; // coalesce: showSection and a caller can both fire this
   const sb=getSB();if(!sb)return;
+  _commLoadInFlight=(async()=>{
   const _cutoff=new Date().getFullYear()-1;
   const _yrCol=YEAR_COL||'year';
   const _cols='id,year,month,jps_ac,name,rate_class,parish,consumption_bucket,kwh,revenue_jmd,customer_count';
-  let _commFailed=false;
+  let rows=null;
   try{
     const{data,error}=await sb.rpc('get_comm_actuals',{year_cutoff:_cutoff});
     if(error)throw error;
-    sbActualsComm=data||[];_sbInvalidateActuals();
+    rows=data||[];
   }catch(e){
     console.warn('[comm] get_comm_actuals fallback to raw table:',e.message);
     try{
       const d=await sbTable('jps_actuals',{gte:[_yrCol,_cutoff],cols:_cols,limit:100000});
       if(d==null)throw new Error('fallback query returned no result');
-      sbActualsComm=d.filter(r=>r.jps_ac&&String(r.jps_ac).trim());_sbInvalidateActuals();
+      rows=d.filter(r=>r.jps_ac&&String(r.jps_ac).trim());
     }catch(e2){
       console.error('[comm] get_comm_actuals fallback ALSO failed — commercial data is missing, not just empty:',e2.message);
       if(window.JpsMonitor&&JpsMonitor.error)JpsMonitor.error('sync:comm_actuals_failed',e2.message||'RPC and fallback both failed');
-      sbActualsComm=[];_sbInvalidateActuals();
-      _commFailed=true;
-      toast('Commercial data failed to load (both fetch paths errored) — commercial figures are missing, not zero','w');
+      rows=null;
     }
   }
-  _commDetailLoaded=!_commFailed; // leave retryable (don't mark "loaded") if it genuinely failed
+  if(rows){
+    sbActualsComm=rows;_sbInvalidateActuals();_commDetailLoaded=true;
+  }else if(_commDetailLoaded){
+    // A refresh failed while we still hold the previous good rows. Keeping them beats
+    // blanking them — slightly stale is recoverable, silently zero is not.
+    toast('Commercial data refresh failed — still showing the rows loaded earlier','w');
+  }else{
+    sbActualsComm=[];_sbInvalidateActuals();_commDetailLoaded=false; // stays retryable
+    toast('Commercial data failed to load (both fetch paths errored) — commercial figures are missing, not zero','w');
+  }
   console.log('[comm] loaded',sbActualsComm.length,'commercial rows');
   // whatever section was already rendered before this finished was residential-only —
   // refresh it now that the full actuals set (residential+commercial) is available
   try{renderSection(document.querySelector('.sec.on')?.id);}catch(e){console.warn('re-render after commercial load:',e);}
+  })();
+  try{await _commLoadInFlight;}finally{_commLoadInFlight=null;}
 }
 
 // jps_le is 128k+ rows — was fetched on every single login as part of the main
 // sync, even though only the LE Forecast tab uses it. Loaded lazily instead, on
 // first LE tab open, same pattern as loadCommercialDetail() above.
-async function loadLEDetail(){
-  if(_leDetailLoaded)return;
+// force=true re-fetches after a sync. Same swap-on-success rule as
+// loadCommercialDetail() above — sbLE is never blanked ahead of a fetch.
+async function loadLEDetail(force){
+  if(_leDetailLoaded&&!force)return;
   const sb=getSB();if(!sb)return;
   const _cutoff=new Date().getFullYear()-1;
   const wrap=document.getElementById('le_table')||document.getElementById('le_krow');
-  if(wrap)wrap.innerHTML='<div style="padding:20px;color:var(--text2);font-size:12px">Loading LE data…</div>';
-  let _leFailed=false;
+  if(wrap&&!_leDetailLoaded)wrap.innerHTML='<div style="padding:20px;color:var(--text2);font-size:12px">Loading LE data…</div>';
+  let rows=null;
   try{
     const d=await sbTable('jps_le',{limit:100000,cols:'year,month,jps_ac,name,rate_class,parish,consumption_bucket,kwh_le,revenue_le,demand_le,customer_count,le_label',gte:['year',_cutoff]});
     if(d==null)throw new Error('jps_le query returned no result');
-    sbLE=d;
+    rows=d;
   }catch(e){
     console.error('[le] loadLEDetail failed — LE data is missing, not empty:',e.message);
     if(window.JpsMonitor&&JpsMonitor.error)JpsMonitor.error('sync:le_failed',e.message||'jps_le fetch failed');
-    sbLE=[];
-    _leFailed=true;
-    toast('LE data failed to load — LE figures are missing, not zero','w');
+    rows=null;
   }
-  _leDetailLoaded=!_leFailed; // leave retryable if it genuinely failed
+  if(rows){sbLE=rows;_leDetailLoaded=true;}
+  else if(_leDetailLoaded){toast('LE data refresh failed — still showing the rows loaded earlier','w');}
+  else{sbLE=[];_leDetailLoaded=false;toast('LE data failed to load — LE figures are missing, not zero','w');}
   console.log('[le] loaded',sbLE.length,'LE rows');
   renderLE();
 }
@@ -9995,18 +10015,15 @@ async function syncSupabase(silent=false){
       sbCustSummary=custSummData;
       log.push(`Customer summary: ${custSummData.length} commercial customers`);
     } else sbCustSummary=[];
-    // Reset lazy flags — commercial detail and LE data must be re-fetched after a full sync.
-    // If they were already loaded before this sync (the common case — e.g. saving a macro
-    // assumption or operational adjustment triggers syncSupabase(true) while the user is
-    // still looking at Driver Forecast), immediately re-fetch them once the sync finishes
-    // instead of leaving the current view silently showing zeroed-out commercial data until
-    // the user happens to switch tabs away and back (or reloads the page) to re-trigger the
-    // lazy load — that's what "commercial values disappear until I refresh" was.
+    // Commercial detail and LE data are re-fetched after a full sync, but they are NOT
+    // blanked first. Blanking them left a window — the length of a 147k-row fetch — in
+    // which every consumer of _sbAllActuals() computed the commercial rate classes as
+    // zero and reported it as a normal answer: RT50 343.0 → 0, RT70 268.2 → 0, no error.
+    // The re-fetch below swaps fresh rows in only once they land, so the previous rows
+    // stay readable until then and no caller ever sees an empty set it cannot recognise
+    // as empty. Note this is the in-memory form of the delete-safe upload rule: write
+    // the new state first, retire the old state after — never clear then repopulate.
     const _wasCommLoaded=_commDetailLoaded, _wasLeLoaded=_leDetailLoaded;
-    _commDetailLoaded=false;
-    sbActualsComm=[];
-    _leDetailLoaded=false;
-    sbLE=[];
 
     const anyOk=actOk||budOk||!!ng;
     sbConnected=anyOk;
@@ -10077,8 +10094,8 @@ async function syncSupabase(silent=false){
     // saving a macro assumption or operational adjustment calls syncSupabase(true)
     // while the user is still looking at a commercial/LE view), re-fetch them now;
     // both re-render the current section again themselves once they complete.
-    if(_wasCommLoaded)loadCommercialDetail().catch(e=>console.warn('loadCommercialDetail (post-sync):',e));
-    if(_wasLeLoaded)loadLEDetail().catch(e=>console.warn('loadLEDetail (post-sync):',e));
+    if(_wasCommLoaded)loadCommercialDetail(true).catch(e=>console.warn('loadCommercialDetail (post-sync):',e));
+    if(_wasLeLoaded)loadLEDetail(true).catch(e=>console.warn('loadLEDetail (post-sync):',e));
 
     const el=document.getElementById('adm_upload_status');
     if(el&&sbActuals.length)el.textContent=`Live · ${sbActuals.length.toLocaleString()} actuals rows`;
@@ -10808,7 +10825,22 @@ function _dfcCommCohortsForNonKam(accounts,year){
 // Pre-indexed O(1) lookups, built once per render — replaces per-(account,month)
 // full-array scans, which would be ~9,000 accounts x 6 months x tens of thousands
 // of rows and freeze the browser against real production data.
+// Shared gate for the pages that cannot be computed without commercial detail. Returns
+// true when the caller should render a placeholder and stop; loadCommercialDetail()
+// re-renders the active section when it lands, so this self-heals with no polling.
+function _commGate(elId,label){
+  if(_commDetailLoaded)return false;
+  const el=document.getElementById(elId);
+  if(el)el.innerHTML='<div style="padding:20px;color:var(--text2);font-size:12px">Loading commercial detail — '+label+' needs it before RT40/RT50/RT70 can be reported…</div>';
+  loadCommercialDetail().catch(e=>console.warn('loadCommercialDetail:',e));
+  return true;
+}
 function _dfcBuildIndices(){
+  // Every engine path funnels through here, so this is where the commercial-detail
+  // precondition is enforced. Once an unloaded sbActualsComm is folded into the index
+  // the omission is unrecoverable — it reads as a real zero downstream — so refuse to
+  // build rather than hand back an index that understates RT40/RT50/RT70 in silence.
+  if(!_commDetailLoaded)throw new Error('COMM_NOT_LOADED: commercial detail is still loading; the forecast cannot be computed from residential rows alone');
   // KAM-assigned commercial accounts get their own 'account' entity (via actByAc,
   // added in renderDriverForecast's keyAccounts loop). actByCohort must exclude
   // those same rows, or a KAM account's kwh is counted twice: once as its own
@@ -11045,6 +11077,7 @@ function dfcResetCap(){_dfcCustCap=300;}
 
 function renderDriverForecast(){
   const wrap=document.getElementById('dfc_table');if(!wrap)return;
+  if(_commGate('dfc_table','the Driver Forecast'))return;
   _dfcCohortReg=[];
   // Signature-checked, not unconditional: chains depend on data and assumptions only,
   // so changing the group-by, search text or KAM filter no longer discards ~1,200
@@ -11970,6 +12003,7 @@ async function _adjLogConfirmDelete(id){
 // instead of by account/cohort.
 function renderRcForecastReport(){
   const wrap=document.getElementById('rcfr_table');if(!wrap)return;
+  if(_commGate('rcfr_table','the RC Forecast Report'))return;
   const yrSel=document.getElementById('rcfr_year');
   if(yrSel&&!yrSel.options.length){
     for(let y=FC_BUD_YEAR;y<=FC_BUD_YEAR+4;y++)yrSel.innerHTML+=`<option value="${y}">${y}</option>`;
@@ -12483,6 +12517,11 @@ function _execLossPct(year){
   return r?Number(r.value_pct)/100:null;
 }
 function generateExecSummary(){
+  if(!_commDetailLoaded){
+    loadCommercialDetail().catch(e=>console.warn('loadCommercialDetail:',e));
+    alert('Commercial detail is still loading. RT40, RT50 and RT70 would all read zero in the summary. Try again in a moment.');
+    return;
+  }
   const yrs=['y3_a','y3_b','y3_c'].map(id=>parseInt(document.getElementById(id)?.value)).filter(y=>!isNaN(y));
   if(yrs.length<2){alert('Select at least two years on this page first.');return;}
   const data=yrs.map(y=>{
@@ -12666,6 +12705,11 @@ function _budgetAssumptionSnapshot(years){
 
 async function commitBudgetVersion(){
   if(!_sbAuthOk())return;
+  if(!_commDetailLoaded){
+    loadCommercialDetail().catch(e=>console.warn('loadCommercialDetail:',e));
+    toast('Commercial detail is still loading \u2014 committing now would freeze a budget with RT40/RT50/RT70 at zero. Try again in a moment.','w');
+    return;
+  }
   const yrs=['y3_a','y3_b','y3_c'].map(id=>parseInt(document.getElementById(id)?.value))
     .filter(y=>!isNaN(y)&&y>=FC_BUD_YEAR).sort((a,b)=>a-b);
   if(!yrs.length){toast('Select at least one year at or after '+FC_BUD_YEAR+' on this page first.','warn');return;}
@@ -12737,6 +12781,7 @@ async function commitBudgetVersion(){
 
 function renderY3Comparison(){
   const wrap=document.getElementById('y3_table');if(!wrap)return;
+  if(_commGate('y3_table','the 3-Year Comparison'))return;
   const selA=document.getElementById('y3_a'),selB=document.getElementById('y3_b'),selC=document.getElementById('y3_c');
   if(selA&&!selA.options.length){
     const opts=[];
