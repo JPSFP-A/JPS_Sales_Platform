@@ -7,3 +7,34 @@ _find*_out.txt
 *.bak.html
 .claude/
 .github/
+
+# --- Working artefacts and generated deliverables -------------------------------
+# Anything left in the deploy root is served as a STATIC file, which bypasses the
+# app's Supabase auth gate completely — sales.jmfinancelab.com/<filename> would hand
+# out the KAM review (named managers, named accounts, the defection register), the
+# driver book and the account-level forecast workbooks to anyone with the URL.
+# The app itself needs only JPS_Sales_Platform_v1.html, config.js, jps-monitor.js,
+# shared/ and og-image.png, so everything else is excluded by pattern rather than by
+# name — a new report dropped in the root next session must not silently ship.
+JPS_Exec_Summary*.html
+JPS_KAM_Review*.html
+JPS_Sales_Forecast_*
+JPS_LE_Sales_Gen_*
+architecture-map.html
+*.xlsx
+*.xlsm
+*.docx
+*.pdf
+*.csv
+~$*
+
+# Scratch scripts and solver output (_check_sp.js alone is 595 KB of embedded data).
+_*.js
+_*.json
+_*.txt
+
+# Repo-side only — schema, SQL and instructions have no business being downloadable.
+migrations/
+supabase/
+reports/
+CLAUDE.md
