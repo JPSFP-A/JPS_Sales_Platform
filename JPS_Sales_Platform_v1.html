@@ -9749,7 +9749,16 @@ function _sbAuthOk(){const el=document.getElementById('_sbAuthBanner');if(el)el.
 function _sbAuthBannerVisible(){const el=document.getElementById('_sbAuthBanner');return !!el&&el.style.display!=='none';}
 
 async function syncSupabase(silent=false){
-  if(_sbSyncing){return;} // already in progress — skip
+  // A concurrent caller used to get an immediate return here, so `await syncSupabase(true)`
+  // resolved BEFORE the in-flight sync had refreshed anything and the caller went on to
+  // read stale rows -- seen live as a measurement reporting pre-change macro values four
+  // minutes after they were changed. Wait for the sync already running instead of
+  // skipping. Bounded at ~20s because the 401-cascade retry below clears the mutex from
+  // a timer, so the flag is not guaranteed to flip on this call stack.
+  if(_sbSyncing){
+    for(let i=0;i<400&&_sbSyncing;i++)await new Promise(r=>setTimeout(r,50));
+    return;
+  }
   _sbSyncing=true;
   updateSbStatus('syncing');
   _adjLogCache=null; // other users may have added adjustments since the last sync
