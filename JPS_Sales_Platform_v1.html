@@ -2430,7 +2430,7 @@ order by ordinal_position;</pre>
               <option>Seasonal pattern revision</option><option>Industry-specific event</option><option>Correction</option>
               <option>Other</option>
             </select>
-            <button id="adjlog_kamonly" class="btn btn-t" onclick="adjToggleKamOnly()" title="Toggle between KAM-entered adjustments and all entries including analyst and system maintenance">Showing KAM entries</button>
+            <button id="adjlog_kamonly" class="btn btn-t" onclick="adjToggleKamOnly()" title="Toggle between KAM-entered adjustments and all entries including analyst and system maintenance">Showing user entries</button>
             <span id="adjlog_hiddenhint" style="font-size:10px;color:var(--text3)"></span>
             <select id="adjlog_kam" class="psel" onchange="renderAdjustmentLog()"></select>
             <select id="adjlog_group" class="psel" onchange="renderAdjustmentLog()">
@@ -3564,6 +3564,26 @@ async function loadLEDetail(){
 // only when sync replaces them wholesale; _sbInvalidateActuals() forces a rebuild.
 let _allActCache=null,_allActKey='';
 function _sbInvalidateActuals(){_allActCache=null;_allActKey='';}
+// Billing carries one customer under several spellings (Limited/Ltd, casing, punctuation,
+// double spaces), splitting a single customer across rows and hiding KAM coverage gaps --
+// 68 groups covering 143 names and ~41 GWh. jps_customer_names maps each raw spelling to
+// one standardised name. Resolving it here, as CUSTOMERS is built, means every customer
+// rollup downstream inherits it without its own lookup. Unmapped names pass through.
+let _friendlyIdx=null;
+function _buildFriendlyNameIndex(){
+  _friendlyIdx=Object.create(null);
+  (typeof sbCustomerNames!=='undefined'?sbCustomerNames:[]).forEach(r=>{
+    const raw=String(r.raw_name||'').trim();
+    if(raw)_friendlyIdx[raw.toLowerCase()]=r.friendly_name||raw;
+  });
+}
+function _friendlyName(raw){
+  const v=String(raw||'').trim();
+  if(!v)return v;
+  if(!_friendlyIdx)_buildFriendlyNameIndex();
+  return _friendlyIdx[v.toLowerCase()]||v;
+}
+
 function _sbAllActuals(){
   const k=sbActuals.length+'|'+sbActualsComm.length;
   if(_allActCache&&_allActKey===k)return _allActCache;
@@ -9384,6 +9404,7 @@ sbBridgeDrivers=[], // jps_bridge_drivers — manual Driver Waterfall attributio
     sbParAgg=[],        // mv_parish_agg — 1,410 rows — feeds PARISHES + renderPfPar
     sbIndAgg=[],        // mv_industry_agg — 5,694 rows — feeds INDUSTRIES + renderPfInd
     sbCustSummary=[],   // get_customers_summary — 974 rows — feeds CUSTOMERS (replaces 41k scan)
+    sbCustomerNames=[], // jps_customer_names -- raw billing name -> standardised friendly name
     sbActualsComm=[];   // get_comm_actuals — 41k rows — lazy-loaded when Commercial tab opens
 
 var _commDetailLoaded=false; // true after sbActualsComm is populated (lazy, on Commercial tab open)
@@ -9533,9 +9554,9 @@ function buildDashboardData(){
     sbCustSummary.forEach(r=>{
       const acct=String(r.jps_ac||'').trim();
       if(!acct)return;
-      if(!custMap[acct])custMap[acct]={num:acct,name:r.name||'',rate:r.rate_class||'',ind:'',parish:r.parish||'',yPY:0,yCY:0,bud:0,m:Array(12).fill(0),py_m:Array(12).fill(0),cmt:''};
+      if(!custMap[acct])custMap[acct]={num:acct,name:_friendlyName(r.name)||'',rate:r.rate_class||'',ind:'',parish:r.parish||'',yPY:0,yCY:0,bud:0,m:Array(12).fill(0),py_m:Array(12).fill(0),cmt:''};
       const c=custMap[acct];
-      if(r.name&&!c.name)c.name=r.name;
+      if(r.name&&!c.name)c.name=_friendlyName(r.name);
       if(r.rate_class&&!c.rate)c.rate=r.rate_class;
       if(r.parish&&!c.parish)c.parish=r.parish;
       c.yPY+=Number(r.kwh_py||0)/1e6;
@@ -9551,9 +9572,9 @@ function buildDashboardData(){
     // Fallback: build from raw rows (sbActuals — available if get_res_actuals returned full data, or no summary loaded)
     rows.forEach(r=>{
       if(!_COMM_RCS.has(r.rc))return; // skip residential — no individual account data needed here
-      if(!custMap[r.acct])custMap[r.acct]={num:r.acct,name:r.name,rate:r.rc,ind:r.industry,parish:r.parish,yPY:0,yCY:0,bud:0,m:Array(12).fill(0),py_m:Array(12).fill(0),cmt:''};
+      if(!custMap[r.acct])custMap[r.acct]={num:r.acct,name:_friendlyName(r.name),rate:r.rc,ind:r.industry,parish:r.parish,yPY:0,yCY:0,bud:0,m:Array(12).fill(0),py_m:Array(12).fill(0),cmt:''};
       const c=custMap[r.acct],gwh=r.kwh/1e6;
-      if(r.name&&!c.name)c.name=r.name;
+      if(r.name&&!c.name)c.name=_friendlyName(r.name);
       if(r.rc&&!c.rate)c.rate=r.rc;
       if(r.parish&&!c.parish)c.parish=r.parish;
       if(r.year===py){c.yPY+=gwh;if(r.month>=1&&r.month<=12)c.py_m[r.month-1]+=gwh;}
@@ -9765,7 +9786,7 @@ async function syncSupabase(silent=false){
       rcAggData,parAggData,indAggData,
       custSummData,
       fcEntriesData,fcNotesData,
-      macroAssumData,opAdjData,newCustData,demandActualsData,
+      macroAssumData,opAdjData,newCustData,custNamesData,demandActualsData,
       rateAssumData,bridgeDriversData,overlayData
     ] = await Promise.all([
       sbTable('jps_industries',{}),
@@ -9830,6 +9851,7 @@ async function syncSupabase(silent=false){
       sbTable('jps_macro_assumptions',{limit:20000}),
       sbTable('jps_operational_adjustments_current',{limit:50000}),
       sbTable('jps_forecast_new_customers',{limit:5000}),
+      sbTable('jps_customer_names',{limit:50000}),
       sbTable('jps_demand_actuals',{limit:5000}),
       sbTable('jps_rate_assumptions',{limit:20000}),
       sbTable('jps_bridge_drivers',{limit:5000}),
@@ -9929,6 +9951,7 @@ async function syncSupabase(silent=false){
     log.push(bridgeDriversData?`Bridge Drivers: jps_bridge_drivers (${sbBridgeDrivers.length} rows)`:'Bridge Drivers: ⚠ jps_bridge_drivers not found — run schema SQL');
 
     sbNewCustomers=newCustData||[];
+    sbCustomerNames=custNamesData||[];_buildFriendlyNameIndex();
     log.push(newCustData?`New Customers: jps_forecast_new_customers (${sbNewCustomers.length} rows)`:'New Customers: ⚠ jps_forecast_new_customers not found — run schema SQL');
 
     sbDemandActuals=demandActualsData||[];
@@ -11725,17 +11748,20 @@ let _adjLogCache=null; // jps_operational_adjustments rows — cached until the 
 // rates, restores. The log defaults to KAM entries only because that is the commercial
 // activity a reviewer is looking for; the rest is available behind the toggle.
 function _adjIsKamEntry(by){
-  const s=String(by||'').trim();
-  if(!s)return false;
-  if(/claude/i.test(s))return false;           // Claude (trend carry-forward) etc.
-  if(/^jordache\s+wilson/i.test(s))return false; // the analyst, incl. "(via Claude)"
+  const v=String(by||'').trim();
+  if(!v)return false;
+  // Exclude only machine-generated maintenance -- carry-forwards, seasonality indices,
+  // workbook extractions. Anything a person decided stays, whether KAM, analyst or admin.
+  // "Jordache Wilson (via Claude)" is a person's decision applied through the assistant,
+  // so it is kept; "Claude (trend carry-forward)" is not, so it is filtered.
+  if(/^claude\b/i.test(v))return false;
   return true;
 }
 let _adjKamOnly=true;
 function adjToggleKamOnly(){
   _adjKamOnly=!_adjKamOnly;
   const b=document.getElementById('adjlog_kamonly');
-  if(b)b.textContent=_adjKamOnly?'Showing KAM entries':'Showing all entries';
+  if(b)b.textContent=_adjKamOnly?'Showing user entries':'Showing all entries';
   renderAdjustmentLog();
 }
 
@@ -11816,7 +11842,7 @@ async function renderAdjustmentLog(){
   if(_adjKamOnly)rows=rows.filter(r=>_adjIsKamEntry(r.created_by));
   const _hidden=_allRows-rows.length;
   const _hint=document.getElementById('adjlog_hiddenhint');
-  if(_hint)_hint.textContent=(_adjKamOnly&&_hidden)?(_hidden+' analyst/system '+(_hidden===1?'entry':'entries')+' hidden'):'';
+  if(_hint)_hint.textContent=(_adjKamOnly&&_hidden)?(_hidden+' system '+(_hidden===1?'entry':'entries')+' hidden'):'';
   if(reasonFilter)rows=rows.filter(r=>r.reason_code===reasonFilter);
   if(kamFilter)rows=rows.filter(r=>r.kam===kamFilter);
   if(q)rows=rows.filter(r=>r.label.toLowerCase().includes(q)||(r.justification||'').toLowerCase().includes(q));
