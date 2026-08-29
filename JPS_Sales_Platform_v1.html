@@ -10825,11 +10825,18 @@ function _dfcCommCohortsForNonKam(accounts,year){
 // Pre-indexed O(1) lookups, built once per render — replaces per-(account,month)
 // full-array scans, which would be ~9,000 accounts x 6 months x tens of thousands
 // of rows and freeze the browser against real production data.
+// The engine needs residential actuals and the assumption set as much as it needs the
+// commercial detail. sbActuals/sbMacroAssum are replaced wholesale by syncSupabase, so
+// between a failed sync and a successful one they are legitimately empty -- and an empty
+// assumption set silently zeroes every driver rather than raising anything.
+function _coreDataReady(){
+  return sbConnected && sbActuals.length>0 && sbMacroAssum.length>0;
+}
 // Shared gate for the pages that cannot be computed without commercial detail. Returns
 // true when the caller should render a placeholder and stop; loadCommercialDetail()
 // re-renders the active section when it lands, so this self-heals with no polling.
 function _commGate(elId,label){
-  if(_commDetailLoaded)return false;
+  if(_commDetailLoaded&&_coreDataReady())return false;
   const el=document.getElementById(elId);
   if(el)el.innerHTML='<div style="padding:20px;color:var(--text2);font-size:12px">Loading commercial detail — '+label+' needs it before RT40/RT50/RT70 can be reported…</div>';
   loadCommercialDetail().catch(e=>console.warn('loadCommercialDetail:',e));
@@ -10841,6 +10848,11 @@ function _dfcBuildIndices(){
   // the omission is unrecoverable — it reads as a real zero downstream — so refuse to
   // build rather than hand back an index that understates RT40/RT50/RT70 in silence.
   if(!_commDetailLoaded)throw new Error('COMM_NOT_LOADED: commercial detail is still loading; the forecast cannot be computed from residential rows alone');
+  // Commercial can finish loading while the main sync is still empty or has failed --
+  // that state passed the check above and produced a forecast with no residential
+  // volume and no assumptions, reported as a normal answer. Same failure as the
+  // commercial one: an empty array is indistinguishable from a real zero.
+  if(!_coreDataReady())throw new Error('CORE_NOT_LOADED: actuals or assumptions have not loaded; the forecast cannot be computed from a partial dataset');
   // KAM-assigned commercial accounts get their own 'account' entity (via actByAc,
   // added in renderDriverForecast's keyAccounts loop). actByCohort must exclude
   // those same rows, or a KAM account's kwh is counted twice: once as its own
@@ -10921,8 +10933,15 @@ function _dfcComputeChain(idx,key,isAccount,driverCtx,opAc,year,asof,newCustCtx,
     if(norm&&opAc&&_DFC_NORM_EXCLUDE.has(String(opAc)))norm=0;
     const solar=_dfcSolarPct(driverCtx.rate_class,year,m);
     const op=opAc?_dfcOpAdjLookup(opAc,year,m):{pct:0,kwh:0};
-    const total=base*(1+(macro+weather+seasInd+solar+(norm||0)+(migration||0)+op.pct)/100)+op.kwh;
-    totals[m]={total,isActual:false,base,macro,weather,seasInd,solar,norm:norm||0,migration:migration||0,oper:op.pct,manual:op.kwh};
+    // Percentage drivers stack without a bound, so a combination of macro, weather,
+    // seasonality, solar, normalisation and an operational cut can exceed -100% and
+    // drive an otherwise-positive base below zero -- a modelling artefact, not a real
+    // customer position. Clamp the SUM at -100% (a total wipeout, never a reversal).
+    // Accounts that are genuinely negative are negative because their BASE is negative
+    // (net billers exporting more than they import); the clamp leaves those untouched.
+    const _drvSum=Math.max(-100, macro+weather+seasInd+solar+(norm||0)+(migration||0)+op.pct);
+    const total=base*(1+_drvSum/100)+op.kwh;
+    totals[m]={total,isActual:false,base,macro,weather,seasInd,solar,norm:norm||0,migration:migration||0,oper:op.pct,manual:op.kwh,drvClamped:_drvSum<=-100};
   }
   return totals;
 }
@@ -12448,6 +12467,19 @@ function _frCollectData(yearOverride){
   resCohorts.forEach(co=>{
     const chain=_dfcGetChain(idx,co.key,false,{rate_class:co.rate_class,industry:null},null,year,null);
     walkChain(chain,co.rate_class,null,null);
+  });
+
+  // Analyst overlays, in kWh, applied at rate-class/month grain AFTER the entity walk.
+  // They belong to no account by definition -- an overlay exists precisely because the
+  // driver engine cannot express the movement, so there is nothing to attribute it to.
+  // Applying them here rather than inside a chain also keeps them out of the rolling
+  // three-month base, so a one-off true-up stays a one-off instead of compounding into
+  // every later month. Months already closed to actuals are never overlaid.
+  (typeof sbForecastOverlays!=='undefined'?sbForecastOverlays:[]).forEach(o=>{
+    if(Number(o.year)!==year)return;
+    const m=Number(o.month);
+    if(m<=repCurMonth)return; // closed month -- actuals are actuals
+    bumpMonth(o.rate_class,m,Number(o.kwh)||0);
   });
 
   // Prior-year actuals (year-1, matching the FY${d.year-1} label the report renders) —
