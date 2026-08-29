@@ -3108,7 +3108,7 @@ async function verifyLoginCode(){
 
 /* ── Common post-auth setup ── */
 function _initIdleTimeout(signOutFn) {
-  var IDLE_MS = 30 * 60 * 1000;
+  var IDLE_MS = 4 * 60 * 60 * 1000;
   var _idleTimer = null;
   function _reset() {
     clearTimeout(_idleTimer);
@@ -9744,6 +9744,9 @@ function _sbAuthExpired(msg){
   console.error('[auth]',text);
 }
 function _sbAuthOk(){const el=document.getElementById('_sbAuthBanner');if(el)el.style.display='none';}
+// Boolean read of the same banner, for guards that must block while signed out.
+// _sbAuthOk() is a setter and returns undefined -- never branch on it.
+function _sbAuthBannerVisible(){const el=document.getElementById('_sbAuthBanner');return !!el&&el.style.display!=='none';}
 
 async function syncSupabase(silent=false){
   if(_sbSyncing){return;} // already in progress — skip
@@ -12736,7 +12739,14 @@ function _budgetAssumptionSnapshot(years){
 }
 
 async function commitBudgetVersion(){
-  if(!_sbAuthOk())return;
+  // _sbAuthOk() only hides the banner and returns undefined, so the old
+  // `if(!_sbAuthOk())return;` guard was always true and this function never ran.
+  // Block on the banner actually being visible -- committing while signed out
+  // would freeze a budget built from RLS-filtered zero rows.
+  if(_sbAuthBannerVisible()){
+    toast('Session expired — sign in again before committing a budget version.','err');
+    return;
+  }
   if(!_commDetailLoaded){
     loadCommercialDetail().catch(e=>console.warn('loadCommercialDetail:',e));
     toast('Commercial detail is still loading \u2014 committing now would freeze a budget with RT40/RT50/RT70 at zero. Try again in a moment.','w');
