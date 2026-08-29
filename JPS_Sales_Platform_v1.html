@@ -2430,6 +2430,8 @@ order by ordinal_position;</pre>
               <option>Seasonal pattern revision</option><option>Industry-specific event</option><option>Correction</option>
               <option>Other</option>
             </select>
+            <button id="adjlog_kamonly" class="btn btn-t" onclick="adjToggleKamOnly()" title="Toggle between KAM-entered adjustments and all entries including analyst and system maintenance">Showing KAM entries</button>
+            <span id="adjlog_hiddenhint" style="font-size:10px;color:var(--text3)"></span>
             <select id="adjlog_kam" class="psel" onchange="renderAdjustmentLog()"></select>
             <select id="adjlog_group" class="psel" onchange="renderAdjustmentLog()">
               <option value="reason_code">Group by Reason Code</option>
@@ -11329,6 +11331,62 @@ function openAddCustomerModal(){
     'var(--teal)'
   );
 }
+
+// New-customer rows were previously add-only: once a KAM entered an expected volume
+// or start date there was no way to correct it short of a DB edit. Same form as the
+// add modal, prefilled, writing an UPDATE keyed on jps_ac.
+function openEditCustomerModal(ac){
+  const c=(sbNewCustomers||[]).find(x=>String(x.jps_ac)===String(ac));
+  if(!c){toast('Customer not found — sync and try again','err');return;}
+  const rcOpts=['RT40','RT50','RT60-ST','RT70','RT20','RT10']
+    .map(r=>`<option${r===c.rate_class?' selected':''}>${r}</option>`).join('');
+  const moOpts=MONTHS_SHORT.map((m,i)=>`<option value="${i+1}"${(i+1)===Number(c.start_month)?' selected':''}>${m}</option>`).join('');
+  openModal(
+    'Edit '+(c.name||ac),
+    `<div style="display:flex;flex-direction:column;gap:10px">
+      <div><label style="font-size:10px;color:var(--text3)">Customer name</label><input id="dfc_ed_name" class="psel" style="width:100%" value="${esc(c.name||'')}"></div>
+      <div style="display:flex;gap:8px">
+        <div style="flex:1"><label style="font-size:10px;color:var(--text3)">Rate class</label><select id="dfc_ed_rc" class="psel" style="width:100%">${rcOpts}</select></div>
+        <div style="flex:1"><label style="font-size:10px;color:var(--text3)">Parish</label><input id="dfc_ed_parish" class="psel" style="width:100%" value="${esc(c.parish||'')}"></div>
+      </div>
+      <div><label style="font-size:10px;color:var(--text3)">Industry</label><input id="dfc_ed_industry" class="psel" style="width:100%" value="${esc(c.industry||'')}"></div>
+      <div><label style="font-size:10px;color:var(--text3)">KAM</label><input id="dfc_ed_kam" class="psel" style="width:100%" value="${esc(c.kam||'')}"></div>
+      <div><label style="font-size:10px;color:var(--text3)">Expected monthly kWh — becomes its Base until real actuals exist</label><input id="dfc_ed_kwh" type="number" class="psel" style="width:100%" value="${Number(c.expected_kwh)||0}"></div>
+      <div style="display:flex;gap:8px">
+        <div style="flex:1"><label style="font-size:10px;color:var(--text3)">Start year</label><input id="dfc_ed_yr" type="number" class="psel" style="width:100%" value="${Number(c.start_year)||FC_BUD_YEAR}"></div>
+        <div style="flex:1"><label style="font-size:10px;color:var(--text3)">Start month</label><select id="dfc_ed_mo" class="psel" style="width:100%">${moOpts}</select></div>
+      </div>
+      <div style="font-size:10px;color:var(--text3)">Account ${esc(ac)} &middot; entered by ${esc(c.created_by||'unknown')}</div>
+    </div>`,
+    ()=>_dfcUpdateNewCustomer(ac),
+    'Save changes',
+    'var(--teal)'
+  );
+}
+async function _dfcUpdateNewCustomer(ac){
+  const sb=getSB();if(!sb)return;
+  const name=(document.getElementById('dfc_ed_name')?.value||'').trim();
+  if(!name){toast('Customer name is required','err');return;}
+  const payload={
+    name,
+    rate_class:document.getElementById('dfc_ed_rc')?.value,
+    parish:(document.getElementById('dfc_ed_parish')?.value||'').trim(),
+    industry:(document.getElementById('dfc_ed_industry')?.value||'').trim(),
+    kam:(document.getElementById('dfc_ed_kam')?.value||'').trim(),
+    expected_kwh:parseFloat(document.getElementById('dfc_ed_kwh')?.value)||0,
+    start_year:parseInt(document.getElementById('dfc_ed_yr')?.value)||FC_BUD_YEAR,
+    start_month:parseInt(document.getElementById('dfc_ed_mo')?.value)||1
+  };
+  const{error}=await sb.from('jps_forecast_new_customers').update(payload).eq('jps_ac',ac);
+  if(error){toast('Save failed: '+error.message,'err');return;}
+  closeModal();
+  toast(name+' updated','ok');
+  _adjLogCache=null;
+  await syncSupabase(true);
+  _dfcResetYearChainCache();
+  if(document.getElementById('adjlog_table'))renderAdjustmentLog();
+  if(document.getElementById('dfc_table'))renderDriverForecast();
+}
 async function _dfcSubmitNewCustomer(){
   const sb=getSB();if(!sb)return;
   const name=(document.getElementById('dfc_new_name')?.value||'').trim();
@@ -11662,6 +11720,25 @@ let _adjLogCache=null; // jps_operational_adjustments rows — cached until the 
 // customers a KAM added to the forecast (jps_forecast_new_customers, already
 // in memory via sbNewCustomers -- every addition is inherently loggable, no
 // reason code needed since the entry itself is the record of what was added).
+// An entry is KAM-authored when a named account manager entered it. Everything else
+// is analyst or system maintenance -- macro/seasonality carry-forwards, normalisation
+// rates, restores. The log defaults to KAM entries only because that is the commercial
+// activity a reviewer is looking for; the rest is available behind the toggle.
+function _adjIsKamEntry(by){
+  const s=String(by||'').trim();
+  if(!s)return false;
+  if(/claude/i.test(s))return false;           // Claude (trend carry-forward) etc.
+  if(/^jordache\s+wilson/i.test(s))return false; // the analyst, incl. "(via Claude)"
+  return true;
+}
+let _adjKamOnly=true;
+function adjToggleKamOnly(){
+  _adjKamOnly=!_adjKamOnly;
+  const b=document.getElementById('adjlog_kamonly');
+  if(b)b.textContent=_adjKamOnly?'Showing KAM entries':'Showing all entries';
+  renderAdjustmentLog();
+}
+
 function _adjLogNormalize(opRows){
   const kamMap={};sbKAM.forEach(k=>kamMap[String(k.jps_ac||'').trim()]=k.kam||'');
   const indMap={};sbIndustries.forEach(i=>indMap[String(i.jps_ac||'').trim()]=i.industry||'');
@@ -11708,7 +11785,7 @@ function _adjLogNormalize(opRows){
       justification:`${c.rate_class||''} · ${c.parish||''} · industry: ${c.industry||'unassigned'}`.replace(/^ · | · $/,''),
       created_by:c.created_by,
       rc:c.rate_class||'—',kam:c.kam||'Unassigned',industry:c.industry||'Unassigned',
-      editArgs:null,
+      editArgs:null, newCustAc:c.jps_ac,
     });
   });
   return out;
@@ -11735,6 +11812,11 @@ async function renderAdjustmentLog(){
   }
 
   let rows=_adjLogNormalize(_adjLogCache);
+  const _allRows=rows.length;
+  if(_adjKamOnly)rows=rows.filter(r=>_adjIsKamEntry(r.created_by));
+  const _hidden=_allRows-rows.length;
+  const _hint=document.getElementById('adjlog_hiddenhint');
+  if(_hint)_hint.textContent=(_adjKamOnly&&_hidden)?(_hidden+' analyst/system '+(_hidden===1?'entry':'entries')+' hidden'):'';
   if(reasonFilter)rows=rows.filter(r=>r.reason_code===reasonFilter);
   if(kamFilter)rows=rows.filter(r=>r.kam===kamFilter);
   if(q)rows=rows.filter(r=>r.label.toLowerCase().includes(q)||(r.justification||'').toLowerCase().includes(q));
@@ -11780,6 +11862,7 @@ async function renderAdjustmentLog(){
         ${r.source==='operational'?`<button class="btn-t" style="padding:2px 8px;font-size:11px" onclick="adjLogEditRow('${esc(r.editArgs[0])}',${r.editArgs[1]},${r.editArgs[2]},${r.editArgs[3]},'${esc(r.editArgs[4])}')">✏ Edit</button>`:''}
         ${r.source==='operational'&&can('delete_item')?`<button class="btn-t" style="padding:2px 8px;font-size:11px;color:var(--red);margin-left:4px" onclick="adjLogDeleteRow(${r.id})">🗑</button>`:''}
         ${r.source==='macro'?`<button class="btn-t" style="padding:2px 8px;font-size:11px" onclick="goToMacroAssumptions()">→ Macro Assumptions</button>`:''}
+        ${r.source==='new_customer'&&r.newCustAc?`<button class="btn-t" style="padding:2px 8px;font-size:11px" onclick="openEditCustomerModal('${esc(r.newCustAc)}')">Edit</button>`:''}
       </td>
     </tr>`).join('')+`</tbody>`;
   });
