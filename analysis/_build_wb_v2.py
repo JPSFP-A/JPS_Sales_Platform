@@ -109,8 +109,8 @@ l26 = [cell(vs, 15, c) for c in range(2, 14)]
 # storm normalisation was scaled into the engine and Petrojam was re-solved. These are
 # the engine's own numbers -- do not hand-edit them here, change the assumptions and
 # re-read, or the workbook and the app start telling different stories.
-T = {2027: {'RT10':1262.50,'RT20':693.81,'RT40':827.11,'RT50':393.83,'RT60-ST':39.18,'RT70':205.68},
-     2028: {'RT10':1298.15,'RT20':703.06,'RT40':819.28,'RT50':425.81,'RT60-ST':38.20,'RT70':205.85}}
+T = {2027: {'RT10':1262.50,'RT20':693.81,'RT40':827.11,'RT50':393.83,'RT60-ST':39.18,'RT70':188.91},
+     2028: {'RT10':1298.15,'RT20':703.06,'RT40':819.28,'RT50':425.81,'RT60-ST':38.20,'RT70':179.01}}
 
 def shape(rc):
     v = m26[rc]
@@ -175,7 +175,7 @@ months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec
 ws.cell(1,1).value = 'JPS Sales Forecast - FY2026 to FY2028, monthly kWh'
 ws.cell(1,1).font = Font(bold=True, size=13)
 ws.cell(2,1).value = ('Actual Jan-Jul 2026; forecast thereafter. Storm recovery now runs THROUGH the driver engine '
-                      '(normalisation on RT50/RT40/RT20/RT70, cement excluded) rather than as a separate overlay, so these '
+                      '(normalisation on RT50/RT40/RT20, cement excluded, industrial nil) rather than as a separate overlay, so these '
                       'figures equal what the platform shows. FY2028 carries no storm uplift: recovery completes by end-2027. '
                       'Losses solved so each fiscal year closes at 27.10%. FY2026 is pinned to the 3,281.97 GWh submitted on '
                       '19 Aug 2026 and now ties to it exactly in the app as well, via a disclosed -460.8 MWh true-up overlay on Aug-Dec.')
@@ -235,9 +235,9 @@ for c in range(2, 42): ws.column_dimensions[get_column_letter(c)].width = 13
 
 d = wb.create_sheet('Demand Wide')
 def rv(r): return [cell(dv, r, c) for c in range(2, 14)]
-G = {'RT40': (827.11/767.10, 819.28/767.10),
-     'RT50': (393.83/342.98, 425.81/342.98),
-     'RT70': (205.68/268.34, 205.85/268.34)}
+G = {'RT40': (827.11/767.00, 819.28/767.00),
+     'RT50': (393.83/342.94, 425.81/342.94),
+     'RT70': (188.91/268.31, 179.01/268.31)}
 blocks = [('Total billed kVA', [(6,'RT40','RT40'), (7,'RT50','RT50'), (8,'RT70','RT70')]),
           ('RT40 - Load Shape', [(12,'RT40','Standard'), (13,'RT40','On-Peak'), (14,'RT40','Partial-Peak'), (15,'RT40','Off-Peak')]),
           ('RT50 - Load Shape', [(19,'RT50','Standard'), (20,'RT50','On-Peak'), (21,'RT50','Partial-Peak'), (22,'RT50','Off-Peak')]),

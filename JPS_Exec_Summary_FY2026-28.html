@@ -2,9 +2,10 @@
 <html><head><meta charset="utf-8">
 <title>JPS Sales &amp; Load Forecast — Executive Summary</title>
 <style>
-body{font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#1a1a1a;max-width:1000px;margin:24px auto;padding:0 20px;background:#fff}
+body{font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#1a1a1a;max-width:1040px;margin:24px auto;padding:0 20px;background:#fff}
 h1{font-size:23px;margin-bottom:2px}
 h2{font-size:16px;margin-top:30px;border-bottom:2px solid #0b3d66;padding-bottom:5px;color:#0b3d66}
+h3{font-size:13px;margin:18px 0 6px;color:#0b3d66}
 .meta{color:#666;font-size:11px;margin-bottom:16px}
 table{border-collapse:collapse;width:100%;margin:12px 0 16px;font-size:12.5px}
 th{background:#0b3d66;color:#fff;text-align:right;padding:7px 9px;font-weight:600}
@@ -13,6 +14,8 @@ td{padding:6px 9px;border-bottom:1px solid #e4e4e4;text-align:right}
 td:first-child,td.l{text-align:left}
 tr:nth-child(even){background:#f7f9fb}
 .tot{font-weight:700;border-top:2px solid #0b3d66}
+.sub td:first-child{padding-left:26px;color:#555;font-style:italic}
+.sub td{color:#555;font-size:11.5px}
 .pos{color:#1e7a46}.neg{color:#b3261e}
 .note{font-size:11px;color:#666;margin:6px 0 14px;line-height:1.5}
 .kpi{display:flex;gap:14px;margin:18px 0;flex-wrap:wrap}
@@ -20,7 +23,13 @@ tr:nth-child(even){background:#f7f9fb}
 .kpi-box .num{font-size:21px;font-weight:700;color:#0b3d66}
 .kpi-box .lbl{font-size:10px;color:#666;text-transform:uppercase;letter-spacing:.04em;margin-top:3px}
 ul{margin:8px 0 16px;padding-left:20px}li{margin-bottom:7px;line-height:1.45}
-.risk{background:#fdf3f2;border-left:3px solid #b3261e;padding:10px 12px;margin:10px 0 16px;font-size:11.5px;line-height:1.55}
+.rk{border-left:3px solid #b3261e;padding:2px 0 2px 12px;margin:0 0 14px}
+.rk .hd{font-weight:700;font-size:12.5px;margin-bottom:3px}
+.rk .qt{font-size:11px;color:#8a1f18;font-weight:700;margin-bottom:3px}
+.rk .bd{font-size:11.5px;line-height:1.55;color:#333}
+.wf{overflow-x:auto;margin:10px 0 6px}
+.lgd{font-size:10.5px;color:#666;margin:2px 0 14px}
+.sw{display:inline-block;width:10px;height:10px;margin:0 4px 0 12px;vertical-align:-1px;border-radius:2px}
 </style></head><body>
 
 <h1>JPS Sales &amp; Load Forecast — Executive Summary</h1>
@@ -28,9 +37,9 @@ ul{margin:8px 0 16px;padding-left:20px}li{margin-bottom:7px;line-height:1.45}
 
 <div class="kpi">
 <div class="kpi-box"><div class="num">3,282.0</div><div class="lbl">FY2026 Sales (GWh)</div></div>
-<div class="kpi-box"><div class="num">3,422.1</div><div class="lbl">FY2027 &middot; +4.3%</div></div>
-<div class="kpi-box"><div class="num">3,490.4</div><div class="lbl">FY2028 &middot; +2.0%</div></div>
-<div class="kpi-box"><div class="num">4,787.9</div><div class="lbl">FY2028 Net Generation</div></div>
+<div class="kpi-box"><div class="num">3,405.3</div><div class="lbl">FY2027 &middot; +3.8%</div></div>
+<div class="kpi-box"><div class="num">3,463.5</div><div class="lbl">FY2028 &middot; +1.7%</div></div>
+<div class="kpi-box"><div class="num">4,751.0</div><div class="lbl">FY2028 Net Generation</div></div>
 </div>
 
 <h2>Sales by Rate Class (GWh)</h2>
@@ -41,37 +50,152 @@ ul{margin:8px 0 16px;padding-left:20px}li{margin-bottom:7px;line-height:1.45}
 <tr><td>RT40 Commercial</td><td>776.7</td><td>767.0</td><td class="neg">&minus;1.3%</td><td>827.1</td><td class="pos">+7.8%</td><td>819.3</td><td class="neg">&minus;0.9%</td></tr>
 <tr><td>RT50 Large Commercial</td><td>362.8</td><td>342.9</td><td class="neg">&minus;5.5%</td><td>393.8</td><td class="pos">+14.8%</td><td>425.8</td><td class="pos">+8.1%</td></tr>
 <tr><td>RT60-ST Street Lighting</td><td>38.6</td><td>37.1</td><td class="neg">&minus;3.9%</td><td>39.2</td><td class="pos">+5.5%</td><td>38.2</td><td class="neg">&minus;2.5%</td></tr>
-<tr><td>RT70 Industrial</td><td>288.1</td><td>268.3</td><td class="neg">&minus;6.9%</td><td>205.7</td><td class="neg">&minus;23.3%</td><td>205.9</td><td class="pos">+0.1%</td></tr>
-<tr class="tot"><td>Total</td><td>3,251.0</td><td>3,282.0</td><td class="pos">+1.0%</td><td>3,422.1</td><td class="pos">+4.3%</td><td>3,490.4</td><td class="pos">+2.0%</td></tr>
+<tr><td>RT70 Industrial</td><td>288.1</td><td>268.3</td><td class="neg">&minus;6.9%</td><td>188.9</td><td class="neg">&minus;29.6%</td><td>179.0</td><td class="neg">&minus;5.2%</td></tr>
+<tr class="tot"><td>Total</td><td>3,251.0</td><td>3,282.0</td><td class="pos">+1.0%</td><td>3,405.3</td><td class="pos">+3.8%</td><td>3,463.5</td><td class="pos">+1.7%</td></tr>
 </table>
-<div class="note">FY2025 is actual. FY2026 blends closed January&ndash;July actuals with forecast for the remaining five months. FY2027 and FY2028 are full driver projections. <b>FY2026 ties exactly to the 3,281,970 MWh submitted on 19 August 2026</b>, which remains the figure of record: the platform, this summary and the supporting workbook now carry the same figure at rate-class level, not merely the same total. The engine's own projection ran 461 MWh above the submitted year &mdash; 416 MWh of it in the August&ndash;December forecast and 45 MWh from January&ndash;July actuals restating slightly above the schedule &mdash; and that difference is carried as a disclosed true-up on the open months only. Closed months are untouched. The adjustment is 0.014% of the year and does not carry into FY2027 or FY2028.</div>
+<div class="note">FY2025 is actual. FY2026 blends closed January&ndash;July actuals with forecast for the remaining five months and ties exactly to the 3,281,970 MWh submitted on 19 August 2026, which remains the figure of record. FY2027 and FY2028 are full driver projections. The platform, this summary and the supporting workbook carry the same figures at rate-class level.</div>
+
+<h2>FY2026 to FY2027 Bridge &mdash; +123.4 GWh</h2>
+<div class="wf">
+<svg viewBox="0 0 770 300" width="100%" height="300" preserveAspectRatio="xMidYMid meet"
+     font-family="Arial,Helvetica,sans-serif" font-size="10.5">
+  <line x1="52" y1="250" x2="756" y2="250" stroke="#bbb"/>
+  <text x="8" y="253" fill="#666">3,250</text><text x="8" y="63" fill="#666">3,440</text>
+  <rect x="58" y="218" width="60" height="32" fill="#0b3d66"/>
+  <text x="88" y="212" text-anchor="middle" fill="#0b3d66" font-weight="bold">3,282.0</text>
+  <text x="88" y="266" text-anchor="middle" fill="#333">FY2026</text>
+
+  <rect x="144" y="134" width="60" height="5"  fill="#7fb8e0"/>
+  <rect x="144" y="139" width="60" height="77" fill="#2e86c1"/>
+  <rect x="144" y="216" width="60" height="2"  fill="#a9cce3"/>
+  <text x="174" y="128" text-anchor="middle" fill="#1e7a46" font-weight="bold">+84.1</text>
+  <text x="174" y="266" text-anchor="middle" fill="#333">Underlying</text>
+  <text x="174" y="277" text-anchor="middle" fill="#666">demand</text>
+
+  <rect x="230" y="127" width="60" height="7" fill="#5dade2"/>
+  <text x="260" y="121" text-anchor="middle" fill="#1e7a46" font-weight="bold">+7.0</text>
+  <text x="260" y="266" text-anchor="middle" fill="#333">Temperature</text>
+
+  <rect x="316" y="127" width="60" height="5" fill="#e59866"/>
+  <text x="346" y="121" text-anchor="middle" fill="#b3261e" font-weight="bold">&#8722;5.1</text>
+  <text x="346" y="266" text-anchor="middle" fill="#333">Solar</text>
+  <text x="346" y="277" text-anchor="middle" fill="#666">residential</text>
+
+  <rect x="402" y="132" width="60" height="82" fill="#c0392b"/>
+  <text x="432" y="226" text-anchor="middle" fill="#b3261e" font-weight="bold">&#8722;82.0</text>
+  <text x="432" y="266" text-anchor="middle" fill="#333">Commercial</text>
+  <text x="432" y="277" text-anchor="middle" fill="#666">defection</text>
+
+  <rect x="488" y="114" width="60" height="36" fill="#48c9b0"/>
+  <rect x="488" y="150" width="60" height="64" fill="#16a085"/>
+  <text x="518" y="108" text-anchor="middle" fill="#1e7a46" font-weight="bold">+100.5</text>
+  <text x="518" y="266" text-anchor="middle" fill="#333">Commercial</text>
+  <text x="518" y="277" text-anchor="middle" fill="#666">load adj.</text>
+
+  <rect x="574" y="95"  width="60" height="4"  fill="#d2b4de"/>
+  <rect x="574" y="99"  width="60" height="15" fill="#a569bd"/>
+  <text x="604" y="89" text-anchor="middle" fill="#1e7a46" font-weight="bold">+18.8</text>
+  <text x="604" y="266" text-anchor="middle" fill="#333">Normalised</text>
+  <text x="604" y="277" text-anchor="middle" fill="#666">volumes</text>
+
+  <rect x="660" y="95" width="60" height="155" fill="#0b3d66"/>
+  <text x="690" y="89" text-anchor="middle" fill="#0b3d66" font-weight="bold">3,405.3</text>
+  <text x="690" y="266" text-anchor="middle" fill="#333">FY2027</text>
+
+  <line x1="118" y1="218" x2="144" y2="218" stroke="#999" stroke-dasharray="3,2"/>
+  <line x1="204" y1="134" x2="230" y2="134" stroke="#999" stroke-dasharray="3,2"/>
+  <line x1="290" y1="127" x2="316" y2="127" stroke="#999" stroke-dasharray="3,2"/>
+  <line x1="376" y1="132" x2="402" y2="132" stroke="#999" stroke-dasharray="3,2"/>
+  <line x1="462" y1="214" x2="488" y2="214" stroke="#999" stroke-dasharray="3,2"/>
+  <line x1="548" y1="114" x2="574" y2="114" stroke="#999" stroke-dasharray="3,2"/>
+  <line x1="634" y1="95"  x2="660" y2="95"  stroke="#999" stroke-dasharray="3,2"/>
+</svg>
+</div>
+<div class="note" style="margin-top:0">Bands within a bar are its sub-drivers, sized to their contribution and listed in the table below. The vertical axis starts at 3,250 GWh, not zero.</div>
+<div class="lgd"><span class="sw" style="background:#2e86c1"></span>bucket migration<span class="sw" style="background:#7fb8e0"></span>customer growth<span class="sw" style="background:#a9cce3"></span>within-tier usage<span class="sw" style="background:#16a085"></span>small commercial<span class="sw" style="background:#48c9b0"></span>large commercial<span class="sw" style="background:#a569bd"></span>normalisation commercial<span class="sw" style="background:#d2b4de"></span>normalisation residential</div>
+
+<table>
+<tr><th class="l">Driver</th><th class="l">Sub-driver</th><th class="l">Rate class</th><th>GWh</th><th class="l">Basis</th></tr>
+<tr><td>New load / underlying demand</td><td></td><td>RT10 / RT20</td><td class="pos">+84.1</td><td class="l">Residential demand movement, net of the residential drivers below</td></tr>
+<tr class="sub"><td></td><td>Customer growth</td><td>RT10 / RT20</td><td>+5.2</td><td class="l">Consuming customers only. RT10's headline +9,415 is 77% zero-consumption accounts carrying no load</td></tr>
+<tr class="sub"><td></td><td>Load growth &mdash; bucket migration</td><td>RT10 / RT20</td><td>+77.0</td><td class="l">Customers moving into higher consumption tiers. RT10 under-150 lost 9,790 customers while 350&ndash;550 gained 5,162 and over-950 gained 1,257</td></tr>
+<tr class="sub"><td></td><td>Load growth &mdash; within-tier usage</td><td>RT10 / RT20</td><td>+2.0</td><td class="l">Consumption per customer inside a tier is broadly flat: RT10 under-150 &minus;2.5%, over-950 &minus;5.4%</td></tr>
+<tr><td>Temperature</td><td></td><td>RT10 / RT20</td><td class="pos">+7.0</td><td class="l">Temperature outlook against historical trend</td></tr>
+<tr><td>Solar adaption residential</td><td></td><td>RT10 / RT20</td><td class="neg">&minus;5.1</td><td class="l">Residential increase in solar self-supply</td></tr>
+<tr><td>Commercial defection</td><td></td><td>RT40/50/60/70</td><td class="neg">&minus;82.0</td><td class="l">Commercial load falling more than 50%: Alcoa &minus;53.0, MBJ Airports &minus;14.5, PAC Kingston Airport &minus;8.5, Clarendon Distillers &minus;2.1, Half Moon Bay &minus;1.8</td></tr>
+<tr><td>Commercial load adjustment</td><td></td><td>RT40/50/60/70</td><td class="pos">+100.5</td><td class="l">Commercial movement excluding defection and normalisation</td></tr>
+<tr class="sub"><td></td><td>Small commercial</td><td>RT40, RT60-ST</td><td>+63.7</td><td class="l">Annualisation of the stronger second-half 2026 commercial run-rate, plus confirmed expansions</td></tr>
+<tr class="sub"><td></td><td>Large commercial</td><td>RT50, RT70</td><td>+36.8</td><td class="l">Large commercial movement excluding defection</td></tr>
+<tr><td>Normalised volumes</td><td></td><td>RT20/40/50</td><td class="pos">+18.8</td><td class="l">Storm-affected load returning &mdash; partial-year effect of the gap closing through 2027</td></tr>
+<tr class="sub"><td></td><td>Commercial</td><td>RT40, RT50</td><td>+15.1</td><td class="l">Hotels and water supply recovering toward pre-storm consumption. Caribbean Cement excluded; industrial excluded</td></tr>
+<tr class="sub"><td></td><td>Residential</td><td>RT20</td><td>+3.7</td><td class="l">Six storm-affected parishes recovering</td></tr>
+<tr class="tot"><td>Total movement</td><td></td><td></td><td class="pos">+123.4</td><td class="l">3,282.0 &rarr; 3,405.3</td></tr>
+</table>
+<div class="note">Indented rows are sub-drivers of the line above and are already included in it &mdash; only the six unindented drivers sum to the total movement.</div>
+
+<h2>FY2027 to FY2028 Bridge &mdash; +58.2 GWh</h2>
+<table>
+<tr><th class="l">Driver</th><th class="l">Sub-driver</th><th class="l">Rate class</th><th>GWh</th><th class="l">Basis</th></tr>
+<tr><td>New load / underlying demand</td><td></td><td>RT10 / RT20</td><td class="pos">+51.7</td><td class="l">Residential demand movement, net of the residential drivers below</td></tr>
+<tr class="sub"><td></td><td>Customer growth</td><td>RT10 / RT20</td><td>+3.2</td><td class="l">Consuming customers only</td></tr>
+<tr class="sub"><td></td><td>Load growth &mdash; bucket migration</td><td>RT10 / RT20</td><td>+47.3</td><td class="l">Tier migration continuing at the observed rate</td></tr>
+<tr class="sub"><td></td><td>Load growth &mdash; within-tier usage</td><td>RT10 / RT20</td><td>+1.2</td><td class="l">Broadly flat per-customer consumption</td></tr>
+<tr><td>Temperature</td><td></td><td>RT10 / RT20</td><td class="pos">+3.5</td><td class="l">Temperature outlook against historical trend</td></tr>
+<tr><td>Solar adaption residential</td><td></td><td>RT10 / RT20</td><td class="neg">&minus;10.3</td><td class="l">Solar self-supply roughly doubles year on year</td></tr>
+<tr><td>Commercial defection</td><td></td><td>RT40/50/60/70</td><td class="neg">&minus;5.8</td><td class="l">University of Technology &minus;3.9 across its accounts, MBJ Airports &minus;1.9 completing</td></tr>
+<tr><td>Commercial load adjustment</td><td></td><td>RT40/50/60/70</td><td class="pos">+19.1</td><td class="l">Commercial movement excluding defection</td></tr>
+<tr class="sub"><td></td><td>Small commercial</td><td>RT40, RT60-ST</td><td>&minus;8.6</td><td class="l">Second-half 2026 annualisation does not repeat</td></tr>
+<tr class="sub"><td></td><td>Large commercial</td><td>RT50, RT70</td><td>+27.6</td><td class="l">Full-year effect of the recovered December 2027 level</td></tr>
+<tr><td>Normalised volumes</td><td></td><td>&mdash;</td><td>0.0</td><td class="l">Storm recovery completes by the end of FY2027; no further uplift assumed</td></tr>
+<tr class="tot"><td>Total movement</td><td></td><td></td><td class="pos">+58.2</td><td class="l">3,405.3 &rarr; 3,463.5</td></tr>
+</table>
 
 <h2>Sales to Net Generation (GWh)</h2>
 <table>
 <tr><th class="l">Fiscal Year</th><th>Billed Sales</th><th>System Losses</th><th>Loss %</th><th>Net Generation</th><th>YoY</th></tr>
 <tr><td>FY2026</td><td>3,282.0</td><td>1,219.8</td><td>27.10%</td><td>4,501.7</td><td>&mdash;</td></tr>
-<tr><td>FY2027</td><td>3,422.1</td><td>1,272.1</td><td>27.10%</td><td>4,694.3</td><td class="pos">+4.3%</td></tr>
-<tr><td>FY2028</td><td>3,490.4</td><td>1,297.5</td><td>27.10%</td><td>4,787.9</td><td class="pos">+2.0%</td></tr>
+<tr><td>FY2027</td><td>3,405.3</td><td>1,265.9</td><td>27.10%</td><td>4,671.2</td><td class="pos">+3.8%</td></tr>
+<tr><td>FY2028</td><td>3,463.5</td><td>1,287.5</td><td>27.10%</td><td>4,751.0</td><td class="pos">+1.7%</td></tr>
 </table>
-<div class="note">Each year closes at a 27.10% twelve-month rolling loss, so the outlook assumes no change in loss performance. FY2026 is tracking to that rate on actuals: the rolling loss ran between 26.29% and 26.63% through July and rises to 27.10% by December. Monthly rates across FY2027 and FY2028 range from 25.0% to 28.8%, consistent with observed seasonality. Every 0.5 percentage point on the loss rate moves FY2027 net generation by roughly 32 GWh.</div>
+<div class="note">Each year closes at a 27.10% twelve-month rolling loss, so the outlook assumes no improvement in loss performance. FY2026 is tracking to that rate on actuals: the rolling loss ran between 26.29% and 26.63% through July and reaches 27.10% by December. Every 0.5 percentage point on the loss rate moves FY2027 net generation by roughly 32 GWh.</div>
 
-<h2>What Is Driving the Outlook</h2>
-<ul>
-<li><b>RT70 falls 23.4% in FY2027 &mdash; the single largest movement in the forecast.</b> Alcoa Minerals completed its transition to self-generation in August 2026 and leaves 53.8 GWh behind. MBJ Airports is assumed to offset 60% of load with a 6MW solar installation, and PAC Kingston Airport commissioned a 4MW photovoltaic system in July 2026. RT70 then flattens in FY2028 &mdash; the losses are behind it, and nothing is assumed to replace them.</li>
-<li><b>RT50 grows 14.8% on hurricane recovery.</b> Storm-affected load returning is the largest positive driver in the forecast. It now runs through the engine as a normalisation driver rather than as a reported overlay, so the attribution sits on the rate classes rather than on a reconciling line. It is weighted to RT50, with smaller amounts on RT40, RT20 and RT70. Caribbean Cement is excluded: it is roughly a third of RT50 but was never storm-affected, and its volume rose through 2026.</li>
-<li><b>Residential growth is compositional, not intensive.</b> Decomposing the July 2025 to July 2026 movement attributes 91% to customers migrating into higher consumption tiers, 6% to customer growth and only 2% to higher usage within a tier. In RT10's two largest tiers, consumption per customer fell. The 4.4% forecast for FY2027 depends on tier migration continuing at broadly the observed pace.</li>
-<li><b>Confirmed expansion projects underpin RT40.</b> Spanish Town Hospital's new six-storey wing, the LINCAC Cancer Centre at St. Joseph's, three National Water Commission facility expansions, Port Authority's Montego Bay berth upgrade, and retail expansion at PriceSmart, Hi-Lo and Progressive Grocers.</li>
-<li><b>Solar self-supply is a structural headwind that roughly doubles year on year</b>, and now appears on the commercial side as well as residential &mdash; Sagicor at three sites, Grace Food Processors and Rainforest Seafood all have photovoltaic installations booked for FY2027.</li>
-</ul>
+<h2>Risks to the Forecast</h2>
 
-<h2>Principal Risks to the Forecast</h2>
-<div class="risk">
-<b>Hurricane recovery is the largest single judgement.</b> Recovery is assumed to complete by the end of FY2027, which is why FY2028 carries no storm uplift at all and RT50's FY2028 growth of 8.1% comes entirely from the recovered December 2027 level running for a full year rather than from any further recovery. If recovery runs slower, FY2027 is overstated and the FY2028 comparative moves with it. The measured shortfall has closed from 11.4 GWh per month in February 2026 to 6.1 GWh in July, so recovery is demonstrably under way &mdash; but independent tourism data does not yet corroborate the pace, with stopover arrivals still down 27.5% year on year in the first half of 2026.<br><br>
-<b>MBJ Airports carries an unconfirmed assumption at confirmed status.</b> The 60% offset rests on a 6MW solar plant being commissioned by end-2026, described in the supporting note as an assumption and a base-case estimate, yet recorded as a confirmed defection for eleven of twelve months. The stated output of 4.32 GWh a year is also inconsistent with a 60% offset of this customer's consumption, which would require roughly 9 GWh. The magnitude is uncertain by around 5 GWh a year.<br><br>
-<b>Kingston Free Port Terminal is the largest unquantified exposure.</b> It runs 25.3 GWh in FY2026 and is forecast to grow to 28.4 GWh, but sits on the register as a possible defection with no quantified impact. If it follows the pattern of the other port and airport accounts, FY2027 is overstated.<br><br>
-<b>Concentration risk in RT50.</b> Caribbean Cement is roughly one third of the rate class, so RT50 should be read as one large customer plus everything else rather than as a diversified class.<br><br>
-<b>Out-year commercial assumptions remain provisional.</b> Commercial macro rates and industry growth rates for FY2027 and FY2028 are carried at the FY2026 run-rate pending commercial team planning inputs.
+<div class="rk">
+<div class="hd">Hurricane recovery &mdash; 15.1 GWh of FY2027</div>
+<div class="qt">If recovery stalls at the current run-rate, FY2027 growth falls from 3.8% to about 3.4%.</div>
+<div class="bd">The forecast assumes storm-affected commercial load continues returning through FY2027 and is complete by December, which is why FY2028 carries no further recovery. The shortfall has closed from 11.4 GWh a month in February to 6.1 GWh in July, so recovery is under way. Stopover arrivals were still down 27.5% year on year in the first half, so the pace is not yet corroborated by tourism data. We will know by the March close whether the trajectory holds.</div>
 </div>
 
-<div class="meta">Prepared by Sales Forecasting &amp; Analysis. Figures in GWh unless stated. Produced from the Driver Forecast engine on 29 August 2026.</div>
+<div class="rk">
+<div class="hd">MBJ Airports &mdash; 5 GWh of FY2027, unresolved</div>
+<div class="qt">The load is recorded as leaving, but the evidence supports a different number.</div>
+<div class="bd">MBJ is carried as a confirmed defection for eleven months at a 60% offset, worth 14.5 GWh. The supporting note describes the underlying 6MW solar plant as an assumption rather than a commitment, and its stated output of 4.32 GWh a year is inconsistent with a 60% offset, which would require roughly 9 GWh. Either the status or the magnitude is wrong. The account manager is to confirm at the FY2027 review.</div>
+</div>
+
+<div class="rk">
+<div class="hd">Kingston Free Port Terminal &mdash; 28.4 GWh unquantified, and unowned</div>
+<div class="qt">Our largest single unmanaged exposure.</div>
+<div class="bd">The account bills 25.3 GWh and is forecast to grow to 28.4. It sits on the register as a possible defection with no impact quantified and no key account manager assigned. Nothing has been deducted for it. Assigning ownership is the immediate action; quantification follows.</div>
+</div>
+
+<div class="rk">
+<div class="hd">Residential growth depends on tier migration continuing</div>
+<div class="qt">Migration is 91% of residential growth. If it stops, FY2027 loses roughly 77 GWh.</div>
+<div class="bd">Decomposing the July 2025 to July 2026 movement attributes 91% of residential growth to customers moving into higher consumption tiers, 6% to customer growth and 2% to higher usage within a tier. Consumption per customer is flat or falling in RT10's two largest tiers. The forecast assumes migration continues at the observed pace; it is an observed behaviour, not a committed one, and it is the single largest assumption in the residential book.</div>
+</div>
+
+<div class="rk">
+<div class="hd">Concentration in RT50 and RT70</div>
+<div class="qt">Two classes each turn on a handful of customers.</div>
+<div class="bd">Caribbean Cement is roughly one third of RT50, so the class should be read as one large customer plus everything else. RT70 falls 29.6% in FY2027 on three accounts, and after Alcoa's departure the remaining industrial book is small enough that any single further loss is material to the class.</div>
+</div>
+
+<div class="rk">
+<div class="hd">Commercial planning inputs outstanding</div>
+<div class="qt">Out-year commercial assumptions are carried at run-rate.</div>
+<div class="bd">Commercial macro and industry growth rates for FY2027 and FY2028 are held at the FY2026 run-rate pending commercial team planning inputs. The FY2028 commercial position in particular should be treated as provisional until those are received.</div>
+</div>
+
+<div class="meta">Prepared by Sales Forecasting &amp; Analysis. Figures in GWh unless stated. FY2026 reconciles to the forecast submitted 19 August 2026.</div>
 </body></html>
