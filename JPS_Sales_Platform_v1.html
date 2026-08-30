@@ -500,6 +500,7 @@ document.getElementById('schema_stale_banner').style.display='none';
     <div class="ni" onclick="sw('rs',this)"><span class="ni-icon">🏠</span>Residential</div>
     <div class="ni" onclick="sw('dfc',this)"><span class="ni-icon">🌲</span>Driver Forecast</div>
     <div class="ni" onclick="sw('macro',this)"><span class="ni-icon">🌐</span>Macro Assumptions</div>
+    <div class="ni" onclick="sw('ovl',this)"><span class="ni-icon">🩹</span>Forecast Overlays</div>
     <div class="ni" onclick="sw('rateassum',this)"><span class="ni-icon">💲</span>Rate Assumptions</div>
     <div class="ni" onclick="sw('adjlog',this)"><span class="ni-icon">📋</span>Adjustment Log</div>
     <div class="ni" onclick="sw('rcfr',this)"><span class="ni-icon">📐</span>RC Forecast Report</div>
@@ -2400,6 +2401,22 @@ order by ordinal_position;</pre>
       </div>
     </div>
 
+    <!-- === FORECAST OVERLAYS === -->
+    <div id="ovl" class="sec">
+      <div class="card">
+        <div class="ch">Forecast Overlays
+          <div style="display:flex;gap:6px;align-items:center">
+            <select id="ovl_year" class="psel" onchange="renderOverlays()"></select>
+            <button class="btn btn-t" onclick="openOverlayModal()">&#65291; New overlay</button>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:10px">
+          Adjustments in kWh applied at rate-class and month level <strong>after</strong> the account walk &mdash; for movements the driver engine cannot express, such as a storm true-up. They belong to no account by definition, which is why they live here and not on the Driver Forecast tab. Everything entered here feeds the Driver Forecast, the 3-Year page and the exec summary, and carries into a committed budget as its own rows.
+        </div>
+        <div id="ovl_table" style="overflow-x:auto"></div>
+      </div>
+    </div>
+
     <!-- === RATE ASSUMPTIONS === -->
     <div id="rateassum" class="sec">
       <div class="card">
@@ -4199,6 +4216,7 @@ function renderSection(id){
   else if(id==='le'){renderLE();}
   else if(id==='dfc'){renderDriverForecast();renderDfcBridge();}
   else if(id==='macro'){renderMacroAssumptions();}
+  else if(id==='ovl'){renderOverlays();}
   else if(id==='rateassum'){renderRateAssumptions();}
   else if(id==='adjlog'){renderAdjustmentLog();}
   else if(id==='rcfr'){renderRcForecastReport();renderRcfrBridge();}
@@ -11551,6 +11569,232 @@ function renderMacroAssumptions(){
   </table>`;
 }
 function goToMacroAssumptions(){sw('macro',document.querySelector('.ni[onclick^="sw(\'macro\'"]'));}
+
+/* ==========================================
+   FORECAST OVERLAYS — jps_forecast_overlays
+   Analyst kWh adjustments applied at rate-class/month grain AFTER the account walk.
+   These existed and were consumed by the engine long before this screen did: the
+   only way to author one was hand-written SQL, so the storm true-up and every
+   adjustment like it lived outside the app entirely and no one but the person who
+   wrote it could see or change it. An overlay belongs to no account by definition,
+   so it cannot live on the Driver Forecast tab with the account adjustments.
+
+   Rows are grouped for editing by label + rate class + year, because that is how
+   they are authored -- one movement spread across months -- even though they are
+   stored one row per month. Deliberately NOT keyed on a delimiter join of those
+   fields for storage; labels are free text and would break it.
+========================================== */
+const _OVL_SEP=' '; // never a delimiter that can occur in a label or rate class
+function _ovlGroupKey(label,rc,year){return String(label)+_OVL_SEP+String(rc)+_OVL_SEP+String(year);}
+function _ovlRows(){return (typeof sbForecastOverlays!=='undefined'&&sbForecastOverlays)?sbForecastOverlays:[];}
+function _ovlFmt(kwh){
+  const a=Math.abs(kwh);
+  if(a>=1e6)return (kwh/1e6).toFixed(2)+' GWh';
+  if(a>=1e3)return (kwh/1e3).toFixed(1)+' MWh';
+  return Math.round(kwh).toLocaleString('en-US')+' kWh';
+}
+let _ovlPendingDelete=null;
+
+function renderOverlays(){
+  const yrSel=document.getElementById('ovl_year');
+  if(yrSel&&!yrSel.options.length){
+    for(let y=FC_BUD_YEAR;y<=FC_BUD_YEAR+4;y++)yrSel.innerHTML+=`<option value="${y}">${y}</option>`;
+  }
+  const year=parseInt(yrSel?.value)||FC_BUD_YEAR;
+  const wrap=document.getElementById('ovl_table');if(!wrap)return;
+
+  const groups=new Map();
+  _ovlRows().filter(o=>Number(o.year)===year).forEach(o=>{
+    const k=_ovlGroupKey(o.label,o.rate_class,o.year);
+    if(!groups.has(k))groups.set(k,{label:o.label,rate_class:o.rate_class,year:Number(o.year),months:[],total:0,rationale:o.rationale||''});
+    const g=groups.get(k);
+    g.months.push(Number(o.month));
+    g.total+=Number(o.kwh)||0;
+    if(!g.rationale&&o.rationale)g.rationale=o.rationale;
+  });
+
+  if(!groups.size){
+    wrap.innerHTML=`<div style="padding:22px 4px;color:var(--text3);font-size:12px">
+      No overlays for FY${year}. The forecast for this year is entirely engine output &mdash; every movement traces to an account, a driver assumption or a new customer.
+    </div>`;
+    return;
+  }
+
+  const list=[...groups.values()].sort((a,b)=>a.label.localeCompare(b.label)||a.rate_class.localeCompare(b.rate_class));
+  const grand=list.reduce((s,g)=>s+g.total,0);
+  const canDel=can('delete_item');
+  const body=list.map(g=>{
+    const mo=[...new Set(g.months)].sort((a,b)=>a-b);
+    const span=mo.length===12?'All year':mo.map(m=>MONTHS_SHORT[m-1]).join(', ');
+    const args=`${JSON.stringify(g.label)},${JSON.stringify(g.rate_class)},${g.year}`;
+    return`<tr style="border-bottom:0.5px solid var(--border)">
+      <td style="padding:7px 8px">${esc(g.label)}</td>
+      <td style="padding:7px 8px;color:var(--text2)">${esc(g.rate_class)}</td>
+      <td style="padding:7px 8px;color:var(--text3);font-size:11px">${esc(span)}</td>
+      <td style="padding:7px 8px;text-align:right;color:${g.total<0?'var(--red)':'var(--teal)'}">${_ovlFmt(g.total)}</td>
+      <td style="padding:7px 8px;color:var(--text3);font-size:11px;max-width:280px">${esc(g.rationale||'—')}</td>
+      <td style="padding:7px 8px;text-align:right;white-space:nowrap">
+        <button class="btn btn-t" style="padding:3px 9px;font-size:11px" onclick='openOverlayModal(${args})'>Edit</button>
+        ${canDel?`<button class="btn btn-o" style="padding:3px 9px;font-size:11px;margin-left:5px" onclick='confirmOverlayDelete(${args})'>Delete</button>`:''}
+      </td></tr>`;
+  }).join('');
+
+  wrap.innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="border-bottom:0.5px solid var(--border-strong);color:var(--text3)">
+      <th style="text-align:left;padding:6px 8px;font-weight:500">Overlay</th>
+      <th style="text-align:left;padding:6px 8px;font-weight:500">Rate class</th>
+      <th style="text-align:left;padding:6px 8px;font-weight:500">Months</th>
+      <th style="text-align:right;padding:6px 8px;font-weight:500">Total</th>
+      <th style="text-align:left;padding:6px 8px;font-weight:500">Rationale</th>
+      <th></th></tr></thead>
+    <tbody>${body}</tbody>
+    <tfoot><tr style="border-top:0.5px solid var(--border-strong)">
+      <td colspan="3" style="padding:8px;color:var(--text2)">FY${year} overlay total &mdash; sits on top of engine output</td>
+      <td style="padding:8px;text-align:right;font-weight:600;color:${grand<0?'var(--red)':'var(--teal)'}">${_ovlFmt(grand)}</td>
+      <td colspan="2"></td></tr></tfoot>
+  </table>`;
+}
+
+function openOverlayModal(label,rc,year){
+  const editing=label!==undefined;
+  const yr=year||parseInt(document.getElementById('ovl_year')?.value)||FC_BUD_YEAR;
+  const existing=editing?_ovlRows().filter(o=>o.label===label&&o.rate_class===rc&&Number(o.year)===yr):[];
+  const byMonth={};existing.forEach(o=>{byMonth[Number(o.month)]=Number(o.kwh)||0;});
+  const rationale=existing.find(o=>o.rationale)?.rationale||'';
+  const classes=(typeof RC_DISPLAY_ORDER!=='undefined'&&RC_DISPLAY_ORDER.length)?RC_DISPLAY_ORDER:['RT10','RT20','RT40','RT50','RT60-ST','RT70'];
+
+  openModal(
+    editing?'Edit overlay':'New overlay',
+    `<div style="font-size:11px;color:var(--text2);margin-bottom:12px">
+       Values are kWh applied on top of engine output for that rate class and month. Negative reduces the forecast. Leave a month blank for no adjustment.
+     </div>
+     <div style="display:flex;gap:10px;margin-bottom:10px">
+       <div style="flex:2">
+         <label style="font-size:10px;color:var(--text3);text-transform:uppercase">Label</label>
+         <input id="ovl_label" class="psel" style="width:100%;box-sizing:border-box;margin-top:4px" value="${esc(label||'')}" ${editing?'readonly':''} placeholder="e.g. FY2026 submitted true-up">
+       </div>
+       <div style="flex:1">
+         <label style="font-size:10px;color:var(--text3);text-transform:uppercase">Rate class</label>
+         <select id="ovl_rc" class="psel" style="width:100%;margin-top:4px" ${editing?'disabled':''}>
+           ${classes.map(c=>`<option value="${esc(c)}"${c===rc?' selected':''}>${esc(c)}</option>`).join('')}
+         </select>
+       </div>
+       <div style="flex:0 0 90px">
+         <label style="font-size:10px;color:var(--text3);text-transform:uppercase">Year</label>
+         <input class="psel" style="width:100%;box-sizing:border-box;margin-top:4px" value="FY${yr}" disabled>
+       </div>
+     </div>
+     <label style="font-size:10px;color:var(--text3);text-transform:uppercase">Monthly kWh</label>
+     <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin:6px 0 4px">
+       ${[1,2,3,4,5,6,7,8,9,10,11,12].map(m=>`<div>
+         <div style="font-size:9px;color:var(--text3);text-align:center">${MONTHS_SHORT[m-1]}</div>
+         <input id="ovl_m${m}" class="psel" style="width:100%;box-sizing:border-box;text-align:right;font-size:11px;padding:4px" value="${byMonth[m]!==undefined?byMonth[m]:''}" oninput="_ovlPreview()">
+       </div>`).join('')}
+     </div>
+     <div id="ovl_preview" style="font-size:11px;color:var(--text2);text-align:right;margin-bottom:10px"></div>
+     <label style="font-size:10px;color:var(--text3);text-transform:uppercase">Rationale</label>
+     <textarea id="ovl_rationale" class="psel" rows="3" style="width:100%;margin-top:4px;box-sizing:border-box" placeholder="Why the engine cannot express this">${esc(rationale)}</textarea>
+     <input type="hidden" id="ovl_editing" value="${editing?'1':''}">
+     <input type="hidden" id="ovl_year_v" value="${yr}">`,
+    _ovlSave,'💾 Save overlay','var(--teal)'
+  );
+  setTimeout(_ovlPreview,0);
+}
+
+function _ovlPreview(){
+  let t=0,n=0;
+  for(let m=1;m<=12;m++){
+    const raw=document.getElementById('ovl_m'+m)?.value;
+    if(raw==null||String(raw).trim()==='')continue;
+    const v=parseFloat(String(raw).replace(/,/g,''));
+    if(!isNaN(v)){t+=v;n++;}
+  }
+  const el=document.getElementById('ovl_preview');
+  if(el)el.innerHTML=n?`${n} month${n===1?'':'s'} &middot; total <strong style="color:${t<0?'var(--red)':'var(--teal)'}">${_ovlFmt(t)}</strong>`:'No months entered';
+}
+
+async function _ovlSave(){
+  const sb=getSB();if(!sb){toast('Not connected','err');return;}
+  const label=(document.getElementById('ovl_label')?.value||'').trim();
+  const rc=document.getElementById('ovl_rc')?.value;
+  const yr=parseInt(document.getElementById('ovl_year_v')?.value);
+  const rationale=(document.getElementById('ovl_rationale')?.value||'').trim();
+  if(!label){toast('Give the overlay a label — it is how the movement is identified in the budget and the exec summary','err');return;}
+  if(!rationale){toast('Rationale is required. An overlay exists because the engine cannot express the movement; that reason has to be recorded','err');return;}
+
+  const rows=[];
+  for(let m=1;m<=12;m++){
+    const raw=document.getElementById('ovl_m'+m)?.value;
+    if(raw==null||String(raw).trim()==='')continue;
+    const v=parseFloat(String(raw).replace(/,/g,''));
+    if(isNaN(v)){toast(`${MONTHS_SHORT[m-1]} is not a number`,'err');return;}
+    if(v===0)continue; // a zero overlay is not an adjustment, it is a row that does nothing
+    rows.push({year:yr,month:m,rate_class:rc,kwh:v,label,rationale});
+  }
+  if(!rows.length){toast('Enter at least one month with a non-zero value','err');return;}
+
+  try{
+    // Upsert first, then remove only the months that were cleared. Never
+    // delete-then-insert: a failed insert after a successful delete would lose the
+    // overlay outright, and an overlay is the one part of the forecast that exists
+    // nowhere else -- it is not derivable from accounts or drivers. Relies on the
+    // unique index (label, rate_class, year, month) as the conflict target.
+    const{data:ins,error:insErr}=await sb.from('jps_forecast_overlays')
+      .upsert(rows,{onConflict:'label,rate_class,year,month'}).select();
+    if(insErr)throw insErr;
+    const keep=rows.map(r=>r.month);
+    const{error:delErr}=await sb.from('jps_forecast_overlays')
+      .delete().eq('year',yr).eq('rate_class',rc).eq('label',label)
+      .not('month','in',`(${keep.join(',')})`);
+    if(delErr)throw delErr; // rows are already correct; a stale month may linger
+
+    // Reflect locally instead of a full resync — syncSupabase refetches ~20 tables
+    // and would blow away anything else mid-edit.
+    if(typeof sbForecastOverlays!=='undefined'){
+      sbForecastOverlays=sbForecastOverlays.filter(o=>!(Number(o.year)===yr&&o.rate_class===rc&&o.label===label));
+      (ins||rows).forEach(r=>sbForecastOverlays.push(r));
+    }
+    _dfcResetYearChainCache();
+    closeModal();
+    toast(`Overlay saved — ${rows.length} month${rows.length===1?'':'s'}, ${_ovlFmt(rows.reduce((s,r)=>s+r.kwh,0))}`,'ok');
+    renderOverlays();
+  }catch(e){
+    toast('Save failed: '+(e.message||e),'err');
+  }
+}
+
+function confirmOverlayDelete(label,rc,year){
+  const rows=_ovlRows().filter(o=>o.label===label&&o.rate_class===rc&&Number(o.year)===year);
+  const total=rows.reduce((s,o)=>s+(Number(o.kwh)||0),0);
+  _ovlPendingDelete={label,rc,year};
+  openModal('Delete overlay?',
+    `<div style="font-size:12px;color:var(--text2)">
+       Removing <strong>${esc(label)}</strong> on <strong>${esc(rc)}</strong> for FY${year} drops
+       <strong>${rows.length}</strong> monthly row${rows.length===1?'':'s'} worth <strong>${_ovlFmt(total)}</strong>.
+       The forecast moves by that amount as soon as it is gone. This cannot be undone from here.
+     </div>`,
+    _ovlDelete,'Delete','var(--red)');
+}
+
+async function _ovlDelete(){
+  if(!_ovlPendingDelete)return;
+  const{label,rc,year}=_ovlPendingDelete;
+  const sb=getSB();if(!sb){toast('Not connected','err');return;}
+  try{
+    const{error}=await sb.from('jps_forecast_overlays')
+      .delete().eq('year',year).eq('rate_class',rc).eq('label',label);
+    if(error)throw error;
+    if(typeof sbForecastOverlays!=='undefined')
+      sbForecastOverlays=sbForecastOverlays.filter(o=>!(Number(o.year)===year&&o.rate_class===rc&&o.label===label));
+    _dfcResetYearChainCache();
+    _ovlPendingDelete=null;
+    closeModal();
+    toast('Overlay deleted','ok');
+    renderOverlays();
+  }catch(e){
+    toast('Delete failed: '+(e.message||e),'err');
+  }
+}
 const MACRO_REASON_CODES=['Rate case update','Economic outlook revision','Weather forecast update','Seasonal pattern revision','Industry-specific event','Correction','Other'];
 
 // Macro, industry and migration rates are applied month-on-month against a rolling
