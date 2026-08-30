@@ -12195,6 +12195,21 @@ function renderLossOutput(){
   const g=v=>(v/1e6).toFixed(1);
   let html='';
 
+  // If a year's stored monthly series was DERIVED -- built forwards from observed
+  // seasonality, with the rolling series computed from it -- then inverting that
+  // rolling series returns the same monthly path. The match is the round trip
+  // closing, not the targets being independently confirmed. Say so, because a clean
+  // result here is the most convincing wrong signal the screen can produce.
+  const derived=res.years.map(y=>y.year).filter(yr=>
+    (typeof sbMacroAssum!=='undefined'?sbMacroAssum:[]).some(r=>
+      r.driver_type==='loss_monthly'&&Number(r.year)===yr&&r.method==='derived'));
+  if(derived.length){
+    html+=`<div style="font-size:11px;color:var(--amber);background:rgba(245,166,35,.10);border-left:3px solid var(--amber);border-radius:4px;padding:9px 12px;margin-bottom:12px">
+      <strong>FY${derived.join(', FY')} ${derived.length>1?'were':'was'} derived, not inverted.</strong>
+      The stored monthly series was built forwards from observed seasonality and the rolling targets were computed from it. Inverting them here returns that same path, so a clean result is the round trip closing &mdash; it is not independent confirmation that the targets are right.
+    </div>`;
+  }
+
   // Both methods side by side first. They differ only in the monthly path -- the
   // annual close is identical and exact in both -- so showing them together is what
   // makes the trade-off legible: exact rolling fidelity against a credible month.
