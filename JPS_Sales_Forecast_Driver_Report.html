@@ -60,7 +60,7 @@ This report explains how the forecast moves and why. Volumes are produced by the
 <tr class="sub"><td></td><td>Customer acquisition</td><td>RT10 / RT20</td><td>+13.8</td></tr>
 <tr class="sub"><td></td><td>Prepaid</td><td>RT10 / RT20</td><td>+0.9</td></tr>
 <tr class="sub"><td></td><td>Load growth &mdash; bucket migration</td><td>RT10 / RT20</td><td>+81.7</td></tr>
-<tr class="sub"><td></td><td>Load growth &mdash; within-tier usage</td><td>RT10 / RT20</td><td class="neg">&minus;12.8</td></tr>
+<tr class="sub"><td></td><td>Load decline</td><td>RT10 / RT20</td><td class="neg">&minus;12.8</td></tr>
 <tr><td>Temperature</td><td></td><td>RT10 / RT20</td><td class="pos">+5.5</td></tr>
 <tr><td>Solar adaption residential</td><td></td><td>RT10 / RT20</td><td class="neg">&minus;4.3</td></tr>
 <tr><td>Commercial defection</td><td></td><td>RT40/50/60/70</td><td class="neg">&minus;82.0</td></tr>
@@ -81,7 +81,7 @@ This report explains how the forecast moves and why. Volumes are produced by the
 <tr class="sub"><td></td><td>Customer acquisition</td><td>RT10 / RT20</td><td>+14.1</td></tr>
 <tr class="sub"><td></td><td>Prepaid</td><td>RT10 / RT20</td><td>+0.7</td></tr>
 <tr class="sub"><td></td><td>Load growth &mdash; bucket migration</td><td>RT10 / RT20</td><td>+65.7</td></tr>
-<tr class="sub"><td></td><td>Load growth &mdash; within-tier usage</td><td>RT10 / RT20</td><td class="neg">&minus;11.7</td></tr>
+<tr class="sub"><td></td><td>Load decline</td><td>RT10 / RT20</td><td class="neg">&minus;11.7</td></tr>
 <tr><td>Temperature</td><td></td><td>RT10 / RT20</td><td class="pos">+2.8</td></tr>
 <tr><td>Solar adaption residential</td><td></td><td>RT10 / RT20</td><td class="neg">&minus;8.9</td></tr>
 <tr><td>Commercial defection</td><td></td><td>RT40/50/60/70</td><td class="neg">&minus;5.8</td></tr>
@@ -176,10 +176,22 @@ If those customers return, the value is:
 </table>
 <p>Growth comes from the movement between bands, not from usage inside them. The under-150 band lost 9,790 customers while the bands above it gained 9,948 &mdash; substantially the same households, moving up. Consumption per customer is flat in the middle bands and falls at both ends.</p>
 
+<p><b>Tariff movement against usage, seven comparable months.</b> If conservation and bill response are what hold usage down inside the bands, the rate should move against the volume. It does, and hardest where the volume falls furthest:</p>
+<table>
+<tr><th class="l">Consumption band</th><th>J$/kWh Jan&ndash;Jul 25</th><th>Jan&ndash;Jul 26</th><th>Rate change</th><th>kWh per customer<br>per month 2026</th><th>Change in kWh<br>per customer</th></tr>
+<tr><td>Under 150 kWh</td><td>56.03</td><td>58.12</td><td>+3.7%</td><td>73.4</td><td class="neg">&minus;4.1%</td></tr>
+<tr><td>150&ndash;350</td><td>57.61</td><td>59.20</td><td>+2.8%</td><td>219.3</td><td class="pos">+0.1%</td></tr>
+<tr><td>350&ndash;550</td><td>59.51</td><td>60.89</td><td>+2.3%</td><td>426.0</td><td class="pos">+0.1%</td></tr>
+<tr><td>550&ndash;750</td><td>59.97</td><td>61.25</td><td>+2.1%</td><td>632.6</td><td>0.0%</td></tr>
+<tr><td>750&ndash;950</td><td>60.10</td><td>61.38</td><td>+2.1%</td><td>836.9</td><td>0.0%</td></tr>
+<tr><td>Over 950</td><td>61.03</td><td>62.35</td><td>+2.2%</td><td>1,734.8</td><td class="neg">&minus;3.6%</td></tr>
+</table>
+<div class="note">January to July, 2025 against 2026, so both years cover the same seven months and the storm quarter is excluded from each. <b>The rate shown is the all-in billed average and carries fuel movement as well as tariff</b> &mdash; the billing extract populates total revenue but leaves the energy, fuel and IPP components at zero, so the two cannot be separated here. Prepaid is excluded. Bands are assigned monthly, so a customer is measured in whichever band they consumed in that month; the seven-month figures therefore differ from the July-to-July snapshot above, where the under-150 decline reads &minus;2.4% and over-950 &minus;5.4%.</div>
+
 <div class="key">
-<b>The two ends fall for different reasons.</b> Over-950 losing 5.4% per customer is the signature of bill response and solar self-supply &mdash; the heaviest users have the most to save and are the most likely to install photovoltaic. Under-150 losing 2.5% reads as hardship or efficiency at the bottom of the book. The middle is stable.
+<b>The two ends fall for different reasons, and the rate points the same way at both.</b> Over-950 is the signature of bill response and solar self-supply &mdash; the heaviest users have the most to save and are the most likely to install photovoltaic. Under-150 reads as hardship or efficiency at the bottom of the book, and it is the band that took the largest rate increase, 3.7% against 2.1% at the top. The middle is stable on both measures.
 <br><br>
-Note that solar self-consumption appears <i>here</i>, not in the solar driver. A customer who installs panels and consumes their own generation without exporting never becomes a net biller; their draw simply falls inside their band. Part of the &minus;13.4 GWh within-tier decline is therefore solar that the solar line does not capture.
+Note that solar self-consumption appears <i>here</i>, not in the solar driver. A customer who installs panels and consumes their own generation without exporting never becomes a net biller; their draw simply falls inside their band. Part of the &minus;12.8 GWh load decline is therefore solar that the solar line does not capture.
 </div>
 
 <h2>5. Solar and Net Billing</h2>
