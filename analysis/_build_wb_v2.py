@@ -110,7 +110,7 @@ l26 = [cell(vs, 15, c) for c in range(2, 14)]
 # the engine's own numbers -- do not hand-edit them here, change the assumptions and
 # re-read, or the workbook and the app start telling different stories.
 T = {2027: {'RT10':1258.60,'RT20':693.81,'RT40':827.11,'RT50':393.83,'RT60-ST':39.18,'RT70':193.82},
-     2028: {'RT10':1291.00,'RT20':703.06,'RT40':819.28,'RT50':425.81,'RT60-ST':38.20,'RT70':186.94}}
+     2028: {'RT10':1291.00,'RT20':709.90,'RT40':823.39,'RT50':425.81,'RT60-ST':38.20,'RT70':186.94}}
 
 def shape(rc):
     v = m26[rc]
