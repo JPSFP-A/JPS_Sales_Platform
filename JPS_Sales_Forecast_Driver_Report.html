@@ -57,9 +57,9 @@ This report explains how the forecast moves and why. Volumes are produced by the
 <table>
 <tr><th class="l">Driver</th><th class="l">Sub-driver</th><th class="l">Rate class</th><th>GWh</th></tr>
 <tr><td>New load / underlying demand</td><td></td><td>RT10 / RT20 residential</td><td class="pos">+83.6</td></tr>
-<tr class="sub"><td></td><td>Customer acquisition</td><td>RT10 / RT20</td><td>+12.0</td></tr>
+<tr class="sub"><td></td><td>Customer acquisition</td><td>RT10 / RT20</td><td>+13.8</td></tr>
 <tr class="sub"><td></td><td>Prepaid</td><td>RT10 / RT20</td><td>+0.9</td></tr>
-<tr class="sub"><td></td><td>Load growth &mdash; bucket migration</td><td>RT10 / RT20</td><td>+83.5</td></tr>
+<tr class="sub"><td></td><td>Load growth &mdash; bucket migration</td><td>RT10 / RT20</td><td>+81.7</td></tr>
 <tr class="sub"><td></td><td>Load growth &mdash; within-tier usage</td><td>RT10 / RT20</td><td class="neg">&minus;12.8</td></tr>
 <tr><td>Temperature</td><td></td><td>RT10 / RT20</td><td class="pos">+5.5</td></tr>
 <tr><td>Solar adaption residential</td><td></td><td>RT10 / RT20</td><td class="neg">&minus;4.3</td></tr>
@@ -78,9 +78,9 @@ This report explains how the forecast moves and why. Volumes are produced by the
 <table>
 <tr><th class="l">Driver</th><th class="l">Sub-driver</th><th class="l">Rate class</th><th>GWh</th></tr>
 <tr><td>New load / underlying demand</td><td></td><td>RT10 / RT20 residential</td><td class="pos">+68.8</td></tr>
-<tr class="sub"><td></td><td>Customer acquisition</td><td>RT10 / RT20</td><td>+12.0</td></tr>
+<tr class="sub"><td></td><td>Customer acquisition</td><td>RT10 / RT20</td><td>+14.1</td></tr>
 <tr class="sub"><td></td><td>Prepaid</td><td>RT10 / RT20</td><td>+0.7</td></tr>
-<tr class="sub"><td></td><td>Load growth &mdash; bucket migration</td><td>RT10 / RT20</td><td>+67.8</td></tr>
+<tr class="sub"><td></td><td>Load growth &mdash; bucket migration</td><td>RT10 / RT20</td><td>+65.7</td></tr>
 <tr class="sub"><td></td><td>Load growth &mdash; within-tier usage</td><td>RT10 / RT20</td><td class="neg">&minus;11.7</td></tr>
 <tr><td>Temperature</td><td></td><td>RT10 / RT20</td><td class="pos">+2.8</td></tr>
 <tr><td>Solar adaption residential</td><td></td><td>RT10 / RT20</td><td class="neg">&minus;8.9</td></tr>
@@ -127,9 +127,40 @@ If those customers return, the value is:
 </div>
 
 <h3>4.3 What customer acquisition is actually worth</h3>
-<p>Before the hurricane, RT10 was adding <b>923 consuming customers a month</b> &mdash; 8,308 over the nine clean months of 2025, while zero-consumption accounts stayed flat at around 50,800. New connections in that period were 96% consuming. Annualised, that is 11,077 consuming customers a year; at 181 kWh a month and a half-year average effect in the first year, worth approximately <b>12 GWh</b>.</p>
+<p>The acquisition line is built from premises joining the grid at a measured monthly rate, each consuming the FY2026 average. The only judgement in it is the choice of measurement window.</p>
+
+<p><b>Rate.</b> RT10 premises on the grid, compound monthly growth:</p>
+<table>
+<tr><th class="l">Window</th><th class="l">Movement</th><th>Per month</th><th>Per year</th></tr>
+<tr><td>Jan&ndash;Oct 2025, pre-storm</td><td class="l">646,008 &rarr; 653,184</td><td>797</td><td>+1.48%</td></tr>
+<tr><td>Jan 2025 &ndash; Jul 2026, full span</td><td class="l">646,008 &rarr; 660,768</td><td>820</td><td>+1.52%</td></tr>
+<tr><td>Dec 2025 &ndash; Jul 2026, post-storm</td><td class="l">653,355 &rarr; 660,768</td><td>1,059</td><td>+1.95%</td></tr>
+</table>
+<div class="note">The full span is adopted: <b>0.1256% a month</b> for RT10. RT20 residential is measured from April 2025 at <b>0.2361% a month</b>, +2.87% a year &mdash; the March-to-April 2025 boundary carries a reclassification that moves roughly 5,565 premises out of RT20 residential, so any window crossing it reads as a collapse in the customer base that did not happen.</div>
+
+<p><b>Consumption.</b> Each new premise is assumed to consume the FY2026 average, taken across the full year rather than a single month so that no seasonality is embedded in an annual figure:</p>
+<table>
+<tr><th class="l">Class</th><th>FY2026 sales</th><th>Average premises</th><th>kWh per premise per month</th></tr>
+<tr><td>RT10</td><td>1,209.2 GWh</td><td>659,687</td><td>152.8</td></tr>
+<tr><td>RT20 residential</td><td>243.6 GWh</td><td>50,581</td><td>401.3</td></tr>
+</table>
+
+<p><b>Volume.</b> A premise connected in March bills for ten months of the year, not twelve, so the year carries the running total of additions rather than the year-end count:</p>
+<table>
+<tr><th class="l">Class</th><th>Opening premises</th><th>Added in the year</th><th>FY2027 GWh</th><th>FY2028 GWh</th></tr>
+<tr><td>RT10</td><td>664,928</td><td>+10,090</td><td>10.0</td><td>10.2</td></tr>
+<tr><td>RT20 residential</td><td>51,332</td><td>+1,473</td><td>3.8</td><td>3.9</td></tr>
+<tr class="tot"><td>Total</td><td></td><td>+11,563</td><td>13.8</td><td>14.1</td></tr>
+</table>
+
 <div class="warn">
-<b>A year-on-year comparison across the storm gives the wrong answer here, and it is worth stating why.</b> Measured July 2025 against July 2026, the consuming base grew by 78 customers and the zero-consumption bucket by 7,274 &mdash; which reads as though JPS is connecting customers who do not consume. It is not. The base lost 107,581 consuming customers in December 2025 and had restored all but 110 of them by July 2026, so the window nets the loss against its own repair, and the zero bucket is inflated by storm damage rather than by vacant new connections. The pre-hurricane run-rate is the correct basis for the forward view.
+<b>Two measurement traps sit in this data, and both were live in the previous version of this figure.</b> First, the customer count on RT10 includes the zero-consumption bucket, so it counts premises connected rather than customers billing. That makes it the right series for customers joining the grid, but it has to be paired with a per-premise rate of 152.8 kWh a month, not the per-consuming-customer rate of 167.4 &mdash; pairing a premise count with a consuming-customer rate counts the roughly 58,000 connected-but-not-billing premises twice over. Second, the customer count on RT20 is populated for the residential segment only; commercial RT20 rows carry none. RT20 was therefore absent from the earlier figure altogether, and that omission is most of the movement from 12.0 to 13.8 GWh.
+</div>
+
+<div class="note"><b>Sensitivity.</b> On the pre-storm 2025 rate alone the line is worth 13.6 GWh; on the post-storm run-rate of 1,059 RT10 premises a month it is 18.1. The post-storm pace is not taken. Seven months on the far side of a hurricane is as likely to be deferred connections catching up as a genuine step change in the rate at which Jamaica is connecting homes. If it holds through the December close, the line is worth roughly 4 GWh more than carried.</div>
+
+<div class="warn">
+<b>A year-on-year comparison across the storm gives the wrong answer here, and it is worth stating why.</b> Measured July 2025 against July 2026, the consuming base grew by 78 customers and the zero-consumption bucket by 7,274 &mdash; which reads as though JPS is connecting customers who do not consume. It is not. The base lost 107,581 consuming customers in December 2025 and had restored all but 110 of them by July 2026, so the window nets the loss against its own repair, and the zero bucket is inflated by storm damage rather than by vacant new connections. Premises connected, not consuming customers, is the series to build the forward view on: it dipped by only 3,325 in November and was back above its October level by December, so it carries the connection rate through the storm largely intact, while the consuming series is dominated for eight months by reconnection.
 </div>
 <h3>4.4 Consumption by band</h3>
 <table>
