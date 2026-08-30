@@ -1,0 +1,562 @@
+<title>JPS Sales Forecast Runbook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+
+<style>
+  /* ---- Light palette: the complete token set. Neutrals biased cool-slate toward
+         the teal accent the platform itself uses, so the doc reads as a sibling
+         of the app rather than a generic report. ---- */
+  :root{
+    --ground:#F4F7F7;
+    --surface:#FFFFFF;
+    --surface-2:#EDF2F2;
+    --line:#D5DEDE;
+    --line-soft:#E4EAEA;
+    --ink:#101A20;
+    --ink-2:#3D4F58;
+    --ink-3:#697C85;
+    --accent:#07806F;
+    --accent-soft:#E2F1EE;
+    --amber:#9E6512;
+    --amber-soft:#F8EEDC;
+    --red:#A02A20;
+    --red-soft:#F8E7E4;
+    --shadow:0 1px 2px rgba(16,26,32,.05),0 8px 24px -12px rgba(16,26,32,.12);
+    --step-face:#FFFFFF;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --ground:#0C1418;
+      --surface:#121D22;
+      --surface-2:#182528;
+      --line:#2A3A3F;
+      --line-soft:#213035;
+      --ink:#E8EFEF;
+      --ink-2:#AFC0C3;
+      --ink-3:#7B8E93;
+      --accent:#3ED4BC;
+      --accent-soft:#14312E;
+      --amber:#E5A648;
+      --amber-soft:#33260F;
+      --red:#F0796B;
+      --red-soft:#361A17;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 28px -14px rgba(0,0,0,.6);
+      --step-face:#0C1418;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0C1418;
+    --surface:#121D22;
+    --surface-2:#182528;
+    --line:#2A3A3F;
+    --line-soft:#213035;
+    --ink:#E8EFEF;
+    --ink-2:#AFC0C3;
+    --ink-3:#7B8E93;
+    --accent:#3ED4BC;
+    --accent-soft:#14312E;
+    --amber:#E5A648;
+    --amber-soft:#33260F;
+    --red:#F0796B;
+    --red-soft:#361A17;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 28px -14px rgba(0,0,0,.6);
+    --step-face:#0C1418;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    background:var(--ground);
+    color:var(--ink);
+    font-family:"IBM Plex Serif",Georgia,serif;
+    font-size:16px;
+    line-height:1.65;
+    margin:0;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1120px;margin:0 auto;padding:0 24px 96px}
+
+  h1,h2,h3,h4,.ui{font-family:"IBM Plex Sans",system-ui,-apple-system,sans-serif}
+  code,.mono,.num{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,monospace;font-variant-numeric:tabular-nums}
+
+  /* ---- Masthead ---- */
+  header.mast{padding:64px 0 30px;border-bottom:2px solid var(--ink)}
+  .eyebrow{
+    font-family:"IBM Plex Sans",sans-serif;font-size:11px;font-weight:600;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0 0 14px
+  }
+  h1{
+    font-size:clamp(34px,5.2vw,54px);line-height:1.05;font-weight:600;
+    letter-spacing:-.022em;margin:0 0 18px;text-wrap:balance
+  }
+  .standfirst{font-size:19px;line-height:1.6;color:var(--ink-2);max-width:64ch;margin:0}
+
+  /* ---- Position strip ---- */
+  .position{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:1px;background:var(--line);border:1px solid var(--line);
+    margin:30px 0 0;border-radius:3px;overflow:hidden
+  }
+  .position div{background:var(--surface);padding:14px 16px}
+  .position dt{
+    font-family:"IBM Plex Sans",sans-serif;font-size:10px;font-weight:600;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin:0 0 5px
+  }
+  .position dd{margin:0;font-family:"IBM Plex Mono",monospace;font-size:21px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .position .delta{font-size:12px;color:var(--ink-3);margin-left:5px}
+  .asof{font-size:12.5px;color:var(--ink-3);margin:10px 0 0;font-family:"IBM Plex Sans",sans-serif}
+
+  /* ---- Layout ---- */
+  .cols{display:grid;grid-template-columns:212px 1fr;gap:52px;margin-top:56px;align-items:start}
+  @media(max-width:900px){.cols{grid-template-columns:1fr;gap:0}nav.rail{display:none}}
+
+  nav.rail{position:sticky;top:26px;font-family:"IBM Plex Sans",sans-serif}
+  nav.rail p{
+    font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--ink-3);margin:0 0 12px
+  }
+  nav.rail a{
+    display:flex;gap:11px;align-items:baseline;padding:5px 0;
+    font-size:13.5px;color:var(--ink-2);text-decoration:none;line-height:1.35
+  }
+  nav.rail a:hover{color:var(--accent)}
+  nav.rail a:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:2px}
+  nav.rail a .n{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--ink-3);flex:0 0 15px}
+  nav.rail .grp{margin-top:20px}
+
+  main{min-width:0;max-width:72ch}
+
+  h2{
+    font-size:13px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;
+    color:var(--accent);margin:64px 0 22px;padding-bottom:9px;border-bottom:1px solid var(--line)
+  }
+  h2:first-child{margin-top:0}
+
+  /* ---- Stage ---- */
+  .stage{display:grid;grid-template-columns:44px 1fr;gap:20px;margin-bottom:44px}
+  .stage .idx{
+    font-family:"IBM Plex Mono",monospace;font-size:13px;font-weight:600;
+    color:var(--accent);background:var(--accent-soft);border-radius:3px;
+    height:30px;display:flex;align-items:center;justify-content:center;margin-top:2px
+  }
+  .stage h3{font-size:20px;font-weight:600;letter-spacing:-.012em;margin:0 0 4px;line-height:1.25}
+  .tab{
+    display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:11.5px;
+    color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line-soft);
+    border-radius:3px;padding:2px 8px;margin:0 0 12px;white-space:nowrap
+  }
+  .stage p{margin:0 0 12px}
+  .stage>div>p:last-child{margin-bottom:0}
+
+  ol.acts{margin:12px 0 0;padding:0;list-style:none;counter-reset:a}
+  ol.acts li{
+    counter-increment:a;position:relative;padding-left:27px;margin-bottom:9px;font-size:15.5px
+  }
+  ol.acts li::before{
+    content:counter(a);position:absolute;left:0;top:.15em;
+    font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:600;
+    color:var(--ink-3)
+  }
+
+  /* ---- Callouts ---- */
+  .note{
+    border-left:3px solid var(--line);background:var(--surface);
+    padding:13px 17px;margin:16px 0 0;font-size:14.5px;line-height:1.6;box-shadow:var(--shadow);border-radius:0 3px 3px 0
+  }
+  .note.warn{border-left-color:var(--amber);background:var(--amber-soft)}
+  .note.stop{border-left-color:var(--red);background:var(--red-soft)}
+  .note .lbl{
+    display:block;font-family:"IBM Plex Sans",sans-serif;font-size:10px;font-weight:600;
+    letter-spacing:.11em;text-transform:uppercase;margin-bottom:5px
+  }
+  .note.warn .lbl{color:var(--amber)}
+  .note.stop .lbl{color:var(--red)}
+  .note:not(.warn):not(.stop) .lbl{color:var(--ink-3)}
+
+  /* ---- Traps ---- */
+  .trap{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:20px 22px;margin-bottom:16px;box-shadow:var(--shadow)}
+  .trap h3{font-family:"IBM Plex Sans",sans-serif;font-size:17px;font-weight:600;margin:0 0 10px;letter-spacing:-.01em}
+  .trap p{margin:0 0 10px;font-size:15px}
+  .trap p:last-child{margin-bottom:0}
+  .trap .happened{
+    font-size:13.5px;color:var(--ink-2);border-top:1px solid var(--line-soft);
+    padding-top:10px;margin-top:12px
+  }
+  .trap .happened b{font-family:"IBM Plex Sans",sans-serif;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);display:block;margin-bottom:4px;font-weight:600}
+
+  /* ---- Formula ---- */
+  .formula{
+    background:var(--surface);border:1px solid var(--line);border-radius:4px;
+    padding:20px 22px;margin:18px 0;overflow-x:auto
+  }
+  .formula code{display:block;font-size:14px;line-height:1.95;white-space:pre;color:var(--ink)}
+  .formula .cm{color:var(--ink-3)}
+
+  /* ---- Table ---- */
+  .tw{overflow-x:auto;margin:18px 0;border:1px solid var(--line);border-radius:4px;background:var(--surface)}
+  table{border-collapse:collapse;width:100%;font-family:"IBM Plex Sans",sans-serif;font-size:14px}
+  th,td{text-align:left;padding:10px 15px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  th{
+    font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--ink-3);background:var(--surface-2);white-space:nowrap
+  }
+  tbody tr:last-child td{border-bottom:none}
+  td code{font-size:12.5px}
+  .own{font-size:11px;font-weight:600;font-family:"IBM Plex Sans",sans-serif;padding:2px 7px;border-radius:2px;white-space:nowrap}
+  .own.app{background:var(--accent-soft);color:var(--accent)}
+  .own.sql{background:var(--amber-soft);color:var(--amber)}
+
+  code{
+    background:var(--surface-2);border:1px solid var(--line-soft);border-radius:2px;
+    padding:1px 5px;font-size:13px
+  }
+  .formula code,td code,.trap code{background:none;border:none;padding:0}
+  strong{font-weight:600}
+  em{font-style:italic}
+  a{color:var(--accent)}
+  hr.end{border:none;border-top:2px solid var(--ink);margin:70px 0 22px}
+  .colophon{font-size:13px;color:var(--ink-3);font-family:"IBM Plex Sans",sans-serif;line-height:1.6}
+</style>
+
+<div class="wrap">
+
+  <header class="mast">
+    <p class="eyebrow">Jamaica Public Service &middot; Sales Analytics</p>
+    <h1>Sales Forecast Runbook</h1>
+    <p class="standfirst">How to run a full forecast cycle in the Sales Platform: the order the steps go in, what each one actually changes, and the specific ways this forecast has been got wrong before.</p>
+
+    <dl class="position">
+      <div><dt>FY2026</dt><dd class="num">3,281.97</dd></div>
+      <div><dt>FY2027</dt><dd class="num">3,406.35<span class="delta">+3.79%</span></dd></div>
+      <div><dt>FY2028</dt><dd class="num">3,475.24<span class="delta">+2.02%</span></dd></div>
+      <div><dt>System loss</dt><dd class="num">27.10%</dd></div>
+    </dl>
+    <p class="asof">GWh billed sales. Position at the last verified engine run. These move whenever an assumption changes, so re-read them from the 3-Year Comparison tab, never from this page.</p>
+  </header>
+
+  <div class="cols">
+    <nav class="rail">
+      <p>The cycle</p>
+      <a href="#s1"><span class="n">1</span>Load actuals</a>
+      <a href="#s2"><span class="n">2</span>Clean the data</a>
+      <a href="#s3"><span class="n">3</span>Set drivers</a>
+      <a href="#s4"><span class="n">4</span>Account moves</a>
+      <a href="#s5"><span class="n">5</span>New customers</a>
+      <a href="#s6"><span class="n">6</span>Overlays</a>
+      <a href="#s7"><span class="n">7</span>Phase losses</a>
+      <a href="#s8"><span class="n">8</span>Review</a>
+      <a href="#s9"><span class="n">9</span>Commit &amp; publish</a>
+      <div class="grp">
+        <p>Reference</p>
+        <a href="#engine">How the engine works</a>
+        <a href="#traps">Known traps</a>
+        <a href="#owns">Where everything lives</a>
+      </div>
+    </nav>
+
+    <main>
+
+      <h2>Before you start</h2>
+      <p>Three preconditions. Skipping any of them produces a forecast that looks complete and is wrong.</p>
+
+      <div class="note stop">
+        <span class="lbl">Check the session is live</span>
+        A stale login does not log you out. It returns <strong>zero rows with no error</strong>, because row-level security filters everything and reports success. The page then renders an all-zero forecast that is indistinguishable from real data. The app now shows a red banner when it detects this. If you see it, sign in again and reload; do not trust anything on screen until you have.
+      </div>
+
+      <div class="note warn">
+        <span class="lbl">Wait for commercial detail</span>
+        RT40, RT50 and RT70 load lazily. Until they arrive they read <strong>zero</strong>, not blank, so every rate-class total, every loss rate and every committed budget built in that window is understated by roughly a third. The Commit and Exec Summary buttons refuse to run until it lands. Nothing else does, so give it a moment.
+      </div>
+
+      <div class="note">
+        <span class="lbl">Check nobody else is mid-edit</span>
+        Assumptions are shared. Two people editing the same rate class, or a second Claude session writing SQL, will silently overwrite each other. See <a href="#owns">Where everything lives</a> for the ownership split.
+      </div>
+
+      <h2>The cycle</h2>
+
+      <div class="stage" id="s1">
+        <div class="idx">01</div>
+        <div>
+          <h3>Load the month's actuals</h3>
+          <div class="tab">Admin → Data Upload</div>
+          <p>The billing extract is the ground truth everything else is built on. The forecast base is a trailing three-month average, so a bad upload moves every future month, not just the one you loaded.</p>
+          <ol class="acts">
+            <li>Choose <strong>Overwrite month</strong> for a normal monthly load: it clears that month first, so a re-run after a correction cannot double-count.</li>
+            <li>Choose <strong>Append / upsert</strong> only when adding rows to a month that is already correct.</li>
+            <li>Pick the Excel file. Columns are detected automatically; rows with no year or month are dropped and counted in the console.</li>
+            <li>Confirm the row count looks like a month, not a fragment.</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="stage" id="s2">
+        <div class="idx">02</div>
+        <div>
+          <h3>Clean what the upload brought in</h3>
+          <div class="tab">Data Quality</div>
+          <p>Two jobs, both immediately after the upload while the data is fresh in mind.</p>
+          <ol class="acts">
+            <li><strong>Rebuild net billers.</strong> One button. Re-derives every month from the <code>&lt;Zero</code> consumption bucket and overwrites, so running it twice is harmless.</li>
+            <li><strong>Review customer names.</strong> Work the <em>Needs review</em> queue. Each group was merged by the matcher and no person has confirmed it.</li>
+          </ol>
+          <div class="note warn">
+            <span class="lbl">A shared name is a suggestion, not a fact</span>
+            <em>Grace Kennedy Remittance</em> and <em>Grace Kennedy Foods</em> normalise to the same key and are different companies. Confirming that merge overstates one customer and makes the other disappear. When they are genuinely different, press <strong>Not the same</strong>. That decision is recorded and the matcher will not re-merge them.
+          </div>
+          <p>Merging changes how customers are grouped for reporting. It moves no kWh: account totals, rate-class volumes and the forecast are untouched.</p>
+        </div>
+      </div>
+
+      <div class="stage" id="s3">
+        <div class="idx">03</div>
+        <div>
+          <h3>Set the driver assumptions</h3>
+          <div class="tab">Macro Assumptions</div>
+          <p>Macro, weather, seasonality, migration, normalisation and per-industry rates, by month. Every non-zero change demands a reason code and a justification before it saves, and lands in the Adjustment Log.</p>
+          <ol class="acts">
+            <li>Set the rate in the month cell. The <strong>Implied FY</strong> column shows what it compounds to over twelve months.</li>
+            <li>Read the before → after line in the reason dialog. That is the annual effect of the change you are about to make.</li>
+            <li>Record why. The justification is the only thing that survives to the next person.</li>
+          </ol>
+          <div class="note stop">
+            <span class="lbl">A rate is not an outcome</span>
+            The Implied FY figure is what <em>this driver alone</em> contributes. It is not the volume growth that comes out of the engine, because seasonality, weather, solar and normalisation all apply on top, against a rolling base. A driver set to a true 3.5%/yr rate delivered <strong>1.37%</strong> RT10 volume growth. Decide which of the two you are setting, and record it in the <code>basis</code> field: <code>rate</code> if you are setting the rate and taking whatever falls out, <code>volume_target</code> if you back-solved to hit a number.
+          </div>
+          <p>A rate-class row overrides the segment row: <code>macro / RT10</code> beats <code>macro / residential</code> for RT10 accounts.</p>
+        </div>
+      </div>
+
+      <div class="stage" id="s4">
+        <div class="idx">04</div>
+        <div>
+          <h3>Enter account-level moves</h3>
+          <div class="tab">Driver Forecast</div>
+          <p>Defections, expansions, shutdowns and renewals for named accounts, mostly entered by KAMs against their own customers.</p>
+          <ol class="acts">
+            <li>Find the account and enter the percentage move for the months it applies to.</li>
+            <li>Pick the reason code that matches: confirmed defection, possible defection, operational disruption, expansion, renewal.</li>
+            <li>Check the effect on the account's own line before leaving the row.</li>
+          </ol>
+          <div class="note warn">
+            <span class="lbl">One month does not make a permanent change</span>
+            The base is a rolling three-month average, so a single month's adjustment washes out almost entirely by the next quarter. A sustained change needs <strong>three consecutive months</strong> at the level you want. A plant shutdown at &minus;80% for one month lands as roughly &minus;35% on the year; the same figure across three months holds at &minus;84%.
+          </div>
+        </div>
+      </div>
+
+      <div class="stage" id="s5">
+        <div class="idx">05</div>
+        <div>
+          <h3>Add new customers</h3>
+          <div class="tab">Driver Forecast → New Customer</div>
+          <p>Load that does not exist yet and therefore has no history for the engine to grow. Entered as expected kWh from a start month.</p>
+          <ol class="acts">
+            <li>Enter the account, expected monthly kWh and the month it energises.</li>
+            <li>Put the start month in the year the load actually begins: a customer starting in January belongs in that year, not carried in the prior one.</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="stage" id="s6">
+        <div class="idx">06</div>
+        <div>
+          <h3>Add overlays for what the engine cannot express</h3>
+          <div class="tab">Forecast Overlays</div>
+          <p>Rate-class and month adjustments in kWh, applied <em>after</em> the account walk. Use one when a movement belongs to no single account, such as a storm true-up, a reconciliation to a submitted total.</p>
+          <ol class="acts">
+            <li>Give it a label. That label is how the movement appears in the budget and the exec summary.</li>
+            <li>Enter the months. The running total updates as you type.</li>
+            <li>Write the rationale. It is mandatory, because an overlay exists precisely where the engine's own logic does not reach.</li>
+          </ol>
+          <div class="note">
+            <span class="lbl">Prefer an account or a driver</span>
+            An overlay is untraceable by design. It belongs to nothing. If the movement can be expressed as an account adjustment or a driver rate, do it there instead, where it is visible in the walk.
+          </div>
+        </div>
+      </div>
+
+      <div class="stage" id="s7">
+        <div class="idx">07</div>
+        <div>
+          <h3>Phase the losses</h3>
+          <div class="tab">Macro Assumptions → Monthly Loss Phasing</div>
+          <p>The <em>rolling 12-month</em> rate is what gets reported. The losses team phases against the <em>monthly</em> rate underneath it. This works the second out of the first.</p>
+          <ol class="acts">
+            <li>Enter the twelve rolling targets in the grid above, December last, because December's window is the calendar year, so it is the annual rate.</li>
+            <li>Pick the year range and press <strong>Solve</strong>. Both methods run; the comparison table shows monthly range, annual close and worst rolling miss for each.</li>
+            <li><strong>Read the exact solve first, as a test.</strong> If every month lands inside 21–31%, the targets are consistent with the sales phasing. If one does not, they are not, and no amount of solving will fix that.</li>
+            <li>Switch to <strong>Smoothed</strong> for the series to hand the losses team. It holds the annual close exactly and gives up a fraction of a point on the intermediate rolling months.</li>
+            <li>Save. The method is recorded with the values, because the numbers alone do not reveal which produced them.</li>
+          </ol>
+          <div class="note warn">
+            <span class="lbl">An impossible month is a verdict on the targets</span>
+            Inverting near-flat rolling targets against seasonal sales forces the monthly losses to swing to compensate, worst at January where the window drops a December and picks up a January. The FY2027–28 targets originally produced a <strong>0.57% January</strong>, and the distortion compounded year on year: January read 15.89% in the first year and 0.57% in the second, because each year's solve stands on the prior year's series. A third year would have been worse again. The arithmetic was exact throughout; the targets were wrong. They have since been rebuilt and now invert cleanly at 22.7–30.8%.
+          </div>
+          <div class="note">
+            <span class="lbl">Three methods, and they are not interchangeable</span>
+            <strong>Exact</strong> and <strong>smoothed</strong> both take the rolling targets as given and differ only in how faithfully they reproduce them. <strong>Derived</strong> does not take them as given at all. The monthly path is built forwards from observed seasonality with the level solved to close the year, and the rolling series is computed from that. Which one produced a series is recorded in <code>method</code>.
+          </div>
+        </div>
+      </div>
+
+      <div class="stage" id="s8">
+        <div class="idx">08</div>
+        <div>
+          <h3>Review before you commit</h3>
+          <div class="tab">Driver Forecast &middot; 3-Year Comparison</div>
+          <p>Everything above is now in the numbers. This is where you find out whether it is right.</p>
+          <ol class="acts">
+            <li>Walk the Driver Forecast tab by rate class. Each month decomposes into base and every driver, so an odd total can be traced to the term that caused it.</li>
+            <li>Check for clamped months. A driver sum below &minus;100% is floored so a positive base cannot go negative; a clamped month means the assumptions stacked past total elimination.</li>
+            <li>Open 3-Year Comparison and read the year-on-year movements. Anything you cannot explain in a sentence is not ready to commit.</li>
+            <li>Generate the <strong>Exec Summary</strong> from the years selected there, and it re-derives from the live engine, so it moves when assumptions move.</li>
+            <li>Build the pack in <strong>Report Builder</strong>.</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="stage" id="s9">
+        <div class="idx">09</div>
+        <div>
+          <h3>Commit and publish</h3>
+          <div class="tab">3-Year Comparison → Commit as Budget</div>
+          <p>Freezes the selected years at account and cohort grain. Database triggers make a locked version immutable. This is the point of no return.</p>
+          <ol class="acts">
+            <li>Confirm commercial detail has loaded. The button blocks if it has not.</li>
+            <li>Commit. The version is written with its full driver decomposition, overlays as their own rows, and an assumption snapshot.</li>
+            <li>Push to the Finance Hub when the budget is agreed.</li>
+          </ol>
+          <div class="note">
+            <span class="lbl">Verify the write</span>
+            Check the version appears with a row count before you tell anyone it is committed. This function silently did nothing for a period, see <a href="#traps">Known traps</a>.
+          </div>
+        </div>
+      </div>
+
+      <h2 id="engine">How the engine works</h2>
+      <p>Four mechanics explain most surprising results.</p>
+
+      <div class="formula">
+        <code><span class="cm">// every forecast month, per account or cohort</span>
+total = base × (1 + Σ drivers ⁄ 100) + manual_kwh
+
+base    = trailing 3-month rolling average
+drivers = macro + weather + seasonality + solar
+        + normalisation + migration + operational
+Σ        is floored at −100%</code>
+      </div>
+
+      <p><strong>The base rolls.</strong> Each forecast month feeds the next month's base, so effects compound and single-month adjustments decay. This is why a permanent change needs three consecutive months.</p>
+
+      <p><strong>Years cascade.</strong> FY2027 needs October–December 2026, so computing a future year computes every year before it. Change a 2026 assumption and 2028 moves.</p>
+
+      <p><strong>Carry-in preserves level shifts.</strong> The prior year's October–December tail carries forward, deseasonalised for the residential classes. That tail is what keeps a confirmed mid-year defection <em>gone</em> in the following year rather than averaging it back to life.</p>
+
+      <p><strong>Rate class beats segment.</strong> A driver keyed to a rate class overrides the segment-level row for accounts in that class.</p>
+
+      <h2 id="traps">Known traps</h2>
+      <p>Each of these has already produced a wrong number in this forecast. They are listed because they are not obvious, not because they are hypothetical.</p>
+
+      <div class="trap">
+        <h3>Reading a monthly rate as an annual one</h3>
+        <p>Driver rates apply monthly against a rolling base and compound. <code>0.676%/month</code> is <strong>8.42%/year</strong>, not 0.68%.</p>
+        <p class="happened"><b>What happened</b>An RT10 assumption was read as roughly 8% growth and flagged as a 30 GWh error. It was not. The value had been <em>solved</em> to deliver 2.8% volume growth. The correction to the correction cost more time than the original. The Implied FY column exists because of this.</p>
+      </div>
+
+      <div class="trap">
+        <h3>Averaging two regimes into one trend</h3>
+        <p>Before concluding a decline is structural, split the window. A damaged period and a recovered period averaged together produce a trend that describes neither.</p>
+        <p class="happened"><b>What happened</b>Solar export per net biller looked 21.3% down year on year and was nearly written into the report as erosion. Split by period it was &minus;50.6% in January–February and &minus;4.7% by May–July: hurricane damage, already recovered. Because the base is the trailing three months, the recovery was <em>already in the forecast</em>. Booking it again would have double-counted.</p>
+      </div>
+
+      <div class="trap">
+        <h3>Confusing a level shift with a recurring rate</h3>
+        <p>A customer that leaves is a permanent step down. A growth rate is a slope. Entering one as the other resurrects load that is gone or compounds a one-off forever.</p>
+        <p class="happened"><b>What happened</b>A carry-in change averaged a confirmed 100% self-generating industrial customer back into the following year, restoring load that no longer existed. Caught only because someone asked why the impact was missing.</p>
+      </div>
+
+      <div class="trap">
+        <h3>Trusting a screen that has silently signed out</h3>
+        <p>An expired session returns <strong>zero rows and no error</strong>. Every total reads zero, which looks like a real number.</p>
+        <p class="happened"><b>What happened</b>A forecast rendered entirely from zeros. A blocking banner now appears when this is detected, and idle sign-out is four hours, but idle sign-out clears the shared platform cookie, so an idle tab on any platform app signs you out of all of them.</p>
+      </div>
+
+      <div class="trap">
+        <h3>Two people writing the same assumption</h3>
+        <p>Nothing locks an assumption while you edit it. The last write wins, silently.</p>
+        <p class="happened"><b>What happened</b>Two sessions re-solved the same accounts against each other for a full day, each reacting to changes the other had made without knowing. Resolved by splitting ownership explicitly, see below.</p>
+      </div>
+
+      <div class="trap">
+        <h3>Reading a round trip as confirmation</h3>
+        <p>If a monthly series was <em>derived</em>, built forwards from observed seasonality, with the rolling targets computed from it, then inverting those targets returns the same monthly path. Exact match, in band, both years agreeing, no warnings. It confirms nothing; it is the round trip closing.</p>
+        <p>This is more dangerous than a solve that fails. An impossible month announces itself. A derived series inverting perfectly looks exactly like validation, and nothing about it appears wrong.</p>
+        <p class="happened"><b>What to do</b>The solver flags a year whose stored series is marked <code>derived</code>. Before treating any agreement as independent, check whether the two things you are comparing share an origin. A second opinion has to come from a different input, not a different direction through the same one.</p>
+      </div>
+
+      <div class="trap">
+        <h3>Repeating a claim you did not check</h3>
+        <p>Findings arrive secondhand, from another analyst, another session, an old note. Repeating one without testing it spreads a wrong constraint faster than the original error ever would.</p>
+        <p class="happened"><b>What happened</b>Two claims about the parish data were passed along and stated as fact: that reloading the source would destroy the prepaid and net-export split, and that parish coverage stopped in April. Both were wrong. The source is <em>account-level</em> detail with no bucket column at all. The buckets are derived during aggregation, so re-aggregating reproduces every one of them and adds parish. And the monthly files run to July with no gap. Checking took two minutes; the claims had already been repeated into a plan.</p>
+      </div>
+
+      <div class="trap">
+        <h3>Assuming a button did something</h3>
+        <p>A guard clause inverted the wrong way made <strong>Commit as Budget</strong> return immediately every time it was pressed. No error, no toast, nothing written, for as long as the feature had existed.</p>
+        <p class="happened"><b>What happened</b>The budget-lock pipeline was built, shipped and believed to be working. The database showed the last write predated it by two days. Confirm a write landed; do not infer it from the absence of an error.</p>
+      </div>
+
+      <h2 id="owns">Where everything lives</h2>
+      <p>What each table holds and whether it can be maintained in the app.</p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Table</th><th>Holds</th><th>Edit in</th></tr></thead>
+          <tbody>
+            <tr><td><code>jps_actuals</code></td><td>Billed sales by account, month, rate class, bucket</td><td><span class="own app">Admin upload</span></td></tr>
+            <tr><td><code>jps_macro_assumptions</code></td><td>Driver rates, seasonality, normalisation, rolling loss</td><td><span class="own app">Macro Assumptions</span></td></tr>
+            <tr><td><code>jps_operational_adjustments</code></td><td>Account-level moves entered by KAMs</td><td><span class="own app">Driver Forecast</span></td></tr>
+            <tr><td><code>jps_forecast_new_customers</code></td><td>Load with no history</td><td><span class="own app">New Customer</span></td></tr>
+            <tr><td><code>jps_forecast_overlays</code></td><td>Rate-class kWh the engine cannot express</td><td><span class="own app">Forecast Overlays</span></td></tr>
+            <tr><td><code>jps_customer_names</code></td><td>Billing spelling → standardised name</td><td><span class="own app">Data Quality</span></td></tr>
+            <tr><td><code>jps_net_billers</code></td><td>Monthly net-biller count and export</td><td><span class="own app">Data Quality</span></td></tr>
+            <tr><td><code>jps_kam</code></td><td>Account → key account manager</td><td><span class="own app">Admin</span></td></tr>
+            <tr><td><code>jps_forecast</code> / <code>_versions</code></td><td>Committed budget, immutable once locked</td><td><span class="own app">Commit as Budget</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>Every assumption carries a <code>basis</code>, and it matters more than the number. <code>rate</code> means someone set the rate and accepted whatever outcome fell out. <code>volume_target</code> means it was back-solved to hit a stated volume, with <code>basis_target</code> recording what that volume was. Without it the value is not reproducible, because a figure like <code>4.664339</code> means nothing on its own. <code>carried</code> means it came from measured history and nobody chose it; labelling those as <code>rate</code> would imply a judgement that was never made.</p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Basis</th><th>Driver assumptions</th><th>Account adjustments</th></tr></thead>
+          <tbody>
+            <tr><td><code>volume_target</code></td><td class="num">48</td><td class="num">9</td></tr>
+            <tr><td><code>rate</code></td><td class="num">42</td><td class="num">—</td></tr>
+            <tr><td><code>carried</code></td><td class="num">463</td><td class="num">84</td></tr>
+            <tr><td><code>null</code>, measured or withdrawn</td><td class="num">578</td><td class="num">94</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>A solved value read as an authored one is the single most common way this forecast has been misread. Check the basis before you change a number.</p>
+
+      <p>A solved <em>series</em> carries a second field, <code>method</code>, because basis and method answer different questions. Basis says it was back-solved; method says which solve: <code>exact</code>, <code>smoothed</code> or <code>derived</code>. Two of those take the rolling targets as given and one does not, and nothing in the values themselves tells them apart.</p>
+
+      <div class="note warn">
+        <span class="lbl">When more than one person is working</span>
+        Agree who owns the assumption tables before starting, and announce every write to them. A solved account adjustment looks arbitrary on its face. One shutdown runs from &minus;50% to +65% across nine months and is only coherent as a solve. Editing those values without knowing they were solved breaks the account.
+      </div>
+
+      <hr class="end">
+      <p class="colophon">
+        Sales Platform &middot; sales.jmfinancelab.com<br>
+        Written from the FY2026–FY2028 cycle. The traps are drawn from errors actually made during it, including several of mine. Figures on this page are a snapshot, so read live numbers from the app.
+      </p>
+
+    </main>
+  </div>
+</div>
