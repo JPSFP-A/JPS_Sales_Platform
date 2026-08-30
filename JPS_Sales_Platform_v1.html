@@ -11540,16 +11540,39 @@ function renderMacroAssumptions(){
       }
       return`<td style="padding:3px;text-align:center;border-left:0.5px solid var(--border)"><input value="${v}" onchange="macroSaveCell('${r.type}',${r.seg?`'${esc(r.seg).replace(/'/g,"\\'")}'`:'null'},${year},${m},this.value)" style="width:48px;height:24px;padding:0 4px;text-align:right;font-size:10px"></td>`;
     }).join('');
-    body+=`<tr><td style="padding:5px 8px${r.type==='industry'?' 5px 20px':''};color:${r.type==='industry'?'var(--text3)':'var(--text)'}">${esc(r.label)}</td>${cells}</tr>`;
+    const _ia=_macroImpliedAnnual(r.type,r.seg,year);
+    const _iaCell=`<td style="padding:3px 8px;text-align:right;font-size:11px;border-left:0.5px solid var(--border-strong);color:${_ia==null?'var(--text3)':'var(--text2)'}" title="${_ia==null?'Not meaningful annualised — monthly shape or a level factor':'What this driver alone contributes over 12 months, compounded. NOT the volume growth out of the chain.'}">${_macroFmtAnnual(_ia)}</td>`;
+    body+=`<tr><td style="padding:5px 8px${r.type==='industry'?' 5px 20px':''};color:${r.type==='industry'?'var(--text3)':'var(--text)'}">${esc(r.label)}</td>${cells}${_iaCell}</tr>`;
   });
-  wrap.innerHTML=`<table style="width:988px;border-collapse:collapse;font-size:12px;table-layout:fixed">
-    <colgroup><col style="width:220px">${months.map(()=>'<col style="width:64px">').join('')}</colgroup>
-    <thead><tr style="border-bottom:0.5px solid var(--border-strong)"><th style="text-align:left;padding:6px 8px;font-weight:500;color:var(--text3)">Driver</th>${head}</tr></thead>
+  wrap.innerHTML=`<table style="width:1076px;border-collapse:collapse;font-size:12px;table-layout:fixed">
+    <colgroup><col style="width:220px">${months.map(()=>'<col style="width:64px">').join('')}<col style="width:88px"></colgroup>
+    <thead><tr style="border-bottom:0.5px solid var(--border-strong)"><th style="text-align:left;padding:6px 8px;font-weight:500;color:var(--text3)">Driver</th>${head}<th style="text-align:right;padding:6px 8px;font-weight:500;color:var(--text3);border-left:0.5px solid var(--border-strong)" title="The driver's own 12-month compounded contribution — not the volume growth the chain produces">Implied FY</th></tr></thead>
     <tbody>${body}</tbody>
   </table>`;
 }
 function goToMacroAssumptions(){sw('macro',document.querySelector('.ni[onclick^="sw(\'macro\'"]'));}
 const MACRO_REASON_CODES=['Rate case update','Economic outlook revision','Weather forecast update','Seasonal pattern revision','Industry-specific event','Correction','Other'];
+
+// Macro, industry and migration rates are applied month-on-month against a rolling
+// base, so they COMPOUND -- 0.676%/mo is 8.4%/yr, not 0.68%. Nothing on this screen
+// used to say so, and the gap caused a live misreading of the RT10 assumption in both
+// directions: 0.676%/mo was read as ~8% growth (it delivered 2.8%), and a true 3.5%/yr
+// rate was expected to deliver 3.5% growth (it delivers 1.37%). The driver is one term
+// among weather, bucket seasonality, solar and normalisation, so the implied annual
+// below is what the DRIVER contributes, not the volume growth that comes out of the
+// chain. Weather and seasonality are monthly shape that nets to ~0 over a year, and
+// normalisation is a level factor, so neither is meaningful annualised -- shown as em-dash.
+const _MACRO_COMPOUNDS=new Set(['macro','industry','migration']);
+function _macroImpliedAnnual(type,seg,year,overrideMonth,overridePct){
+  if(!_MACRO_COMPOUNDS.has(type))return null;
+  let f=1;
+  for(let m=1;m<=12;m++){
+    const v=(m===overrideMonth&&overridePct!=null)?overridePct:(_dfcMacroLookup(type,seg,year,m)||0);
+    f*=(1+v/100);
+  }
+  return (f-1)*100;
+}
+function _macroFmtAnnual(v){return v==null?'&mdash;':(v>=0?'+':'')+v.toFixed(2)+'%';}
 let _macroPendingEdit=null;
 function macroSaveCell(type,seg,year,month,val){
   const pct=parseFloat(val)||0;
@@ -11561,6 +11584,18 @@ function macroSaveCell(type,seg,year,month,val){
     `<div style="font-size:12px;color:var(--text2);margin-bottom:12px">
       <strong>${esc(segLabel)}</strong>, ${MONTHS_SHORT[month-1]} ${year}, is changing to <strong>${pct>0?'+':''}${pct}%</strong>. Every non-zero change needs a reason before it saves.
     </div>
+    ${(()=>{
+      // Show the compounded annual effect BEFORE the save. A monthly rate reads as a
+      // small number and lands as a large one; not seeing that is what let an RT10
+      // assumption sit at 8.4%/yr while looking like 0.68%.
+      const was=_macroImpliedAnnual(type,seg,year);
+      if(was==null)return '';
+      const now=_macroImpliedAnnual(type,seg,year,month,pct);
+      return`<div style="font-size:11px;color:var(--text2);background:rgba(0,194,168,.07);border-left:3px solid var(--teal);border-radius:4px;padding:8px 12px;margin-bottom:12px">
+        Compounded over 12 months this driver goes <strong>${_macroFmtAnnual(was)}</strong> &rarr; <strong>${_macroFmtAnnual(now)}</strong> for FY${year}.
+        That is the driver's own contribution, not the volume growth out of the chain &mdash; seasonality, weather, solar and normalisation all apply on top.
+      </div>`;
+    })()}
     <label style="font-size:10px;color:var(--text3);text-transform:uppercase">Reason code</label>
     <select id="macro_reason_code" class="psel" style="width:100%;margin:4px 0 10px">
       ${MACRO_REASON_CODES.map(r=>`<option value="${r}">${r}</option>`).join('')}
