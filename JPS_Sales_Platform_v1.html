@@ -2399,6 +2399,22 @@ order by ordinal_position;</pre>
         </div>
         <div id="macro_table" style="overflow-x:auto"></div>
       </div>
+
+      <div class="card" style="margin-top:14px">
+        <div class="ch">Monthly Loss Phasing
+          <div style="display:flex;gap:6px;align-items:center">
+            <select id="loss_from" class="psel" style="font-size:11px"></select>
+            <span style="font-size:11px;color:var(--text3)">to</span>
+            <select id="loss_to" class="psel" style="font-size:11px"></select>
+            <button class="btn btn-t" onclick="runLossSolver()">Solve</button>
+            <button class="btn btn-o" onclick="exportLossPhasing()">&#11015; CSV</button>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:10px">
+          The rows above are the <strong>rolling 12-month</strong> loss rate &mdash; what gets reported. This works out the <strong>monthly</strong> rate that produces them, which is what the losses team needs to phase against. December's rolling window is exactly the calendar year, so each year closes on its December target by construction, not by approximation.
+        </div>
+        <div id="loss_solver_out"></div>
+      </div>
     </div>
 
     <!-- === FORECAST OVERLAYS === -->
@@ -11523,6 +11539,13 @@ function renderMacroAssumptions(){
   if(yrSel&&!yrSel.options.length){
     for(let y=FC_BUD_YEAR;y<=FC_BUD_YEAR+4;y++)yrSel.innerHTML+=`<option value="${y}">${y}</option>`;
   }
+  const lf=document.getElementById('loss_from'),lt=document.getElementById('loss_to');
+  if(lf&&lt&&!lf.options.length){
+    for(let y=FC_BUD_YEAR;y<=FC_BUD_YEAR+4;y++){
+      lf.innerHTML+=`<option value="${y}"${y===FC_BUD_YEAR+1?' selected':''}>FY${y}</option>`;
+      lt.innerHTML+=`<option value="${y}"${y===FC_BUD_YEAR+2?' selected':''}>FY${y}</option>`;
+    }
+  }
   const year=parseInt(yrSel?.value)||FC_BUD_YEAR;
   const wrap=document.getElementById('macro_table');if(!wrap)return;
   // Actual/locked months use the real actual value, not the driver math — a macro
@@ -11569,6 +11592,199 @@ function renderMacroAssumptions(){
   </table>`;
 }
 function goToMacroAssumptions(){sw('macro',document.querySelector('.ni[onclick^="sw(\'macro\'"]'));}
+
+/* ==========================================
+   MONTHLY LOSS PHASING — inverts the rolling 12-month loss rate
+
+   jps_macro_assumptions.loss_rolling holds the ROLLING 12-month system loss rate,
+   because that is the reported measure. Phasing work needs the MONTHLY rate that
+   produces it, and until now that inversion was done offline in Python and typed
+   back in -- so the monthly series existed in a spreadsheet and nowhere the app
+   could see.
+
+   The inversion is exact, not a fit. Losses and sales relate as
+       L(m) = S(m) * p(m) / (1 - p(m))          p = loss share of net generation
+   and the rolling rate at month t is the window ratio
+       R(t) = sum(L over window) / (sum(S over window) + sum(L over window))
+   so the window's total losses are pinned:
+       W(t) = R(t) * sum(S over window) / (1 - R(t))
+   The window at (Y,t) covers months t+1..12 of Y-1 and 1..t of Y. With the prior
+   year's monthly losses known, everything before month 1 of Y is a constant, so
+   the cumulative losses to month t are determined outright and each month falls
+   out by difference. Twelve equations, twelve unknowns, solved by forward
+   substitution -- no least squares and no regularisation.
+
+   The consequence that matters: December's window IS the calendar year, so
+   solving month 12 to its target makes the year close on that target EXACTLY.
+   "It didn't come back to 27.1" cannot happen by construction here; if a year
+   misses, the input is inconsistent and the check below says so rather than
+   quietly returning a fitted approximation.
+
+   The one assumption is the seed. The first solved year's window reaches back
+   into the year before it, whose monthly losses are not known, so they are
+   seeded flat at that year's own annual rate. The seed is disclosed in the
+   output. It only touches the first solved year -- by the second year the
+   window no longer reaches it and it has washed out entirely.
+========================================== */
+const _LOSS_PCT_BAND=[0.05,0.60]; // outside this a monthly rate is not credible
+
+function _lossRollingTarget(year,month){
+  const v=_dfcMacroLookup('loss_rolling',null,year,month);
+  return (v==null||v===0)?null:v/100; // 0 means "not set", not "no losses"
+}
+
+function _lossMonthlySales(year){
+  const out=new Array(13).fill(0);
+  if(year<FC_BUD_YEAR){
+    _sbAllActuals().forEach(r=>{
+      if(Number(r.year)!==year)return;
+      const rc=r.rate_class;
+      if(rc==='EV'||!RC_DISPLAY_ORDER.includes(rc))return;
+      const m=Number(r.month);
+      if(m>=1&&m<=12)out[m]+=Number(r.kwh)||0;
+    });
+  }else{
+    const d=_frCollectData(year);
+    RC_DISPLAY_ORDER.forEach(rc=>{
+      for(let m=1;m<=12;m++)out[m]+=(d.rcMonth[rc]&&d.rcMonth[rc][m])||0;
+    });
+  }
+  return out;
+}
+
+function _lossSolve(startYear,endYear){
+  const warnings=[],sales={},L={};
+  for(let y=startYear-1;y<=endYear;y++)sales[y]=_lossMonthlySales(y);
+
+  const seedYear=startYear-1;
+  const seedPct=_lossRollingTarget(seedYear,12);
+  L[seedYear]=new Array(13).fill(0);
+  if(seedPct==null){
+    warnings.push(`No annual loss rate on record for FY${seedYear}, so the trailing window before ${startYear} is seeded at zero. FY${startYear}'s monthly split will be wrong; later years are unaffected.`);
+  }else{
+    for(let m=1;m<=12;m++)L[seedYear][m]=sales[seedYear][m]*seedPct/(1-seedPct);
+  }
+  if(seedPct!=null&&sales[seedYear].reduce((a,b)=>a+b,0)<=0)
+    warnings.push(`No sales data for FY${seedYear}, so the seed contributes nothing and FY${startYear}'s monthly split will be wrong.`);
+
+  const years=[];
+  for(let y=startYear;y<=endYear;y++){
+    L[y]=new Array(13).fill(0);
+    const months=[];
+    let cumPrev=0,missing=false;
+    for(let t=1;t<=12;t++){
+      const tgt=_lossRollingTarget(y,t);
+      if(tgt==null){missing=true;break;}
+      let wS=0,tailPrior=0;
+      for(let m=t+1;m<=12;m++){wS+=sales[y-1][m];tailPrior+=L[y-1][m];}
+      for(let m=1;m<=t;m++)wS+=sales[y][m];
+      const cum=(tgt*wS/(1-tgt))-tailPrior;
+      const lm=cum-cumPrev;
+      cumPrev=cum;
+      L[y][t]=lm;
+      const sm=sales[y][t];
+      const pct=(sm+lm)>0?lm/(sm+lm):null;
+      if(lm<0)warnings.push(`FY${y} ${MONTHS_SHORT[t-1]} solves to a negative loss (${(lm/1e6).toFixed(2)} GWh). The rolling targets around it are not reachable with this sales profile.`);
+      else if(pct!=null&&(pct<_LOSS_PCT_BAND[0]||pct>_LOSS_PCT_BAND[1]))
+        warnings.push(`FY${y} ${MONTHS_SHORT[t-1]} solves to ${(pct*100).toFixed(1)}%, outside the ${_LOSS_PCT_BAND[0]*100}–${_LOSS_PCT_BAND[1]*100}% band. Check the rolling target either side of it.`);
+      months.push({m:t,sales:sm,loss:lm,pct,target:tgt});
+    }
+    if(missing){
+      warnings.push(`FY${y} has no complete set of rolling targets — skipped. Fill the "Rolling 12-mth system loss %" row above for all 12 months.`);
+      continue;
+    }
+    // Independent check: rebuild the rolling series FROM the solved monthly losses
+    // and compare against target. Exact by construction, so any drift here is a bug
+    // in the inversion, not a fitting residual -- surface it rather than trust it.
+    months.forEach(r=>{
+      let wS=0,wL=0;
+      for(let m=r.m+1;m<=12;m++){wS+=sales[y-1][m];wL+=L[y-1][m];}
+      for(let m=1;m<=r.m;m++){wS+=sales[y][m];wL+=L[y][m];}
+      r.rollBack=(wS+wL)>0?wL/(wS+wL):null;
+      r.rollDiff=(r.rollBack==null)?null:(r.rollBack-r.target)*100;
+    });
+    const yS=months.reduce((s,r)=>s+r.sales,0),yL=months.reduce((s,r)=>s+r.loss,0);
+    const annual=(yS+yL)>0?yL/(yS+yL):null;
+    const annualTarget=_lossRollingTarget(y,12);
+    years.push({year:y,months,sales:yS,losses:yL,netgen:yS+yL,annual,annualTarget,
+                annualDiff:(annual==null||annualTarget==null)?null:(annual-annualTarget)*100});
+  }
+  return{years,seedYear,seedPct,warnings};
+}
+
+let _lossLast=null;
+function runLossSolver(){
+  const a=parseInt(document.getElementById('loss_from')?.value);
+  const b=parseInt(document.getElementById('loss_to')?.value);
+  const out=document.getElementById('loss_solver_out');
+  if(!out)return;
+  if(isNaN(a)||isNaN(b)||b<a){out.innerHTML='<div style="color:var(--amber);font-size:12px;padding:10px 0">Pick a valid year range.</div>';return;}
+  if(!_commDetailLoaded){
+    loadCommercialDetail().catch(e=>console.warn('loadCommercialDetail:',e));
+    out.innerHTML='<div style="color:var(--amber);font-size:12px;padding:10px 0">Commercial detail is still loading — RT40, RT50 and RT70 would read zero and every loss rate would come out wrong. Try again in a moment.</div>';
+    return;
+  }
+  const res=_lossSolve(a,b);
+  _lossLast=res;
+  const g=v=>(v/1e6).toFixed(1);
+  let html='';
+  if(res.seedPct!=null)
+    html+=`<div style="font-size:11px;color:var(--text3);margin-bottom:10px">Trailing window before FY${res.seedYear+1} seeded flat at FY${res.seedYear}'s annual rate of ${(res.seedPct*100).toFixed(2)}%. Affects FY${res.seedYear+1}'s monthly split only — it has washed out by FY${res.seedYear+2}.</div>`;
+  res.warnings.forEach(w=>{
+    html+=`<div style="font-size:11px;color:var(--amber);background:rgba(245,166,35,.10);border-left:3px solid var(--amber);border-radius:4px;padding:7px 11px;margin-bottom:7px">${esc(w)}</div>`;
+  });
+  res.years.forEach(y=>{
+    const ok=y.annualDiff!=null&&Math.abs(y.annualDiff)<0.005;
+    html+=`<div style="margin-bottom:16px">
+      <div style="font-size:12px;font-weight:600;margin-bottom:6px">FY${y.year}
+        <span style="font-weight:400;color:var(--text3);margin-left:8px">sales ${g(y.sales)} · losses ${g(y.losses)} · net gen ${g(y.netgen)} GWh</span>
+        <span style="margin-left:8px;color:${ok?'var(--teal)':'var(--red)'}">closes ${(y.annual*100).toFixed(2)}% vs target ${(y.annualTarget*100).toFixed(2)}%${ok?' ✓':' ✗ off by '+y.annualDiff.toFixed(3)+'pp'}</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="border-bottom:0.5px solid var(--border-strong);color:var(--text3)">
+          <th style="text-align:left;padding:4px 6px;font-weight:500">Month</th>
+          <th style="text-align:right;padding:4px 6px;font-weight:500">Sales GWh</th>
+          <th style="text-align:right;padding:4px 6px;font-weight:500">Losses GWh</th>
+          <th style="text-align:right;padding:4px 6px;font-weight:500">Net gen GWh</th>
+          <th style="text-align:right;padding:4px 6px;font-weight:500">Monthly loss %</th>
+          <th style="text-align:right;padding:4px 6px;font-weight:500">Rolling target</th>
+          <th style="text-align:right;padding:4px 6px;font-weight:500">Rebuilt rolling</th>
+        </tr></thead><tbody>
+        ${y.months.map(r=>{
+          const bad=r.loss<0||(r.pct!=null&&(r.pct<_LOSS_PCT_BAND[0]||r.pct>_LOSS_PCT_BAND[1]));
+          const drift=r.rollDiff==null?null:Math.abs(r.rollDiff);
+          return`<tr style="border-bottom:0.5px solid var(--border)">
+            <td style="padding:4px 6px">${MONTHS_SHORT[r.m-1]}</td>
+            <td style="padding:4px 6px;text-align:right;color:var(--text2)">${g(r.sales)}</td>
+            <td style="padding:4px 6px;text-align:right;color:${r.loss<0?'var(--red)':'var(--text2)'}">${g(r.loss)}</td>
+            <td style="padding:4px 6px;text-align:right;color:var(--text2)">${g(r.sales+r.loss)}</td>
+            <td style="padding:4px 6px;text-align:right;font-weight:600;color:${bad?'var(--red)':'var(--text)'}">${r.pct==null?'—':(r.pct*100).toFixed(2)+'%'}</td>
+            <td style="padding:4px 6px;text-align:right;color:var(--text3)">${(r.target*100).toFixed(2)}%</td>
+            <td style="padding:4px 6px;text-align:right;color:${drift!=null&&drift<0.005?'var(--teal)':'var(--red)'}">${r.rollBack==null?'—':(r.rollBack*100).toFixed(2)+'%'}</td>
+          </tr>`;}).join('')}
+      </tbody></table></div>`;
+  });
+  if(res.years.length)
+    html+=`<div style="font-size:11px;color:var(--text3)">"Rebuilt rolling" recomputes the rolling rate from the solved monthly losses. It should equal the target to the last decimal — it is a check on the inversion, not a fit.</div>`;
+  out.innerHTML=html||'<div style="color:var(--text3);font-size:12px">Nothing to solve.</div>';
+}
+
+function exportLossPhasing(){
+  if(!_lossLast||!_lossLast.years.length){toast('Solve first','w');return;}
+  const rows=[['Year','Month','Sales kWh','Losses kWh','Net generation kWh','Monthly loss %','Rolling target %','Rebuilt rolling %']];
+  _lossLast.years.forEach(y=>{
+    y.months.forEach(r=>rows.push([y.year,MONTHS_SHORT[r.m-1],Math.round(r.sales),Math.round(r.loss),
+      Math.round(r.sales+r.loss),r.pct==null?'':(r.pct*100).toFixed(4),(r.target*100).toFixed(2),
+      r.rollBack==null?'':(r.rollBack*100).toFixed(4)]));
+    rows.push([y.year,'FY total',Math.round(y.sales),Math.round(y.losses),Math.round(y.netgen),
+      (y.annual*100).toFixed(4),(y.annualTarget*100).toFixed(2),'']);
+  });
+  const csv=rows.map(r=>r.join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download='loss_phasing.csv';a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
 
 /* ==========================================
    FORECAST OVERLAYS — jps_forecast_overlays
