@@ -18,7 +18,9 @@ _find*_out.txt
 # name — a new report dropped in the root next session must not silently ship.
 JPS_Exec_Summary*.html
 JPS_KAM_Review*.html
+JPS_System_Losses*.html
 JPS_Sales_Forecast_*
+JPS_Forecast_*
 JPS_LE_Sales_Gen_*
 architecture-map.html
 *.xlsx
