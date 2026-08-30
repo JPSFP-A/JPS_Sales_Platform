@@ -49,12 +49,19 @@ print('monthly %.2f-%.2f | rolling %.2f-%.2f | failures %d'
       % (min(fwd), max(fwd), min(rollv), max(rollv), bad))
 assert bad == 0, 'workbook does not reconcile; report not written'
 
-f = lambda v, d=1: format(round(v, d), ',.%df' % d)
+# Half-up, not Python's round(): FY2027 sales land on exactly 3,406.35 GWh, where
+# banker's rounding gives 3,406.3 and the rest of the pack says 3,406.4.
+from decimal import Decimal, ROUND_HALF_UP
+
+
+def f(v, d=1):
+    q = Decimal(str(v)).quantize(Decimal('1e-%d' % d), rounding=ROUND_HALF_UP)
+    return format(q, ',.%df' % d)
 
 # ---------------- monthly table ----------------
 rows = []
 for y in (2026, 2027, 2028):
-    tag = ' &mdash; January to July actual, August to December target' if y == 2026 else ''
+    tag = ', January to July actual and August to December target' if y == 2026 else ''
     rows.append('<tr class="yr"><td class="l" colspan="6"><b>FY%d</b>%s</td></tr>' % (y, tag))
     for m in range(12):
         act = (y == 2026 and m < ACTUAL_THROUGH)
@@ -106,7 +113,7 @@ for r in (26.10, 26.60, 27.10, 27.60, 28.10):
     L = S27 * r / (100 - r)
     d = (S27 + L) - FY[2027][3]
     sens.append('<tr><td class="l">%.2f%%%s</td><td>%s</td><td>%s</td><td class="%s">%s</td></tr>'
-                % (r, ' &mdash; plan' if abs(r - 27.10) < 1e-9 else '', f(L), f(S27 + L),
+                % (r, ' (plan)' if abs(r - 27.10) < 1e-9 else '', f(L), f(S27 + L),
                    'pos' if d > 0.05 else ('neg' if d < -0.05 else ''),
                    '&mdash;' if abs(d) < 0.05 else ('%s%s' % ('+' if d > 0 else '&minus;', f(abs(d))))))
 
@@ -143,7 +150,7 @@ tr:nth-child(even){background:#f7f9fb}
 ul{margin:8px 0 14px;padding-left:20px}li{margin-bottom:6px;line-height:1.45}
 </style></head><body>
 
-<h1>System Losses &mdash; FY2026 to FY2028</h1>
+<h1>System Losses, FY2026 to FY2028</h1>
 <div class="meta">Sales Forecasting &amp; Analysis &middot; 30 August 2026 &middot; Companion to the Executive Summary and Driver Report</div>
 
 <div class="kpi">
@@ -154,7 +161,7 @@ ul{margin:8px 0 14px;padding-left:20px}li{margin-bottom:6px;line-height:1.45}
 </div>
 
 <div class="key">
-<b>The outlook holds losses at 27.10% at each December, so no improvement in loss performance is assumed anywhere in the three years.</b> Losses still grow in absolute terms &mdash; from @l26@ to @l28@ GWh &mdash; because they are carried as a constant share of a growing book. That is a deliberately neutral assumption rather than a forecast of the loss reduction programme. Any recovery below 27.10% is upside to net generation that is not in these numbers.
+<b>The outlook holds losses at 27.10% at each December, so no improvement in loss performance is assumed anywhere in the three years.</b> Losses still grow in absolute terms, from @l26@ to @l28@ GWh, because they are carried as a constant share of a growing book. That is a deliberately neutral assumption rather than a forecast of the loss reduction programme. Any recovery below 27.10% is upside to net generation that is not in these numbers.
 </div>
 
 <h2>Annual Position</h2>
@@ -184,16 +191,16 @@ ul{margin:8px 0 14px;padding-left:20px}li{margin-bottom:6px;line-height:1.45}
 <h2>How the Targets Were Built</h2>
 <p>The FY2027 and FY2028 monthly path is not an assumption laid on top of the forecast. It is solved from three constraints:</p>
 <ul>
-<li><b>Shape</b> comes from billed actuals. The month-to-month pattern is taken from 2024 and 2025, with October to December 2025 excluded &mdash; Hurricane Melissa collapsed net generation in that quarter, November 2025 coming in at 245,234 MWh against a norm near 390,000, and those months are not representative of normal operation.</li>
+<li><b>Shape</b> comes from billed actuals. The month-to-month pattern is taken from 2024 and 2025, with October to December 2025 excluded. Hurricane Melissa collapsed net generation in that quarter, November 2025 coming in at 245,234 MWh against a norm near 390,000, and those months are not representative of normal operation.</li>
 <li><b>Level</b> is solved so each fiscal year closes at 27.10%, matching FY2026.</li>
 <li><b>The rolling series is derived</b> from the monthly path, not imposed on it. This matters: the two are not independent, and setting both invites a contradiction.</li>
 </ul>
 
 <div class="warn">
-<b>This replaced an earlier set of targets that did not survive inspection.</b> The previous FY2027 and FY2028 targets were set as a smooth twelve-month rolling series, independent of sales seasonality. Inverted against the real monthly sales profile they implied a monthly loss rate of 15.9% in January 2027 and <b>0.57% in January 2028</b> &mdash; not credible months, and worsening year on year. The rebuilt path runs @mlo@% to @mhi@%, against 21.84% to 30.96% observed across 2024 and 2025. December is unchanged at 27.10%, so <b>net generation is unaffected by the rebuild</b>. Only the phasing within the year changed.
+<b>This replaced an earlier set of targets that did not survive inspection.</b> The previous FY2027 and FY2028 targets were set as a smooth twelve-month rolling series, independent of sales seasonality. Inverted against the real monthly sales profile they implied a monthly loss rate of 15.9% in January 2027 and <b>0.57% in January 2028</b>, neither of them a credible month, and worsening year on year. The rebuilt path runs @mlo@% to @mhi@%, against 21.84% to 30.96% observed across 2024 and 2025. December is unchanged at 27.10%, so <b>net generation is unaffected by the rebuild</b>. Only the phasing within the year changed.
 </div>
 
-<h2>FY2026 &mdash; Actual Against Target</h2>
+<h2>FY2026 Actual Against Target</h2>
 <p>January to July are billed actuals. August to December are the target of record, submitted with the rolling loss schedule.</p>
 <table>
 <tr><th class="l">FY2026 monthly loss %</th><th>Jan</th><th>Feb</th><th>Mar</th><th>Apr</th><th>May</th><th>Jun</th><th>Jul</th><th>Aug&ndash;Dec</th></tr>
