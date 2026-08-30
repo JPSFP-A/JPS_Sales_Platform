@@ -140,30 +140,30 @@ gap = TARGET_2026 - cur26
 assert abs(gap) < 5e3, 'FY2026 is %.3f GWh, off the submitted 3,281.97 by %.1f MWh' % (cur26/1e6, gap/1e3)
 print('FY2026 ties to the submitted total: %.3f GWh (gap %.1f MWh)' % (cur26/1e6, gap/1e3))
 
-roll = np.array([26.38,26.62,26.81,26.83,26.70,26.71,26.56,26.55,26.58,27.18,27.08,27.10] * 2) / 100.0
-TG, n = 0.2710, 24
-A = np.zeros((24, n)); b = np.zeros(24)
-for k in range(24):
-    t = 12 + k; r = roll[k]
-    b[k] = r * sales[t-11:t+1].sum() / (1 - r)
-    for i in range(t-11, t+1):
-        if i < 12: b[k] -= l26[i]
-        else: A[k, i-12] = sales[i]
-sc = abs(b).mean(); A /= sc; b /= sc
-H = np.zeros((2, n)); hb = np.zeros(2)
-for j, off in enumerate((12, 24)):
-    S = sales[off:off+12].sum()
-    hb[j] = (TG * S / (1 - TG)) / sc
-    for i in range(off, off+12): H[j, i-12] = sales[i] / sc
-D = np.zeros((n, n)); x0 = l26[11] / sales[11]
-for i in range(n):
-    D[i, i] = 1.0
-    if i > 0: D[i, i-1] = -1.0
-d0 = np.zeros(n); d0[0] = x0
-x, *_ = np.linalg.lstsq(np.vstack([A, 1e4*H, 1.0*D]), np.concatenate([b, 1e4*hb, 1.0*d0]), rcond=None)
-full = np.concatenate([np.array(l26), x * sales[12:]])
+# Monthly loss rates come straight from jps_macro_assumptions driver_type='loss_monthly'.
+# They are no longer inverted out of a rolling target: inverting the old near-flat
+# targets against seasonal sales implied a 0.57% January 2028, so the targets are now
+# built FROM a credible monthly path and the rolling series is derived from it.
+# Seasonality from 2024-2025 billed actuals (Oct-Dec 2025 excluded as storm-distorted),
+# level solved so each year closes at 27.10%.
+RATE_M = {
+ 2027: [27.759440,22.784440,29.334440,27.389440,30.719440,26.519440,
+        26.064440,29.039440,25.364440,29.109440,22.869440,26.899440],
+ 2028: [27.759529,22.784529,29.334529,27.389529,30.719529,26.519529,
+        26.064529,29.039529,25.364529,29.109529,22.869529,26.899529],
+}
+full = list(l26)
+for y in (2027, 2028):
+    off = 12 if y == 2027 else 24
+    for m in range(12):
+        r = RATE_M[y][m] / 100.0
+        full.append(sales[off + m] * r / (1 - r))
+full = np.array(full)
 pct = [full[t] / (sales[t] + full[t]) * 100 for t in range(36)]
 rchk = [full[t-11:t+1].sum() / (sales[t-11:t+1].sum() + full[t-11:t+1].sum()) * 100 for t in range(12, 36)]
+for y, off in ((2027, 12), (2028, 24)):
+    S, L = sales[off:off+12].sum(), full[off:off+12].sum()
+    assert abs(L/(S+L)*100 - 27.10) < 0.01, 'FY%d closes at %.4f%%, not 27.10' % (y, L/(S+L)*100)
 ng = [sales[t] + full[t] for t in range(36)]
 
 dst = r'C:\Projects\Sales_Platform\JPS_LE_Sales_Gen_FY2026-28.xlsx'
@@ -287,4 +287,4 @@ for y, off in ((2026,0), (2027,12), (2028,24)):
     print('FY%d: sales %.1f  losses %.1f  netgen %.1f  loss%% %.2f'
           % (y, S/1e6, L/1e6, (S+L)/1e6, L/(S+L)*100))
 print('monthly loss range %.2f to %.2f pct' % (min(pct[12:]), max(pct[12:])))
-print('max rolling deviation %.2f pp' % max(abs(rchk[k]-roll[k]*100) for k in range(24)))
+print('rolling range %.2f to %.2f pct' % (min(rchk), max(rchk)))
