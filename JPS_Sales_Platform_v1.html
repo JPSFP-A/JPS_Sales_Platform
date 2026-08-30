@@ -2408,6 +2408,11 @@ order by ordinal_position;</pre>
             <span style="font-size:11px;color:var(--text3)">to</span>
             <select id="loss_to" class="psel" style="font-size:11px"></select>
             <button class="btn btn-t" onclick="runLossSolver()">Solve</button>
+            <select id="loss_method" class="psel" style="font-size:11px" onchange="setLossMethod()">
+              <option value="exact">Exact inversion</option>
+              <option value="smoothed">Smoothed</option>
+            </select>
+            <button class="btn btn-t" onclick="saveLossMonthly()">&#128190; Save</button>
             <button class="btn btn-o" onclick="exportLossPhasing()">&#11015; CSV</button>
           </div>
         </div>
@@ -11903,7 +11908,10 @@ function exportNetBillers(){
    output. It only touches the first solved year -- by the second year the
    window no longer reaches it and it has washed out entirely.
 ========================================== */
-const _LOSS_PCT_BAND=[0.05,0.60]; // outside this a monthly rate is not credible
+// What a monthly loss rate can credibly be, taken from the last two years of billed
+// actuals (observed 21.84–30.96%) rather than picked. A wider guess would let an
+// implausible month through; a tighter one would flag real seasonal months as faults.
+const _LOSS_PCT_BAND=[0.21,0.31];
 
 function _lossRollingTarget(year,month){
   const v=_dfcMacroLookup('loss_rolling',null,year,month);
@@ -11961,9 +11969,14 @@ function _lossSolve(startYear,endYear){
       L[y][t]=lm;
       const sm=sales[y][t];
       const pct=(sm+lm)>0?lm/(sm+lm):null;
-      if(lm<0)warnings.push(`FY${y} ${MONTHS_SHORT[t-1]} solves to a negative loss (${(lm/1e6).toFixed(2)} GWh). The rolling targets around it are not reachable with this sales profile.`);
+      // An out-of-band month is a verdict on the TARGETS, not a solver failure. The
+      // inversion is exact either way, so if it returns an impossible month the
+      // rolling series cannot be produced by any real monthly path against this
+      // sales profile. Say that, rather than showing a red number and leaving the
+      // reader to conclude the arithmetic went wrong.
+      if(lm<0)warnings.push(`FY${y} ${MONTHS_SHORT[t-1]} solves to a NEGATIVE loss (${(lm/1e6).toFixed(2)} GWh). No real monthly path produces these rolling targets against this sales profile — the targets need rebuilding, not phasing against.`);
       else if(pct!=null&&(pct<_LOSS_PCT_BAND[0]||pct>_LOSS_PCT_BAND[1]))
-        warnings.push(`FY${y} ${MONTHS_SHORT[t-1]} solves to ${(pct*100).toFixed(1)}%, outside the ${_LOSS_PCT_BAND[0]*100}–${_LOSS_PCT_BAND[1]*100}% band. Check the rolling target either side of it.`);
+        warnings.push(`FY${y} ${MONTHS_SHORT[t-1]} solves to ${(pct*100).toFixed(1)}%, outside the ${(_LOSS_PCT_BAND[0]*100).toFixed(0)}–${(_LOSS_PCT_BAND[1]*100).toFixed(0)}% the last two years of actuals support. These rolling targets imply an implausible monthly path — rebuild them against the sales seasonality rather than phasing against this.`);
       months.push({m:t,sales:sm,loss:lm,pct,target:tgt});
     }
     if(missing){
@@ -11989,7 +12002,173 @@ function _lossSolve(startYear,endYear){
   return{years,seedYear,seedPct,warnings};
 }
 
-let _lossLast=null;
+/* ── Smoothed solve ────────────────────────────────────────────────────────────
+   The exact inversion is arithmetically right and often unusable. Near-flat rolling
+   targets against a seasonal sales base force the monthly losses to swing to
+   compensate, worst in January where the window drops a December and picks up a
+   January -- and because each year is solved on the prior year's series, the
+   year-boundary artefact COMPOUNDS: 15.9% in the first solved year became 0.6% in
+   the second on the live targets. A third year would be worse again.
+
+   So the exact solve is best read as a test on the targets: if inverting them
+   returns an impossible month, the targets are not consistent with sales phasing,
+   and that is a finding for the losses team rather than a series to publish.
+
+   This produces the series to actually phase against. It holds the ANNUAL close as
+   a hard equality -- that is the number that must not move -- and treats the eleven
+   intermediate rolling months as least-squares targets traded off against a
+   smoothness penalty on month-to-month change. Solved as a KKT system:
+
+       [ AᵀA + λ²DᵀD   1 ] [x]   [ Aᵀc  ]
+       [ 1ᵀ            0 ] [ν] = [ C₁₂  ]
+
+   A is the cumulative-sum operator (the rolling constraint at t pins losses to
+   date), D the first difference, and the bottom row is the annual equality. λ is
+   not guessed: it climbs a ladder and stops at the SMALLEST value that brings every
+   month inside a credible band, so the series is no smoother than it has to be and
+   keeps as much rolling fidelity as possible.
+──────────────────────────────────────────────────────────────────────────────── */
+function _lossLinSolve(M,b){
+  // Gaussian elimination with partial pivoting. n is 13 here; clarity over speed.
+  const n=b.length,a=M.map((r,i)=>[...r,b[i]]);
+  for(let col=0;col<n;col++){
+    let piv=col;
+    for(let r=col+1;r<n;r++)if(Math.abs(a[r][col])>Math.abs(a[piv][col]))piv=r;
+    if(Math.abs(a[piv][col])<1e-12)return null; // singular — caller falls back
+    if(piv!==col){const t=a[piv];a[piv]=a[col];a[col]=t;}
+    for(let r=0;r<n;r++){
+      if(r===col)continue;
+      const f=a[r][col]/a[col][col];
+      if(!f)continue;
+      for(let c=col;c<=n;c++)a[r][c]-=f*a[col][c];
+    }
+  }
+  return a.map((r,i)=>r[n]/a[i][i]);
+}
+
+function _lossSmoothYear(C,lambda){
+  // C[1..12] = cumulative losses to month t implied by the rolling targets.
+  const n=12,M=[],b=new Array(n).fill(0);
+  for(let i=0;i<n;i++)M.push(new Array(n).fill(0));
+  // AᵀA and Aᵀc over the 11 intermediate rolling equations (t = 1..11).
+  for(let t=1;t<=11;t++){
+    for(let i=0;i<t;i++){
+      b[i]+=C[t];
+      for(let j=0;j<t;j++)M[i][j]+=1;
+    }
+  }
+  // λ²DᵀD — first-difference smoothness.
+  const l2=lambda*lambda;
+  for(let k=0;k<n-1;k++){
+    M[k][k]+=l2;M[k][k+1]-=l2;M[k+1][k]-=l2;M[k+1][k+1]+=l2;
+  }
+  // Bordered KKT row/column for the hard annual equality 1ᵀx = C[12].
+  const K=M.map(r=>[...r,1]);
+  K.push([...new Array(n).fill(1),0]);
+  const rhs=[...b,C[12]];
+  const sol=_lossLinSolve(K,rhs);
+  return sol?sol.slice(0,n):null;
+}
+
+function _lossSolveSmoothed(startYear,endYear){
+  const warnings=[],sales={},L={};
+  for(let y=startYear-1;y<=endYear;y++)sales[y]=_lossMonthlySales(y);
+  const seedYear=startYear-1,seedPct=_lossRollingTarget(seedYear,12);
+  L[seedYear]=new Array(13).fill(0);
+  if(seedPct!=null)for(let m=1;m<=12;m++)L[seedYear][m]=sales[seedYear][m]*seedPct/(1-seedPct);
+  else warnings.push(`No annual loss rate on record for FY${seedYear}; the window before FY${startYear} is seeded at zero.`);
+
+  const years=[];
+  for(let y=startYear;y<=endYear;y++){
+    const C=new Array(13).fill(0);let missing=false;
+    for(let t=1;t<=12;t++){
+      const tgt=_lossRollingTarget(y,t);
+      if(tgt==null){missing=true;break;}
+      let wS=0,tailPrior=0;
+      for(let m=t+1;m<=12;m++){wS+=sales[y-1][m];tailPrior+=L[y-1][m];}
+      for(let m=1;m<=t;m++)wS+=sales[y][m];
+      C[t]=(tgt*wS/(1-tgt))-tailPrior;
+    }
+    if(missing){warnings.push(`FY${y} has no complete set of rolling targets — skipped.`);continue;}
+
+    // Credibility is judged against the YEAR'S OWN rate, not an absolute range. A
+    // system losing 27% annually does not lose 17% in one month and 33% the next;
+    // the absolute 5-60% guard is far too loose to drive smoothing, and a month
+    // 10pp off the annual passes it while being obviously wrong.
+    const loB=_LOSS_PCT_BAND[0],hiB=_LOSS_PCT_BAND[1];
+    const scale=Math.max(1,Math.abs(C[12])/12);
+    const attempt=lam=>{
+      const x=_lossSmoothYear(C,lam);
+      if(!x)return null;
+      const ok=x.every((lm,i)=>{
+        const sm=sales[y][i+1],p=(sm+lm)>0?lm/(sm+lm):null;
+        return lm>=0&&p!=null&&p>=loB&&p<=hiB;
+      });
+      return{x,ok,lam};
+    };
+    // Climb a ladder to bracket the smallest workable lambda, then bisect into the
+    // bracket. Every extra unit of smoothing is paid for in rolling-month accuracy,
+    // so stopping at the first ladder rung that passes over-smooths by up to the
+    // width of the rung -- the bisection buys that accuracy back.
+    let pass=null,failLam=0;
+    for(const mult of [0,0.05,0.25,1,5,25,100,500,2500,10000]){
+      const r=attempt(mult*scale);
+      if(!r)continue;
+      if(r.ok){pass=r;break;}
+      failLam=r.lam;
+      if(!pass)pass=r; // keep the best effort in case nothing ever passes
+    }
+    if(pass&&pass.ok&&pass.lam>failLam){
+      let lo=failLam,hi=pass.lam;
+      for(let i=0;i<18;i++){
+        const mid=(lo+hi)/2,r=attempt(mid);
+        if(r&&r.ok){pass=r;hi=mid;}else lo=mid;
+      }
+    }
+    const best=pass?pass.x:null,usedLambda=pass?pass.lam:0;
+    if(!best){warnings.push(`FY${y} smoothed solve failed — use the exact series.`);continue;}
+    if(!pass.ok)warnings.push(`FY${y} could not be smoothed into ${(loB*100).toFixed(1)}–${(hiB*100).toFixed(1)}% even at maximum smoothing. The rolling targets are badly out of step with the sales profile.`);
+
+    L[y]=[0,...best];
+    const months=[];
+    for(let t=1;t<=12;t++){
+      const lm=L[y][t],sm=sales[y][t];
+      months.push({m:t,sales:sm,loss:lm,pct:(sm+lm)>0?lm/(sm+lm):null,target:_lossRollingTarget(y,t)});
+    }
+    months.forEach(r=>{
+      let wS=0,wL=0;
+      for(let m=r.m+1;m<=12;m++){wS+=sales[y-1][m];wL+=L[y-1][m];}
+      for(let m=1;m<=r.m;m++){wS+=sales[y][m];wL+=L[y][m];}
+      r.rollBack=(wS+wL)>0?wL/(wS+wL):null;
+      r.rollDiff=r.rollBack==null?null:(r.rollBack-r.target)*100;
+    });
+    const yS=months.reduce((s,r)=>s+r.sales,0),yL=months.reduce((s,r)=>s+r.loss,0);
+    const annual=(yS+yL)>0?yL/(yS+yL):null,annualTarget=_lossRollingTarget(y,12);
+    const worstRoll=Math.max(...months.slice(0,11).map(r=>Math.abs(r.rollDiff||0)));
+    years.push({year:y,months,sales:yS,losses:yL,netgen:yS+yL,annual,annualTarget,
+      annualDiff:(annual==null||annualTarget==null)?null:(annual-annualTarget)*100,
+      lambda:usedLambda,worstRoll});
+  }
+  return{years,seedYear,seedPct,warnings};
+}
+
+let _lossLast=null,_lossExact=null,_lossSmooth=null;
+function setLossMethod(){renderLossOutput();}
+
+function _lossSummaryRow(y,sm){
+  const pcts=y.months.map(r=>r.pct).filter(v=>v!=null);
+  const lo=Math.min(...pcts)*100,hi=Math.max(...pcts)*100;
+  const bad=pcts.some(p=>p<_LOSS_PCT_BAND[0]||p>_LOSS_PCT_BAND[1]);
+  const worst=sm?y.worstRoll:Math.max(...y.months.slice(0,11).map(r=>Math.abs(r.rollDiff||0)));
+  return`<tr style="border-bottom:0.5px solid var(--border)">
+    <td style="padding:5px 8px">FY${y.year}</td>
+    <td style="padding:5px 8px">${sm?'Smoothed':'Exact'}</td>
+    <td style="padding:5px 8px;text-align:right;color:${bad?'var(--red)':'var(--text)'}">${lo.toFixed(2)}% – ${hi.toFixed(2)}%</td>
+    <td style="padding:5px 8px;text-align:right;color:${Math.abs(y.annualDiff)<0.005?'var(--teal)':'var(--red)'}">${(y.annual*100).toFixed(4)}%</td>
+    <td style="padding:5px 8px;text-align:right;color:${worst<0.005?'var(--teal)':'var(--text2)'}">${worst.toFixed(3)}pp</td>
+  </tr>`;
+}
+
 function runLossSolver(){
   const a=parseInt(document.getElementById('loss_from')?.value);
   const b=parseInt(document.getElementById('loss_to')?.value);
@@ -12001,10 +12180,42 @@ function runLossSolver(){
     out.innerHTML='<div style="color:var(--amber);font-size:12px;padding:10px 0">Commercial detail is still loading — RT40, RT50 and RT70 would read zero and every loss rate would come out wrong. Try again in a moment.</div>';
     return;
   }
-  const res=_lossSolve(a,b);
+  _lossExact=_lossSolve(a,b);
+  _lossSmooth=_lossSolveSmoothed(a,b);
+  renderLossOutput();
+}
+
+function renderLossOutput(){
+  const out=document.getElementById('loss_solver_out');
+  if(!out||!_lossExact)return;
+  const method=document.getElementById('loss_method')?.value||'exact';
+  const res=(method==='smoothed'&&_lossSmooth&&_lossSmooth.years.length)?_lossSmooth:_lossExact;
   _lossLast=res;
+  _lossLast.method=(res===_lossSmooth)?'smoothed':'exact';
   const g=v=>(v/1e6).toFixed(1);
   let html='';
+
+  // Both methods side by side first. They differ only in the monthly path -- the
+  // annual close is identical and exact in both -- so showing them together is what
+  // makes the trade-off legible: exact rolling fidelity against a credible month.
+  if(_lossSmooth&&_lossSmooth.years.length){
+    html+=`<div style="margin-bottom:16px">
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="border-bottom:0.5px solid var(--border-strong);color:var(--text3)">
+          <th style="text-align:left;padding:5px 8px;font-weight:500">Year</th>
+          <th style="text-align:left;padding:5px 8px;font-weight:500">Method</th>
+          <th style="text-align:right;padding:5px 8px;font-weight:500">Monthly range</th>
+          <th style="text-align:right;padding:5px 8px;font-weight:500">Annual close</th>
+          <th style="text-align:right;padding:5px 8px;font-weight:500">Worst rolling miss</th>
+        </tr></thead><tbody>
+        ${_lossExact.years.map(y=>_lossSummaryRow(y,false)).join('')}
+        ${_lossSmooth.years.map(y=>_lossSummaryRow(y,true)).join('')}
+      </tbody></table>
+      <div style="font-size:11px;color:var(--text3);margin-top:7px">
+        Both close the year exactly. <strong>Exact</strong> reproduces every rolling month and can throw an impossible month — treat that as the targets failing a consistency test, not the solver failing. <strong>Smoothed</strong> keeps the annual close as a hard constraint and trades a fraction of a point on intermediate rolling months for a series you can phase against.
+      </div>
+    </div>`;
+  }
   if(res.seedPct!=null)
     html+=`<div style="font-size:11px;color:var(--text3);margin-bottom:10px">Trailing window before FY${res.seedYear+1} seeded flat at FY${res.seedYear}'s annual rate of ${(res.seedPct*100).toFixed(2)}%. Affects FY${res.seedYear+1}'s monthly split only — it has washed out by FY${res.seedYear+2}.</div>`;
   res.warnings.forEach(w=>{
@@ -12042,8 +12253,53 @@ function runLossSolver(){
       </tbody></table></div>`;
   });
   if(res.years.length)
-    html+=`<div style="font-size:11px;color:var(--text3)">"Rebuilt rolling" recomputes the rolling rate from the solved monthly losses. It should equal the target to the last decimal — it is a check on the inversion, not a fit.</div>`;
+    html+=`<div style="font-size:11px;color:var(--text3)">"Rebuilt rolling" recomputes the rolling rate from the solved monthly losses. On the exact method it equals the target to the last decimal — a check on the inversion, not a fit. On the smoothed method the gap is the deliberate trade.</div>`;
   out.innerHTML=html||'<div style="color:var(--text3);font-size:12px">Nothing to solve.</div>';
+}
+
+// Persist the shown series as driver_type 'loss_monthly'. Which METHOD produced it
+// goes in basis and the seed in basis_target: exact and smoothed give materially
+// different monthly paths from identical targets, and nothing in the numbers reveals
+// which you are looking at. A series without its method is not reproducible.
+async function saveLossMonthly(){
+  if(!_lossLast||!_lossLast.years.length){toast('Solve first','w');return;}
+  const sb=getSB();if(!sb){toast('Not connected','err');return;}
+  const method=_lossLast.method||'exact';
+  const cu=(typeof CU!=='undefined'&&CU&&CU.name)?CU.name:'';
+  const seed=_lossLast.seedPct!=null
+    ?`Trailing window before FY${_lossLast.seedYear+1} seeded flat at FY${_lossLast.seedYear}'s annual rate of ${(_lossLast.seedPct*100).toFixed(2)}%.`
+    :`No seed available for FY${_lossLast.seedYear}; window before FY${_lossLast.seedYear+1} treated as zero.`;
+  const rows=[];
+  _lossLast.years.forEach(y=>{
+    const desc=method==='exact'
+      ?`Exact inversion of the rolling 12-month targets by forward substitution. Reproduces every rolling month; FY closes at ${(y.annual*100).toFixed(4)}% against a ${(y.annualTarget*100).toFixed(2)}% target. ${seed}`
+      :`Smoothed solve: annual close held as a hard equality, intermediate rolling months least-squares with a first-difference penalty (lambda ${y.lambda.toExponential(2)}), worst intermediate rolling miss ${y.worstRoll.toFixed(3)}pp. FY closes at ${(y.annual*100).toFixed(4)}% against a ${(y.annualTarget*100).toFixed(2)}% target. ${seed}`;
+    y.months.forEach(r=>{
+      if(r.pct==null)return;
+      // basis says it was back-solved to close the year; method says which solve.
+      // basis='exact' would violate the basis check constraint and lose the meaning
+      // the column was added for -- these are two different questions.
+      rows.push({driver_type:'loss_monthly',segment:null,year:y.year,month:r.m,
+        value_pct:Number((r.pct*100).toFixed(4)),
+        basis:'volume_target',method:method,basis_target:desc,
+        reason_code:'Monthly loss phasing solved from rolling targets',
+        justification:desc,updated_by:cu,updated_at:new Date().toISOString()});
+    });
+  });
+  if(!rows.length){toast('Nothing to save','w');return;}
+  try{
+    const{error}=await sb.from('jps_macro_assumptions')
+      .upsert(rows,{onConflict:'driver_type,segment,year,month'});
+    if(error)throw error;
+    rows.forEach(n=>{
+      const ex=(typeof sbMacroAssum!=='undefined'?sbMacroAssum:[]).find(r=>
+        r.driver_type==='loss_monthly'&&(r.segment||null)===null&&
+        Number(r.year)===n.year&&Number(r.month)===n.month);
+      if(ex)Object.assign(ex,n);else if(typeof sbMacroAssum!=='undefined')sbMacroAssum.push(n);
+    });
+    _adjLogCache=null;
+    toast(`Saved ${rows.length} monthly loss rates (${method})`,'ok');
+  }catch(e){toast('Save failed: '+(e.message||e),'err');}
 }
 
 function exportLossPhasing(){
