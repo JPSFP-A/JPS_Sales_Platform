@@ -501,6 +501,7 @@ document.getElementById('schema_stale_banner').style.display='none';
     <div class="ni" onclick="sw('dfc',this)"><span class="ni-icon">🌲</span>Driver Forecast</div>
     <div class="ni" onclick="sw('macro',this)"><span class="ni-icon">🌐</span>Macro Assumptions</div>
     <div class="ni" onclick="sw('ovl',this)"><span class="ni-icon">🩹</span>Forecast Overlays</div>
+    <div class="ni" onclick="sw('dq',this)"><span class="ni-icon">🧹</span>Data Quality</div>
     <div class="ni" onclick="sw('rateassum',this)"><span class="ni-icon">💲</span>Rate Assumptions</div>
     <div class="ni" onclick="sw('adjlog',this)"><span class="ni-icon">📋</span>Adjustment Log</div>
     <div class="ni" onclick="sw('rcfr',this)"><span class="ni-icon">📐</span>RC Forecast Report</div>
@@ -2433,6 +2434,58 @@ order by ordinal_position;</pre>
       </div>
     </div>
 
+    <!-- === DATA QUALITY === -->
+    <div id="dq" class="sec">
+
+      <div class="card">
+        <div class="ch">Customer Names
+          <div style="display:flex;gap:6px;align-items:center">
+            <input id="dq_search" class="psel" style="font-size:11px;width:190px" placeholder="Search a customer…" oninput="renderNameGroups()">
+            <select id="dq_filter" class="psel" style="font-size:11px" onchange="renderNameGroups()">
+              <option value="todo">Needs review</option>
+              <option value="merged">Reviewed</option>
+              <option value="all">Everything</option>
+            </select>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:4px">
+          The billing system spells one customer several ways &mdash; <em>Kingston Wharves Limited</em> and <em>Kingston Wharves Ltd</em> bill separately, so the account rolls up as two customers and neither shows its real size. This maps every raw spelling to one standardised name, which every customer rollup then inherits.
+        </div>
+        <div style="font-size:11px;color:var(--text3);background:var(--navy3);border-radius:4px;padding:9px 12px;margin-bottom:10px;line-height:1.55">
+          <strong style="color:var(--text2)">How to work it.</strong>
+          <span style="color:var(--teal)">1.</span> Work <em>Needs review</em>. Every group there was merged by the matcher and <strong>no person has checked it</strong> &mdash; the grouping is a guess until you confirm it.
+          <span style="color:var(--teal)">2.</span> Read the spellings and decide whether they are genuinely one customer. Separate entities normalise alike: <em>Grace Kennedy Remittance</em> and <em>Grace Kennedy Foods</em> collide, and merging them overstates one customer and loses the other.
+          <span style="color:var(--teal)">3.</span> If they are one, pick the spelling to keep and press <strong>Confirm</strong>. If they are not, press <strong>Not the same</strong> &mdash; each spelling goes back to standing alone.
+          <span style="color:var(--teal)">4.</span> Either way the group is marked reviewed and the matcher will not touch it again. A human decision is never overwritten by the next run.
+          <br><span style="color:var(--text3)">This changes how customers are grouped for reporting. It does not move a single kWh &mdash; account totals, rate class volumes and the forecast are untouched.</span>
+        </div>
+        <div id="dq_names_stats" style="font-size:11px;color:var(--text3);margin-bottom:8px"></div>
+        <div id="dq_names" style="max-height:520px;overflow-y:auto"></div>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <div class="ch">Net Billers
+          <div style="display:flex;gap:6px;align-items:center">
+            <button class="btn btn-t" onclick="rebuildNetBillers()">Rebuild from actuals</button>
+            <button class="btn btn-o" onclick="exportNetBillers()">&#11015; CSV</button>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:4px">
+          Customers who export more than they consume in a month &mdash; rooftop solar running the meter backwards. They sit in the <code style="background:var(--navy3);padding:1px 5px;border-radius:3px">&lt;Zero</code> consumption bucket and carry negative kWh, so they subtract from billed sales.
+        </div>
+        <div style="font-size:11px;color:var(--text3);background:var(--navy3);border-radius:4px;padding:9px 12px;margin-bottom:10px;line-height:1.55">
+          <strong style="color:var(--text2)">How to work it.</strong>
+          <span style="color:var(--teal)">1.</span> After each monthly upload, press <strong>Rebuild from actuals</strong>. It re-derives every month from <code>jps_actuals</code> and overwrites &mdash; it never appends, so running it twice is harmless.
+          <span style="color:var(--teal)">2.</span> Read the count and the export together. Rising count is adoption; rising export per biller is existing systems producing more.
+          <span style="color:var(--teal)">3.</span> Watch for the two moving apart. Export per biller falling while the count climbs means damaged or under-performing systems, not slower adoption &mdash; that is what Hurricane Melissa looked like in the data.
+          <br><span style="color:var(--text3)">This is a measurement, not an assumption. It records what the meters did; it does not feed the forecast. Solar in the forecast is the <em>solar</em> driver on the Macro Assumptions tab.</span>
+        </div>
+        <div id="dq_nb_status" style="font-size:11px;color:var(--text3);margin-bottom:8px"></div>
+        <div id="dq_netbillers" style="overflow-x:auto"></div>
+      </div>
+
+    </div>
+
     <!-- === RATE ASSUMPTIONS === -->
     <div id="rateassum" class="sec">
       <div class="card">
@@ -4233,6 +4286,7 @@ function renderSection(id){
   else if(id==='dfc'){renderDriverForecast();renderDfcBridge();}
   else if(id==='macro'){renderMacroAssumptions();}
   else if(id==='ovl'){renderOverlays();}
+  else if(id==='dq'){renderDataQuality();}
   else if(id==='rateassum'){renderRateAssumptions();}
   else if(id==='adjlog'){renderAdjustmentLog();}
   else if(id==='rcfr'){renderRcForecastReport();renderRcfrBridge();}
@@ -11592,6 +11646,229 @@ function renderMacroAssumptions(){
   </table>`;
 }
 function goToMacroAssumptions(){sw('macro',document.querySelector('.ni[onclick^="sw(\'macro\'"]'));}
+
+/* ==========================================
+   DATA QUALITY — customer name standardisation and net-biller measurement
+
+   Both tables existed and neither could be maintained from the app.
+   jps_customer_names was populated once by a script and every one of its 13,597
+   rows is still flagged auto_derived, meaning no human has confirmed any of it.
+   jps_net_billers was created and never populated at all, so the net-biller
+   analysis had to be re-derived from the raw bucket each time someone asked.
+
+   Names group by norm_key -- the billing spelling with punctuation, case and the
+   company suffixes (Ltd/Limited/Co/Inc) stripped -- which is what makes
+   "Kingston Wharves Ltd" and "Kingston Wharves Limited" collide. A shared key is
+   a SUGGESTION, never an automatic merge: Grace Kennedy Remittance and Grace
+   Kennedy Foods normalise alike and are different companies. A person decides,
+   and their decision is recorded by clearing auto_derived so the matcher cannot
+   silently undo it on the next run.
+========================================== */
+function renderDataQuality(){renderNameGroups();renderNetBillers();}
+
+function _dqNames(){return (typeof sbCustomerNames!=='undefined'&&sbCustomerNames)?sbCustomerNames:[];}
+
+// Groups sharing a norm_key. `merged` = every raw name in the group already points
+// at the same friendly name; `todo` = they don't, so somebody has to decide.
+function _dqNameGroups(){
+  const byKey=new Map();
+  _dqNames().forEach(r=>{
+    const k=r.norm_key||(' '+r.raw_name);
+    if(!byKey.has(k))byKey.set(k,[]);
+    byKey.get(k).push(r);
+  });
+  const out=[];
+  byKey.forEach((rows,k)=>{
+    if(rows.length<2)return; // a name with no variant needs no decision
+    const friendly=[...new Set(rows.map(r=>r.friendly_name))];
+    out.push({key:k,rows,friendly,merged:friendly.length===1,
+              reviewed:rows.every(r=>r.auto_derived===false)});
+  });
+  return out;
+}
+
+function renderNameGroups(){
+  const host=document.getElementById('dq_names');if(!host)return;
+  const q=(document.getElementById('dq_search')?.value||'').trim().toLowerCase();
+  const filter=document.getElementById('dq_filter')?.value||'todo';
+  const all=_dqNameGroups();
+  const stats=document.getElementById('dq_names_stats');
+  if(stats){
+    const todo=all.filter(g=>!g.reviewed).length;
+    const conflict=all.filter(g=>!g.merged).length;
+    stats.innerHTML=`${_dqNames().length.toLocaleString('en-US')} billing spellings &middot; ${all.length} groups with a variant &middot; <strong style="color:${todo?'var(--amber)':'var(--teal)'}">${todo} awaiting review</strong>${conflict?` &middot; <strong style="color:var(--red)">${conflict} still disagree on the name</strong>`:''} &middot; ${all.length-todo} reviewed`;
+  }
+  let list=all.filter(g=>filter==='all'?true:filter==='merged'?g.reviewed:!g.reviewed);
+  if(q)list=list.filter(g=>g.rows.some(r=>String(r.raw_name).toLowerCase().includes(q)||String(r.friendly_name).toLowerCase().includes(q)));
+  // Conflicts first -- a group whose spellings still point at different names is the
+  // only case where reporting is actively wrong right now. Then biggest groups, which
+  // carry the most volume and so the most consequence if the merge is wrong.
+  list.sort((a,b)=>(a.merged-b.merged)||(b.rows.length-a.rows.length)||String(a.rows[0].raw_name).localeCompare(String(b.rows[0].raw_name)));
+
+  if(!list.length){
+    host.innerHTML=`<div style="padding:18px 4px;color:var(--text3);font-size:12px">${q?'Nothing matches that search.':filter==='todo'?'Every group with a name variant has been reviewed by a person.':filter==='merged'?'Nothing reviewed yet — everything here is still the matcher’s guess.':'Nothing here.'}</div>`;
+    return;
+  }
+  const shown=list.slice(0,150);
+  host.innerHTML=shown.map(g=>{
+    const opts=[...new Set(g.rows.map(r=>r.raw_name))];
+    const cur=g.merged?g.friendly[0]:'';
+    const id=_dqGid(g.key);
+    return`<div style="border:0.5px solid var(--border);border-radius:5px;padding:9px 11px;margin-bottom:7px">
+      <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">
+        <div style="flex:1;min-width:240px">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:3px">${g.rows.length} spellings${g.reviewed?' &middot; <span style="color:var(--teal)">reviewed</span>':''}</div>
+          ${g.rows.map(r=>`<div style="font-size:12px;color:var(--text)">${esc(r.raw_name)}${r.friendly_name!==r.raw_name?` <span style="color:var(--text3);font-size:10px">&rarr; ${esc(r.friendly_name)}</span>`:''}</div>`).join('')}
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <select id="dqf_${id}" class="psel" style="font-size:11px;max-width:260px">
+            ${opts.map(o=>`<option value="${esc(o)}"${o===cur?' selected':''}>${esc(o)}</option>`).join('')}
+          </select>
+          <button class="btn btn-t" style="padding:4px 10px;font-size:11px" onclick="mergeNameGroup('${id}')">${g.reviewed?'Re-point':'Confirm'}</button>
+          <button class="btn btn-o" style="padding:4px 10px;font-size:11px" title="These are different customers — undo the match and let each spelling stand alone" onclick="splitNameGroup('${id}')">Not the same</button>
+        </div>
+      </div>
+    </div>`;}).join('')
+    +(list.length>shown.length?`<div style="padding:10px 4px;color:var(--text3);font-size:11px">Showing 150 of ${list.length}. Search to narrow.</div>`:'');
+  _dqGroupCache=new Map(shown.map(g=>[_dqGid(g.key),g]));
+}
+
+let _dqGroupCache=new Map();
+function _dqGid(key){let h=0;const s=String(key);for(let i=0;i<s.length;i++){h=(h*31+s.charCodeAt(i))|0;}return'g'+(h>>>0).toString(36);}
+
+async function mergeNameGroup(gid){
+  const g=_dqGroupCache.get(gid);if(!g)return;
+  const target=document.getElementById('dqf_'+gid)?.value;
+  if(!target){toast('Pick the spelling to keep','w');return;}
+  const sb=getSB();if(!sb){toast('Not connected','err');return;}
+  const cu=(typeof CU!=='undefined'&&CU&&CU.name)?CU.name:'';
+  const rows=g.rows.map(r=>({raw_name:r.raw_name,friendly_name:target,norm_key:r.norm_key,
+    auto_derived:false,updated_by:cu,updated_at:new Date().toISOString()}));
+  try{
+    const{error}=await sb.from('jps_customer_names').upsert(rows,{onConflict:'raw_name'});
+    if(error)throw error;
+    // Update in memory and drop the derived index so rollups pick it up without a resync.
+    rows.forEach(n=>{
+      const ex=_dqNames().find(r=>r.raw_name===n.raw_name);
+      if(ex)Object.assign(ex,n);
+    });
+    _friendlyIdx=null;
+    if(typeof _allActCache!=='undefined')_allActCache=null;
+    toast(`${rows.length} spellings now roll up as "${target}"`,'ok');
+    renderNameGroups();
+  }catch(e){toast('Merge failed: '+(e.message||e),'err');}
+}
+
+// The matcher got this group wrong -- these are different customers. Point every
+// spelling back at itself and mark the group reviewed, so it stops being offered
+// and the next matcher run cannot re-merge it. norm_key is left alone: the names
+// really do normalise alike, that is why it collided, and rewriting the key would
+// just hide the collision from the next person instead of recording the decision.
+async function splitNameGroup(gid){
+  const g=_dqGroupCache.get(gid);if(!g)return;
+  const sb=getSB();if(!sb){toast('Not connected','err');return;}
+  const cu=(typeof CU!=='undefined'&&CU&&CU.name)?CU.name:'';
+  const rows=g.rows.map(r=>({raw_name:r.raw_name,friendly_name:r.raw_name,norm_key:r.norm_key,
+    auto_derived:false,updated_by:cu,updated_at:new Date().toISOString()}));
+  try{
+    const{error}=await sb.from('jps_customer_names').upsert(rows,{onConflict:'raw_name'});
+    if(error)throw error;
+    rows.forEach(n=>{
+      const ex=_dqNames().find(r=>r.raw_name===n.raw_name);
+      if(ex)Object.assign(ex,n);
+    });
+    _friendlyIdx=null;
+    if(typeof _allActCache!=='undefined')_allActCache=null;
+    toast(`${rows.length} spellings now roll up separately`,'ok');
+    renderNameGroups();
+  }catch(e){toast('Split failed: '+(e.message||e),'err');}
+}
+
+/* ── Net billers ── measured from actuals, never assumed ── */
+let _nbLast=[];
+function _nbDerive(){
+  const agg=new Map();
+  _sbAllActuals().forEach(r=>{
+    if(String(r.consumption_bucket||'')!=='<Zero')return;
+    const y=Number(r.year),m=Number(r.month),rc=r.rate_class;
+    if(!y||!m||!rc)return;
+    const k=y+' '+m+' '+rc;
+    if(!agg.has(k))agg.set(k,{year:y,month:m,rate_class:rc,count:0,kwh:0});
+    const a=agg.get(k);
+    a.count+=Number(r.customer_count)||0;
+    a.kwh+=Number(r.kwh)||0;
+  });
+  return[...agg.values()].sort((a,b)=>b.year-a.year||b.month-a.month||a.rate_class.localeCompare(b.rate_class));
+}
+
+function renderNetBillers(){
+  const host=document.getElementById('dq_netbillers');if(!host)return;
+  const rows=_nbDerive();
+  _nbLast=rows;
+  if(!rows.length){
+    host.innerHTML='<div style="padding:16px 4px;color:var(--text3);font-size:12px">No net billers found in the loaded actuals. The &lt;Zero bucket is empty for every month held.</div>';
+    return;
+  }
+  const byMonth=new Map();
+  rows.forEach(r=>{
+    const k=r.year+'-'+String(r.month).padStart(2,'0');
+    if(!byMonth.has(k))byMonth.set(k,{count:0,kwh:0,classes:{}});
+    const b=byMonth.get(k);b.count+=r.count;b.kwh+=r.kwh;b.classes[r.rate_class]=r.kwh;
+  });
+  const keys=[...byMonth.keys()].sort().reverse().slice(0,18);
+  host.innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:11px">
+    <thead><tr style="border-bottom:0.5px solid var(--border-strong);color:var(--text3)">
+      <th style="text-align:left;padding:5px 7px;font-weight:500">Month</th>
+      <th style="text-align:right;padding:5px 7px;font-weight:500">Net billers</th>
+      <th style="text-align:right;padding:5px 7px;font-weight:500">Export MWh</th>
+      <th style="text-align:right;padding:5px 7px;font-weight:500">kWh per biller</th>
+      <th style="text-align:left;padding:5px 7px;font-weight:500">By class</th>
+    </tr></thead><tbody>
+    ${keys.map(k=>{const b=byMonth.get(k);
+      const per=b.count?b.kwh/b.count:0;
+      return`<tr style="border-bottom:0.5px solid var(--border)">
+        <td style="padding:5px 7px">${k}</td>
+        <td style="padding:5px 7px;text-align:right">${b.count.toLocaleString('en-US')}</td>
+        <td style="padding:5px 7px;text-align:right;color:var(--red)">${(b.kwh/1000).toFixed(1)}</td>
+        <td style="padding:5px 7px;text-align:right;color:var(--text2)">${Math.round(per).toLocaleString('en-US')}</td>
+        <td style="padding:5px 7px;color:var(--text3)">${Object.entries(b.classes).map(([c,v])=>`${esc(c)} ${(v/1000).toFixed(0)}`).join(' · ')}</td>
+      </tr>`;}).join('')}
+    </tbody></table>
+    <div style="font-size:11px;color:var(--text3);margin-top:8px">Derived live from the loaded actuals. "Rebuild from actuals" writes this to jps_net_billers so it is queryable outside the app.</div>`;
+}
+
+async function rebuildNetBillers(){
+  const sb=getSB();if(!sb){toast('Not connected','err');return;}
+  const st=document.getElementById('dq_nb_status');
+  const rows=_nbDerive().map(r=>({year:r.year,month:r.month,rate_class:r.rate_class,
+    count:Math.round(r.count),kwh:r.kwh}));
+  if(!rows.length){toast('Nothing to write — no net billers in the loaded actuals','w');return;}
+  if(st)st.textContent=`Writing ${rows.length} rows…`;
+  try{
+    // Upsert on the existing (year, month, rate_class) key. Overwrite, never append:
+    // this is a re-derivation of what the meters did, so the newest read always wins
+    // and running it twice is a no-op rather than a double count.
+    const{error}=await sb.from('jps_net_billers').upsert(rows,{onConflict:'year,month,rate_class'});
+    if(error)throw error;
+    const months=new Set(rows.map(r=>r.year+'-'+r.month)).size;
+    if(st)st.innerHTML=`<span style="color:var(--teal)">✓</span> ${rows.length} rows across ${months} months written to jps_net_billers.`;
+    toast('Net billers rebuilt','ok');
+  }catch(e){
+    if(st)st.innerHTML=`<span style="color:var(--red)">Write failed: ${esc(e.message||String(e))}</span>`;
+    toast('Rebuild failed: '+(e.message||e),'err');
+  }
+}
+
+function exportNetBillers(){
+  if(!_nbLast.length){toast('Nothing to export','w');return;}
+  const rows=[['Year','Month','Rate class','Net billers','Export kWh','kWh per biller']];
+  _nbLast.forEach(r=>rows.push([r.year,r.month,r.rate_class,Math.round(r.count),Math.round(r.kwh),
+    r.count?Math.round(r.kwh/r.count):'']));
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([rows.map(r=>r.join(',')).join('\n')],{type:'text/csv'}));
+  a.download='net_billers.csv';a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
 
 /* ==========================================
    MONTHLY LOSS PHASING — inverts the rolling 12-month loss rate
