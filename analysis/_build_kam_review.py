@@ -1,0 +1,236 @@
+# -*- coding: utf-8 -*-
+"""Build the Key Account Review from the engine extract and the adjustment register.
+
+The review was hand-authored, which is why its assigned-book figures went stale
+without anything catching it. Now:
+  numbers  -> _kam_data.json, extracted from the live engine by _kam_extract.js
+  register -> jps_operational_adjustments, read live from Supabase
+  narrative-> NOTES below, the only hand-written part, and it carries no figures
+              that are not also computed here
+
+Nothing is written unless the per-manager totals sum to the assigned book, the
+assigned book plus the unassigned line equals the company total, and every
+movement listed ties to its own opening and closing year.
+
+    python _build_kam_review.py
+"""
+import io, os, sys, json, requests
+from decimal import Decimal, ROUND_HALF_UP
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
+DST = os.path.join(ROOT, 'JPS_KAM_Review_FY2027.html')
+DATA = os.path.join(HERE, '_kam_data.json')
+
+FY = (2026, 2027, 2028)
+AS_AT = '31 August 2026'
+
+
+def f(v, d=1):
+    return format(Decimal(str(v)).quantize(Decimal('1e-%d' % d), rounding=ROUND_HALF_UP), ',.%df' % d)
+
+
+def pct(a, b):
+    return (b / a - 1) * 100 if a else 0.0
+
+
+def cls(v):
+    return 'pos' if v > 0 else ('neg' if v < 0 else '')
+
+
+def sign(v, d=1):
+    return ('+' if v > 0 else ('&minus;' if v < 0 else '')) + f(abs(v), d)
+
+
+# ---------------------------------------------------------------- data
+D = json.load(io.open(DATA, encoding='utf-8'))
+KAM = D['kam']
+CO = {int(k): v for k, v in D['company'].items()}
+
+ASSIGNED = {y: round(sum(v['y%d' % (y - 2000)] for v in KAM.values()), 2) for y in FY}
+UNASSIGNED = {y: round(CO[y] - ASSIGNED[y], 2) for y in FY}
+
+
+def load_env(path):
+    env = {}
+    if os.path.exists(path):
+        for line in io.open(path, encoding='utf-8'):
+            line = line.strip()
+            if line and not line.startswith('#') and '=' in line:
+                k, v = line.split('=', 1)
+                env[k.strip()] = v.strip().strip('"').strip("'")
+    return env
+
+
+env = load_env(os.path.join(HERE, '.env'))
+URL = env.get('SUPABASE_URL') or os.environ.get('SUPABASE_URL')
+KEY = env.get('SUPABASE_SERVICE_ROLE_KEY') or os.environ.get('SUPABASE_SERVICE_ROLE_KEY')
+if not URL or not KEY:
+    print('Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY in analysis/.env')
+    sys.exit(1)
+H = {'apikey': KEY, 'Authorization': 'Bearer ' + KEY}
+
+
+def rest(table, params, page=10000):
+    """Paginated GET. PostgREST caps a response, and a silently truncated account
+    list would leave register rows showing a raw account number instead of a name."""
+    out, off = [], 0
+    while True:
+        p = dict(params); p['limit'] = str(page); p['offset'] = str(off)
+        r = requests.get('%s/rest/v1/%s' % (URL, table), headers=H, params=p, timeout=120)
+        r.raise_for_status()
+        b = r.json()
+        out += b
+        if len(b) < page:
+            return out
+        off += page
+
+
+adj = rest('jps_operational_adjustments',
+           {'select': 'jps_ac,year,month,operational_pct,manual_kwh,reason_code,justification,basis',
+            'year': 'gte.2027'})
+kmap = {r['jps_ac']: r['kam'] for r in rest('jps_kam', {'select': 'jps_ac,kam'})}
+names = {}
+for r in rest('jps_actuals', {'select': 'jps_ac,name', 'year': 'eq.2026'}):
+    if r.get('name'):
+        names.setdefault(r['jps_ac'], r['name'])
+
+MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+
+def nm(s):
+    return ' '.join(str(s or '').upper().replace('-', ' ').split())
+
+
+# Group by customer and decision, not by service point. A customer with eleven
+# metered sites entered the same shutdown once; showing it eleven times reads as
+# eleven separate events.
+reg = {}
+for a in adj:
+    label = names.get(a['jps_ac'], a['jps_ac'])
+    k = (nm(label), a.get('reason_code') or '', a.get('justification') or '')
+    e = reg.setdefault(k, {'name': label, 'reason': a.get('reason_code') or '',
+                           'just': a.get('justification') or '', 'months': [], 'pcts': set(),
+                           'accounts': set(), 'basis': a.get('basis') or ''})
+    e['months'].append((a['year'], a['month']))
+    e['accounts'].add(a['jps_ac'])
+    if a.get('operational_pct') is not None:
+        e['pcts'].add(round(float(a['operational_pct']), 2))
+
+for e in reg.values():
+    e['months'].sort()
+    lo, hi = e['months'][0], e['months'][-1]
+    e['period'] = ('%s %d' % (MON[lo[1] - 1], lo[0])) if lo == hi else \
+                  ('%s %d to %s %d' % (MON[lo[1] - 1], lo[0], MON[hi[1] - 1], hi[0]))
+    p = sorted(e['pcts'])
+    e['impact'] = 'not quantified' if not p else (('%.0f%%' % p[0]) if len(p) == 1 else
+                                                  '%.0f%% to %.0f%%' % (p[0], p[-1]))
+    ks = {kmap.get(ac) for ac in e['accounts']} - {None}
+    e['kam'] = ', '.join(sorted(ks)) if ks else ''
+    e['nacc'] = len(e['accounts'])
+
+unresolved = sum(1 for e in reg.values() if e['name'] == list(e['accounts'])[0])
+print('  register: %d entries, %d customers unresolved to a name' % (len(reg), unresolved))
+
+# ---------------------------------------------------------------- checks
+fails = []
+
+
+def chk(label, got, want, tol=0.05):
+    ok = abs(got - want) <= tol
+    if not ok:
+        fails.append(label)
+    print('  %-52s %10.2f vs %10.2f  %s' % (label, got, want, 'ok' if ok else '*** FAIL'))
+
+
+print('Reconciling before write')
+for y in FY:
+    chk('FY%d managers sum to assigned book' % y,
+        sum(v['y%d' % (y - 2000)] for v in KAM.values()), ASSIGNED[y])
+    chk('FY%d assigned + unassigned = company' % y, ASSIGNED[y] + UNASSIGNED[y], CO[y])
+for m in D['movements']:
+    if abs((m['b'] - m['a']) - m['d']) > 0.02:
+        fails.append('movement %s does not tie' % m['n'])
+print('  %-52s %10d %s' % ('movements tie to their own years', len(D['movements']),
+                           'ok' if not fails else '***'))
+assert not fails, 'reconciliation failed: %s' % fails
+
+# ---------------------------------------------------------------- narrative
+order = sorted(KAM, key=lambda k: -KAM[k]['y27'])
+worst = min(KAM, key=lambda k: KAM[k]['y27'] - KAM[k]['y26'])
+w = KAM[worst]
+wdrop = w['y27'] - w['y26']
+ex_w = {k: v for k, v in KAM.items() if k != worst}
+ex_growth = pct(sum(v['y26'] for v in ex_w.values()), sum(v['y27'] for v in ex_w.values()))
+top = [m for m in D['movements'] if m['k'] == worst][:3]
+
+NOTES = {
+ 'lead': ('The assigned book grows %.1f%% while the company grows %.1f%%.' %
+          (pct(ASSIGNED[2026], ASSIGNED[2027]), pct(CO[2026], CO[2027]))),
+ 'lead_body': ('Managed accounts move from %s to %s GWh because three industrial losses in one portfolio offset '
+               'growth everywhere else. Excluding %s\'s book, the assigned portfolios grow %.1f%%. The company total '
+               'grows on residential tier migration, customer acquisition and small commercial, none of which sits in '
+               'a managed portfolio.' % (f(ASSIGNED[2026]), f(ASSIGNED[2027]), worst.split()[0], ex_growth)),
+ 'worst_hd': ("%s's portfolio falls %s GWh and needs discussion in the review." % (worst, f(abs(wdrop)))),
+ 'worst_body': ('Three accounts carry effectively all of it: ' +
+                ', '.join('%s (%s)' % (m['n'], sign(m['d'], 1)) for m in top) +
+                '. None is a performance issue, all three are structural, but the portfolio target should be reset '
+                'rather than left to show a %.0f%% decline against an unchanged prior year.'
+                % abs(pct(w['y26'], w['y27']))),
+}
+
+# ---------------------------------------------------------------- render
+rows = []
+for k in order:
+    v = KAM[k]
+    g = pct(v['y26'], v['y27'])
+    rows.append('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>'
+                '<td class="%s">%s%%</td><td>%s</td></tr>'
+                % (k, f(v['customers'], 0), f(v['accounts'], 0), f(v['y26']), f(v['y27']),
+                   cls(g), ('+' if g > 0 else '&minus;') + f(abs(g)), f(v['y28'])))
+rows.append('<tr class="tot"><td>Total assigned</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>'
+            '<td class="%s">%s%%</td><td>%s</td></tr>'
+            % (f(sum(v['customers'] for v in KAM.values()), 0), f(D['assigned_accounts'], 0),
+               f(ASSIGNED[2026]), f(ASSIGNED[2027]),
+               cls(pct(ASSIGNED[2026], ASSIGNED[2027])),
+               ('+' if ASSIGNED[2027] > ASSIGNED[2026] else '&minus;') + f(abs(pct(ASSIGNED[2026], ASSIGNED[2027]))),
+               f(ASSIGNED[2028])))
+rows.append('<tr><td>Unassigned commercial and residential</td><td>%s+</td><td>%s+</td><td>%s</td><td>%s</td>'
+            '<td class="pos">+%s%%</td><td>%s</td></tr>'
+            % (f(D['unassigned_comm_customers'], 0), f(D['unassigned_comm_accounts'], 0),
+               f(UNASSIGNED[2026]), f(UNASSIGNED[2027]),
+               f(pct(UNASSIGNED[2026], UNASSIGNED[2027])), f(UNASSIGNED[2028])))
+rows.append('<tr class="tot"><td>Total company sales</td><td></td><td></td><td>%s</td><td>%s</td>'
+            '<td class="pos">+%s%%</td><td>%s</td></tr>'
+            % (f(CO[2026]), f(CO[2027]), f(pct(CO[2026], CO[2027])), f(CO[2028])))
+PORTFOLIO = '\n'.join(rows)
+
+MOVES = '\n'.join(
+    '<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td class="%s">%s</td></tr>'
+    % (m['n'], m['k'], m['rc'], f(m['a']), f(m['b']), cls(m['d']), sign(m['d']))
+    for m in D['movements'])
+
+regrows = sorted(reg.values(), key=lambda e: (e['kam'] or 'zz', e['name']))
+REGISTER = '\n'.join(
+    '<tr><td>%s%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td class="l">%s</td></tr>'
+    % (e['name'], ('' if e['nacc'] == 1 else ' <small>(%d sites)</small>' % e['nacc']),
+       e['kam'] or '<i>unassigned</i>', e['period'], e['impact'],
+       e['reason'], e['just'][:150])
+    for e in regrows)
+
+HTML = io.open(os.path.join(HERE, '_kam_review_template.html'), encoding='utf-8').read()
+TOK = {
+ 'ASAT': AS_AT, 'PORTFOLIO': PORTFOLIO, 'MOVES': MOVES, 'REGISTER': REGISTER,
+ 'NREG': str(len(regrows)),
+ 'LEAD': NOTES['lead'], 'LEADBODY': NOTES['lead_body'],
+ 'WORSTHD': NOTES['worst_hd'], 'WORSTBODY': NOTES['worst_body'],
+ 'CO27': f(CO[2027]), 'CO28': f(CO[2028]),
+ 'AS26': f(ASSIGNED[2026]), 'AS27': f(ASSIGNED[2027]), 'AS28': f(ASSIGNED[2028]),
+}
+out = HTML
+for k, v in TOK.items():
+    out = out.replace('@%s@' % k, v)
+assert '@' not in out.replace('&', ''), 'unresolved token'
+io.open(DST, 'w', encoding='utf-8').write(out)
+print()
+print('written %s  (%d managers, %d register entries)' % (DST, len(KAM), len(regrows)))

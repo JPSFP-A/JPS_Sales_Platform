@@ -1,0 +1,34 @@
+{
+ "generated_from": "sales.jmfinancelab.com engine, _y3RcTotals and _dfcGetChain, 31 Aug 2026",
+ "company": {"2026": 3281.97, "2027": 3406.35, "2028": 3475.24},
+ "assigned_accounts": 7143,
+ "unassigned_comm_accounts": 1018,
+ "unassigned_comm_customers": 794,
+ "kam": {
+  "Simone Chisholm":  {"accounts": 3066, "customers": 43, "y26": 328.88, "y27": 339.91, "y28": 336.79},
+  "Nicole Watson":    {"accounts": 186,  "customers": 37, "y26": 211.31, "y27": 222.37, "y28": 233.32},
+  "Tanya Williams":   {"accounts": 1257, "customers": 48, "y26": 190.55, "y27": 204.25, "y28": 206.72},
+  "Sheryl Davis":     {"accounts": 2050, "customers": 38, "y26": 122.88, "y27": 132.89, "y28": 136.42},
+  "Anna-Kay Toyloy":  {"accounts": 86,   "customers": 31, "y26": 110.49, "y27": 127.60, "y28": 129.51},
+  "Ewan Pitter":      {"accounts": 166,  "customers": 29, "y26": 101.36, "y27": 111.11, "y28": 110.44},
+  "Sharmica Holness": {"accounts": 143,  "customers": 21, "y26": 128.34, "y27": 53.81,  "y28": 53.11},
+  "Ruel Barnett":     {"accounts": 95,   "customers": 41, "y26": 41.72,  "y27": 44.95,  "y28": 45.68},
+  "Kenroy Williams":  {"accounts": 94,   "customers": 28, "y26": 37.29,  "y27": 40.19,  "y28": 40.40}
+ },
+ "movements": [
+  {"n": "Alcoa Mins Of Ja Ltd",       "k": "Sharmica Holness", "rc": "RT70", "a": 53.95, "b": 0.94,  "d": -53.01},
+  {"n": "MBJ Airports Limited",       "k": "Sharmica Holness", "rc": "RT70", "a": 16.44, "b": 1.96,  "d": -14.48},
+  {"n": "Windalco",                   "k": "Sharmica Holness", "rc": "RT70", "a": 23.15, "b": 12.42, "d": -10.72},
+  {"n": "PAC Kingston Airport Ltd.",  "k": "Simone Chisholm",  "rc": "RT70", "a": 9.82,  "b": 1.33,  "d": -8.48},
+  {"n": "Caribbean Broilers Ja Ltd",  "k": "Nicole Watson",    "rc": "RT40", "a": 19.10, "b": 22.72, "d": 3.62},
+  {"n": "Juici Beef Limited",         "k": "Sharmica Holness", "rc": "RT50", "a": 4.86,  "b": 8.47,  "d": 3.61},
+  {"n": "Wisynco Group Limited",      "k": "Tanya Williams",   "rc": "RT70", "a": 17.37, "b": 20.11, "d": 2.74},
+  {"n": "National Water Commission",  "k": "Simone Chisholm",  "rc": "RT40", "a": 8.22,  "b": 10.93, "d": 2.71},
+  {"n": "Jamaica Defence Force",      "k": "Ewan Pitter",      "rc": "RT50", "a": 8.19,  "b": 10.42, "d": 2.22},
+  {"n": "Clarendon Distillers Ltd",   "k": "Sharmica Holness", "rc": "RT40", "a": 2.18,  "b": 0.10,  "d": -2.08},
+  {"n": "Jamaica Broilers Group Ltd", "k": "Tanya Williams",   "rc": "RT50", "a": 6.09,  "b": 8.14,  "d": 2.05},
+  {"n": "Jamaica Broilers Ltd",       "k": "Tanya Williams",   "rc": "RT50", "a": 4.88,  "b": 6.81,  "d": 1.93},
+  {"n": "Riu Jamaicotel Limited",     "k": "Anna-Kay Toyloy",  "rc": "RT50", "a": 7.84,  "b": 9.69,  "d": 1.85},
+  {"n": "Half Moon Bay Limited",      "k": "Ruel Barnett",     "rc": "RT50", "a": 2.05,  "b": 0.21,  "d": -1.84}
+ ]
+}
