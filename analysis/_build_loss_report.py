@@ -9,7 +9,7 @@ before a line of the report is written.
 Placeholders are @tokens@ rather than %-format, because the template carries CSS
 percent signs and escaping every one of them is a defect waiting to happen.
 """
-import io, openpyxl
+import io, re, openpyxl
 
 SRC = r'C:\Projects\Sales_Platform\JPS_LE_Sales_Gen_FY2026-28.xlsx'
 DST = r'C:\Projects\Sales_Platform\JPS_System_Losses_FY2026-28.html'
@@ -148,6 +148,24 @@ tr:nth-child(even){background:#f7f9fb}
 .lgd{font-size:10.5px;color:#666;margin:2px 0 14px}
 .sw{display:inline-block;width:22px;height:3px;vertical-align:middle;margin:0 5px 0 12px}
 ul{margin:8px 0 14px;padding-left:20px}li{margin-bottom:6px;line-height:1.45}
+
+@page{
+  size:A4; margin:16mm 13mm 17mm 13mm;
+  @bottom-left{content:"JPS System Losses, FY2026 to FY2028"; font:8.5pt Arial,Helvetica,sans-serif; color:#888}
+  @bottom-right{content:"Page " counter(page) " of " counter(pages); font:8.5pt Arial,Helvetica,sans-serif; color:#888}
+}
+@media print{
+  body{max-width:none;margin:0;padding:0;font-size:10.5pt;background:#fff}
+  h1{font-size:17pt}
+  h2{font-size:12pt;break-after:avoid;page-break-after:avoid}
+  h3{break-after:avoid;page-break-after:avoid}
+  table{font-size:8.6pt;break-inside:auto}
+  thead{display:table-header-group}
+  tr{break-inside:avoid;page-break-inside:avoid}
+  .key,.warn,.gap,.note,.act,.rk,.kpi,.wf,svg{break-inside:avoid;page-break-inside:avoid}
+  .wf{overflow:visible}
+  a{text-decoration:none;color:inherit}
+}
 </style></head><body>
 
 <h1>System Losses, FY2026 to FY2028</h1>
@@ -244,6 +262,6 @@ TOK = {'s26': f(FY[2026][0]), 's27': f(FY[2027][0]), 's28': f(FY[2028][0]),
 out = HTML
 for k, v in TOK.items():
     out = out.replace('@%s@' % k, v)
-assert '@' not in out.replace('&', ''), 'unresolved token in template'
+assert not re.search(r'@[A-Z0-9_]+@', out), 'unresolved token in template'
 io.open(DST, 'w', encoding='utf-8').write(out)
 print('written', DST)

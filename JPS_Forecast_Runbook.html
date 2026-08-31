@@ -216,6 +216,24 @@
   a{color:var(--accent)}
   hr.end{border:none;border-top:2px solid var(--ink);margin:70px 0 22px}
   .colophon{font-size:13px;color:var(--ink-3);font-family:"IBM Plex Sans",sans-serif;line-height:1.6}
+
+@page{
+  size:A4; margin:16mm 13mm 17mm 13mm;
+  @bottom-left{content:"JPS Sales Forecast Runbook"; font:8.5pt Arial,Helvetica,sans-serif; color:#888}
+  @bottom-right{content:"Page " counter(page) " of " counter(pages); font:8.5pt Arial,Helvetica,sans-serif; color:#888}
+}
+@media print{
+  body{max-width:none;margin:0;padding:0;font-size:10.5pt;background:#fff}
+  h1{font-size:17pt}
+  h2{font-size:12pt;break-after:avoid;page-break-after:avoid}
+  h3{break-after:avoid;page-break-after:avoid}
+  table{font-size:8.6pt;break-inside:auto}
+  thead{display:table-header-group}
+  tr{break-inside:avoid;page-break-inside:avoid}
+  .key,.warn,.gap,.note,.act,.rk,.kpi,.wf,svg{break-inside:avoid;page-break-inside:avoid}
+  .wf{overflow:visible}
+  a{text-decoration:none;color:inherit}
+}
 </style>
 
 <div class="wrap">
