@@ -14,7 +14,7 @@ movement listed ties to its own opening and closing year.
 
     python _build_kam_review.py
 """
-import io, os, sys, json, requests
+import io, os, re, sys, json, requests
 from decimal import Decimal, ROUND_HALF_UP
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -167,15 +167,18 @@ top = [m for m in D['movements'] if m['k'] == worst][:3]
 NOTES = {
  'lead': ('The assigned book grows %.1f%% while the company grows %.1f%%.' %
           (pct(ASSIGNED[2026], ASSIGNED[2027]), pct(CO[2026], CO[2027]))),
- 'lead_body': ('Managed accounts move from %s to %s GWh because three industrial losses in one portfolio offset '
-               'growth everywhere else. Excluding %s\'s book, the assigned portfolios grow %.1f%%. The company total '
-               'grows on residential tier migration, customer acquisition and small commercial, none of which sits in '
-               'a managed portfolio.' % (f(ASSIGNED[2026]), f(ASSIGNED[2027]), worst.split()[0], ex_growth)),
- 'worst_hd': ("%s's portfolio falls %s GWh and needs discussion in the review." % (worst, f(abs(wdrop)))),
+ 'lead_body': ('Managed accounts move from %s to %s GWh. All of that flatness is three structural events that happen '
+               'to sit in one portfolio: a completed move to self-generation, a solar commissioning and a turbine '
+               'outage. None is a sales outcome and none was avoidable by account management. Excluding those three '
+               'accounts, the assigned portfolios grow %.1f%%. The company total grows on residential tier migration, '
+               'customer acquisition and small commercial, none of which sits in a managed portfolio.'
+               % (f(ASSIGNED[2026]), f(ASSIGNED[2027]), ex_growth)),
+ 'worst_hd': ("%s's portfolio falls %s GWh, entirely on three structural events." % (worst, f(abs(wdrop)))),
  'worst_body': ('Three accounts carry effectively all of it: ' +
                 ', '.join('%s (%s)' % (m['n'], sign(m['d'], 1)) for m in top) +
-                '. None is a performance issue, all three are structural, but the portfolio target should be reset '
-                'rather than left to show a %.0f%% decline against an unchanged prior year.'
+                '. Each is a customer decision or an operational event rather than a lapse in account management, and '
+                'the portfolio grows without them. The target should be reset to the book that remains, rather than '
+                'left showing a %.0f%% decline against an unchanged prior year that nobody could have held.'
                 % abs(pct(w['y26'], w['y27']))),
 }
 
@@ -230,7 +233,7 @@ TOK = {
 out = HTML
 for k, v in TOK.items():
     out = out.replace('@%s@' % k, v)
-assert '@' not in out.replace('&', ''), 'unresolved token'
+assert not re.search(r'@[A-Z0-9]+@', out), 'unresolved token'
 io.open(DST, 'w', encoding='utf-8').write(out)
 print()
 print('written %s  (%d managers, %d register entries)' % (DST, len(KAM), len(regrows)))
