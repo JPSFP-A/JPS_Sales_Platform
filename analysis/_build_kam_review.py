@@ -86,24 +86,57 @@ def rest(table, params, page=10000):
         off += page
 
 
-adj = rest('jps_operational_adjustments',
-           {'select': 'jps_ac,year,month,operational_pct,manual_kwh,reason_code,justification,basis,created_by',
-            'year': 'gte.2027'})
+CACHE = os.path.join(HERE, '_kam_register_cache.json')
+
+
+def fetch_inputs():
+    """Adjustments, the KAM map, and names for the accounts that need them.
+
+    Cached to disk on every success. A TLS-inspecting proxy on the corporate
+    network intermittently blocks this host, and a report that cannot be rebuilt
+    because of a transient network fault is worse than one built from the last
+    known-good inputs, provided it says so.
+    """
+    a = rest('jps_operational_adjustments',
+             {'select': 'jps_ac,year,month,operational_pct,manual_kwh,reason_code,'
+                        'justification,basis,created_by', 'year': 'gte.2027'})
+    km = rest('jps_kam', {'select': 'jps_ac,kam'})
+    acs = sorted({r['jps_ac'] for r in a})
+    nm = {}
+    for i in range(0, len(acs), 40):
+        chunk = acs[i:i + 40]
+        for r in rest('jps_actuals',
+                      {'select': 'jps_ac,name', 'year': 'eq.2026',
+                       'jps_ac': 'in.(%s)' % ','.join(chunk)}):
+            if r.get('name'):
+                nm.setdefault(r['jps_ac'], r['name'])
+    out = {'adj': a, 'kam': km, 'names': nm}
+    io.open(CACHE, 'w', encoding='utf-8').write(json.dumps(out))
+    return out, False
+
+
+try:
+    DATA_IN, from_cache = fetch_inputs()
+except Exception as exc:
+    if not os.path.exists(CACHE):
+        print('Supabase unreachable and no cache at %s' % CACHE)
+        print('  %s' % exc)
+        sys.exit(1)
+    DATA_IN, from_cache = json.load(io.open(CACHE, encoding='utf-8')), True
+    print('  Supabase unreachable, built from cache: %s' % type(exc).__name__)
+
+adj = DATA_IN['adj']
+_km = DATA_IN['kam']
+names = DATA_IN['names']
 # jps_kam is mixed grain: some rows map a whole customer, some a single service
 # point, and an account-level row wins. Resolving at account grain alone reported
 # 45 of 53 adjustment accounts as unassigned when only 3 actually are.
-_km = rest('jps_kam', {'select': 'jps_ac,kam'})
 kam_acct = {r['jps_ac']: r['kam'] for r in _km if '-' in r['jps_ac']}
 kam_cust = {r['jps_ac']: r['kam'] for r in _km if '-' not in r['jps_ac']}
 
 
 def kam_of(ac):
     return kam_acct.get(ac) or kam_cust.get(ac.split('-')[0])
-names = {}
-for r in rest('jps_actuals', {'select': 'jps_ac,name', 'year': 'eq.2026'}):
-    if r.get('name'):
-        names.setdefault(r['jps_ac'], r['name'])
-
 MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 
