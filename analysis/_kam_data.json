@@ -1,5 +1,5 @@
 {
- "generated_from": "sales.jmfinancelab.com engine, _y3RcTotals and _dfcGetChain, 31 Aug 2026, after the MBJ re-solve, the Ministry of Health regional mapping and Kingston Free Port Terminal assigned to Jean Waugh-Evans",
+ "generated_from": "sales.jmfinancelab.com engine, 31 Aug 2026, after the MBJ re-solve, the Ministry of Health regional mapping, and Kingston Free Port Terminal plus the University of Technology RT70 point assigned to Jean Waugh-Evans",
  "company": {
   "2026": 3281.97,
   "2027": 3406.9,
@@ -45,11 +45,11 @@
    "y28": 136.42
   },
   "Ewan Pitter": {
-   "accounts": 166,
+   "accounts": 165,
    "customers": 29,
-   "y26": 101.36,
-   "y27": 109.32,
-   "y28": 109.43
+   "y26": 97.27,
+   "y27": 106.26,
+   "y28": 109.27
   },
   "Sharmica Holness": {
    "accounts": 192,
@@ -73,11 +73,11 @@
    "y28": 40.4
   },
   "Jean Waugh-Evans": {
-   "accounts": 1,
-   "customers": 1,
-   "y26": 25.28,
-   "y27": 26.08,
-   "y28": 25.44
+   "accounts": 2,
+   "customers": 2,
+   "y26": 29.37,
+   "y27": 29.14,
+   "y28": 25.59
   }
  },
  "movements": [
