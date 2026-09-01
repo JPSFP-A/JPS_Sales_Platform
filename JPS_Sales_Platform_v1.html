@@ -3748,17 +3748,47 @@ function sw(id,el){
   // without ever visiting a commercial tab previously showed a silently-undercounted
   // residential-only total with no loading indicator.
   const _commSections=['ov','es','cm','df','ro','fc','le','dfc','adjlog','rcfr','y3cmp'];
-  if(_commSections.includes(id)&&!_commDetailLoaded){
-    loadCommercialDetail().catch(e=>console.warn('loadCommercialDetail:',e));
-  }
-  setTimeout(()=>{
+  const _paint=()=>{
     try{if(_swSections.includes(id))buildCharts();}catch(ce){console.warn('buildCharts error:',ce);}
     try{renderSection(id);}catch(re){
       console.error('renderSection error ['+id+']:',re);
       const sec=document.getElementById(id);
-      if(sec)sec.innerHTML='<div style="padding:40px;color:red;font-family:monospace;font-size:13px"><b>Render error in ['+id+']:</b><br>'+re.message+'<br><pre style="white-space:pre-wrap;font-size:11px">'+re.stack+'</pre></div>';
+      if(!sec)return;
+      // A not-loaded guard is a timing condition, not a defect. Offer a retry
+      // rather than a stack trace, which reads as a broken page.
+      if(/^(COMM|CORE)_NOT_LOADED/.test(re.message||'')){
+        sec.innerHTML='<div style="padding:40px;font-size:13px;color:var(--text2)">'
+          +'<b>Still loading account detail.</b><br><br>This page needs the commercial accounts, which load '
+          +'separately from the residential rows. It normally takes a few seconds.<br><br>'
+          +'<button class="btn btn-o" data-sec="'+id+'" onclick="sw(this.dataset.sec,null)">Retry</button></div>';
+      } else {
+        sec.innerHTML='<div style="padding:40px;color:red;font-family:monospace;font-size:13px"><b>Render error in ['+id+']:</b><br>'+re.message+'<br><pre style="white-space:pre-wrap;font-size:11px">'+re.stack+'</pre></div>';
+      }
     }
-  },60);
+  };
+  // Commercial detail loads separately. Painting on a fixed 60ms timer raced that
+  // fetch: on a cold page the guard in _dfcBuildIndices threw COMM_NOT_LOADED and
+  // the user saw a stack trace on Driver Forecast. Wait for the load instead.
+  if(_commSections.includes(id)&&!_commDetailLoaded){
+    const sec=document.getElementById(id);
+    if(sec&&!sec.querySelector('.comm-wait')){
+      const w=document.createElement('div');
+      w.className='comm-wait';
+      w.style.cssText='padding:10px 12px;margin:0 0 12px;border-left:3px solid var(--teal);background:var(--card);font-size:12px;color:var(--text2)';
+      w.textContent='Loading commercial account detail…';
+      sec.insertBefore(w,sec.firstChild);
+    }
+    loadCommercialDetail()
+      .catch(e=>console.warn('loadCommercialDetail:',e))
+      .then(()=>{
+        const sec2=document.getElementById(id);
+        const w=sec2&&sec2.querySelector('.comm-wait');
+        if(w)w.remove();
+        setTimeout(_paint,0);
+      });
+  } else {
+    setTimeout(_paint,60);
+  }
   if(typeof _rtAnnouncePresence==='function')_rtAnnouncePresence(id);
 }
 
