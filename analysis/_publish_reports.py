@@ -13,6 +13,19 @@ the other push scripts use.
 """
 import io, os, sys, json, mimetypes, requests
 
+# A TLS-inspecting proxy on the corporate network re-signs HTTPS with a private
+# root. curl, git and Chrome trust it because they use the Windows certificate
+# store; requests uses certifi's bundle and does not, which is why this script
+# failed with CERTIFICATE_VERIFY_FAILED while the browser worked. truststore
+# points Python at the OS store. Verification stays ON: this is the correct fix,
+# not verify=False.
+try:
+    import truststore
+    truststore.inject_into_ssl()
+except Exception:
+    pass
+
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 BUCKET = 'sales-reports'

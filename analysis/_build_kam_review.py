@@ -15,6 +15,19 @@ movement listed ties to its own opening and closing year.
     python _build_kam_review.py
 """
 import io, os, re, sys, json, requests
+
+# A TLS-inspecting proxy on the corporate network re-signs HTTPS with a private
+# root. curl, git and Chrome trust it because they use the Windows certificate
+# store; requests uses certifi's bundle and does not, which is why this script
+# failed with CERTIFICATE_VERIFY_FAILED while the browser worked. truststore
+# points Python at the OS store. Verification stays ON: this is the correct fix,
+# not verify=False.
+try:
+    import truststore
+    truststore.inject_into_ssl()
+except Exception:
+    pass
+
 from decimal import Decimal, ROUND_HALF_UP
 
 HERE = os.path.dirname(os.path.abspath(__file__))
