@@ -141,8 +141,42 @@ for e in reg.values():
     e['nacc'] = len(e['accounts'])
     e['entered'] = ', '.join(sorted(e['by'])) if e['by'] else ''
 
+# The register is for key account managers to confirm what they entered. Analyst
+# modelling adjustments are not theirs to confirm and are documented in the driver
+# report instead, so they are dropped here. An entry is only dropped when every row
+# in it is analyst-entered: PAC Kingston Airport carries rows from both Simone
+# Chisholm and the analyst, and filtering by row would show it as one month when it
+# spans three.
+ANALYST = ('jwilson', 'jordache')
+
+
+def analyst_only(e):
+    return e['by'] and all(any(a in b.lower() for a in ANALYST) for b in e['by'])
+
+
+hidden = {k: e for k, e in reg.items() if analyst_only(e)}
+reg = {k: e for k, e in reg.items() if not analyst_only(e)}
+mixed = [e['name'] for e in reg.values()
+         if any(any(a in b.lower() for a in ANALYST) for b in e['by'])]
+
 unresolved = sum(1 for e in reg.values() if e['name'] == list(e['accounts'])[0])
-print('  register: %d entries, %d customers unresolved to a name' % (len(reg), unresolved))
+print('  register: %d entries shown, %d analyst entries hidden, %d unresolved to a name'
+      % (len(reg), len(hidden), unresolved))
+for e in sorted(hidden.values(), key=lambda x: x['name']):
+    print('     hidden: %-38s %s' % (e['name'][:38], ', '.join(sorted(e['by']))))
+# An account can have some months entered by its manager and others by the analyst,
+# so a shown entry may cover fewer months than the adjustment actually spans. Mark
+# those rather than let the period read as the whole story.
+hidden_acc = {}
+for e in hidden.values():
+    for ac in e['accounts']:
+        hidden_acc.setdefault(ac, []).append(e['period'])
+for e in reg.values():
+    extra = sorted({p for ac in e['accounts'] for p in hidden_acc.get(ac, [])})
+    e['partial'] = extra
+part = [e['name'] for e in reg.values() if e['partial']]
+if part:
+    print('     shown but with further months hidden: %s' % ', '.join(sorted(set(part))))
 
 # ---------------------------------------------------------------- checks
 fails = []
@@ -229,14 +263,16 @@ regrows = sorted(reg.values(), key=lambda e: (e['kam'] or 'zz', e['name']))
 REGISTER = '\n'.join(
     '<tr><td>%s%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td class="l">%s</td></tr>'
     % (e['name'], ('' if e['nacc'] == 1 else ' <small>(%d sites)</small>' % e['nacc']),
-       e['kam'] or '<i>unassigned</i>', e['entered'], e['period'], e['impact'],
-       e['reason'], e['just'][:150])
+       e['kam'] or '<i>unassigned</i>', e['entered'],
+       e['period'] + ('' if not e['partial'] else
+                      ' <small>(+%d more entered by Sales Forecasting)</small>' % len(e['partial'])),
+       e['impact'], e['reason'], e['just'][:150])
     for e in regrows)
 
 HTML = io.open(os.path.join(HERE, '_kam_review_template.html'), encoding='utf-8').read()
 TOK = {
  'ASAT': AS_AT, 'PORTFOLIO': PORTFOLIO, 'MOVES': MOVES, 'REGISTER': REGISTER,
- 'NREG': str(len(regrows)),
+ 'NREG': str(len(regrows)), 'NHID': str(len(hidden)),
  'LEAD': NOTES['lead'], 'LEADBODY': NOTES['lead_body'],
  'WORSTHD': NOTES['worst_hd'], 'WORSTBODY': NOTES['worst_body'],
  'CO27': f(CO[2027]), 'CO28': f(CO[2028]),
