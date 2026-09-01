@@ -66,9 +66,9 @@ small{color:#666}
 <div class="note">Ranked by absolute movement. Every row is an account chain from the engine, so the change is what the forecast actually carries rather than the face value of any adjustment entered against it.</div>
 
 <h2>Adjustment Register</h2>
-<div class="note">@NREG@ entries affecting FY2027 and beyond, read from the operational adjustments log. One row per account and reason, with the months it spans. Percentages are solved values, not face values, because the engine applies each driver against a rolling three-month base. Entering a flat &minus;50% would compound to a 58% drop in the second month and leave the base wrong thereafter.</div>
+<div class="note">@NREG@ entries affecting FY2027 and beyond, read from the operational adjustments log. One row per account and reason, with the months it spans, and the user who entered it. The manager shown is the account owner from the mapping, resolved at account and customer grain, which is not always the person who entered the adjustment. Percentages are solved values, not face values, because the engine applies each driver against a rolling three-month base. Entering a flat &minus;50% would compound to a 58% drop in the second month and leave the base wrong thereafter.</div>
 <table>
-<tr><th class="l">Account</th><th class="l">Key Account Manager</th><th>Period</th><th>Impact</th><th>Reason</th><th class="l">Basis</th></tr>
+<tr><th class="l">Account</th><th class="l">Key Account Manager</th><th class="l">Entered by</th><th>Period</th><th>Impact</th><th>Reason</th><th class="l">Basis</th></tr>
 @REGISTER@
 </table>
 

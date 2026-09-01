@@ -87,9 +87,18 @@ def rest(table, params, page=10000):
 
 
 adj = rest('jps_operational_adjustments',
-           {'select': 'jps_ac,year,month,operational_pct,manual_kwh,reason_code,justification,basis',
+           {'select': 'jps_ac,year,month,operational_pct,manual_kwh,reason_code,justification,basis,created_by',
             'year': 'gte.2027'})
-kmap = {r['jps_ac']: r['kam'] for r in rest('jps_kam', {'select': 'jps_ac,kam'})}
+# jps_kam is mixed grain: some rows map a whole customer, some a single service
+# point, and an account-level row wins. Resolving at account grain alone reported
+# 45 of 53 adjustment accounts as unassigned when only 3 actually are.
+_km = rest('jps_kam', {'select': 'jps_ac,kam'})
+kam_acct = {r['jps_ac']: r['kam'] for r in _km if '-' in r['jps_ac']}
+kam_cust = {r['jps_ac']: r['kam'] for r in _km if '-' not in r['jps_ac']}
+
+
+def kam_of(ac):
+    return kam_acct.get(ac) or kam_cust.get(ac.split('-')[0])
 names = {}
 for r in rest('jps_actuals', {'select': 'jps_ac,name', 'year': 'eq.2026'}):
     if r.get('name'):
@@ -111,9 +120,11 @@ for a in adj:
     k = (nm(label), a.get('reason_code') or '', a.get('justification') or '')
     e = reg.setdefault(k, {'name': label, 'reason': a.get('reason_code') or '',
                            'just': a.get('justification') or '', 'months': [], 'pcts': set(),
-                           'accounts': set(), 'basis': a.get('basis') or ''})
+                           'accounts': set(), 'basis': a.get('basis') or '', 'by': set()})
     e['months'].append((a['year'], a['month']))
     e['accounts'].add(a['jps_ac'])
+    if a.get('created_by'):
+        e['by'].add(a['created_by'])
     if a.get('operational_pct') is not None:
         e['pcts'].add(round(float(a['operational_pct']), 2))
 
@@ -125,9 +136,10 @@ for e in reg.values():
     p = sorted(e['pcts'])
     e['impact'] = 'not quantified' if not p else (('%.0f%%' % p[0]) if len(p) == 1 else
                                                   '%.0f%% to %.0f%%' % (p[0], p[-1]))
-    ks = {kmap.get(ac) for ac in e['accounts']} - {None}
+    ks = {kam_of(ac) for ac in e['accounts']} - {None}
     e['kam'] = ', '.join(sorted(ks)) if ks else ''
     e['nacc'] = len(e['accounts'])
+    e['entered'] = ', '.join(sorted(e['by'])) if e['by'] else ''
 
 unresolved = sum(1 for e in reg.values() if e['name'] == list(e['accounts'])[0])
 print('  register: %d entries, %d customers unresolved to a name' % (len(reg), unresolved))
@@ -215,9 +227,9 @@ MOVES = '\n'.join(
 
 regrows = sorted(reg.values(), key=lambda e: (e['kam'] or 'zz', e['name']))
 REGISTER = '\n'.join(
-    '<tr><td>%s%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td class="l">%s</td></tr>'
+    '<tr><td>%s%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td class="l">%s</td></tr>'
     % (e['name'], ('' if e['nacc'] == 1 else ' <small>(%d sites)</small>' % e['nacc']),
-       e['kam'] or '<i>unassigned</i>', e['period'], e['impact'],
+       e['kam'] or '<i>unassigned</i>', e['entered'], e['period'], e['impact'],
        e['reason'], e['just'][:150])
     for e in regrows)
 
