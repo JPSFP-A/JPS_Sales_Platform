@@ -10,7 +10,7 @@ import openpyxl
 SRC = sys.argv[1] if len(sys.argv) > 1 else r"C:\Users\jwilson\AppData\Local\Temp\Customer-Monthly-Transaction-Report-7-26 (1).xlsx"
 DRY_RUN = '--dry-run' in sys.argv
 
-SECRET = open(r'D:\Projects\DataManager\.env').read().split('=', 1)[1].strip()
+SECRET = open(r'C:\Projects\DataManager\.env').read().split('=', 1)[1].strip()
 URL = 'https://bhrswnbenkvflpdjhfpa.supabase.co/rest/v1/jps_actuals'
 HDRS = {'apikey': SECRET, 'Authorization': 'Bearer ' + SECRET, 'Content-Type': 'application/json',
         'Prefer': 'resolution=merge-duplicates,return=minimal'}
@@ -69,12 +69,14 @@ unmapped_samples = []
 months_seen = set()
 for r in rows:
     tariff = str(r[6] or '').strip()
-    if tariff == 'RT10-PAYG':
-        rc = 'RT10'
-    elif tariff == 'RT20-PAYG':
+    if tariff == 'RT20-PAYG':
         rc = 'RT20'
     else:
-        rc = 'UNASSIGNED-PAYG'
+        # RT10-PAYG and 'unassigned' both land in RT10 -- sampled 'unassigned' accounts
+        # are indistinguishable from ordinary RT10 residential prepaid usage (see
+        # 2026-08-18 review), so JPS's own un-tagged rows fold into RT10 rather than
+        # sitting in a separate UNASSIGNED-PAYG bucket most of the app never reads.
+        rc = 'RT10'
     parish = resolve_parish(r[5])
     if parish == 'UNMAPPED' and len(unmapped_samples) < 10:
         unmapped_samples.append(r[5])
