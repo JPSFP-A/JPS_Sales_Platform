@@ -11173,12 +11173,45 @@ function _dfcSyncChainCache(){
   if(sig!==_dfcCacheSig){_dfcYearChainCache={};_dfcSolarPctCache=null;_dfcCacheSig=sig;return true;}
   return false;
 }
+// The actual/forecast cutoff. This used to be `lockedThru=curMonth`, driven by the
+// wall clock: on 1 September the engine began treating August as closed whether or
+// not August had been loaded, and a closed month with no rows resolves to zero
+// (see _dfcComputeChain: `total: act||0`) rather than falling back to its forecast.
+// September 2026 hit exactly that -- August carried the prepaid feed (3.2 GWh) and
+// nothing else, so a 295 GWh month would have read as 3, and Oct-Dec inherited the
+// collapse through their rolling 3-month base.
+//
+// A month is closed only once every feed that makes up a month has landed for it:
+// commercial account rows AND residential postpaid bucket rows. Prepaid on its own
+// is not a month. The cutoff is the unbroken run from January, so a gap in the
+// middle can never be locked over, and it is capped at curMonth so this can only
+// ever lock fewer months than the old rule, never more.
+let _dfcClosedThruCache=0,_dfcClosedThruKey='';
+function _dfcClosedThru(year){
+  const k=`${year}|${sbActuals.length}|${sbActualsComm.length}|${curMonth}`;
+  if(_dfcClosedThruKey===k)return _dfcClosedThruCache;
+  const comm={},resPostpaid={};
+  _sbAllActuals().forEach(r=>{
+    if(Number(r.year)!==year)return;
+    const m=Number(r.month);
+    if(!(m>=1&&m<=12))return;
+    if(_isComm(r))comm[m]=true;
+    else if(String(r.consumption_bucket||'')!=='Prepaid')resPostpaid[m]=true;
+  });
+  let thru=0;
+  for(let m=1;m<=curMonth;m++){
+    if(!comm[m]||!resPostpaid[m])break;
+    thru=m;
+  }
+  _dfcClosedThruKey=k;_dfcClosedThruCache=thru;
+  return thru;
+}
 function _dfcGetChain(idx,key,isAccount,driverCtx,opAc,year,newCustCtx){
   const cacheKey=`${year}|${key}|${isAccount}|${opAc||''}`;
   if(_dfcYearChainCache[cacheKey])return _dfcYearChainCache[cacheKey];
   let lockedThru=0,carryIn=null;
   if(year===FC_BUD_YEAR){
-    lockedThru=curMonth;
+    lockedThru=_dfcClosedThru(year);
   }else if(year>FC_BUD_YEAR){
     // Carry the prior year's Oct/Nov/Dec tail forward -- that tail is what preserves a
     // PERMANENT LEVEL SHIFT (a confirmed mid-year defection like Alcoa RT70 going 100%
@@ -11301,7 +11334,7 @@ function renderDriverForecast(){
     for(let y=FC_BUD_YEAR;y<=FC_BUD_YEAR+4;y++)yrSel.innerHTML+=`<option value="${y}">${y}</option>`;
   }
   const year=parseInt(yrSel?.value)||FC_BUD_YEAR;
-  const lockedThru=year===FC_BUD_YEAR?curMonth:0; // only the real current year has any closed/actual months
+  const lockedThru=year===FC_BUD_YEAR?_dfcClosedThru(year):0; // only the real current year has any closed/actual months
   const months=[1,2,3,4,5,6,7,8,9,10,11,12];
   const grp=document.getElementById('dfc_group')?.value||'customer';
   const q=(document.getElementById('dfc_search')?.value||'').toLowerCase();
@@ -11698,7 +11731,7 @@ function renderMacroAssumptions(){
   const wrap=document.getElementById('macro_table');if(!wrap)return;
   // Actual/locked months use the real actual value, not the driver math — a macro
   // % entered there would never be read, so don't offer it as editable.
-  const lockedThru=year===FC_BUD_YEAR?curMonth:0;
+  const lockedThru=year===FC_BUD_YEAR?_dfcClosedThru(year):0;
   const months=[1,2,3,4,5,6,7,8,9,10,11,12];
   const industries=[...new Set(sbIndustries.map(i=>i.industry).filter(Boolean))].sort();
   const rows=[
@@ -13172,7 +13205,7 @@ function renderRcForecastReport(){
     for(let y=FC_BUD_YEAR;y<=FC_BUD_YEAR+4;y++)yrSel.innerHTML+=`<option value="${y}">${y}</option>`;
   }
   const year=parseInt(yrSel?.value)||FC_BUD_YEAR;
-  const lockedThru=year===FC_BUD_YEAR?curMonth:0; // only the real current year has any closed/actual months
+  const lockedThru=year===FC_BUD_YEAR?_dfcClosedThru(year):0; // only the real current year has any closed/actual months
   // See _dfcToLERows for why this matters — without it, this can get stuck on
   // chains cached from an earlier, incomplete render and silently diverge from
   // what Driver Forecast itself currently shows.
@@ -13553,7 +13586,7 @@ function _frCollectData(yearOverride){
   // Months-elapsed for THIS report year -- only the real current year (FC_BUD_YEAR)
   // has any actual/closed months; a future year is 100% forecast. Mirrors the
   // lockedThru rule renderRcForecastReport() already uses for the same reason.
-  const repCurMonth=year===FC_BUD_YEAR?curMonth:0;
+  const repCurMonth=year===FC_BUD_YEAR?_dfcClosedThru(year):0;
   _dfcResetYearChainCache();
   const idx=_dfcBuildIndices();
   const commAccounts=_dfcBuildCommAccounts(year).filter(a=>a.rate_class!=='EV');
@@ -13803,7 +13836,7 @@ function _budgetRowFromChain(c,meta){
 // Builds every row for one year without touching the DB. Returns {rows,summary} so the
 // caller can show the user what is about to be committed before anything is written.
 function _budgetBuildYear(versionId,year){
-  const repCurMonth=year===FC_BUD_YEAR?curMonth:0;
+  const repCurMonth=year===FC_BUD_YEAR?_dfcClosedThru(year):0;
   _dfcResetYearChainCache();
   const idx=_dfcBuildIndices();
   const commAccounts=_dfcBuildCommAccounts(year).filter(a=>a.rate_class!=='EV');
@@ -14051,7 +14084,7 @@ function _bridgeChain(idx,e,year){
 }
 function _bridgeTotalActual(idx,e,year,rc){
   if(rc&&e.rate_class!==rc)return 0;
-  // _dfcGetChain only special-cases year===FC_BUD_YEAR (lockedThru=curMonth) and
+  // _dfcGetChain only special-cases year===FC_BUD_YEAR (lockedThru=_dfcClosedThru) and
   // year>FC_BUD_YEAR (cross-year cascade) -- for year<FC_BUD_YEAR neither branch
   // fires, so lockedThru silently stays 0 and every month gets computed as if it
   // were UNFORECAST, instead of reading the real (already-closed) actuals. Same
