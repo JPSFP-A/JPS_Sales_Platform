@@ -7,7 +7,29 @@
 # Generalized from rt20_split_jun26.py (originally hardcoded to June 2026) so it
 # can be rerun each month against that month's "Billing Details Report_<Mon> <YYYY>"
 # file. Usage: python rt20_split.py <YYYY> <M> "<billing file path>"
-import json, sys, csv
+import io, json, sys, csv
+
+# The Parish column in the raw export holds the BRANCH/TOWN (Montego Bay, Spanish
+# Town, KSA North...), not the parish grouping jps_actuals is keyed on. Every other
+# loader maps it through this file; this one did not, so the August 2026 load wrote
+# 23,662 rows under town names. Because the engine keys cohorts on
+# rate_class|parish|consumption_bucket, those rows matched no prior month: each
+# cohort lost its history and the next month's rolling three-month base would have
+# been built from two months instead of three. Class totals were unaffected, which
+# is exactly why it was not obvious.
+_PG = r"C:\Users\jwilson\Downloads\Parish Grouping.csv"
+PMAP = {}
+with io.open(_PG, encoding='utf-8-sig') as _f:
+    for _r in list(csv.reader(_f))[1:]:
+        if len(_r) >= 2:
+            PMAP[str(_r[0]).strip().upper()] = _r[1]
+
+
+def map_parish(raw):
+    v = str(raw or '').strip()
+    if not v:
+        return 'UNMAPPED'
+    return PMAP.get(v.upper(), 'UNMAPPED')
 
 YEAR = int(sys.argv[1])
 MONTH = int(sys.argv[2])
@@ -136,7 +158,7 @@ for r in _rows():
     naics_col = 'NAICS Code' if 'NAICS Code' in idx else ('sicc_code' if 'sicc_code' in idx else None)
     naics = str(r[idx[naics_col]] if naics_col and idx[naics_col] < len(r) else '').strip()
     prem = str(r[idx['Prem_Code']] or '').strip() if idx.get('Prem_Code', -1) < len(r) else ''
-    parish = str(r[idx['Parish']] or '').strip() if idx.get('Parish', -1) < len(r) else 'UNMAPPED'
+    parish = map_parish(r[idx['Parish']]) if idx.get('Parish', -1) < len(r) else 'UNMAPPED'
     name = str(r[idx['Name']] or '').strip() if idx.get('Name', -1) < len(r) else ''
 
     kwh = num(r[idx['net_kwh_billed_consump']]) if 'net_kwh_billed_consump' in idx else 0.0
