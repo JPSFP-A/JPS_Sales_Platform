@@ -27,13 +27,18 @@ def _discover_billing_files():
             print('  ?? duplicate files for', key, ':', files[key], 'vs', base, '- keeping first', flush=True)
             continue
         files[key]=base
-    # Secondary source: raw CIS exports named "<Mon> <YY>.csv" (e.g. "Feb 25.csv") -
-    # same column schema as the xlsx extracts, comma-delimited w/ quoted fields. Only
-    # fills months the xlsx source above didn't already find (never overrides one).
-    csv_cands=sorted(set(_glob.glob(os.path.join(DL,'*.csv'))+_glob.glob('*.csv')))
-    for fp in csv_cands:
+    # Secondary source: raw CIS exports named "<Mon> <YY>.<ext>" (e.g. "Feb 25.csv",
+    # "Aug 26.xls") - same column schema as the xlsx extracts. The extension says how
+    # the export was saved, not what it is: .csv is comma-delimited with quoted fields,
+    # .xls off this report is tab-delimited text behind a five-line report header. proc()
+    # sniffs the real format, so both are accepted here rather than forcing a rename
+    # that would mislabel a TSV as a CSV. Only fills months the xlsx source above didn't
+    # already find (never overrides one).
+    raw_cands=sorted(set(sum([_glob.glob(os.path.join(DL,p))+_glob.glob(p)
+                              for p in ('*.csv','*.xls','*.xlsx')], [])))
+    for fp in raw_cands:
         base=os.path.basename(fp)
-        m=_re.match(r'(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+(\d{2})\.CSV$', base.upper())
+        m=_re.match(r'(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+(\d{2})\.(CSV|XLS|XLSX)$', base.upper())
         if not m: continue
         key='20%s-%02d'%(m.group(2), _MONNUM[m.group(1)])
         if key in files: continue

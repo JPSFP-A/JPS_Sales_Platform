@@ -110,6 +110,16 @@ def main():
     special = set(who_map.keys())
 
     files = sorted(set(glob.glob("Check Consumption*.xlsx")) | set(glob.glob("Check Consumption*.xls")))
+    # Optional filename filter: `python monthly_loader.py "August 2026"` processes only
+    # the files whose name contains that. Reprocessing every month is safe (the upserts
+    # are idempotent) but each file is a 40-100MB full scan, so a month-end run that
+    # only needs the new month should not pay for twenty of them.
+    want = [a for a in sys.argv[1:] if not a.startswith("-")]
+    if want:
+        files = [f for f in files if any(w.lower() in f.lower() for w in want)]
+        if not files:
+            print("no 'Check Consumption*' file matches", want)
+            sys.exit(1)
     print("files:", len(files))
     if not files:
         print("No 'Check Consumption*' files found in", HERE)

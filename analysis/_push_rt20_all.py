@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import json, requests, glob, os, re, time
 
-SECRET = open(r'D:\Projects\DataManager\.env').read().split('=', 1)[1].strip()
+SECRET = open(r'C:\Projects\DataManager\.env').read().split('=', 1)[1].strip()
 URL = 'https://bhrswnbenkvflpdjhfpa.supabase.co/rest/v1/jps_actuals'
 HDRS = {'apikey': SECRET, 'Authorization': 'Bearer ' + SECRET, 'Content-Type': 'application/json',
         'Prefer': 'resolution=merge-duplicates,return=minimal'}
@@ -9,6 +9,15 @@ KEYS = ['jps_ac', 'year', 'month', 'rate_class', 'name', 'consumption_bucket', '
         'demand_jmd', 'fuel_jmd', 'energy_jmd', 'ipp_jmd', 'customer_charge_jmd', 'gct_jmd', 'customer_count', 'segment']
 
 files = sorted(glob.glob('rt20_split_20??_??.json'))
+# Optional month filter: `python _push_rt20_all.py 2026_08` pushes that month only.
+# Without it every split file is re-pushed -- idempotent, but 20 months of ~24k rows
+# each is a long round trip when only the new month has changed.
+import sys as _sys
+_want = [a for a in _sys.argv[1:] if not a.startswith('-')]
+if _want:
+    files = [f for f in files if any(w in f for w in _want)]
+    if not files:
+        print('no rt20_split file matches', _want, flush=True); raise SystemExit(1)
 print('files to push:', len(files), flush=True)
 grand_total = 0
 for fp in files:

@@ -15,6 +15,17 @@ MONNUM = {'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5, 'JUN': 6, 'JUL': 7, 
 
 def discover_billing_files():
     files = {}
+    # Raw CIS exports are named "<Mon> <YY>.<ext>" (e.g. "Jul 26.csv", "Aug 26.xls");
+    # only the "Billing Details Report ..." form was matched here, so a month that
+    # arrived under the short name was silently absent. Mirrors corrected_scan.py.
+    for pat in ('*.csv', '*.xls', '*.xlsx'):
+        for fp in sorted(set(glob.glob(os.path.join(DL, pat)) + glob.glob(os.path.join(HERE, pat)))):
+            base = os.path.basename(fp)
+            m = re.match(r'(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+(\d{2})\.(CSV|XLS|XLSX)$', base.upper())
+            if not m:
+                continue
+            key = '20%s-%02d' % (m.group(2), MONNUM[m.group(1)])
+            files.setdefault(key, fp)
     cands = sorted(set(glob.glob(os.path.join(DL, 'Billing Details Report*.xls*')) + glob.glob(os.path.join(HERE, 'Billing Details Report*.xls*'))))
     for fp in cands:
         base = os.path.basename(fp)
@@ -149,11 +160,21 @@ def proc_rt10(path):
 
 if __name__ == '__main__':
     files = discover_billing_files()
-    need = ['2025-%02d' % m for m in range(1, 13)] + ['2026-%02d' % m for m in range(1, 8)]
-    missing = [mo for mo in need if mo not in files]
-    if missing:
-        print('MISSING raw files for:', missing)
-    out = {}
+    # Was a hardcoded range ending at 2026-07, so every new month had to be typed in
+    # or it silently never processed. Take whatever the discovery found from 2025 on.
+    need = sorted(mo for mo in files if mo >= '2025-01')
+    # Optional month filter: `python rt10_zero_fix.py 2026-08` reprocesses that month
+    # only. Each pass is a full scan of a ~300MB export, so redoing twenty closed
+    # months to pick up one new one costs the better part of an hour for no change.
+    want = [a for a in sys.argv[1:] if not a.startswith('-')]
+    if want:
+        need = [mo for mo in need if mo in want]
+        if not need:
+            print('no discovered billing file for', want)
+            raise SystemExit(1)
+    # Merge into the existing result rather than starting empty -- a filtered run that
+    # dumped only what it processed would silently drop every other month from the file.
+    out = json.load(open('rt10_zero_fix_result.json')) if os.path.exists('rt10_zero_fix_result.json') else {}
     for mo in need:
         if mo not in files:
             continue
