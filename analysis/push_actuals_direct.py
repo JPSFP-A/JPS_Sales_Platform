@@ -23,6 +23,18 @@
 # Requires the same .env as monthly_loader.py (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY).
 import json, os, sys, requests
 
+# A TLS-inspecting proxy on the corporate network re-signs HTTPS with a private
+# root. requests uses certifi's bundle and does not trust it, so this failed with
+# CERTIFICATE_VERIFY_FAILED while curl and the browser worked. truststore points
+# Python at the Windows certificate store. Verification stays ON: this is the
+# correct fix, not verify=False.
+try:
+    import truststore
+    truststore.inject_into_ssl()
+except Exception:
+    pass
+
+
 HERE = os.path.dirname(os.path.abspath(sys.argv[0]))
 os.chdir(HERE)
 

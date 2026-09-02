@@ -1,6 +1,18 @@
 # -*- coding: utf-8 -*-
 import json, requests, glob, os, re, time
 
+# A TLS-inspecting proxy on the corporate network re-signs HTTPS with a private
+# root. requests uses certifi's bundle and does not trust it, so this failed with
+# CERTIFICATE_VERIFY_FAILED while curl and the browser worked. truststore points
+# Python at the Windows certificate store. Verification stays ON: this is the
+# correct fix, not verify=False.
+try:
+    import truststore
+    truststore.inject_into_ssl()
+except Exception:
+    pass
+
+
 SECRET = open(r'C:\Projects\DataManager\.env').read().split('=', 1)[1].strip()
 URL = 'https://bhrswnbenkvflpdjhfpa.supabase.co/rest/v1/jps_actuals'
 HDRS = {'apikey': SECRET, 'Authorization': 'Bearer ' + SECRET, 'Content-Type': 'application/json',
