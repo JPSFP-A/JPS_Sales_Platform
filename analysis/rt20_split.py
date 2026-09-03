@@ -135,6 +135,16 @@ for r in _rows():
     if r and r[0] == 'Cust_Code':
         hdr = r
         idx = {name: i for i, name in enumerate(hdr)}
+        # 2026 exports call this column 'NAICS Code'; 2025-vintage exports call the same
+        # business-classification field 'sicc_code' (Standard Industrial Classification,
+        # NAICS's predecessor) -- same business rule, different column name. The casing
+        # of either also drifts month to month ('Sicc_Code', 'Sicc_code', 'sicc_code'
+        # all seen across the 2026 CSVs), and an exact-case lookup here silently matched
+        # none of them for April-July: every row fell through to naics='', so every RT20
+        # account in those months was misclassified as residential-style bucket volume
+        # instead of a real commercial account. Resolve case-insensitively instead.
+        _idx_ci = {k.strip().lower(): k for k in idx}
+        naics_col = _idx_ci.get('naics code') or _idx_ci.get('sicc_code')
         continue
     if hdr is None:
         continue
@@ -152,10 +162,6 @@ for r in _rows():
         continue
     n_billed += 1
 
-    # 2026 exports call this column 'NAICS Code'; 2025-vintage exports call the same
-    # business-classification field 'sicc_code' (Standard Industrial Classification,
-    # NAICS's predecessor) — same business rule, different column name.
-    naics_col = 'NAICS Code' if 'NAICS Code' in idx else ('sicc_code' if 'sicc_code' in idx else None)
     naics = str(r[idx[naics_col]] if naics_col and idx[naics_col] < len(r) else '').strip()
     prem = str(r[idx['Prem_Code']] or '').strip() if idx.get('Prem_Code', -1) < len(r) else ''
     parish = map_parish(r[idx['Parish']]) if idx.get('Parish', -1) < len(r) else 'UNMAPPED'

@@ -21,11 +21,26 @@ KEYS = ['jps_ac', 'year', 'month', 'rate_class', 'name', 'consumption_bucket', '
         'demand_jmd', 'fuel_jmd', 'energy_jmd', 'ipp_jmd', 'customer_charge_jmd', 'gct_jmd', 'customer_count', 'segment']
 
 files = sorted(glob.glob('rt20_split_20??_??.json'))
-# Optional month filter: `python _push_rt20_all.py 2026_08` pushes that month only.
-# Without it every split file is re-pushed -- idempotent, but 20 months of ~24k rows
-# each is a long round trip when only the new month has changed.
+# Explicit month filter: `python _push_rt20_all.py 2026_08` pushes that month only.
+# `--all` re-pushes every cached split file on disk.
+#
+# A bare run used to default to --all, on the theory that re-pushing an unchanged
+# file is a harmless no-op upsert. It is only a no-op if the cached json's parish
+# values still match what the on_conflict key expects in the DB. On 2026-09-02 they
+# didn't -- rt20_split.py had been patched to map parish through Parish Grouping.csv,
+# but rt20_split_2026_01.json..07.json on disk were never regenerated and still held
+# raw town names from before the patch. Re-pushing them didn't update the existing
+# grouped-parish rows (different key), it inserted a second copy under the town-name
+# key instead -- doubling RT20 for seven months, all silent, until user caught it in
+# their reporting. --all is now something you have to ask for, not the default.
 import sys as _sys
-_want = [a for a in _sys.argv[1:] if not a.startswith('-')]
+_args = _sys.argv[1:]
+_want = [a for a in _args if not a.startswith('-')]
+if not _want and '--all' not in _args:
+    print('Refusing to run with no target -- this pushes every cached rt20_split_*.json,', flush=True)
+    print('which is only safe if every one of them was built by the CURRENT rt20_split.py.', flush=True)
+    print('Pass a month (`2026_08`) or `--all` once you have verified that.', flush=True)
+    raise SystemExit(1)
 if _want:
     files = [f for f in files if any(w in f for w in _want)]
     if not files:
