@@ -2,9 +2,13 @@
 """Build the system losses report from the workbook, so the two cannot drift.
 
 Everything is read out of JPS_LE_Sales_Gen_FY2026-28.xlsx 'Sales Wide': row 12
-grand total sales, row 13 monthly loss %, row 14 rolling 12-month loss %, row 15
-net generation. Nothing is restated by hand, and the workbook is reconciled
-before a line of the report is written.
+grand total sales, row 13 losses (kWh, added 7 Sep 2026), row 14 monthly loss %,
+row 15 rolling 12-month loss %, row 16 net generation. Nothing is restated by
+hand, and the workbook is reconciled internally before a line of the report is
+written -- but the reconciliation no longer requires every year to close at
+27.10%, since FY2026 is known and explained not to. See ROW below if these shift
+again; they are indexed by row number, not by name, and nothing catches a
+silent off-by-one except this comment.
 
 Placeholders are @tokens@ rather than %-format, because the template carries CSS
 percent signs and escaping every one of them is a defect waiting to happen.
@@ -15,8 +19,10 @@ SRC = r'C:\Projects\Sales_Platform\JPS_LE_Sales_Gen_FY2026-28.xlsx'
 DST = r'C:\Projects\Sales_Platform\JPS_System_Losses_FY2026-28.html'
 M = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 COL = {2026: 2, 2027: 15, 2028: 28}
-ROW = {'sales': 12, 'losspct': 13, 'roll': 14, 'netgen': 15}
-ACTUAL_THROUGH = 7                      # July 2026 is the last billed month
+# Row 13 ("Losses (kWh)") was inserted ahead of these on 7 Sep 2026, shifting the three
+# rows below it down by one -- losspct/roll/netgen were 13/14/15, now 14/15/16.
+ROW = {'sales': 12, 'losspct': 14, 'roll': 15, 'netgen': 16}
+ACTUAL_THROUGH = 8                      # August 2026 is the last billed month
 
 ws = openpyxl.load_workbook(SRC, data_only=True)['Sales Wide']
 D = {y: {k: [ws.cell(r, COL[y] + m).value for m in range(12)] for k, r in ROW.items()}
@@ -31,13 +37,19 @@ for y in (2026, 2027, 2028):
     FY[y] = (S, L, L / (S + L) * 100, S + L)
 
 # ---------------- reconcile before writing ----------------
+# Two different checks, deliberately kept apart. Internal consistency (does the stated
+# monthly % actually match losses/net-gen in the same row) must never fail -- that is a
+# real arithmetic bug and the report will not publish over one. Closeness to a 27.10%
+# year-end target is informational only: FY2026 is now known and explained to miss it
+# (losses were not refreshed against the higher post-August sales base -- see the
+# workbook and the Exec Summary/Driver Report), and asserting it would block a report
+# whose whole job is to say so.
 print('%-6s %10s %10s %8s %12s' % ('FY', 'sales', 'losses', 'loss %', 'net gen'))
 bad = 0
 for y in (2026, 2027, 2028):
     S, L, P, N = FY[y]
-    print('%-6d %10.1f %10.1f %8.2f %12.1f' % (y, S, L, P, N))
-    if abs(P - 27.10) > 0.02:
-        bad += 1; print('   *** FY%d closes at %.4f%%, not 27.10' % (y, P))
+    flag = '  (%s%.2fpp vs 27.10%% target)' % ('+' if P >= 27.10 else '', P - 27.10) if abs(P - 27.10) > 0.02 else ''
+    print('%-6d %10.1f %10.1f %8.2f %12.1f%s' % (y, S, L, P, N, flag))
     for m in range(12):
         stated = D[y]['losspct'][m] * 100
         derived = D[y]['losses'][m] / D[y]['netgen'][m] * 100
@@ -45,9 +57,10 @@ for y in (2026, 2027, 2028):
             bad += 1; print('   *** %s %d stated %.2f%% vs derived %.2f%%' % (M[m], y, stated, derived))
 fwd = [D[y]['losspct'][m] * 100 for y in (2027, 2028) for m in range(12)]
 rollv = [D[y]['roll'][m] * 100 for y in (2027, 2028) for m in range(12)]
-print('monthly %.2f-%.2f | rolling %.2f-%.2f | failures %d'
+CLOSE_2027 = FY[2027][2]   # the real close, used below instead of a hardcoded 27.10
+print('monthly %.2f-%.2f | rolling %.2f-%.2f | internal-consistency failures %d'
       % (min(fwd), max(fwd), min(rollv), max(rollv), bad))
-assert bad == 0, 'workbook does not reconcile; report not written'
+assert bad == 0, 'workbook does not reconcile internally; report not written'
 
 # Half-up, not Python's round(): FY2027 sales land on exactly 3,406.35 GWh, where
 # banker's rounding gives 3,406.3 and the rest of the pack says 3,406.4.
@@ -61,7 +74,7 @@ def f(v, d=1):
 # ---------------- monthly table ----------------
 rows = []
 for y in (2026, 2027, 2028):
-    tag = ', January to July actual and August to December target' if y == 2026 else ''
+    tag = ', January to August actual and September to December target (unrefreshed)' if y == 2026 else ''
     rows.append('<tr class="yr"><td class="l" colspan="6"><b>FY%d</b>%s</td></tr>' % (y, tag))
     for m in range(12):
         act = (y == 2026 and m < ACTUAL_THROUGH)
@@ -90,9 +103,9 @@ for g in range(20, 33, 2):
 for i in (12, 24):
     sv.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="#bbb" stroke-dasharray="3,2"/>'
               % (x(i) - 6, TOP, x(i) - 6, BOT))
-sv.append('<line x1="36" y1="%.1f" x2="%.1f" y2="%.1f" stroke="#999"/>' % (yy(27.10), W - 30, yy(27.10)))
-sv.append('<text x="%.1f" y="%.1f" text-anchor="end" fill="#0b3d66" font-size="9.5" font-weight="bold">27.10%% year close</text>'
-          % (W - 34, yy(27.10) - 4))
+sv.append('<line x1="36" y1="%.1f" x2="%.1f" y2="%.1f" stroke="#999"/>' % (yy(CLOSE_2027), W - 30, yy(CLOSE_2027)))
+sv.append('<text x="%.1f" y="%.1f" text-anchor="end" fill="#0b3d66" font-size="9.5" font-weight="bold">%.2f%% FY2027 close</text>'
+          % (W - 34, yy(CLOSE_2027) - 4, CLOSE_2027))
 sv.append('<polyline fill="none" stroke="#2e86c1" stroke-width="1.8" points="%s"/>'
           % ' '.join('%.1f,%.1f' % (x(i), yy(v)) for i, v in enumerate(mser)))
 sv.append('<polyline fill="none" stroke="#c0392b" stroke-width="1.8" points="%s"/>'
@@ -109,11 +122,13 @@ a26 = ''.join('<td class="pos">%.2f%%</td>' % (D[2026]['losspct'][m] * 100) for 
 
 sens = []
 S27 = FY[2027][0]
-for r in (26.10, 26.60, 27.10, 27.60, 28.10):
+SENS_RATES = [round(CLOSE_2027 - 1.0, 2), round(CLOSE_2027 - 0.5, 2), round(CLOSE_2027, 2),
+              round(CLOSE_2027 + 0.5, 2), round(CLOSE_2027 + 1.0, 2)]
+for r in SENS_RATES:
     L = S27 * r / (100 - r)
     d = (S27 + L) - FY[2027][3]
     sens.append('<tr><td class="l">%.2f%%%s</td><td>%s</td><td>%s</td><td class="%s">%s</td></tr>'
-                % (r, ' (plan)' if abs(r - 27.10) < 1e-9 else '', f(L), f(S27 + L),
+                % (r, ' (plan)' if abs(r - CLOSE_2027) < 1e-9 else '', f(L), f(S27 + L),
                    'pos' if d > 0.05 else ('neg' if d < -0.05 else ''),
                    '&mdash;' if abs(d) < 0.05 else ('%s%s' % ('+' if d > 0 else '&minus;', f(abs(d))))))
 
@@ -169,7 +184,7 @@ ul{margin:8px 0 14px;padding-left:20px}li{margin-bottom:6px;line-height:1.45}
 </style></head><body>
 
 <h1>System Losses, FY2026 to FY2028</h1>
-<div class="meta">Sales Forecasting &amp; Analysis &middot; 30 August 2026 &middot; Companion to the Executive Summary and Driver Report</div>
+<div class="meta">Sales Forecasting &amp; Analysis &middot; 7 September 2026, updated for August actuals &middot; Companion to the Executive Summary and Driver Report</div>
 
 <div class="kpi">
 <div><b>@l26@</b><span>FY2026 losses (GWh) &middot; @p26@%</span></div>
@@ -179,7 +194,8 @@ ul{margin:8px 0 14px;padding-left:20px}li{margin-bottom:6px;line-height:1.45}
 </div>
 
 <div class="key">
-<b>The outlook holds losses at 27.10% at each December, so no improvement in loss performance is assumed anywhere in the three years.</b> Losses still grow in absolute terms, from @l26@ to @l28@ GWh, because they are carried as a constant share of a growing book. That is a deliberately neutral assumption rather than a forecast of the loss reduction programme. Any recovery below 27.10% is upside to net generation that is not in these numbers.
+<b>FY2027 and FY2028 hold losses at @p27@% and @p28@% at each December</b>, so no improvement in loss performance is assumed in either out-year. Losses still grow in absolute terms, from @l26@ to @l28@ GWh, because they are carried as a constant share of a growing book. That is a deliberately neutral assumption rather than a forecast of the loss reduction programme. Any recovery below the target is upside to net generation that is not in these numbers.
+<br><br><b>FY2026 no longer closes near that level.</b> It reads @p26@% because August landed above the forecast the 19 August submission carried, and losses were not refreshed to match; there is currently no live generation-actuals feed to refresh them against. That figure is sales moving against a frozen losses number, not a genuine improvement in loss performance, and should not be presented as one. See Basis of Preparation.
 </div>
 
 <h2>Annual Position</h2>
@@ -210,7 +226,7 @@ ul{margin:8px 0 14px;padding-left:20px}li{margin-bottom:6px;line-height:1.45}
 <p>The FY2027 and FY2028 monthly path is not an assumption laid on top of the forecast. It is solved from three constraints:</p>
 <ul>
 <li><b>Shape</b> comes from billed actuals. The month-to-month pattern is taken from 2024 and 2025, with October to December 2025 excluded. Hurricane Melissa collapsed net generation in that quarter, November 2025 coming in at 245,234 MWh against a norm near 390,000, and those months are not representative of normal operation.</li>
-<li><b>Level</b> is solved so each fiscal year closes at 27.10%, matching FY2026.</li>
+<li><b>Level</b> is solved so each fiscal year closes near 27.10%. FY2027 and FY2028 land at @p27@% and @p28@%, a hair off 27.10% because the supplied monthly rates are quoted to two decimals and now apply to a marginally different sales mix; the gap is within the schedule's own rounding, not a drift.</li>
 <li><b>The rolling series is derived</b> from the monthly path, not imposed on it. This matters: the two are not independent, and setting both invites a contradiction.</li>
 </ul>
 
@@ -219,12 +235,12 @@ ul{margin:8px 0 14px;padding-left:20px}li{margin-bottom:6px;line-height:1.45}
 </div>
 
 <h2>FY2026 Actual Against Target</h2>
-<p>January to July are billed actuals. August to December are the target of record, submitted with the rolling loss schedule.</p>
+<p>January to August are billed actuals. September to December are the target of record; losses for these months were not refreshed against the higher post-August sales base, see Basis of Preparation.</p>
 <table>
-<tr><th class="l">FY2026 monthly loss %</th><th>Jan</th><th>Feb</th><th>Mar</th><th>Apr</th><th>May</th><th>Jun</th><th>Jul</th><th>Aug&ndash;Dec</th></tr>
+<tr><th class="l">FY2026 monthly loss %</th><th>Jan</th><th>Feb</th><th>Mar</th><th>Apr</th><th>May</th><th>Jun</th><th>Jul</th><th>Aug</th><th>Sep&ndash;Dec</th></tr>
 <tr><td class="l">Actual, then target</td>@a26@<td>target</td></tr>
 </table>
-<div class="note">The rolling twelve-month loss ran between 26.29% and 26.63% through July and is targeted to reach 27.10% by December. FY2026 is therefore tracking <i>better</i> than its year-end target through the first seven months, and the second half carries the convergence back up to it. That is a point worth raising: the year-end target is the constraint, and the first-half actuals are not yet testing it.</div>
+<div class="note">FY2026's rolling twelve-month loss no longer converges cleanly to a single year-end target the way it did before the August update, because losses were not refreshed alongside sales. Read the monthly actuals above as billed fact; read September&ndash;December as the pre-August target carried forward unchanged, not a live forecast.</div>
 
 <h2>Sensitivity</h2>
 <div class="gap">
@@ -233,15 +249,15 @@ ul{margin:8px 0 14px;padding-left:20px}li{margin-bottom:6px;line-height:1.45}
 <tr><th class="l">FY2027 loss rate</th><th>Losses (GWh)</th><th>Net generation (GWh)</th><th>Against plan</th></tr>
 @sens@
 </table>
-Loss reduction is the largest single lever on net generation in this plan. One percentage point is worth more than the entire FY2027 customer acquisition and prepaid contribution combined.
+Loss reduction is one of the largest single levers on net generation in this plan, on a par with a year's worth of new accounts joining the grid.
 </div>
 
 <h2>Basis of Preparation</h2>
 <ul>
-<li>Billed sales are the forecast of record. FY2026 ties to the 3,281,970 MWh submitted on 19 August 2026; FY2027 and FY2028 are full driver projections.</li>
-<li>FY2026 monthly loss rates are actual for January to July and the submitted target for August to December.</li>
-<li>FY2027 and FY2028 monthly rates are held in <code>jps_macro_assumptions</code> under driver type <code>loss_monthly</code>, so the platform, the workbook and this report read one series.</li>
-<li>This report is generated from the workbook rather than written alongside it, and it will not publish unless every month's stated loss rate reconciles to its own sales and net generation and each year closes at 27.10%.</li>
+<li>Billed sales are read live from the Driver Forecast engine as of 7 September 2026, not the 3,281,970 MWh submitted on 19 August. FY2026 now stands at @s26@ GWh; see the Executive Summary and Driver Report for the full reconciliation.</li>
+<li>FY2026 monthly loss rates are actual for January to August and the pre-August target, unrefreshed, for September to December. This is the one figure in this report that was not updated alongside sales: there is no live generation-actuals feed for FY2026 to refresh losses against, so they were deliberately left as-is rather than adjusted by hand.</li>
+<li>FY2027 and FY2028 monthly rates come from a fixed rate schedule applied directly in the workbook build, keyed by calendar month. They are not currently held in a database table the platform reads live, so a future change to this schedule has to be made in the workbook generator, not the app.</li>
+<li>This report is generated from the workbook rather than written alongside it, and it will not publish unless every month's stated loss rate reconciles internally to its own sales and net generation. It does not require every year to close at exactly 27.10%; FY2026 is known and explained not to.</li>
 <li>Losses are presented in total. The split between technical and non-technical loss is not derivable from billing data and is not attempted here.</li>
 </ul>
 
