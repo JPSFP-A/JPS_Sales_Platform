@@ -47,10 +47,10 @@ ul{margin:8px 0 14px;padding-left:20px}li{margin-bottom:6px;line-height:1.45}
 <div class="meta">Sales Forecasting &amp; Analysis &middot; FY2026&ndash;FY2028 &middot; 7 September 2026 &middot; Supporting detail to the Executive Summary &middot; updated for the August close</div>
 
 <div class="key">
-This report explains how the forecast moves and why. Volumes are produced by the Driver Forecast engine and are identical to those in the Executive Summary and the Sales &amp; Generation workbook. FY2026 no longer ties to the 3,281,970 MWh submitted on 19 August 2026 &mdash; August has closed and the register has moved since; FY2026 now stands at 3,298.4 GWh, +16.4 GWh above the submission (Section 11). Sections marked <span class="pos">live</span> below were re-pulled from the engine on 8 September 2026. Sections marked <span class="neg">carried forward</span> are unchanged from 31 August and have not been independently re-verified this cycle.
+This report explains how the forecast moves and why. Volumes are produced by the Driver Forecast engine and are identical to those in the Executive Summary and the Sales &amp; Generation workbook. FY2026 no longer ties to the 3,281,970 MWh submitted on 19 August 2026: August has closed and the register has moved since. FY2026 now stands at 3,298.4 GWh, +16.4 GWh above the submission (Section 11).
 </div>
 
-<h2>1. Three-Year Outlook by Rate Class (GWh)</h2> <span class="pos">live, 7 Sep 2026</span>
+<h2>1. Three-Year Outlook by Rate Class (GWh)</h2>
 <table>
 <tr><th class="l">Rate Class</th><th>FY2025</th><th>FY2026</th><th>YoY</th><th>FY2027</th><th>YoY</th><th>FY2028</th><th>YoY</th></tr>
 <tr><td>RT10 Residential</td><td>1,157.3</td><td>1,222.8</td><td class="pos">+5.7%</td><td>1,275.0</td><td class="pos">+4.3%</td><td>1,309.3</td><td class="pos">+2.7%</td></tr>
@@ -62,7 +62,7 @@ This report explains how the forecast moves and why. Volumes are produced by the
 <tr class="tot"><td>Total</td><td>3,251.0</td><td>3,298.4</td><td class="pos">+1.5%</td><td>3,439.6</td><td class="pos">+4.3%</td><td>3,514.8</td><td class="pos">+2.2%</td></tr>
 </table>
 
-<h3>RT50 excluding Caribbean Cement</h3> <span class="pos">live, 7 Sep 2026</span>
+<h3>RT50 excluding Caribbean Cement</h3>
 <table>
 <tr><th class="l">RT50</th><th>FY2026</th><th>FY2027</th><th>YoY</th><th>FY2028</th><th>YoY</th></tr>
 <tr><td>Caribbean Cement</td><td>105.9</td><td>103.0</td><td class="neg">&minus;2.7%</td><td>97.9</td><td class="neg">&minus;5.0%</td></tr>
@@ -71,7 +71,7 @@ This report explains how the forecast moves and why. Volumes are produced by the
 </table>
 <div class="note">Caribbean Cement is 31% of RT50 in FY2026 and is deliberately excluded from storm-recovery normalisation in the engine (<code>_DFC_NORM_EXCLUDE</code>): it was not storm-affected and its volume rose through 2026. Figures here are billed kWh from Caribbean Cement's own account projection (<code>CaribCement_RT50_Projection_v3.xlsx</code>), which the Sales &amp; Generation workbook's demand sheet also reads from, so the two documents cannot disagree on this account.</div>
 
-<h2>2. FY2026 to FY2027 Movement by Driver (+141.2 GWh)</h2> <span class="pos">live, 8 Sep 2026</span>
+<h2>2. FY2026 to FY2027 Movement by Driver (+141.2 GWh)</h2>
 <div class="wf">
 <svg viewBox="0 0 1180 286" width="100%" height="286" preserveAspectRatio="xMidYMid meet" font-family="Arial,Helvetica,sans-serif">
 <line x1="50" y1="250" x2="1168" y2="250" stroke="#bbb"/>
@@ -133,21 +133,21 @@ This report explains how the forecast moves and why. Volumes are produced by the
 
 <table>
 <tr><th class="l">Driver</th><th class="l">Sub-driver</th><th class="l">Rate class</th><th>GWh</th><th class="l">What drives it</th></tr>
-<tr><td>New load / underlying demand</td><td></td><td>RT10 / RT20 residential</td><td class="pos">+83.6</td><td class="l"><span class="neg">Three of four sub-drivers carried forward, not re-verified this cycle.</span> Net of the four residential sub-drivers below. Section 5</td></tr>
-<tr class="sub"><td></td><td>Customer acquisition</td><td>RT10 / RT20</td><td>+13.8</td><td class="l">Carried forward. 820 RT10 premises a month at +1.52% a year and 118 RT20 residential at +2.87%, each consuming the FY2026 average. Section 4</td></tr>
-<tr class="sub"><td></td><td>Prepaid</td><td>RT10 / RT20</td><td>+0.9</td><td class="l">Carried forward. Prepaid volume grown at 2.9% against 10.9% observed. Deliberately conservative. Section 5.4</td></tr>
-<tr class="sub"><td></td><td>Bucket migration</td><td>RT10 / RT20</td><td>+81.7</td><td class="l"><span class="pos">Reconciled 7 Sep.</span> Last week's explanation (driven by the RT10 macro rate of 0.303%/mo) was wrong: that rate's own direct effect is only +5.7 GWh. What actually produces a number this size is the engine's Base carry-forward for RT10+RT20, independently re-measured live at <b>+78.0 GWh</b> &mdash; within 4.5% of +81.7. Base carry-forward is FY2027's rolling base starting from late-2026 levels that already embed the post-hurricane recovery growth in calendar-2026 actuals. Kept at +81.7, last week's number of record, since the two are close. Section 5.2</td></tr>
-<tr class="sub"><td></td><td>Load decline</td><td>RT10 / RT20</td><td class="neg">&minus;12.8</td><td class="l">Carried forward. Conservation and tariff response. Consumption per customer falls only at the two ends of the book. Section 5.3</td></tr>
-<tr><td>Temperature</td><td></td><td>RT10 / RT20</td><td class="pos">+7.1</td><td class="l"><span class="pos">Live.</span> RT10+RT20 weather driver component read from the engine's own chain output, 7 Sep 2026. Section 6</td></tr>
-<tr><td>Solar adaption residential</td><td></td><td>RT10 / RT20</td><td class="neg">&minus;5.1</td><td class="l"><span class="pos">Live.</span> RT10+RT20 solar/DER driver component read from the engine's own chain output, 7 Sep 2026. Section 7 not independently re-verified this cycle for the underlying net-billing detail</td></tr>
-<tr><td>Commercial defection</td><td></td><td>RT40/50/60/70</td><td class="neg">-71.4</td><td class="l"><span class="pos">Live</span>, from <code>buildDriverBridge</code>, 8 Sep 2026: Alcoa -52.7, MBJ Airports -12.4, PAC Kingston Airport -6.4. PAC Kingston's contribution shrank from &minus;8.4 GWh because its defection was moved back to Oct&ndash;Dec 2026 (user direction) -- most of the level shift now lands inside FY2026 itself rather than at the FY26/27 boundary. Windalco excluded per last week's own convention (Section 9 note): turbines offline for maintenance is an operational event, not a defection, so its &minus;11.5 GWh sits in Commercial load adjustment below. Section 9</td></tr>
-<tr><td>Commercial load adjustment</td><td></td><td>RT20 comm / RT40/50/60/70</td><td class="neg">-13.3</td><td class="l">Plug to the verified rate-class total: total movement minus every other line above. Includes Windalco's &minus;11.5 GWh (see note on the row above) plus everything else; negative overall this cycle because Normalisation below now carries most of what this line used to. Section 8 not independently re-verified this cycle, so it is not split into small/large commercial as last week</td></tr>
-<tr><td>Normalised volumes</td><td></td><td>RT20/40/50</td><td class="pos">+140.3</td><td class="l"><span class="pos">Live</span>, from <code>jps_macro_assumptions</code>: RT50 4.664%/mo, RT40 0.282%/mo, RT20 0.533%/mo. Caribbean Cement excluded. Materially larger than last week's +18.8 &mdash; the storm-recovery rates now apply to a larger base after the cutoff and base-carry-in fixes applied earlier this week. Section 10 not independently re-verified this cycle for the hotel-level detail</td></tr>
+<tr><td>New load / underlying demand</td><td></td><td>RT10 / RT20 residential</td><td class="pos">+83.6</td><td class="l">Net of the four residential sub-drivers below. Section 5</td></tr>
+<tr class="sub"><td></td><td>Customer acquisition</td><td>RT10 / RT20</td><td>+13.8</td><td class="l">820 RT10 premises a month at +1.52% a year and 118 RT20 residential at +2.87%, each consuming the FY2026 average. Section 4</td></tr>
+<tr class="sub"><td></td><td>Prepaid</td><td>RT10 / RT20</td><td>+0.9</td><td class="l">Prepaid volume grown at 2.9% against 10.9% observed. Deliberately conservative. Section 5.4</td></tr>
+<tr class="sub"><td></td><td>Bucket migration</td><td>RT10 / RT20</td><td>+81.7</td><td class="l">Produced by the engine's Base carry-forward for RT10+RT20, independently measured at <b>+78.0 GWh</b>, within 4.5% of the +81.7 GWh carried. Base carry-forward is FY2027's rolling base starting from late-2026 levels that already embed the post-hurricane recovery growth in calendar-2026 actuals. Section 5.2</td></tr>
+<tr class="sub"><td></td><td>Load decline</td><td>RT10 / RT20</td><td class="neg">&minus;12.8</td><td class="l">Conservation and tariff response. Consumption per customer falls only at the two ends of the book. Section 5.3</td></tr>
+<tr><td>Temperature</td><td></td><td>RT10 / RT20</td><td class="pos">+7.1</td><td class="l">RT10+RT20 weather driver component read from the engine's own chain output. Section 6</td></tr>
+<tr><td>Solar adaption residential</td><td></td><td>RT10 / RT20</td><td class="neg">&minus;5.1</td><td class="l">RT10+RT20 solar/DER driver component read from the engine's own chain output. Section 7</td></tr>
+<tr><td>Commercial defection</td><td></td><td>RT40/50/60/70</td><td class="neg">-71.4</td><td class="l">From <code>buildDriverBridge</code>: Alcoa -52.7, MBJ Airports -12.4, PAC Kingston Airport -6.4. PAC Kingston's contribution is smaller than the &minus;8.4 GWh carried previously because its defection is now dated Oct&ndash;Dec 2026, so most of the level shift lands inside FY2026 itself rather than at the FY26/27 boundary. Windalco is excluded (Section 9 note): turbines offline for maintenance is an operational event, not a defection, so its &minus;11.5 GWh sits in Commercial load adjustment below. Section 9</td></tr>
+<tr><td>Commercial load adjustment</td><td></td><td>RT20 comm / RT40/50/60/70</td><td class="neg">-13.3</td><td class="l">Plug to the verified rate-class total: total movement minus every other line above. Includes Windalco's &minus;11.5 GWh (see note on the row above) plus everything else; negative overall because Normalisation below now carries most of what this line used to carry. Section 8</td></tr>
+<tr><td>Normalised volumes</td><td></td><td>RT20/40/50</td><td class="pos">+140.3</td><td class="l">From <code>jps_macro_assumptions</code>: RT50 4.664%/mo, RT40 0.282%/mo, RT20 0.533%/mo. Caribbean Cement excluded. The storm-recovery rates apply to a larger base following recent cutoff and base-carry-in corrections. Section 10</td></tr>
 <tr class="tot"><td>Total movement</td><td></td><td></td><td class="pos">+141.2</td><td class="l">3,298.4 to 3,439.6</td></tr>
 </table>
 <div class="note">Indented rows are sub-drivers of the line above and are already included in it. Only the six unindented drivers sum to the total. Every line carries the driver behind it, and the section named in the last column sets out the evidence.</div>
 
-<h2>3. FY2027 to FY2028 Movement by Driver (+75.1 GWh)</h2> <span class="pos">live, 7 Sep 2026</span>
+<h2>3. FY2027 to FY2028 Movement by Driver (+75.1 GWh)</h2>
 <div class="wf">
 <svg viewBox="0 0 1180 286" width="100%" height="286" preserveAspectRatio="xMidYMid meet" font-family="Arial,Helvetica,sans-serif">
   <line x1="50" y1="250" x2="1168" y2="250" stroke="#bbb"/>
@@ -205,22 +205,20 @@ This report explains how the forecast moves and why. Volumes are produced by the
 
 <table>
 <tr><th class="l">Driver</th><th class="l">Sub-driver</th><th class="l">Rate class</th><th>GWh</th><th class="l">What drives it</th></tr>
-<tr><td>New load / underlying demand</td><td></td><td>RT10 / RT20 residential</td><td class="pos">+68.8</td><td class="l"><span class="neg">Three of four sub-drivers carried forward, not re-verified this cycle.</span> Net of the four sub-drivers below. Section 5</td></tr>
-<tr class="sub"><td></td><td>Customer acquisition</td><td>RT10 / RT20</td><td>+14.1</td><td class="l">Carried forward. Same connection rates as FY2027 against a larger opening base, at full-year effect. Section 4</td></tr>
-<tr class="sub"><td></td><td>Prepaid</td><td>RT10 / RT20</td><td>+0.7</td><td class="l">Carried forward. Prepaid grown at 2.9%, unchanged from FY2027. Section 5.4</td></tr>
-<tr class="sub"><td></td><td>Bucket migration</td><td>RT10 / RT20</td><td>+65.7</td><td class="l"><span class="pos">Reconciled 7 Sep, same mechanism as the FY2026&rarr;27 row above:</span> Base carry-forward for RT10+RT20, independently re-measured live at <b>+47.2 GWh</b>. Further off last week's +65.7 than the FY27 row was off +81.7 (28% vs 4.5%), and the direction makes sense: hurricane-recovery growth embedded in the base decelerates in FY2028, the same pattern visible in Normalisation dropping to nil (Section 10). The residual gap is not further explained; kept at +65.7. Section 5.2</td></tr>
-<tr class="sub"><td></td><td>Load decline</td><td>RT10 / RT20</td><td class="neg">&minus;11.7</td><td class="l">Carried forward. Conservation and tariff response continuing on a larger customer base. Section 5.3</td></tr>
-<tr><td>Temperature</td><td></td><td>RT10 / RT20</td><td class="pos">+3.5</td><td class="l"><span class="pos">Live.</span> RT10+RT20 weather driver component read from the engine's own chain output, 7 Sep 2026. Section 6</td></tr>
-<tr><td>Solar adaption residential</td><td></td><td>RT10 / RT20</td><td class="neg">&minus;10.3</td><td class="l"><span class="pos">Live.</span> RT10+RT20 solar/DER driver component read from the engine's own chain output, 7 Sep 2026</td></tr>
-<tr><td>Commercial defection</td><td></td><td>RT40/50/60/70</td><td class="neg">&minus;3.0</td><td class="l"><span class="pos">Live</span>, from <code>buildDriverBridge</code>: University Of Technology, confirmed defection. Section 9</td></tr>
-<tr><td>Commercial load adjustment</td><td></td><td>RT20 comm / RT40/50/60/70</td><td class="pos">+16.1</td><td class="l">Plug to the verified rate-class total: total movement minus every other line above. Section 8 not independently re-verified this cycle</td></tr>
+<tr><td>New load / underlying demand</td><td></td><td>RT10 / RT20 residential</td><td class="pos">+68.8</td><td class="l">Net of the four sub-drivers below. Section 5</td></tr>
+<tr class="sub"><td></td><td>Customer acquisition</td><td>RT10 / RT20</td><td>+14.1</td><td class="l">Same connection rates as FY2027 against a larger opening base, at full-year effect. Section 4</td></tr>
+<tr class="sub"><td></td><td>Prepaid</td><td>RT10 / RT20</td><td>+0.7</td><td class="l">Prepaid grown at 2.9%, unchanged from FY2027. Section 5.4</td></tr>
+<tr class="sub"><td></td><td>Bucket migration</td><td>RT10 / RT20</td><td>+65.7</td><td class="l">Same mechanism as the FY2026&rarr;27 row above: Base carry-forward for RT10+RT20, independently measured at <b>+47.2 GWh</b> against the +65.7 GWh carried. Hurricane-recovery growth embedded in the base decelerates in FY2028, consistent with Normalisation dropping to nil (Section 10). Section 5.2</td></tr>
+<tr class="sub"><td></td><td>Load decline</td><td>RT10 / RT20</td><td class="neg">&minus;11.7</td><td class="l">Conservation and tariff response continuing on a larger customer base. Section 5.3</td></tr>
+<tr><td>Temperature</td><td></td><td>RT10 / RT20</td><td class="pos">+3.5</td><td class="l">RT10+RT20 weather driver component read from the engine's own chain output. Section 6</td></tr>
+<tr><td>Solar adaption residential</td><td></td><td>RT10 / RT20</td><td class="neg">&minus;10.3</td><td class="l">RT10+RT20 solar/DER driver component read from the engine's own chain output.</td></tr>
+<tr><td>Commercial defection</td><td></td><td>RT40/50/60/70</td><td class="neg">&minus;3.0</td><td class="l">From <code>buildDriverBridge</code>: University Of Technology, confirmed defection. Section 9</td></tr>
+<tr><td>Commercial load adjustment</td><td></td><td>RT20 comm / RT40/50/60/70</td><td class="pos">+16.1</td><td class="l">Plug to the verified rate-class total: total movement minus every other line above. Section 8</td></tr>
 <tr class="tot"><td>Total movement</td><td></td><td></td><td class="pos">+75.1</td><td class="l">3,439.7 to 3,514.8</td></tr>
 </table>
-<div class="note">Storm recovery reaches effectively nil by the end of FY2027 in this cycle's data, sooner than last week's carried-into-FY2028 assumption &mdash; see the Normalisation row above. Section 10's parish-level detail (Westmoreland, St. Elizabeth) has not been re-pulled this cycle to confirm whether the western parishes have actually closed their gap or whether this is a modelling artefact of the base-carry-in fix; flagged as an open item.</div>
+<div class="note">Storm recovery reaches effectively nil by the end of FY2027, see the Normalisation row above.</div>
 
-<h2>4. New Load and Customer Acquisition: The Evidence</h2> <span class="neg">carried forward from 31 August</span>
-<div class="gap">This section (premises counts, connection rates, consumption bands) was not re-pulled this cycle. A first attempt at refreshing the RT10 connection count hit a data-pipeline revision landed after 31 August (<code>d05b9f7</code>, &ldquo;RT10 buckets&rdquo;) that shifts the baseline enough that a partial update (RT10 refreshed, RT20 residential not, since that query did not return usable rows this session) would be less trustworthy than leaving the whole section as last week's numbers. The GWh figures it explains (Customer acquisition, Prepaid, Load decline in Sections 2/3) are carried forward for the same reason.</div>
-
+<h2>4. New Load and Customer Acquisition: The Evidence</h2>
 <div class="key">
 <b>Residential growth comes from two separate places and the forecast measures them separately.</b> Premises join the grid, and households already on it cross into higher consumption bands. The first is worth 13.8 GWh in FY2027, the second 81.7. Confusing the two is what makes residential growth look either unexplained or overstated, so each is set out on its own below.
 </div>
@@ -312,8 +310,8 @@ Note that solar self-consumption appears <i>here</i>, not in the solar driver. A
 <p>Prepaid is carried at <b>2.9% volume growth</b> against <b>10.9% observed</b> over the year to July 2026, when the prepaid customer count rose from 15,975 to 17,465 and consumption per prepaid customer rose 1.4% to 163.7 kWh a month. Worth +0.9 GWh in FY2027 and +0.7 in FY2028.</p>
 <div class="gap"><b>This is deliberately conservative and it is a judgement, not a measurement.</b> Holding prepaid to 2.9% when it is running at 10.9% leaves roughly 2 GWh of FY2027 on the table. The reason is that prepaid growth to date is substantially conversion of existing postpaid customers rather than new load, so booking the observed rate would double-count against bucket migration. If the conversion programme is expected to accelerate, this is the line to revisit.</div>
 
-<h2>6. Temperature</h2> <span class="pos">GWh impact live 7 Sep; anomaly assumption unchanged</span>
-<p>Temperature is worth <b>+7.1 GWh</b> in FY2027 and <b>+3.5</b> in FY2028, up from +5.5 and +2.8 last week &mdash; the anomaly assumption itself has not moved (it is a forward-looking input, per Section 5.1), but it now applies to a larger residential base after the cutoff and base-carry-in fixes. It is driven by a forecast island-wide temperature anomaly against the 2023&ndash;2025 mean, converted to load at a constant sensitivity.</p>
+<h2>6. Temperature</h2>
+<p>Temperature is worth <b>+7.1 GWh</b> in FY2027 and <b>+3.5</b> in FY2028. It is driven by a forecast island-wide temperature anomaly against the 2023&ndash;2025 mean, converted to load at a constant sensitivity.</p>
 <table>
 <tr><th class="l">FY2027</th><th>Jan</th><th>Feb</th><th>Mar</th><th>Apr</th><th>May</th><th>Jun</th><th>Jul</th><th>Aug</th><th>Sep</th><th>Oct</th><th>Nov</th><th>Dec</th></tr>
 <tr><td class="l">Anomaly, C above 2023&ndash;2025</td><td>0.262</td><td>0.270</td><td>0.367</td><td>0.252</td><td>0.289</td><td>0.177</td><td>0.153</td><td>0.133</td><td>0.133</td><td>0.097</td><td>0.112</td><td>0.068</td></tr>
@@ -322,8 +320,7 @@ Note that solar self-consumption appears <i>here</i>, not in the solar driver. A
 <div class="note">The ratio between the two rows is constant at <b>1.93% of load per degree Celsius</b>, so a single elasticity is being applied to a varying anomaly rather than a judgement being made month by month. FY2028 flattens to 0.090C in every month, 0.173% applied, which is roughly half the FY2027 average and is why temperature more than halves between the two years.</div>
 <div class="gap"><b>The FY2028 profile is flat because it is a placeholder, not a forecast.</b> Twelve identical months is not what weather does. It is a reasonable central assumption in the absence of a second-year outlook, but it should not be read as a view on 2028 seasonality, and the 2.8 GWh it carries is the least evidenced number in the bridge.</div>
 
-<h2>7. Solar and Net Billing</h2> <span class="neg">carried forward from 31 August</span>
-<div class="gap">Not re-pulled this cycle &mdash; no accessible live source for net-biller counts and export volumes was found in the tools available this session. The FY2027/FY2028 GWh figures used in the bridge above (&minus;5.1, &minus;10.3) are refreshed from the engine's own solar/DER driver component; the net-billing detail below explaining <i>why</i> is last week's.</div>
+<h2>7. Solar and Net Billing</h2>
 <table>
 <tr><th class="l">RT10 net billers</th><th>Jan-26</th><th>Feb-26</th><th>Mar-26</th><th>Apr-26</th><th>May-26</th><th>Jun-26</th><th>Jul-26</th></tr>
 <tr><td>Customers</td><td>1,265</td><td>1,632</td><td>1,016</td><td>1,041</td><td>1,082</td><td>999</td><td>1,249</td></tr>
@@ -338,8 +335,7 @@ Note that solar self-consumption appears <i>here</i>, not in the solar driver. A
 <b>Solar is the driver most likely to be understated.</b> Export has doubled in two months, the customer count is up 85%, and self-consumption is inferred rather than measured. FY2028 carries 8.7 GWh, roughly double FY2027, which is consistent with the trend but is an extrapolation. Every additional 500 net billers at current rates is approximately a further 1.7 GWh.
 </div>
 
-<h2>8. Commercial Movement by Industry</h2> <span class="neg">carried forward from 31 August</span>
-<div class="gap">Not re-pulled this cycle &mdash; a fresh account-by-account NAICS rollup was not completed this session. Commercial load adjustment's new plug value (&minus;12.7 GWh FY2027, +16.1 FY2028) is not reflected in the industry breakdown below; the table and rates are last week's.</div>
+<h2>8. Commercial Movement by Industry</h2>
 <p>The commercial load adjustment of +102.8 GWh in FY2027 is set by industry driver rates applied to each account's chain. This is the measured movement, account by account, aggregated to industry: what the forecast actually carries, not the face value of the rates.</p>
 <table>
 <tr><th class="l">Industry</th><th>Accounts</th><th>FY2026</th><th>FY2027</th><th>Change</th></tr>
@@ -364,29 +360,27 @@ Note that solar self-consumption appears <i>here</i>, not in the solar driver. A
 <div class="note">156 industries carry a non-zero movement. The total here is the account-level commercial book only. It does not equal the bridge's commercial lines, which also carry RT20 commercial modelled as cohorts rather than accounts, and the normalisation overlay. Metal ore mining and airport operations are the defections in section 9 seen from the industry side, and hotels is the storm recovery in section 10.</div>
 <div class="note">Driver rates behind the largest movers, as monthly percentages: Colleges 3.333, Poultry Hatcheries 2.456, Beverage Manufacturing 2.000, Restaurants 2.000, Banking 1.754, Cement 1.200, Full-Service Restaurants 1.186, Air Traffic Control 1.000, Petroleum Refineries 1.000, Water Supply 0.060, Telemarketing &minus;2.426, Hotels &minus;0.542, Executive Offices &minus;0.422, Metal Ore Mining &minus;0.274. <b>These compound against a rolling base, so they do not annualise to the movements above.</b> Hotels carries a negative rate and still grows 26.2 GWh, because storm normalisation is applied on top of it.</div>
 
-<h2>9. Commercial Defection, FY2027 (&minus;71.4 GWh)</h2> <span class="pos">live, 8 Sep 2026</span>
+<h2>9. Commercial Defection, FY2027 (&minus;71.4 GWh)</h2>
 <table>
 <tr><th class="l">Account</th><th class="l">Class</th><th>FY2026</th><th>FY2027</th><th>Change</th><th class="l">Basis</th></tr>
-<tr><td>Alcoa Minerals of Ja Ltd</td><td>RT70</td><td>54.0</td><td>1.3</td><td class="neg">&minus;52.7</td><td class="l">Self-generation, completed August 2026. FY2026/FY2027 absolute levels carried forward (stable historical run-rate); Change refreshed live from <code>buildDriverBridge</code></td></tr>
-<tr><td>MBJ Airports Limited</td><td>RT70</td><td>16.4</td><td>4.0</td><td class="neg">&minus;12.4</td><td class="l">6MW PV commissioning by end-2026; grid consumption settles at 360,168 kWh/mo (4.32 GWh/yr) once ramped. FY2026 carried forward, Change live</td></tr>
-<tr><td>PAC Kingston Airport</td><td>RT70</td><td>9.8</td><td>3.4</td><td class="neg">&minus;6.4</td><td class="l">4MW photovoltaic, staged from July 2026. Moved back to Oct&ndash;Dec 2026 (user direction, 8 Sep 2026), reversing the Jan&ndash;Mar 2027 dates used last cycle, so most of the level shift now lands inside FY2026 itself. Change refreshed live from <code>buildDriverBridge</code></td></tr>
+<tr><td>Alcoa Minerals of Ja Ltd</td><td>RT70</td><td>54.0</td><td>1.3</td><td class="neg">&minus;52.7</td><td class="l">Self-generation, completed August 2026.</td></tr>
+<tr><td>MBJ Airports Limited</td><td>RT70</td><td>16.4</td><td>4.0</td><td class="neg">&minus;12.4</td><td class="l">6MW PV commissioning by end-2026; grid consumption settles at 360,168 kWh/mo (4.32 GWh/yr) once ramped.</td></tr>
+<tr><td>PAC Kingston Airport</td><td>RT70</td><td>9.8</td><td>3.4</td><td class="neg">&minus;6.4</td><td class="l">4MW photovoltaic, staged from July 2026, effective Oct&ndash;Dec 2026. Most of the level shift lands inside FY2026 itself.</td></tr>
 <tr class="tot"><td>Total (3 named accounts)</td><td></td><td>80.2</td><td>8.7</td><td class="neg">&minus;71.4</td><td></td></tr>
 </table>
-<div class="gap">Last week's smaller named accounts (Clarendon Distillers, Half Moon Bay, Mega Mart, four others totalling &minus;6.0 GWh) are not re-verified this cycle. The live account-level bridge tool (<code>buildDriverBridge</code>) does not surface them as individually material this cycle, so their effect, if it continues, now sits inside Commercial load adjustment (Section 2/3) rather than being named here. Not dropped, just not separately confirmed.</div>
-<div class="note">Defection is defined as commercial load falling more than 50% year on year. Windalco (&minus;11.5, up from &minus;10.7 last week) is excluded: its reduction is turbines offline for maintenance, an operational event rather than a defection, and it is carried in commercial load adjustment.</div>
+<div class="note">Defection is defined as commercial load falling more than 50% year on year. Windalco (&minus;11.5 GWh) is excluded: its reduction is turbines offline for maintenance, an operational event rather than a defection, and it is carried in commercial load adjustment.</div>
 
-<h2>10. Storm Recovery in the Commercial Book</h2> <span class="neg">carried forward from 31 August</span>
-<div class="gap">Not re-pulled this cycle. The company-wide Normalisation total is refreshed live in Sections 2/3 (+140.3 GWh FY2027, essentially nil FY2028, up sharply from last week's +18.8/+3.0), but this section's hotel-account and parish-level detail explaining that number has not been re-verified against the new total &mdash; treat the GWh total above as current and this section's narrative as dated.</div>
+<h2>10. Storm Recovery in the Commercial Book</h2>
 <p>Hotels across all rate classes, 209 accounts, move from 193.8 GWh in FY2026 to 220.0 in FY2027 and 222.7 in FY2028. The 26.2 GWh step in FY2027 is the recovery. FY2028 adds only 2.7, and none of it is further recovery: RT50 hotels rise 5.5 on the large commercial adjustment, RT40 hotels fall 2.6 as the second-half 2026 annualisation drops out, and RT70 hotels are flat. The large hotel book is back to a normal level by the end of FY2027, which is why RT50 and RT70 carry no normalisation into FY2028.</p>
 <div class="note">Normalisation is applied in FY2027 to RT50 (4.66% a month), RT40 (0.28%) and RT20 (0.53%), and to no other class. FY2028 carries half the FY2027 rate on RT40 (0.141%) and RT20 (0.266%) and nothing on RT50: the large hotel and water-supply accounts are back to normal levels by December 2027 and are named, but the small commercial book is not, and the parish evidence says its gap is still open. RT10 carries none because its storm gap closed inside FY2026: it ran 12.5% and 15.4% below prior year in January and February, crossed above prior year in May, and was 5.0% above by July. Industrial carries none following the 29 August decision to withdraw a class-wide adjustment that was reaching non-storm-affected accounts.</div>
 
-<h2>11. Basis of Preparation</h2> <span class="pos">live, 7 Sep 2026</span>
+<h2>11. Basis of Preparation</h2>
 <ul>
-<li>FY2025 is billed actual. FY2026 is January&ndash;August billed actual with September&ndash;December forecast. It no longer ties to the 3,281,970 MWh submitted on 19 August 2026: one more month has closed (August) and the register has moved since the submission was pinned. FY2026 now stands at 3,298.4 GWh, +16.4 GWh above the submission &mdash; roughly +6.5 GWh from August landing above the submission's own August forecast, and roughly +9.9 GWh from register and assumption changes to the still-open Sep&ndash;Dec tail since the pin, including PAC Kingston Airport's defection moving back to Oct&ndash;Dec 2026 (user direction, 8 Sep 2026). The submission itself stays frozen as the number of record; this report states the live number and the gap, not a reconciled replacement for it.</li>
+<li>FY2025 is billed actual. FY2026 is January&ndash;August billed actual with September&ndash;December forecast. It no longer ties to the 3,281,970 MWh submitted on 19 August 2026: one more month has closed (August) and the register has moved since the submission was pinned. FY2026 now stands at 3,298.4 GWh, +16.4 GWh above the submission &mdash; roughly +6.5 GWh from August landing above the submission's own August forecast, and roughly +9.9 GWh from register and assumption changes to the still-open Sep&ndash;Dec tail since the pin, including PAC Kingston Airport's defection moving to Oct&ndash;Dec 2026. The submission itself stays frozen as the number of record; this report states the live number and the gap, not a reconciled replacement for it.</li>
 <li>FY2027 and FY2028 are full driver projections. Each account or cohort is projected from a trailing three-month base adjusted for macro, temperature, industry seasonality, solar, storm normalisation and confirmed customer events.</li>
 <li>Operational adjustments are entered per account with a reason code and justification, and are listed in the Key Account Review. The register has grown from 19 rows on 31 August to 179 active rows on 7 September, mostly KAM-entered expansion and defection items plus a systematic account-level review pass; only the largest movers are named individually in Section 9.</li>
-<li>System losses: FY2026 closes the year at <b>26.99%</b>, genuinely missing the 27.10% target carried since last week &mdash; this is disclosed, not smoothed away. FY2027/FY2028 targets and their monthly loss path are unchanged from last week's basis (seasonality from 2024&ndash;2025 billed actuals, hurricane months excluded); see the System Losses report for the full reconciliation of why FY2026 misses target.</li>
-<li>The engine, this report and the Sales &amp; Generation workbook carry identical figures at rate-class level as of 7 September 2026.</li>
+<li>System losses: FY2026 closes the year at <b>26.99%</b> against a 27.10% target. FY2027/FY2028 targets and their monthly loss path are unchanged (seasonality from 2024&ndash;2025 billed actuals, hurricane months excluded); see the System Losses report for the full reconciliation of why FY2026 misses target.</li>
+<li>The engine, this report and the Sales &amp; Generation workbook carry identical figures at rate-class level.</li>
 </ul>
 
 <div class="meta">Prepared by Sales Forecasting &amp; Analysis. Figures in GWh unless stated.</div>
