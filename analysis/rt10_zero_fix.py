@@ -136,11 +136,27 @@ def proc_rt10(path):
         code = r[I['Cust_Code']] if I.get('Cust_Code', -1) < len(r) else None
         if code in (None, '', 'Cust_Code'):
             continue
-        cb = gv(r, 'cust_billed')
-        if cb is not None and str(cb).strip() in ('0', '0.0'):
+        # Whitelist, not blacklist -- matches corrected_scan.py's fix (2026-09-08):
+        # cust_billed's only confirmed "really billed" value is '1'. Everything else
+        # ('0', blank, or an unexpected flag like 'Y' -- seen tagging rows with
+        # net_revenue=net_kwh=0, a zero-billed row tagged differently, not a second
+        # billed state) defaults to excluded so a future flag value can't silently
+        # slip through as billed.
+        cb = str(gv(r, 'cust_billed') or '').strip()
+        if cb != '1':
+            continue
+        rc = str(gv(r, 'rate_class'))
+        if rc.strip() in ('PR', 'PC'):
+            # PR/PC = prepaid/PAYG meter (CIS's own tag), distinct from the RT10-PAYG
+            # srat codes. Missing this exclusion let 88 prepaid-tagged rows (2,437.66
+            # kWh, all correctly cust_billed=1 and in [0,150)) get classified as RT10
+            # via title_of() below and counted here, on top of what the separate
+            # prepaid pipeline (_push_prepaid_v3.py) already counts for the same
+            # premises -- caught 2026-09-08 by _push_rt10_buckets.py's reconciliation
+            # gate refusing to push because this script's total no longer matched
+            # corrected_scan.py's (which has excluded PR/PC all along).
             continue
         srat = str(gv(r, 'Srat_Code'))
-        rc = str(gv(r, 'rate_class'))
         title = title_of(rc, srat)
         if title != 'RT10':
             continue
