@@ -113,21 +113,44 @@ def proc(path):
     g=lambda r,n: NUM(r[I[n]]) if n in I and I[n]<len(r) else 0.0
     gv=lambda r,n: (r[I[n]] if n in I and I[n]<len(r) else None)
     it=rows
-    srt={}; acc={}; buck={}; uns={}; unp={}; n=0; skipped_unbilled=0
+    srt={}; acc={}; buck={}; uns={}; unp={}; n=0; skipped_unbilled=0; skipped_prepaid=0; skipped_nondata=0
     for r in it:
         code=str(r[I['Cust_Code']] or '').strip().replace(',','')  # same stray-comma
         # issue as NUM() -- without stripping, this account's key wouldn't match its
         # jps_actuals counterpart (e.g. "100,185-607213" vs "100185-607213")
         if code in (None,'','Cust_Code'): continue
-        # cust_billed=0 means the row wasn't actually billed this cycle (verified: 5,719
-        # of 724,563 June rows are 0, and over half of those still carry nonzero
-        # net_billed_revenue/Cust_Charge — deposits/administrative charges, not real
-        # monthly billing) — exclude entirely rather than let them inflate totals.
-        cb=gv(r,'cust_billed')
-        if cb is not None and str(cb).strip() in ('0','0.0'):
+        # Report-footer/control rows (e.g. "* * * REPORT CONTROL INFORMATION * * *",
+        # "Current Release: CX2021") land with real text in Cust_Code but blank
+        # rate_class AND blank Srat_Code -- no real billing row is ever blank on both
+        # (verified: 9 such rows in the Aug-2026 export). Drop them before they can
+        # register as a bogus UNMAPPED entry.
+        rc_probe=str(gv(r,'rate_class') or '').strip(); srat_probe=str(gv(r,'Srat_Code') or '').strip()
+        if not rc_probe and not srat_probe:
+            skipped_nondata+=1; continue
+        # cust_billed is a real/billed flag, not a boolean-ish free field: the Aug-2026
+        # export showed only '1' (720,345 rows, real billing), '0' (5,612), '' (9, all
+        # non-data rows already caught above) and 'Y' (4, verified net_revenue=net_kwh=0
+        # -- a zero-billed row tagged differently, not a second "billed" state). Rather
+        # than enumerate every not-billed spelling and risk missing the next one, keep
+        # only the confirmed-billed value and treat everything else as not billed —
+        # matches the original intent (over half of cust_billed=0 rows still carry
+        # nonzero net_billed_revenue/Cust_Charge, deposits/administrative charges, not
+        # real monthly billing) without depending on which exact flag value shows up.
+        cb=str(gv(r,'cust_billed') or '').strip()
+        if cb != '1':
             skipped_unbilled+=1; continue
+        rc=str(gv(r,'rate_class'))
+        if rc in ('PR','PC'):
+            # PR/PC = premises on a prepaid/PAYG meter (CIS's own tag for it, distinct
+            # from the RT10-PAYG/RT20-PAYG srat codes which never appear in this report).
+            # These premises are already captured by the separate PAYG vending extract
+            # and pushed via _push_prepaid_v3.py under consumption_bucket='Prepaid'.
+            # Counting them here too double-counted kWh against jps_actuals' RT10/RT20
+            # postpaid buckets (2026-09-08 check: ~9-16K kWh/month found billed on both
+            # sides, confirmed by exact Prem_Code match against the PAYG extract).
+            skipped_prepaid+=1; continue
         n+=1
-        srat=str(gv(r,'Srat_Code')); rc=str(gv(r,'rate_class')); title=title_of(rc,srat)
+        srat=str(gv(r,'Srat_Code')); title=title_of(rc,srat)
         if title is None: uns[srat+' / '+rc]=uns.get(srat+' / '+rc,0)+1; title='UNMAPPED'
         praw=str(gv(r,'Parish')); pg=PMAP.get(norm(praw))
         if pg is None: unp[praw]=unp.get(praw,0)+1; pg='UNMAPPED'
@@ -159,17 +182,25 @@ def proc(path):
                              'v':[0.0]*11}
             v=b['v']
             v[0]+=kwh;v[1]+=rev;v[2]+=kvap;v[3]+=kval;v[4]+=kvao;v[5]+=kva;v[6]+=en;v[7]+=fu;v[8]+=ip;v[9]+=cc;v[10]+=radj
-    return srt,acc,buck,uns,unp,n,skipped_unbilled
+    return srt,acc,buck,uns,unp,n,skipped_unbilled,skipped_prepaid,skipped_nondata
 M=json.load(open('corrected.json')) if os.path.exists('corrected.json') else {
   'months':[], 'bin':BIN,'cap':CAP,'sep':SEP,
   'srat_legend':['count','kwh','rev','kvap','kval','kvao','kva','energy','fuel','ipp','cust','rev_adj','net_bill_adj'],
   'acct_legend':['kwh','rev','kvap','kval','kvao','kva','energy','fuel','ipp','cust','rev_adj'],
   'bucket_legend':['count','kwh','rev','energy','fuel','ipp','cust'],
   'srat':{}, 'acct':{}, 'bucket':{}, 'unmapped_srat':{}, 'unmapped_parish':{}}
+# Migrate unmapped_srat/unmapped_parish from a flat {key:count} cumulative total (which
+# double-counts every time a month is reprocessed, since nothing was ever keyed by month)
+# to {month:{key:count}}. The old flat total can't be split back out by month, so it's
+# kept once, unmodified, as a labelled legacy snapshot rather than silently discarded or
+# left in a shape that would corrupt fresh per-month writes below.
+for fld in ('unmapped_srat','unmapped_parish'):
+    if M[fld] and not isinstance(next(iter(M[fld].values())), dict):
+        M[fld]={'_legacy_cumulative_pre_2026-09-08_permonth_migration':M[fld]}
 for mo,f in FILES.items():
     if mo in M['months']: print('skip',mo,'(done)',flush=True); continue
     t=time.time(); print('processing',mo,flush=True)
-    srt,acc,buck,uns,unp,n,skipped_unbilled=proc(os.path.join(DL,f) if not os.path.exists(f) else f)
+    srt,acc,buck,uns,unp,n,skipped_unbilled,skipped_prepaid,skipped_nondata=proc(os.path.join(DL,f) if not os.path.exists(f) else f)
     M['srat'][mo]={k:{pg:[round(x,2) for x in v] for pg,v in d.items()} for k,d in srt.items()}
     M['bucket'][mo]={tt:{str(b):[round(x,2) for x in v] for b,v in d.items()} for tt,d in buck.items()}
     for (code,title),b in acc.items():
@@ -177,12 +208,12 @@ for mo,f in FILES.items():
         rec=M['acct'].setdefault(akey,{'name':b['name'],'code':str(code),'srat':b['srat'],'rc':b['rc'],'title':title,'pg':b['pg'],'key':b['key'],'m':{}})
         rec.update(name=b['name'],code=str(code),srat=b['srat'],rc=b['rc'],title=title,pg=b['pg'],key=b['key'])
         rec['m'][mo]=[round(x) for x in b['v']]
-    for s,c in uns.items(): M['unmapped_srat'][s]=M['unmapped_srat'].get(s,0)+c
-    for p,c in unp.items(): M['unmapped_parish'][p]=M['unmapped_parish'].get(p,0)+c
+    M['unmapped_srat'][mo]=uns      # per-month: reprocessing a month cleanly replaces
+    M['unmapped_parish'][mo]=unp    # its own entry instead of adding onto a running total
     M['months']=sorted(set(M['months']+[mo]))
     json.dump(M,open('corrected.json','w'))
     tr={}
     for k,d in srt.items():
         srat,rc=k.split(SEP,1); tt=title_of(rc,srat) or 'UNMAPPED'; tr[tt]=tr.get(tt,0)+round(sum(v[2] for v in d.values()))
-    print('  done',mo,'rows',n,'(skipped',skipped_unbilled,'cust_billed=0)','in',round(time.time()-t),'s | title rev:',{k:round(v/1e6) for k,v in tr.items()},'M',flush=True)
-print('WROTE corrected.json months',M['months'],'| unmapped(srat/rc):',M['unmapped_srat'],flush=True)
+    print('  done',mo,'rows',n,'(skipped',skipped_unbilled,'not billed,',skipped_prepaid,'PR/PC prepaid-tagged,',skipped_nondata,'non-data/report-footer rows)','in',round(time.time()-t),'s | title rev:',{k:round(v/1e6) for k,v in tr.items()},'M',flush=True)
+print('WROTE corrected.json months',M['months'],'| unmapped this run (srat/rc):',{k:v for k,v in M['unmapped_srat'].items() if k in FILES},flush=True)
