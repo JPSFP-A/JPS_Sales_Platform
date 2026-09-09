@@ -121,6 +121,18 @@ KVA_TRUE = {
     (2026, 1): 63601.00, (2026, 2): 65929.00, (2026, 3): 66345.00, (2026, 4): 65347.00,
     (2026, 5): 65930.00, (2026, 6): 65098.00, (2026, 7): 62604.00, (2026, 8): 63185.00,
 }
+# There is no given future KVA schedule for this account (unlike Alcoa's negotiated
+# one), so projected months used to leave KVA blank -- which _build_wb_v2.py's
+# CC[(y,m)]['kva'] load coerces to 0.0 (float(cell.value or 0)), and that 0 then
+# poisons every downstream use: "RT50 excl. Caribbean Cement" subtracts 0 instead of
+# a real number, so for every projected month it silently equals the FULL RT50 total
+# rather than actually excluding this account, and the Load Factor calc divides by
+# zero (guarded to 0.0, another silently-wrong value). KVA doesn't drive any $ figure
+# in this model (Demand/Energy/IPP/Fuel/Other are all kWh-derived for projected
+# months), so a flat, clearly-labelled projection is safe here: hold KVA at the
+# trailing 3-actual-month average rather than dropping to zero.
+_kva_hist_sorted = sorted(KVA_TRUE.items())
+KVA_PROJ = sum(v for _, v in _kva_hist_sorted[-3:]) / 3
 MNAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 r = r0 + 1
 first_data_row = r
@@ -274,6 +286,8 @@ drow(18, 'Projection start (first row of Projection tab)', '2024-01', '@', 'Form
 section(20, 'REFERENCE (informational, not scenario inputs)')
 drow(21, 'Latest true billed KVA (Aug-2026)', 63185.00, '#,##0.00', 'Source: Aug 26.csv, kva_billed_consump field', input_cell=False)
 ds.cell(21, 2).font = BLACK
+drow(22, 'Projected-month KVA (held flat, trailing 3-mo avg)', round(KVA_PROJ, 2), '#,##0.00', 'No given future KVA schedule for this account -- see Projection tab note', input_cell=False)
+ds.cell(22, 2).font = BLACK
 
 section(23, 'HISTORICAL BASELINE UNIT RATES (computed from History tab averages — feed the Projected months)')
 def rate_row(row, label, num_col, den_col='D'):
@@ -292,7 +306,7 @@ ds.cell(29, 2).value = f'=History!J{AVG_ROW}'
 ds.cell(29, 2).font = GREEN; ds.cell(29, 2).number_format = MONEY
 ds.cell(29, 2).border = BORDER; ds.cell(29, 1).border = BORDER
 
-ds['A31'] = ('MODELING NOTES: (1) Unlike Alcoa, there is no user-provided future KVA schedule or negotiated $/KVA rate for this account — every kWh-driven component (Demand, Energy, IPP, Fuel, Other) uses a history-derived $/kWh rate with an escalation driver, same as Alcoa\'s ORIGINAL template before account-specific inputs were given. '
+ds['A31'] = ('MODELING NOTES: (1) Unlike Alcoa, there is no user-provided future KVA schedule or negotiated $/KVA rate for this account — every kWh-driven $ component (Demand, Energy, IPP, Fuel, Other) uses a history-derived $/kWh rate with an escalation driver, same as Alcoa\'s ORIGINAL template before account-specific inputs were given. KVA itself is not a $ input for this account, but it still feeds Load Factor and the "RT50 excl. Caribbean Cement" subtraction in the LE workbook, so projected months hold it flat at the trailing 3-actual-month average (row 22 above) rather than leaving it blank -- a blank was coercing to 0 downstream, which silently made "excl. Caribbean Cement" equal the full RT50 total for every projected month instead of actually excluding this account. '
              '(2) GCT is real for this account (~13-16% of revenue) — applied via the GCT rate driver, unlike Alcoa which was GCT-exempt. '
              '(3) No hurricane normalization applied — see History tab note; Nov/Dec-2025 are included in all averages as "Normal".')
 ds['A31'].font = Font(name=FONT, italic=True, size=8.5, color='B87800')
@@ -371,7 +385,8 @@ for i in range(TOTAL_ROWS):
         ps.cell(rr, 18).value = f'=History!E{hr}'
         ps.cell(rr, 18).font = GREEN; ps.cell(rr, 18).number_format = MONEY
     else:
-        ps.cell(rr, 6).value = ''  # no given future KVA schedule for this account
+        ps.cell(rr, 6).value = round(KVA_PROJ, 2)  # no given future schedule -- trailing 3-actual-month average, held flat
+        ps.cell(rr, 6).font = BLACK; ps.cell(rr, 6).number_format = '#,##0.00'
         ps.cell(rr, 7).value = f'=IF(Drivers!$B$5=1,INDEX(Seasonality!$C$4:$C$15,MATCH(D{rr},Seasonality!$A$4:$A$15,0)),Seasonality!$C$16)'
         ps.cell(rr, 7).font = GREEN; ps.cell(rr, 7).number_format = KWHFMT
         ps.cell(rr, 8).value = f'=G{rr}*(1+Drivers!$B$4)'
@@ -418,7 +433,7 @@ last_proj_row = pr0 + TOTAL_ROWS - 1
 # range is merged) -- discovered when adding Aug-2026 exposed it. last_proj_row+2
 # always lands after every data row, whatever ACTUAL_ROWS/PROJ_ROWS are.
 _footer_row = last_proj_row + 2
-ps.cell(_footer_row, 1).value = ('Jan-2024 to Aug-2026 (32 rows, "Actual") pulled directly from History, row for row. Sep-2026 to Dec-2028 (28 rows, "Projected") use seasonality-derived kWh + history-derived $/kWh rates for every component -- there is no given future KVA schedule or negotiated demand/IPP/fuel rate for this account, unlike Alcoa, so Demand here stays modeled as $/kWh (Drivers tab note). '
+ps.cell(_footer_row, 1).value = ('Jan-2024 to Aug-2026 (32 rows, "Actual") pulled directly from History, row for row. Sep-2026 to Dec-2028 (28 rows, "Projected") use seasonality-derived kWh + history-derived $/kWh rates for every $ component -- there is no given future KVA schedule or negotiated demand/IPP/fuel rate for this account, unlike Alcoa, so Demand here stays modeled as $/kWh (Drivers tab note). KVA on projected rows is held flat at the trailing 3-actual-month average (Drivers row 22) rather than left blank, since a blank coerces to 0 downstream and silently breaks the "excl. Caribbean Cement" subtraction in the LE workbook. '
              'No hurricane normalization was applied to the seasonality baseline (History tab note) -- if you have reason to believe this account was storm-affected in Nov/Dec-2025, flag it and I\'ll rebuild that portion the same way as Alcoa\'s.')
 ps.cell(_footer_row, 1).font = Font(name=FONT, italic=True, size=8.5, color='B87800')
 ps.merge_cells(start_row=_footer_row, start_column=1, end_row=_footer_row, end_column=18)
