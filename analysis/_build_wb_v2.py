@@ -18,41 +18,65 @@ def cell(ws, r, c):
 # the submitted total while the app did not, and their class splits never matched.
 # The engine now ties on its own, so there is nothing left to pin.
 # FY2026, FY2027 and FY2028 monthly by class, read straight off the Driver Forecast
-# engine on 7 Sep 2026 -- via _frCollectData(year).rcMonth in an authenticated
-# session, the same function and the same data the app itself renders from. August
-# is now a closed, actual month (_dfcClosedThru returns 8): it billed 302.2 GWh
-# against the 295.6 GWh the previous forecast carried, and that beat rolls forward
-# through the Sep-Dec rolling base and into FY2027/28 via the cross-year cascade.
-# These are the engine's own numbers. Do not hand-edit them -- change the
-# assumptions in the app and re-read, or the workbook and the app start telling
-# different stories again.
+# engine on 9 Sep 2026 -- via _frCollectData(year).rcMonth in an authenticated
+# session, the same function and the same data the app itself renders from. This
+# replaces a 7 Sep snapshot that had gone stale: two corrected_scan.py bugs fixed on
+# 8-9 Sep (a cust_billed blacklist that missed non-'0'/'1' flag values, and report-
+# footer rows registering as bogus billing rows) moved August's true total from
+# 302.2 to 304.0 GWh, RT40 alone picking up +1.66 GWh -- it has the most accounts, so
+# the most exposure to both bugs. That correction rolls forward through the Sep-Dec
+# rolling base and into FY2027/28 via the cross-year cascade, same as any other
+# actuals revision. These are the engine's own numbers. Do not hand-edit them --
+# change the assumptions in the app and re-read, or the workbook and the app start
+# telling different stories again.
 m26 = {
-    'RT10': [84427346, 76489141, 88277732, 87175653, 99081407, 101299278, 113612986, 117680973, 111922483, 116157238, 114193599, 112441528],
-    'RT20': [44388714, 41872696, 49678165, 47362312, 55463130, 55124575, 60644232, 60610127, 59353549, 61124484, 59807340, 59225991],
-    'RT40': [56013982, 52824365, 61689786, 59597985, 65913616, 64392244, 70139337, 70227099, 66286481, 68601071, 68357244, 67720897],
-    'RT50': [26723901, 26712470, 29779870, 28362025, 30151229, 28210033, 28679193, 30606534, 28417733, 29232266, 29462691, 29234792],
+    'RT10': [84427346, 76489141, 88277732, 87175653, 99081407, 101300120, 113612986, 117671042, 111919423, 116152842, 114187856, 112437191],
+    'RT20': [44388714, 41872696, 49678165, 47362312, 55463130, 55125421, 60644232, 60610127, 59353834, 61124580, 59807466, 59226157],
+    'RT40': [56013982, 52824365, 61689786, 59597985, 65913616, 64392244, 70139337, 71882555, 66829692, 69370164, 69639250, 68840722],
+    'RT50': [26723901, 26712470, 29779870, 28362025, 30151229, 28210033, 28679193, 30677402, 28440874, 29263308, 29504108, 29266499],
     'RT60-ST': [2224345, 2309941, 3098902, 3413243, 2798277, 3409919, 3409214, 3413417, 3341283, 3356521, 3348515, 3329878],
-    'RT70': [20371321, 21088523, 26193990, 24727332, 27726514, 26848147, 28562426, 19707587, 18179779, 18647298, 18023242, 17703124],
+    'RT70': [20371321, 21088523, 26193990, 24727332, 27726514, 26848147, 28562426, 19707587, 18179779, 17964880, 17315643, 16953156],
 }
 
 m27 = {
-    'RT10': [99481469, 94596469, 97683476, 97875420, 103622039, 110794271, 115532731, 122140843, 118218428, 112535199, 98622328, 103889624],
-    'RT20': [51507962, 53159606, 55366912, 53861290, 56165610, 59870384, 62138397, 62520446, 62155406, 61747651, 55502502, 57635619],
-    'RT40': [69085428, 69911419, 69673960, 69902154, 70105651, 70074692, 69926179, 69993631, 70033485, 70034683, 70038871, 69870571],
-    'RT50': [30015941, 30725442, 31227578, 31999737, 32679453, 33122073, 33717955, 34302712, 34866893, 35449050, 36060579, 36664586],
+    'RT10': [99479355, 94594252, 97681367, 97873273, 103619730, 110791865, 115530248, 122138227, 118215866, 112532704, 98620158, 103887334],
+    'RT20': [51508081, 53159716, 55367039, 53861428, 56165750, 59870539, 62138552, 62520603, 62155549, 61747780, 55502646, 57635763],
+    'RT40': [69940987, 70849956, 70584195, 70826799, 71054274, 71024661, 70889303, 70969492, 71018683, 71031251, 71046925, 70889062],
+    'RT50': [30052242, 30763580, 31264640, 32038586, 32719217, 33162320, 33759292, 34344900, 34909924, 35493019, 36105474, 36710385],
     'RT60-ST': [3341846, 3337277, 3339485, 3334739, 3334776, 3326704, 3320957, 3315114, 3308584, 3300214, 3294289, 3284637],
-    'RT70': [15547048, 15375372, 16192538, 16505098, 16512799, 16532935, 16219395, 16201957, 16188466, 16159363, 16163271, 16154341],
+    'RT70': [15498440, 15356377, 16214558, 16489925, 16508752, 16533866, 16213319, 16198904, 16185743, 16155430, 16160048, 16151064],
 }
 
 m28 = {
-    'RT10': [103459079, 96412726, 100663699, 100543554, 106070184, 113926782, 118738395, 125631734, 121471002, 115406401, 100669190, 106351704],
-    'RT20': [55110538, 55888809, 58558738, 55288782, 57303699, 61184080, 63265202, 63535037, 62882494, 62236373, 55535567, 57624569],
-    'RT40': [69940974, 69873571, 69784064, 69899158, 69713255, 69643098, 69593220, 69497571, 69434605, 69373945, 69280266, 69248980],
-    'RT50': [36013638, 36204468, 36255630, 36123230, 36160954, 36147849, 36113416, 36111516, 36096467, 36080780, 36071324, 36059367],
+    'RT10': [103456806, 96410613, 100661485, 100541359, 106067864, 113924317, 118735871, 125629078, 121468394, 115403866, 100666993, 106349378],
+    'RT20': [55110668, 55888925, 58558868, 55288927, 57303844, 61184239, 63265361, 63535196, 62882639, 62236503, 55535712, 57624715],
+    'RT40': [70969809, 70913416, 70834495, 70960227, 70785149, 70725604, 70686551, 70601932, 70550110, 70500778, 70418129, 70398865],
+    'RT50': [36058323, 36249391, 36300562, 36167874, 36205585, 36192383, 36157818, 36155837, 36140686, 36124894, 36115343, 36103285],
     'RT60-ST': [3278045, 3270689, 3262859, 3255633, 3248197, 3240733, 3233392, 3226013, 3218652, 3211325, 3204004, 3196701],
-    'RT70': [16002934, 15978074, 15958240, 15893073, 15856843, 15816912, 15770155, 15729588, 15687579, 15644853, 15603484, 15561844],
+    'RT70': [15999472, 15974769, 15954907, 15889721, 15853528, 15813594, 15766842, 15726287, 15684283, 15641565, 15600204, 15558571],
 }
-l26 = [cell(vs, 15, c) for c in range(2, 14)]
+
+# FY2026 losses. Jan-Aug is real: net generation (net_gen_historical.net_gen_mwh)
+# minus TRUE billed sales (jps_actuals, not net_gen_historical's own billed_mwh
+# column, which is a different, less current pipeline and no longer agrees with
+# jps_actuals -- e.g. Aug billed_mwh there is 307,231 vs jps_actuals' 303,962).
+# Blended Jan-Aug lands at 25.98%, comfortably under the 27.10% target -- losses
+# have been running better than plan all year. Sep-Dec has no real losses yet, so
+# they are SOLVED (same approach as FY2027/28's RATE_M, just a flat rate here
+# rather than a seasonal curve, since four months isn't enough to fit one credibly)
+# to close the FULL YEAR at exactly 27.10%, not just the open months: 29.05%/mo.
+_NETGEN_JAN_AUG_2026 = [325445.00, 294131.83, 346444.13, 347826.00, 364366.69, 387886.70, 399975.47, 417380.53]  # MWh, net_gen_historical
+_BILLED_JAN_AUG_2026 = [234149.60905, 221297.13582, 258718.44568, 250638.54954, 281134.17319, 279285.88383, 305047.38824, 303962.13026]  # MWh, jps_actuals
+l26_actual = [(ng - b) * 1000 for ng, b in zip(_NETGEN_JAN_AUG_2026, _BILLED_JAN_AUG_2026)]  # kWh
+_S_actual_2026 = sum(_BILLED_JAN_AUG_2026) * 1000
+_L_actual_2026 = sum(l26_actual)
+_S_fcst_2026 = sum(sum(m26[rc][8:12]) for rc in CLS)
+_TARGET_2026_LOSSPCT = 0.2710
+_L_fcst_2026_total = _TARGET_2026_LOSSPCT / (1 - _TARGET_2026_LOSSPCT) * (_S_actual_2026 + _S_fcst_2026) - _L_actual_2026
+_R_SEPDEC_2026 = _L_fcst_2026_total / (_S_fcst_2026 + _L_fcst_2026_total)
+l26_fcst = [sum(m26[rc][8 + m] for rc in CLS) * _R_SEPDEC_2026 / (1 - _R_SEPDEC_2026) for m in range(4)]
+l26 = l26_actual + l26_fcst
+assert abs((sum(l26)) / (sum(sum(m26[rc]) for rc in CLS) + sum(l26)) * 100 - 27.10) < 0.05, 'FY2026 losses solve did not land on 27.10'
 
 series = {rc: {2026: m26[rc], 2027: m27[rc], 2028: m28[rc]} for rc in CLS}
 sales = np.array([sum(series[rc][y][m] for rc in CLS) for y in (2026, 2027, 2028) for m in range(12)])
@@ -187,11 +211,14 @@ months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec
 
 ws.cell(1,1).value = 'JPS Sales Forecast - FY2026 to FY2028, monthly kWh'
 ws.cell(1,1).font = Font(bold=True, size=13)
-ws.cell(2,1).value = ('Actual Jan-Jul 2026; forecast thereafter. Storm recovery now runs THROUGH the driver engine '
+ws.cell(2,1).value = ('Actual Jan-Aug 2026; forecast thereafter. Storm recovery now runs THROUGH the driver engine '
                       '(normalisation on RT50/RT40/RT20, cement excluded; industrial recovery applied to the seven hotel accounts only) rather than as a separate overlay, so these '
                       'figures equal what the platform shows. FY2028 carries no storm uplift: recovery completes by end-2027. '
-                      'Losses solved so each fiscal year closes at 27.10%. FY2026 is pinned to the 3,281.97 GWh submitted on '
-                      '19 Aug 2026 and now ties to it exactly in the app as well, via a disclosed -460.8 MWh true-up overlay on Aug-Dec.')
+                      'Losses solved to close each fiscal year at 27.10%%: FY2027/28 via a seasonality-shaped monthly rate, FY2026 via a single '
+                      'rate on the still-open Sep-Dec months (Jan-Aug is real, running at 25.98%%, comfortably under target). '
+                      'FY2026 no longer ties to the 3,281.97 GWh submitted 19 Aug 2026 -- that figure is frozen as the number of record; the register '
+                      'has moved since as more months closed. Currently %.1f GWh, %s%.1f GWh (%s%.2f pct) above the submission, reported here rather than forced to tie.'
+                      % (cur26/1e6, _sign, gap/1e6, _sign, gap/TARGET_2026*100))
 ws.cell(2,1).font = Font(italic=True, size=9)
 col = 2
 for y in (2026, 2027, 2028):
