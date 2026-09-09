@@ -65,11 +65,11 @@ This report explains how the forecast moves and why. Volumes are produced by the
 <h3>RT50 excluding Caribbean Cement</h3>
 <table>
 <tr><th class="l">RT50</th><th>FY2026</th><th>FY2027</th><th>YoY</th><th>FY2028</th><th>YoY</th></tr>
-<tr><td>Caribbean Cement</td><td>105.9</td><td>103.0</td><td class="neg">&minus;2.7%</td><td>97.9</td><td class="neg">&minus;5.0%</td></tr>
-<tr><td>All other RT50</td><td>239.7</td><td>297.8</td><td class="pos">+24.3%</td><td>335.6</td><td class="pos">+12.7%</td></tr>
+<tr><td>Caribbean Cement</td><td>106.7</td><td>104.5</td><td class="neg">&minus;2.1%</td><td>109.5</td><td class="pos">+4.8%</td></tr>
+<tr><td>All other RT50</td><td>239.1</td><td>296.8</td><td class="pos">+24.1%</td><td>324.4</td><td class="pos">+9.3%</td></tr>
 <tr class="tot"><td>RT50 total</td><td>345.6</td><td>400.8</td><td class="pos">+16.0%</td><td>433.4</td><td class="pos">+8.1%</td></tr>
 </table>
-<div class="note">Caribbean Cement is 31% of RT50 in FY2026 and is deliberately excluded from storm-recovery normalisation: it was not storm-affected and its volume rose through 2026. Figures here are billed kWh from Caribbean Cement's own account projection, which the Sales &amp; Generation workbook's demand sheet also reads from, so the two documents cannot disagree on this account.</div>
+<div class="note">Caribbean Cement is 31% of RT50 in FY2026 and is deliberately excluded from storm-recovery normalisation: it was not storm-affected and its volume rose through 2026. Figures here are this account's own live chain from the Driver Forecast engine, the same source as every other number in this report. A separate standalone model for this account (used in the Sales &amp; Generation workbook, built on seasonality and historical $/kWh rates rather than the engine's macro/weather/industry drivers) carries a different trajectory for FY2028 specifically, 97.9 GWh against the 109.5 GWh here; the two are independent models of the same account and are not expected to tie.</div>
 
 <h2>2. FY2026 to FY2027 Movement by Driver (+141.2 GWh)</h2>
 <div class="wf">
@@ -172,6 +172,106 @@ This report explains how the forecast moves and why. Volumes are produced by the
 <br><br>
 <b>RT20 commercial, up 4.8 GWh:</b> no material managed account moves it. By industry: Wired and Wireless Telecommunications Carriers +1.6, Executive Offices +1.0, Water Supply and Irrigation Systems +0.6, plus small amounts across several other industries. The non-KAM pooled book is flat to slightly down and is not the source of this growth.
 </div>
+<h3>FY2026 to FY2027, by industry</h3>
+<div class="wf" style="display:grid;grid-template-columns:1fr 1fr;gap:0 24px">
+<div>
+<div style="font-weight:700;color:#0b3d66;margin:10px 0 2px">RT50</div>
+<table>
+<tr><th class="l">Industry</th><th>GWh</th></tr>
+<tr><td class="l">Hotels (except Casino Hotels) and Motels</td><td class="pos">+16.99</td></tr>
+<tr><td class="l">Poultry Hatcheries</td><td class="pos">+4.67</td></tr>
+<tr><td class="l">(non-KAM pooled cohort)</td><td class="pos">+4.50</td></tr>
+<tr><td class="l">Full-Service Restaurants</td><td class="pos">+3.68</td></tr>
+<tr><td class="l">Hydroelectric Power Generation</td><td class="pos">+3.24</td></tr>
+<tr><td class="l">Other General Government Support</td><td class="pos">+2.66</td></tr>
+<tr><td class="l">Food Manufacturing</td><td class="pos">+2.44</td></tr>
+<tr><td class="l">Executive Offices</td><td class="pos">+1.82</td></tr>
+<tr><td class="l">Orange Groves</td><td class="pos">+1.79</td></tr>
+<tr><td class="l">Distilleries</td><td class="pos">+1.68</td></tr>
+<tr><td class="l">Cookie and Cracker Manufacturing</td><td class="pos">+1.54</td></tr>
+<tr><td class="l">Other Metal Ore Mining</td><td class="pos">+1.34</td></tr>
+<tr><td class="l">Manufacturing</td><td class="pos">+1.25</td></tr>
+<tr><td class="l">International Affairs</td><td class="pos">+1.18</td></tr>
+<tr><td class="l">Corporate, Subsidiary, and Regional Managing Offices</td><td class="pos">+1.04</td></tr>
+<tr><td class="l">Banking, Insurance and Investments</td><td class="pos">+1.00</td></tr>
+<tr><td class="l">Colleges, Universities, and Professional Schools</td><td class="pos">+0.94</td></tr>
+<tr><td class="l">General Medical and Surgical Hospitals</td><td class="pos">+0.92</td></tr>
+<tr><td class="l">Residential Property Managers</td><td class="pos">+0.80</td></tr>
+<tr><td class="l">Water Supply and Irrigation Systems</td><td class="pos">+0.68</td></tr>
+<tr><td class="l">Other Animal Food Manufacturing</td><td class="pos">+0.67</td></tr>
+<tr><td class="l">Dimension Stone Mining and Quarrying</td><td class="pos">+0.53</td></tr>
+<tr><td class="l">Fish and Seafood Merchant Wholesalers</td><td class="pos">+0.46</td></tr>
+<tr><td class="l">Convention and Trade Show Organizers</td><td class="pos">+0.45</td></tr>
+<tr><td class="l">Petroleum Refineries</td><td class="pos">+0.41</td></tr>
+<tr><td class="l">Dairy Cattle and Milk Production</td><td class="pos">+0.40</td></tr>
+<tr><td class="l">Port and Harbor Operations</td><td class="pos">+0.36</td></tr>
+<tr><td class="l">General Warehousing and Storage</td><td class="neg">&minus;0.31</td></tr>
+<tr><td class="l">Meat and Meat Product Merchant Wholesalers</td><td class="neg">&minus;0.60</td></tr>
+<tr><td class="l">Cement Manufacturing</td><td class="neg">&minus;2.19</td></tr>
+<tr class="sub"><td class="l">All other industries (15, each under 0.3 GWh)</td><td class="pos">+0.90</td></tr>
+<tr class="tot"><td class="l">RT50 total</td><td class="pos">+55.20</td></tr>
+</table>
+</div>
+<div>
+<div style="font-weight:700;color:#0b3d66;margin:10px 0 2px">RT40</div>
+<table>
+<tr><th class="l">Industry</th><th>GWh</th></tr>
+<tr><td class="l">Water Supply and Irrigation Systems</td><td class="pos">+17.55</td></tr>
+<tr><td class="l">(non-KAM pooled cohort)</td><td class="pos">+13.44</td></tr>
+<tr><td class="l">Retail</td><td class="pos">+5.80</td></tr>
+<tr><td class="l">Poultry Hatcheries</td><td class="pos">+5.51</td></tr>
+<tr><td class="l">Full-Service Restaurants</td><td class="pos">+5.48</td></tr>
+<tr><td class="l">Banking, Insurance and Investments</td><td class="pos">+5.28</td></tr>
+<tr><td class="l">General Medical and Surgical Hospitals</td><td class="pos">+2.81</td></tr>
+<tr><td class="l">Hotels (except Casino Hotels) and Motels</td><td class="pos">+2.49</td></tr>
+<tr><td class="l">Processing</td><td class="pos">+1.58</td></tr>
+<tr><td class="l">Supermarkets and Other Grocery Retailers (except Convenience Retailers)</td><td class="pos">+1.42</td></tr>
+<tr><td class="l">Courts</td><td class="pos">+1.11</td></tr>
+<tr><td class="l">(no industry tag)</td><td class="pos">+0.81</td></tr>
+<tr><td class="l">Restaurants</td><td class="pos">+0.70</td></tr>
+<tr><td class="l">Executive Offices</td><td class="pos">+0.66</td></tr>
+<tr><td class="l">Food Manufacturing</td><td class="pos">+0.60</td></tr>
+<tr><td class="l">Limited-Service Restaurants</td><td class="pos">+0.41</td></tr>
+<tr><td class="l">Vocational Rehabilitation Services</td><td class="pos">+0.39</td></tr>
+<tr><td class="l">Snack and Nonalcoholic Beverage Bars</td><td class="pos">+0.35</td></tr>
+<tr><td class="l">Drugs and Druggists' Sundries Merchant Wholesalers</td><td class="pos">+0.31</td></tr>
+<tr><td class="l">General Line Grocery Merchant Wholesalers</td><td class="neg">&minus;0.92</td></tr>
+<tr><td class="l">Distilleries</td><td class="neg">&minus;1.77</td></tr>
+<tr><td class="l">Telemarketing Bureaus and Other Contact Centers</td><td class="neg">&minus;1.79</td></tr>
+<tr class="sub"><td class="l">All other industries (33, each under 0.3 GWh)</td><td class="pos">+3.80</td></tr>
+<tr class="tot"><td class="l">RT40 total</td><td class="pos">+66.20</td></tr>
+</table>
+</div>
+<div>
+<div style="font-weight:700;color:#0b3d66;margin:10px 0 2px">RT70</div>
+<table>
+<tr><th class="l">Industry</th><th>GWh</th></tr>
+<tr><td class="l">Hotels (except Casino Hotels) and Motels</td><td class="pos">+7.59</td></tr>
+<tr><td class="l">Food Manufacturing</td><td class="pos">+1.25</td></tr>
+<tr><td class="l">Petroleum Refineries</td><td class="pos">+0.96</td></tr>
+<tr><td class="l">Port and Harbor Operations</td><td class="pos">+0.90</td></tr>
+<tr><td class="l">General Medical and Surgical Hospitals</td><td class="pos">+0.85</td></tr>
+<tr><td class="l">Distilleries</td><td class="pos">+0.83</td></tr>
+<tr><td class="l">Flour Milling</td><td class="neg">&minus;0.46</td></tr>
+<tr><td class="l">Colleges, Universities, and Professional Schools</td><td class="neg">&minus;1.01</td></tr>
+<tr><td class="l">Other Airport Operations</td><td class="neg">&minus;18.76</td></tr>
+<tr><td class="l">Other Metal Ore Mining</td><td class="neg">&minus;64.18</td></tr>
+<tr class="tot"><td class="l">RT70 total</td><td class="neg">&minus;72.00</td></tr>
+</table>
+</div>
+<div>
+<div style="font-weight:700;color:#0b3d66;margin:10px 0 2px">RT20 commercial</div>
+<table>
+<tr><th class="l">Industry</th><th>GWh</th></tr>
+<tr><td class="l">Wired and Wireless Telecommunications Carriers (except Satellite)</td><td class="pos">+1.55</td></tr>
+<tr><td class="l">Executive Offices</td><td class="pos">+1.00</td></tr>
+<tr><td class="l">Water Supply and Irrigation Systems</td><td class="pos">+0.60</td></tr>
+<tr class="sub"><td class="l">All other industries (8, each under 0.3 GWh)</td><td class="pos">+1.13</td></tr>
+<tr class="tot"><td class="l">RT20 commercial total</td><td class="pos">+4.80</td></tr>
+</table>
+</div>
+</div>
+<div class="note">RT60-ST (street lighting) carries no industry classification, almost entirely one non-KAM pooled cohort; not shown. Entries below the 0.3 GWh threshold are combined into "All other industries" per class rather than listed individually. Every table ties to the class total already stated in the bridge above.</div>
 
 <h2>3. FY2027 to FY2028 Movement by Driver (+75.1 GWh)</h2>
 <div class="wf">
@@ -260,6 +360,88 @@ This report explains how the forecast moves and why. Volumes are produced by the
 <br><br>
 <b>RT20 commercial, down 8.1 GWh:</b> the small KAM-tracked industries are flat to positive, Wired and Wireless Telecommunications Carriers +0.5, Executive Offices +0.3, Water Supply and Irrigation Systems +0.2, and do not explain the decline. The entire &minus;8.1 GWh, plus that offset, roughly &minus;9.6 GWh, sits in the non-KAM pooled book, which carries no industry classification. There is no further breakdown available for this piece.
 </div>
+<h3>FY2027 to FY2028, by industry</h3>
+<div class="wf" style="display:grid;grid-template-columns:1fr 1fr;gap:0 24px">
+<div>
+<div style="font-weight:700;color:#0b3d66;margin:10px 0 2px">RT50</div>
+<table>
+<tr><th class="l">Industry</th><th>GWh</th></tr>
+<tr><td class="l">Hotels (except Casino Hotels) and Motels</td><td class="pos">+5.13</td></tr>
+<tr><td class="l">Cement Manufacturing</td><td class="pos">+5.01</td></tr>
+<tr><td class="l">Poultry Hatcheries</td><td class="pos">+4.29</td></tr>
+<tr><td class="l">(non-KAM pooled cohort)</td><td class="pos">+2.33</td></tr>
+<tr><td class="l">Full-Service Restaurants</td><td class="pos">+1.84</td></tr>
+<tr><td class="l">Food Manufacturing</td><td class="pos">+1.48</td></tr>
+<tr><td class="l">Colleges, Universities, and Professional Schools</td><td class="pos">+1.04</td></tr>
+<tr><td class="l">Other General Government Support</td><td class="pos">+1.01</td></tr>
+<tr><td class="l">Orange Groves</td><td class="pos">+0.96</td></tr>
+<tr><td class="l">Cookie and Cracker Manufacturing</td><td class="pos">+0.86</td></tr>
+<tr><td class="l">Banking, Insurance and Investments</td><td class="pos">+0.81</td></tr>
+<tr><td class="l">Distilleries</td><td class="pos">+0.68</td></tr>
+<tr><td class="l">Fish and Seafood Merchant Wholesalers</td><td class="pos">+0.62</td></tr>
+<tr><td class="l">Hydroelectric Power Generation</td><td class="pos">+0.61</td></tr>
+<tr><td class="l">Other Metal Ore Mining</td><td class="pos">+0.60</td></tr>
+<tr><td class="l">Other Animal Food Manufacturing</td><td class="pos">+0.55</td></tr>
+<tr><td class="l">Corporate, Subsidiary, and Regional Managing Offices</td><td class="pos">+0.54</td></tr>
+<tr><td class="l">International Affairs</td><td class="pos">+0.52</td></tr>
+<tr><td class="l">Executive Offices</td><td class="pos">+0.41</td></tr>
+<tr><td class="l">Residential Property Managers</td><td class="pos">+0.39</td></tr>
+<tr><td class="l">Manufacturing</td><td class="pos">+0.34</td></tr>
+<tr><td class="l">Water Supply and Irrigation Systems</td><td class="pos">+0.34</td></tr>
+<tr><td class="l">Meat and Meat Product Merchant Wholesalers</td><td class="pos">+0.32</td></tr>
+<tr><td class="l">General Medical and Surgical Hospitals</td><td class="pos">+0.31</td></tr>
+<tr class="sub"><td class="l">All other industries (10, each under 0.3 GWh)</td><td class="pos">+1.44</td></tr>
+<tr class="tot"><td class="l">RT50 total</td><td class="pos">+32.60</td></tr>
+</table>
+</div>
+<div>
+<div style="font-weight:700;color:#0b3d66;margin:10px 0 2px">RT40</div>
+<table>
+<tr><th class="l">Industry</th><th>GWh</th></tr>
+<tr><td class="l">Poultry Hatcheries</td><td class="pos">+3.07</td></tr>
+<tr><td class="l">Banking, Insurance and Investments</td><td class="pos">+2.90</td></tr>
+<tr><td class="l">Full-Service Restaurants</td><td class="pos">+2.59</td></tr>
+<tr><td class="l">Retail - Supermarket</td><td class="pos">+1.53</td></tr>
+<tr><td class="l">General Medical and Surgical Hospitals</td><td class="pos">+0.59</td></tr>
+<tr><td class="l">Restaurants</td><td class="pos">+0.49</td></tr>
+<tr><td class="l">Supermarkets and Other Grocery Retailers (except Convenience Retailers)</td><td class="neg">&minus;0.51</td></tr>
+<tr><td class="l">Executive Offices</td><td class="neg">&minus;0.55</td></tr>
+<tr><td class="l">Wired and Wireless Telecommunications Carriers (except Satellite)</td><td class="neg">&minus;0.91</td></tr>
+<tr><td class="l">Hotels (except Casino Hotels) and Motels</td><td class="neg">&minus;1.67</td></tr>
+<tr><td class="l">Telemarketing Bureaus and Other Contact Centers</td><td class="neg">&minus;2.41</td></tr>
+<tr><td class="l">Water Supply and Irrigation Systems</td><td class="neg">&minus;2.56</td></tr>
+<tr><td class="l">(non-KAM pooled cohort)</td><td class="neg">&minus;3.86</td></tr>
+<tr class="sub"><td class="l">All other industries (22, each under 0.3 GWh)</td><td class="neg">&minus;1.44</td></tr>
+<tr class="tot"><td class="l">RT40 total</td><td class="neg">&minus;3.30</td></tr>
+</table>
+</div>
+<div>
+<div style="font-weight:700;color:#0b3d66;margin:10px 0 2px">RT70</div>
+<table>
+<tr><th class="l">Industry</th><th>GWh</th></tr>
+<tr><td class="l">Petroleum Refineries</td><td class="pos">+1.83</td></tr>
+<tr><td class="l">Food Manufacturing</td><td class="neg">&minus;0.42</td></tr>
+<tr><td class="l">Other Metal Ore Mining</td><td class="neg">&minus;0.58</td></tr>
+<tr><td class="l">Port and Harbor Operations</td><td class="neg">&minus;0.65</td></tr>
+<tr><td class="l">Distilleries</td><td class="neg">&minus;0.70</td></tr>
+<tr><td class="l">Colleges, Universities, and Professional Schools</td><td class="neg">&minus;2.95</td></tr>
+<tr class="sub"><td class="l">All other industries (4, each under 0.3 GWh)</td><td class="neg">&minus;0.73</td></tr>
+<tr class="tot"><td class="l">RT70 total</td><td class="neg">&minus;4.20</td></tr>
+</table>
+</div>
+<div>
+<div style="font-weight:700;color:#0b3d66;margin:10px 0 2px">RT20 commercial</div>
+<table>
+<tr><th class="l">Industry</th><th>GWh</th></tr>
+<tr><td class="l">Wired and Wireless Telecommunications Carriers (except Satellite)</td><td class="pos">+0.49</td></tr>
+<tr><td class="l">Executive Offices</td><td class="pos">+0.30</td></tr>
+<tr><td class="l">(non-KAM pooled cohort)</td><td class="neg">&minus;9.57</td></tr>
+<tr class="sub"><td class="l">All other industries (6, each under 0.3 GWh)</td><td class="pos">+0.42</td></tr>
+<tr class="tot"><td class="l">RT20 commercial total</td><td class="neg">&minus;8.10</td></tr>
+</table>
+</div>
+</div>
+<div class="note">RT60-ST (street lighting) carries no industry classification, almost entirely one non-KAM pooled cohort; not shown. Entries below the 0.3 GWh threshold are combined into "All other industries" per class rather than listed individually. Every table ties to the class total already stated in the bridge above.</div>
 
 <h2>4. New Load and Customer Acquisition: The Evidence</h2>
 <div class="key">
