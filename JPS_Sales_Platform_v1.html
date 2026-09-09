@@ -9632,6 +9632,7 @@ function getSB(){
           detectSessionInUrl:false,
         }
       });
+    try { if (window.JpsAuth && window.JpsAuth.startSessionSync) JpsAuth.startSessionSync(_sbClient); } catch(e){ console.warn('JpsAuth.startSessionSync failed', e); }
     try { if (window.JpsNav) JpsNav.bind(_sbClient); } catch(e){ console.warn('JpsNav bind failed', e); }
     (function(){ function _m(){ try { if (window.JpsSubmit) { JpsSubmit.mount(_sbClient, { sourceApp: 'sales' }); _jpsSubmitSyncVisibility(document.querySelector('.sec.on')?.id); } } catch(e){ console.error('[submit] mount', e); } }
       _sbClient.auth.getSession().then(function(r){ if (r && r.data && r.data.session) _m(); }).catch(function(e){ console.error('[submit] getSession', e); });

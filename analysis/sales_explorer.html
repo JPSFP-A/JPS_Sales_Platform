@@ -139,6 +139,7 @@ const acctNum=id=>String(id||'').split('~')[0];
 // ── Supabase account drill-down ──────────────────────────────────
 const _SB=supabase.createClient('https://bhrswnbenkvflpdjhfpa.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJocnN3bmJlbmt2ZmxwZGpoZnBhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMTc0OTcsImV4cCI6MjA5MTg5MzQ5N30.JupFs0tnMn3k282PqFOSMi2ch-wtB7Ewv7O8fN16-94',
   window.JpsAuth?JpsAuth.clientOptions():undefined);
+try { if (window.JpsAuth && window.JpsAuth.startSessionSync) JpsAuth.startSessionSync(_SB); } catch(e){ console.warn('JpsAuth.startSessionSync failed', e); }
 
 /* ── Login gate — platform SSO (shared jps_sso_v1 cookie) or manual sign-in.
    This page embeds 1,100+ customers' billing detail in the HTML itself, so it
