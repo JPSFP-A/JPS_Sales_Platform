@@ -133,6 +133,25 @@ KVA_TRUE = {
 # trailing 3-actual-month average rather than dropping to zero.
 _kva_hist_sorted = sorted(KVA_TRUE.items())
 KVA_PROJ = sum(v for _, v in _kva_hist_sorted[-3:]) / 3
+
+# Projected-month volume: this account's own live Driver Forecast engine chain
+# (_dfcGetChain, verified 2026-09-10 against buildDriverBridge/_y3RcTotals), not the
+# seasonality-index method the Projection sheet still shows for comparison in columns
+# G/H below. The seasonality index has this account DECLINING into FY2028 (97.9 GWh);
+# the live engine, which applies this account's real macro/weather/industry-
+# seasonality drivers instead of a 12-month historical average, shows it RISING
+# (109.5 GWh) -- an 11.2 GWh disagreement in FY2028 alone. Jan-Aug 2026 matches the
+# History tab's actuals exactly (both ultimately trace to jps_actuals); Sep-2026
+# onward is genuinely a different, more current forecast than the seasonality path.
+PROJ_KWH_LIVE = {
+    (2026, 9): 8374817, (2026, 10): 8294243, (2026, 11): 8515892, (2026, 12): 8353009,
+    (2027, 1): 8478470, (2027, 2): 8541726, (2027, 3): 8566332, (2027, 4): 8619334,
+    (2027, 5): 8672961, (2027, 6): 8698497, (2027, 7): 8739057, (2027, 8): 8776005,
+    (2027, 9): 8810640, (2027, 10): 8842101, (2027, 11): 8879266, (2027, 12): 8906618,
+    (2028, 1): 8942476, (2028, 2): 8976185, (2028, 3): 9008733, (2028, 4): 9043027,
+    (2028, 5): 9076795, (2028, 6): 9110583, (2028, 7): 9144787, (2028, 8): 9178961,
+    (2028, 9): 9213271, (2028, 10): 9247757, (2028, 11): 9282337, (2028, 12): 9317054,
+}
 MNAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 r = r0 + 1
 first_data_row = r
@@ -306,7 +325,7 @@ ds.cell(29, 2).value = f'=History!J{AVG_ROW}'
 ds.cell(29, 2).font = GREEN; ds.cell(29, 2).number_format = MONEY
 ds.cell(29, 2).border = BORDER; ds.cell(29, 1).border = BORDER
 
-ds['A31'] = ('MODELING NOTES: (1) Unlike Alcoa, there is no user-provided future KVA schedule or negotiated $/KVA rate for this account — every kWh-driven $ component (Demand, Energy, IPP, Fuel, Other) uses a history-derived $/kWh rate with an escalation driver, same as Alcoa\'s ORIGINAL template before account-specific inputs were given. KVA itself is not a $ input for this account, but it still feeds Load Factor and the "RT50 excl. Caribbean Cement" subtraction in the LE workbook, so projected months hold it flat at the trailing 3-actual-month average (row 22 above) rather than leaving it blank -- a blank was coercing to 0 downstream, which silently made "excl. Caribbean Cement" equal the full RT50 total for every projected month instead of actually excluding this account. '
+ds['A31'] = ('MODELING NOTES: (1) Projected-month VOLUME (Sep-2026 on) is this account\'s own live Driver Forecast engine chain, not a seasonality projection -- the seasonality index (Projection tab columns G/H, kept for comparison) has this account declining into FY2028 (97.9 GWh); the live engine, applying real macro/weather/industry-seasonality drivers instead of a 12-month historical average, shows it rising (109.5 GWh). Dollar components (Demand, Energy, IPP, Fuel, Other) still use a history-derived $/kWh rate with an escalation driver applied to that live volume, same as Alcoa\'s ORIGINAL template before account-specific inputs were given -- there is no user-provided future KVA schedule or negotiated $/KVA rate for this account, unlike Alcoa. KVA itself is not a $ input for this account, but it still feeds Load Factor and the "RT50 excl. Caribbean Cement" subtraction in the LE workbook, so projected months hold it flat at the trailing 3-actual-month average (row 22 above) rather than leaving it blank -- a blank was coercing to 0 downstream, which silently made "excl. Caribbean Cement" equal the full RT50 total for every projected month instead of actually excluding this account. '
              '(2) GCT is real for this account (~13-16% of revenue) — applied via the GCT rate driver, unlike Alcoa which was GCT-exempt. '
              '(3) No hurricane normalization applied — see History tab note; Nov/Dec-2025 are included in all averages as "Normal".')
 ds['A31'].font = Font(name=FONT, italic=True, size=8.5, color='B87800')
@@ -317,8 +336,11 @@ ds['A31'].alignment = Alignment(wrap_text=True, vertical='top')
 # ============================================================ PROJECTION =========
 # 60 months, Jan-2024 to Dec-2028 — same "actuals where we have actuals" structure as
 # the Alcoa model. Jan-2024 to Aug-2026 (32 months) pulled straight from History, not
-# re-derived. Sep-2026 to Dec-2028 (28 months) uses seasonality + history-derived rates
-# (no given future schedule for this account, unlike Alcoa's KVA-driven approach).
+# re-derived. Sep-2026 to Dec-2028 (28 months): volume is this account's own live
+# Driver Forecast engine chain (PROJ_KWH_LIVE above), not derived from the seasonality
+# index -- see that dict's comment for why. Dollar components still use history-
+# derived $/kWh rates applied to that volume (no given future schedule for this
+# account, unlike Alcoa's KVA-driven approach).
 ACTUAL_ROWS = 32
 PROJ_ROWS = 28
 TOTAL_ROWS = ACTUAL_ROWS + PROJ_ROWS
@@ -387,12 +409,31 @@ for i in range(TOTAL_ROWS):
     else:
         ps.cell(rr, 6).value = round(KVA_PROJ, 2)  # no given future schedule -- trailing 3-actual-month average, held flat
         ps.cell(rr, 6).font = BLACK; ps.cell(rr, 6).number_format = '#,##0.00'
-        ps.cell(rr, 7).value = f'=IF(Drivers!$B$5=1,INDEX(Seasonality!$C$4:$C$15,MATCH(D{rr},Seasonality!$A$4:$A$15,0)),Seasonality!$C$16)'
-        ps.cell(rr, 7).font = GREEN; ps.cell(rr, 7).number_format = KWHFMT
-        ps.cell(rr, 8).value = f'=G{rr}*(1+Drivers!$B$4)'
-        ps.cell(rr, 8).font = BLACK; ps.cell(rr, 8).number_format = KWHFMT
-        ps.cell(rr, 9).value = f'=H{rr}*Drivers!$B$6'
-        ps.cell(rr, 9).font = BLACK; ps.cell(rr, 9).number_format = KWHFMT
+        _py, _pm = 2024 + (i // 12), (i % 12) + 1
+        _live_kwh = PROJ_KWH_LIVE.get((_py, _pm))
+        if _live_kwh is not None:
+            # Volume is this account's own live Driver Forecast engine chain (verified
+            # 2026-09-10 against buildDriverBridge and the app's RT50 total), not the
+            # seasonality-index projection below -- that index showed this account
+            # DECLINING into FY2028 (97.9 GWh) while the live engine, which applies
+            # this account's real macro/weather/industry-seasonality drivers, shows it
+            # RISING (109.5 GWh). The two disagreed by 11.2 GWh in FY2028 alone. Kept
+            # columns G/H (Seasonal kWh / Volume-Adj kWh) showing what the old
+            # seasonality method would have produced, for comparison, but they no
+            # longer feed column I -- only the live figure does.
+            ps.cell(rr, 7).value = f'=IF(Drivers!$B$5=1,INDEX(Seasonality!$C$4:$C$15,MATCH(D{rr},Seasonality!$A$4:$A$15,0)),Seasonality!$C$16)'
+            ps.cell(rr, 7).font = Font(name=FONT, color='999999', size=10, italic=True); ps.cell(rr, 7).number_format = KWHFMT
+            ps.cell(rr, 8).value = f'=G{rr}*(1+Drivers!$B$4)'
+            ps.cell(rr, 8).font = Font(name=FONT, color='999999', size=10, italic=True); ps.cell(rr, 8).number_format = KWHFMT
+            ps.cell(rr, 9).value = _live_kwh
+            ps.cell(rr, 9).font = BLUE; ps.cell(rr, 9).number_format = KWHFMT
+        else:
+            ps.cell(rr, 7).value = f'=IF(Drivers!$B$5=1,INDEX(Seasonality!$C$4:$C$15,MATCH(D{rr},Seasonality!$A$4:$A$15,0)),Seasonality!$C$16)'
+            ps.cell(rr, 7).font = GREEN; ps.cell(rr, 7).number_format = KWHFMT
+            ps.cell(rr, 8).value = f'=G{rr}*(1+Drivers!$B$4)'
+            ps.cell(rr, 8).font = BLACK; ps.cell(rr, 8).number_format = KWHFMT
+            ps.cell(rr, 9).value = f'=H{rr}*Drivers!$B$6'
+            ps.cell(rr, 9).font = BLACK; ps.cell(rr, 9).number_format = KWHFMT
         yexp = f'(ROUNDUP((A{rr}-{ACTUAL_ROWS+1})/12,0)-1)'
         ps.cell(rr, 10).value = f'=$I{rr}*Drivers!$B$24*(1+Drivers!$B$9)^{yexp}'
         ps.cell(rr, 10).font = BLACK; ps.cell(rr, 10).number_format = MONEY
@@ -433,7 +474,7 @@ last_proj_row = pr0 + TOTAL_ROWS - 1
 # range is merged) -- discovered when adding Aug-2026 exposed it. last_proj_row+2
 # always lands after every data row, whatever ACTUAL_ROWS/PROJ_ROWS are.
 _footer_row = last_proj_row + 2
-ps.cell(_footer_row, 1).value = ('Jan-2024 to Aug-2026 (32 rows, "Actual") pulled directly from History, row for row. Sep-2026 to Dec-2028 (28 rows, "Projected") use seasonality-derived kWh + history-derived $/kWh rates for every $ component -- there is no given future KVA schedule or negotiated demand/IPP/fuel rate for this account, unlike Alcoa, so Demand here stays modeled as $/kWh (Drivers tab note). KVA on projected rows is held flat at the trailing 3-actual-month average (Drivers row 22) rather than left blank, since a blank coerces to 0 downstream and silently breaks the "excl. Caribbean Cement" subtraction in the LE workbook. '
+ps.cell(_footer_row, 1).value = ('Jan-2024 to Aug-2026 (32 rows, "Actual") pulled directly from History, row for row. Sep-2026 to Dec-2028 (28 rows, "Projected") use this account\'s own live Driver Forecast engine volume (column I, blue), not the seasonality index in columns G/H -- shown there for comparison only, since it disagrees materially (97.9 vs 109.5 GWh in FY2028). Dollar components still use history-derived $/kWh rates for every $ component applied to that live volume -- there is no given future KVA schedule or negotiated demand/IPP/fuel rate for this account, unlike Alcoa, so Demand here stays modeled as $/kWh (Drivers tab note). KVA on projected rows is held flat at the trailing 3-actual-month average (Drivers row 22) rather than left blank, since a blank coerces to 0 downstream and silently breaks the "excl. Caribbean Cement" subtraction in the LE workbook. '
              'No hurricane normalization was applied to the seasonality baseline (History tab note) -- if you have reason to believe this account was storm-affected in Nov/Dec-2025, flag it and I\'ll rebuild that portion the same way as Alcoa\'s.')
 ps.cell(_footer_row, 1).font = Font(name=FONT, italic=True, size=8.5, color='B87800')
 ps.merge_cells(start_row=_footer_row, start_column=1, end_row=_footer_row, end_column=18)
