@@ -17,22 +17,20 @@ def cell(ws, r, c):
 # workbook and was then pinned to 3,281.97 here -- which meant the workbook tied to
 # the submitted total while the app did not, and their class splits never matched.
 # The engine now ties on its own, so there is nothing left to pin.
-# FY2026, FY2027 and FY2028 monthly by class, pinned to the Three-Year Outlook by
-# Rate Class table in the Driver Report (JPS_Sales_Forecast_Driver_Report.html,
-# Section 1) as already presented externally. Basis is the Sep-7 snapshot of the
-# Driver Forecast engine, with each class's twelve monthly values scaled so its
-# annual sum ties exactly to that table's stated total -- the engine has since moved
-# (corrected_scan.py fixes changed live jps_actuals data after Section 1 was built),
-# but the report itself was not re-issued, so this workbook must keep matching what
-# was presented, not the engine's current state. Do not hand-edit this back to a live
-# pull without also refreshing the Driver Report's Section 1 at the same time.
+# FY2026 monthly by class, pinned to the Billed Sales (MWh) table supplied 11 Sep
+# 2026 -- the current official monthly-actual/forecast register, superseding the
+# Sep-7 engine snapshot previously pinned here. FY2027 and FY2028 remain pinned to
+# the Driver Report's Section 1 annual totals as before; only FY2026 moved. Do not
+# hand-edit this back to a live pull without also refreshing the Driver Report's
+# Section 1 and Section 2 bridge at the same time -- both were updated 11 Sep 2026
+# to this same FY2026 total (3,299.7 GWh, was 3,298.4/3,298.5).
 m26 = {
-    'RT10': [84430152, 76491683, 88280666, 87178550, 99084700, 101302644, 113616762, 117684884, 111926203, 116161098, 114197394, 112445264],
-    'RT20': [44391744, 41875554, 49681556, 47365545, 55466916, 55128338, 60648371, 60614264, 59357600, 61128656, 59811422, 59230034],
-    'RT40': [56052877, 52861045, 61732622, 59639368, 65959385, 64436956, 70188040, 70275863, 66332509, 68648706, 68404709, 67767920],
-    'RT50': [26726009, 26714577, 29782219, 28364263, 30153608, 28212259, 28681456, 30608949, 28419975, 29234572, 29465015, 29237098],
-    'RT60-ST': [2227109, 2312812, 3102753, 3417485, 2801755, 3414157, 3413451, 3417659, 3345435, 3360692, 3352676, 3334016],
-    'RT70': [20205532, 20916897, 25980814, 24526092, 27500866, 26629647, 28329975, 19547200, 18031825, 18495540, 17876562, 17559050],
+    'RT10': [84427000, 76489000, 88278000, 87176000, 99081000, 101300000, 113613000, 117671000, 111926000, 116161000, 114197000, 112445000],
+    'RT20': [44389000, 41873000, 49678000, 47362000, 55463000, 55125000, 60644000, 60610000, 59358000, 61129000, 59811000, 59230000],
+    'RT40': [56014000, 52824000, 61690000, 59598000, 65914000, 64392000, 70139000, 71883000, 64637000, 68649000, 68405000, 67768000],
+    'RT50': [26724000, 26712000, 29780000, 28362000, 30151000, 28210000, 28679000, 30677000, 28419000, 29235000, 29465000, 29237000],
+    'RT60-ST': [2224000, 2310000, 3099000, 3413000, 2798000, 3410000, 3409000, 3413000, 3345000, 3361000, 3353000, 3334000],
+    'RT70': [20371000, 21089000, 26194000, 24727000, 27727000, 26848000, 28562000, 19708000, 18032000, 18496000, 17877000, 17559000],
 }
 
 m27 = {
