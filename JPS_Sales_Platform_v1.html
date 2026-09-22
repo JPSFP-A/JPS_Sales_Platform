@@ -9650,14 +9650,22 @@ async function writeAudit(action, details={}){
   try{
     const sb=getSB(); if(!sb) return;
     const userName = CU?.name || CU?.email || 'Unknown';
-    await sb.from('audit_log').insert({
-      user_id: CU?.id || null,
-      user_name: userName,
-      user_role: CU?.role || 'unknown',
-      action,
-      details,
-      created_at: new Date().toISOString()
+    // Routed through the write-audit-log Edge Function rather than a direct
+    // insert -- it stamps user_id from the verified JWT and ip_address from
+    // the real request, neither of which the browser can spoof.
+    const { error } = await sb.functions.invoke('write-audit-log', {
+      body: {
+        table: 'audit_log',
+        fields: {
+          user_name: userName,
+          user_role: CU?.role || 'unknown',
+          app: 'sales',
+          action,
+          details,
+        },
+      },
     });
+    if (error) console.warn('Audit log write failed:', error.message);
   }catch(e){ console.warn('Audit log write failed:',e.message); }
 }
 

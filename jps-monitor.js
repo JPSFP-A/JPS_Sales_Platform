@@ -38,10 +38,13 @@
   // ── Core log writer ──────────────────────────────────
   async function _write(severity, source, message, detail) {
     const sb = _getClient ? _getClient() : null;
-    const payload = {
-      user_id:   _user.id,
+    // app was missing here before -- every v1.0 JpsMonitor row showed up as
+    // 'sales' in the audit view regardless of which app actually logged it,
+    // since the view COALESCEs a null app to 'sales'.
+    const fields = {
       user_name: _user.name,
       action:    `monitor:${severity}`,
+      app:       _appName,
       target:    `[${_appName}] ${source}`,
       old_val:   null,
       new_val:   JSON.stringify({
@@ -56,8 +59,13 @@
     const level = (severity === 'critical' || severity === 'error') ? 'error' : 'warn';
     console[level](`[JpsMonitor:${severity}] [${_appName}] ${source} — ${message}`, detail || '');
 
+    // Routed through the write-audit-log Edge Function rather than a direct
+    // insert -- it stamps user_id from the verified JWT and ip_address from
+    // the real request. Requires a logged-in session (same as the RLS
+    // insert policy it replaces did) -- a pre-login write silently no-ops
+    // either way, same as before.
     if (sb) {
-      try { await sb.from('fpa_audit_log').insert(payload); } catch(e) { /* silent */ }
+      try { await sb.functions.invoke('write-audit-log', { body: { table: 'fpa_audit_log', fields } }); } catch(e) { /* silent */ }
     }
   }
 
