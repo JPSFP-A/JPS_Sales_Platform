@@ -11,7 +11,9 @@ rows = []
 # Commercial (NAICS-having) individual accounts: (jps_ac, name, bucket, parish, kwh, rev, dem, fu, en, ipp, cust_chg, gct, cnt, segment)
 for jps_ac, b in d['comm'].items():
     kwh, rev, dem, fu, en, ipp, cust_chg, gct = b['v']
-    rows.append((jps_ac, b['name'], 'Commercial', b['parish'], kwh, rev, dem, fu, en, ipp, cust_chg, gct, None, 'Commercial'))
+    # Net-export/zero split, same convention as the res buckets below.
+    bucket = '<Zero' if kwh < 0 else ('Zero' if kwh == 0 else 'Commercial')
+    rows.append((jps_ac, b['name'], bucket, b['parish'], kwh, rev, dem, fu, en, ipp, cust_chg, gct, None, 'Commercial'))
 
 # Residential (no-NAICS) buckets
 for key, v in d['res'].items():

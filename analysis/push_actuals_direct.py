@@ -123,9 +123,15 @@ def main():
             if not (kwh or rev):
                 continue
             yr, mth = mo.split("-")
+            # Net-export/zero split, same convention as RT10/RT20's buckets ('<Zero'/
+            # 'Zero'). Previously every row here was hardcoded 'Commercial' regardless
+            # of sign, which made net-billing customers in RT40/50/60-ST/70 invisible
+            # to any query filtering on consumption_bucket (existing rows backfilled
+            # 2026-09-23; this keeps future monthly pushes consistent with that).
+            bucket = "<Zero" if kwh < 0 else ("Zero" if kwh == 0 else "Commercial")
             rows.append({
                 "jps_ac": jps_ac, "year": int(yr), "month": int(mth), "name": name,
-                "rate_class": rate_class, "parish": pg, "consumption_bucket": "Commercial",
+                "rate_class": rate_class, "parish": pg, "consumption_bucket": bucket,
                 "kwh": kwh, "revenue_jmd": rev, "demand_jmd": dem,
                 "fuel_jmd": fuel, "energy_jmd": energy, "ipp_jmd": ipp, "customer_charge_jmd": cust,
                 "customer_count": 1,

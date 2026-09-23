@@ -53,8 +53,12 @@ for fp in files:
     rows = []
     for jps_ac, b in d['comm'].items():
         kwh, rev, dem, fu, en, ipp, cust_chg, gct = b['v']
+        # Net-export/zero split, same convention as the res buckets below. Previously
+        # hardcoded 'Commercial' regardless of sign, which hid RT20-commercial net
+        # billers from any query filtering on consumption_bucket (backfilled 2026-09-23).
+        bucket = '<Zero' if kwh < 0 else ('Zero' if kwh == 0 else 'Commercial')
         rows.append({'jps_ac': jps_ac, 'year': Y, 'month': M, 'rate_class': 'RT20', 'name': b['name'],
-                     'consumption_bucket': 'Commercial', 'parish': b['parish'], 'kwh': kwh, 'revenue_jmd': rev,
+                     'consumption_bucket': bucket, 'parish': b['parish'], 'kwh': kwh, 'revenue_jmd': rev,
                      'demand_jmd': dem, 'fuel_jmd': fu, 'energy_jmd': en, 'ipp_jmd': ipp,
                      'customer_charge_jmd': cust_chg, 'gct_jmd': gct, 'customer_count': None, 'segment': 'Commercial'})
     for key, v in d['res'].items():

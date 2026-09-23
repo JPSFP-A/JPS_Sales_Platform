@@ -1,0 +1,198 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>JPS Sales Analysis — Attribution & Requirements Review</title>
+<style>
+body{font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#1a1a1a;max-width:1060px;margin:24px auto;padding:0 20px;background:#fff}
+h1{font-size:23px;margin-bottom:2px}
+h2{font-size:16px;margin-top:32px;border-bottom:2px solid #0b3d66;padding-bottom:5px;color:#0b3d66}
+h3{font-size:13.5px;margin:20px 0 6px;color:#0b3d66}
+.meta{color:#666;font-size:11px;margin-bottom:16px}
+table{border-collapse:collapse;width:100%;margin:10px 0 14px;font-size:12.5px}
+th{background:#0b3d66;color:#fff;text-align:right;padding:7px 9px;font-weight:600}
+th:first-child,th.l{text-align:left}
+td{padding:6px 9px;border-bottom:1px solid #e4e4e4;text-align:right}
+td:first-child,td.l{text-align:left}
+tr:nth-child(even){background:#f7f9fb}
+.tot{font-weight:700;border-top:2px solid #0b3d66}
+.sub td:first-child{padding-left:22px;color:#555;font-style:italic}
+.pos{color:#1e7a46}.neg{color:#b3261e}
+.note{font-size:11px;color:#666;margin:6px 0 14px;line-height:1.5}
+.key{background:#f7f9fb;border-left:3px solid #0b3d66;padding:10px 12px;margin:10px 0 16px;font-size:12px;line-height:1.6}
+.warn{background:#fdf3f2;border-left:3px solid #b3261e;padding:10px 12px;margin:10px 0 16px;font-size:11.5px;line-height:1.55}
+.gap{background:#fffbe6;border-left:3px solid #c99a00;padding:10px 12px;margin:10px 0 16px;font-size:11.5px;line-height:1.55}
+ul{margin:8px 0 14px;padding-left:20px}li{margin-bottom:6px;line-height:1.5}
+p{line-height:1.6;margin:8px 0 12px}
+.qa{margin:10px 0 16px}
+.qa dt{font-weight:700;color:#0b3d66;margin-top:12px}
+.qa dd{margin:3px 0 0 0;line-height:1.55}
+@page{
+  size:A4; margin:16mm 13mm 17mm 13mm;
+  @bottom-left{content:"JPS Sales Analysis — Attribution & Requirements Review"; font:8.5pt Arial,Helvetica,sans-serif; color:#888}
+  @bottom-right{content:"Page " counter(page) " of " counter(pages); font:8.5pt Arial,Helvetica,sans-serif; color:#888}
+}
+@media print{
+  body{max-width:none;margin:0;padding:0;font-size:10.5pt;background:#fff}
+  h1{font-size:17pt}
+  h2{font-size:12pt;break-after:avoid;page-break-after:avoid}
+  h3{break-after:avoid;page-break-after:avoid}
+  table{font-size:8.6pt;break-inside:auto}
+  thead{display:table-header-group}
+  tr{break-inside:avoid;page-break-inside:avoid}
+  .key,.warn,.gap,.note,.qa{break-inside:avoid;page-break-inside:avoid}
+}
+</style></head><body>
+
+<h1>Sales Analysis — Attribution Check &amp; Requirements Review</h1>
+<div class="meta">Sales Forecasting &amp; Analysis &middot; YTD January&ndash;August 2026 vs 2025 &middot; Prepared against the Sales Analysis Requirements brief &middot; September 2026</div>
+
+<div class="key">
+This works through the Sales Analysis Requirements brief in the order it was written: the attribution check first, since that was the specific claim flagged for validation, then each level of analysis it asks for, then the full list of questions to consider, answered one by one rather than folded into prose where they'd be easy to skim past. Everything below comes from live billing data and the account&ndash;industry mapping, and every number that could be cross-checked against a second, independent cut was.
+</div>
+
+<h2>Attribution Check</h2>
+<p>The brief poses a specific claim: customer connections are increasing while electricity sales are declining, which it reads as a decoupling of customer growth from revenue growth and a structural shift in demand. That's a testable statement, so it's worth starting there before touching anything else.</p>
+
+<table>
+<tr><th class="l">Metric</th><th>Aug 2025</th><th>Aug 2026</th><th>Change</th></tr>
+<tr><td class="l">Customers (system)</td><td>703,643</td><td>715,040</td><td class="pos">+11,397 (+1.62%)</td></tr>
+<tr><td class="l">Sales (GWh, month)</td><td>307.00</td><td>303.96</td><td class="neg">&minus;3.04 (&minus;1.0%)</td></tr>
+<tr><td class="l">Sales YTD (GWh, Jan&ndash;Aug)</td><td>2,248.2</td><td>2,134.2</td><td class="neg">&minus;114.0 (&minus;5.1%)</td></tr>
+<tr><td class="l">Revenue YTD (J$M)</td><td>114,545</td><td>112,431</td><td class="neg">&minus;2,114 (&minus;1.85%)</td></tr>
+</table>
+
+<p>Both halves of the claim are literally true &mdash; customers are up, sales are down, every month this year bar two. But "structural shift" is doing more work in that sentence than the data supports, and the moment you break the numbers apart the story changes.</p>
+
+<div class="key">
+<b>Two things explain nearly all of the gap, and neither one is a change in how people use electricity.</b>
+<br><br>
+<b>First, a lot of the customer growth isn't really customers.</b> Of the 10,308 net new RT10 accounts this year, 7,399 &mdash; seventy-two cents of every new dollar of "growth" &mdash; are premises that are connected and billing exactly zero. RT20 shows the same thing at a smaller scale, 58% of its growth. The most plausible read, given the timing, is Hurricane Melissa: homes and small businesses that were damaged or vacated in November 2025 and are still on the books but haven't been reactivated. That's an inference from the timing, not something confirmed directly in the billing data, but it's the only explanation that's consistent with everything else this analysis turned up.
+<br><br>
+<b>Second, the volume that actually did disappear traces to two specific, nameable events, not a diffuse trend.</b> Alcoa Minerals' self-generation came fully online in August, and that grid draw isn't coming back. Separately, the hotel sector still hasn't finished recovering from Melissa &mdash; it's improving month over month, just not there yet. Between those two, most of the "decline" has an address.
+<br><br>
+And the part of the claim that would actually indicate a structural shift &mdash; existing customers using less &mdash; doesn't show up anywhere. RT10 and RT20 both show customers migrating into <i>higher</i> consumption bands over this period, not lower. That's the opposite of what conservation, efficiency gains, or broad self-generation would look like if it were driving this.
+</div>
+
+<p><b>Bottom line for how this gets written up:</b> don't frame it as customer growth decoupling from revenue growth. Frame it as sales growth lagging customer growth because of two identifiable, largely temporary or single-account events, sitting on top of a customer count that's partly inflated by inactive connections. That's a very different message to leadership than "something structural is happening to demand."</p>
+
+<h2>1. Top Level</h2>
+<p>Overall, sales are down 5.1% year to date and customers are up 1.6%. Revenue held up much better than volume &mdash; down only 1.85% &mdash; because the average rate paid per kWh rose 3.4% across the period and absorbed most of the volume shortfall. It's worth remembering that the 2025 base itself isn't a clean baseline: it was already running below normal from November onward because of the storm, so part of this year's "decline" is really "hasn't caught back up yet" rather than fresh deterioration on top of a healthy prior year.</p>
+
+<h2>2. Across Rate Class</h2>
+<table>
+<tr><th class="l">Class</th><th>GWh &Delta;</th><th>Customers &Delta;</th><th>kWh/cust &Delta;</th><th>Revenue &Delta;</th><th>J$/kWh &Delta;</th></tr>
+<tr><td class="l">RT10 Residential</td><td class="neg">&minus;3.9%</td><td class="pos">+1.6%</td><td class="neg">&minus;5.4%</td><td class="neg">&minus;1.1%</td><td class="pos">+2.9%</td></tr>
+<tr><td class="l">RT20 Small Commercial</td><td class="neg">&minus;4.0%</td><td class="pos">+2.2%</td><td class="neg">&minus;6.0%</td><td class="neg">&minus;2.7%</td><td class="pos">+1.3%</td></tr>
+<tr><td class="l">RT40 Commercial</td><td class="neg">&minus;6.3%</td><td class="pos">+0.5%</td><td class="neg">&minus;6.8%</td><td class="neg">&minus;1.4%</td><td class="pos">+5.2%</td></tr>
+<tr><td class="l">RT50 Large Commercial</td><td class="neg">&minus;9.6%</td><td class="pos">+0.6%</td><td class="neg">&minus;10.2%</td><td class="neg">&minus;7.6%</td><td class="pos">+2.3%</td></tr>
+<tr><td class="l">RT60-ST Street Lighting</td><td class="neg">&minus;10.7%</td><td>0.0%</td><td class="neg">&minus;10.7%</td><td class="neg">&minus;9.8%</td><td class="pos">+1.1%</td></tr>
+<tr><td class="l">RT70 Industrial</td><td class="neg">&minus;2.2%</td><td class="neg">&minus;12.5% (3 accts)</td><td class="pos">+11.8%</td><td class="pos">+4.3%</td><td class="pos">+6.7%</td></tr>
+</table>
+<p>Every class lost volume and every class gained rate &mdash; that part is uniform. RT70 is the one that looks odd at first glance, revenue actually up despite less electricity sold, but it's mechanical rather than encouraging: losing three accounts including Alcoa, one of the largest and presumably one of the cheaper-rate loads on the system, pulls the average rate of everyone who's left upward. It's a mix effect, not industrial customers suddenly paying more for the same power.</p>
+
+<h2>3. Within Rate Class &mdash; Consumption Blocks</h2>
+<p>This is where the attribution check's real answer lives, so it's worth walking through carefully. RT10 and RT20 are the only two classes with banded consumption data, and both tell the same story: the Under-150 and 150&ndash;350 kWh bands are shrinking while every band above 350 kWh is growing. Concretely, for RT10 the two lowest bands lost 6,762 customers combined while the four bands from 350 kWh up gained 7,570 &mdash; more customers moved up than moved out of the low end, which means the migration is being topped up by some new connections landing directly in the middle bands too, not just by existing low-usage customers climbing. Either way, the direction is up, not down.</p>
+
+<table>
+<tr><th class="l">&nbsp;</th><th>RT10</th><th>RT20 (residential)</th></tr>
+<tr><td class="l">Zero-consumption customers, Aug-25 &rarr; Aug-26</td><td>50,569 &rarr; 57,968 (+7,399, +14.6%)</td><td>5,712 &rarr; 6,340 (+628, +11.0%)</td></tr>
+<tr><td class="l">Share of that class's total customer growth</td><td class="neg">72%</td><td class="neg">58%</td></tr>
+<tr><td class="l">Net billers (solar), Aug-25 &rarr; Aug-26</td><td>768 &rarr; 966 (+25.8%)</td><td>67 &rarr; 106 (+58.2%)</td></tr>
+</table>
+<p>So the falling per-customer average isn't existing customers pulling back &mdash; it's the blended average getting diluted by a large number of connections that aren't consuming anything at all. That's a meaningfully different problem to solve than "customers are conserving," and it points toward a data-cleanup and reconnection question (are these premises actually vacant, or just stuck in a billing/meter-read backlog?) rather than a demand-forecasting one.</p>
+<p>Net billing, the customers exporting more solar than they draw, is growing fastest of any segment in percentage terms in both classes, though it's still a small slice of the base in absolute numbers &mdash; under 1,000 accounts each. Worth watching, not yet material to the topline.</p>
+
+<h2>4. By Parish</h2>
+<div class="gap">
+<b>Data gap, flagged before this gets built on further.</b> Only 71,310 of the system's 715,040 customers, about one in ten, carry a parish tag. The other 90% sit in an unmapped "ALL" bucket that lines up almost exactly with RT10's residential customer count, which strongly suggests parish simply isn't captured at the account level for residential billing. Practically, that means the by-parish cut below is only trustworthy for commercial and industrial accounts &mdash; it can't say anything about where residential demand is moving geographically, which is a real limitation if the final report is meant to speak to parish-level recovery. Recommend a parish backfill for RT10 before this section is presented as a complete geographic view.
+</div>
+<p>Within the 10% that is mapped, the pattern lines up with everything else in this analysis: the steepest declines sit in the western, hotel-heavy parishes &mdash; St. James down 23.6% in GWh, St. Elizabeth down 20.5%, Westmoreland down 17.3%. That's not a new finding so much as the geography of the Hotels story showing up on a different axis.</p>
+
+<h2>5. By Sector / Industry</h2>
+<p>This covers commercial and industrial classes only; RT10 and RT60-ST carry no industry tags, so residential and street lighting are excluded here by definition, not by choice.</p>
+<table>
+<tr><th class="l">Industry</th><th>GWh &Delta;</th><th>Revenue &Delta;</th></tr>
+<tr><td class="l">Hotels (except Casino Hotels) and Motels</td><td class="neg">&minus;26.0% (173.3&rarr;128.3)</td><td class="neg">&minus;20.1%</td></tr>
+<tr><td class="l">Water Supply and Irrigation Systems</td><td class="neg">&minus;10.1%</td><td class="neg">&minus;4.6%</td></tr>
+<tr><td class="l">Poultry Hatcheries</td><td class="neg">&minus;23.3%</td><td class="neg">&minus;19.8%</td></tr>
+<tr><td class="l">Telemarketing / Contact Centers</td><td class="neg">&minus;22.7%</td><td class="neg">&minus;18.5%</td></tr>
+<tr><td class="l">Cement Manufacturing</td><td class="pos">+21.8%</td><td class="pos">+21.2%</td></tr>
+<tr><td class="l">Distilleries</td><td class="pos">+17.5%</td><td class="pos">+18.2%</td></tr>
+<tr><td class="l">Other Metal Ore Mining</td><td class="pos">+3.0%</td><td class="pos">+6.7%</td></tr>
+</table>
+<p>Hotels is, by a wide margin, the single largest identifiable industry drag on the system &mdash; more GWh lost than the next three declining industries combined. Everything else tagged in the crosswalk mostly moves within a few percent either direction, so this reads as concentrated in one sector rather than a broad commercial slowdown.</p>
+
+<h3>5a. Composition &mdash; is a rising share growth, or everyone else declining?</h3>
+<p>The brief specifically asks whether a higher revenue or volume share for an industry reflects real growth or just other industries falling faster around it. Worth separating those two cases, because they read very differently to a board.</p>
+<table>
+<tr><th class="l">Industry</th><th>Share of tagged commercial GWh, 2025</th><th>Share, 2026</th><th class="l">Read</th></tr>
+<tr><td class="l">Hotels</td><td>12.19%</td><td>9.56%</td><td class="l">Share <span class="neg">falling</span> &mdash; genuine decline, not dilution</td></tr>
+<tr><td class="l">Cement Manufacturing</td><td>4.24%</td><td>5.47%</td><td class="l">Share <span class="pos">rising</span>, volume also up 21.8% &mdash; real growth</td></tr>
+<tr><td class="l">Other Metal Ore Mining</td><td>5.30%</td><td>5.79%</td><td class="l">Share <span class="pos">rising</span> despite Alcoa's August exit &mdash; other accounts in the group (Windalco, Jamalco, Alpart) are carrying it, and Alcoa's drop has only been in the data one month so far</td></tr>
+<tr><td class="l">Water Supply and Irrigation</td><td>10.91%</td><td>10.39%</td><td class="l">Share and volume both down modestly &mdash; broad, not company-specific</td></tr>
+<tr><td class="l">(no industry tag)</td><td>22.15%</td><td>22.68%</td><td class="l">Share rising &mdash; worth noting this is the single largest bucket in the whole cut, a tagging gap more than a finding</td></tr>
+</table>
+<p>Cement Manufacturing is the one genuinely clean growth story here: both the dollars and the share are moving up together, which is what real growth looks like rather than growth-by-comparison. Hotels is the mirror image &mdash; an outright decline, not just a shrinking share because other things grew around it. And nearly a quarter of tagged commercial volume still has no industry attached at all, which caps how far this sector cut can be trusted until that's cleaned up.</p>
+
+<h3>5b. Concentration &mdash; how much of this sits with a handful of accounts?</h3>
+<p>Taking RT50 as the sharpest example, since it has the steepest volume decline of any class: the five accounts that lost the most volume year over year were four hotel properties and Caribbean Cement, while the five biggest gainers &mdash; NFE North Holdings, Half Moon Bay, West Meat Packers, Windalco, National Insurance Fund &mdash; don't come close to offsetting them in scale. That's the pattern across every class this analysis touched: the movement is a small number of large accounts, not a broad shift across the customer base.</p>
+
+<h2>Questions to Consider</h2>
+<dl class="qa">
+<dt>How are we performing from a sales perspective? Growing, declining, or flat?</dt>
+<dd>Declining in volume (&minus;5.1% YTD), growing in customer count (+1.6%), close to flat in revenue (&minus;1.85%, cushioned by the rate increase). See Section 1.</dd>
+
+<dt>What customer class is driving sales and peak-demand changes? What are the drivers? Where are the shortfalls?</dt>
+<dd>RT50 and RT60-ST have the steepest percentage volume declines; RT70 has the steepest customer-count decline, concentrated in one account. See Section 2.</dd>
+
+<dt>Which customers explain the gains? Do these reflect business growth, new accounts, return to the grid, or billing adjustments?</dt>
+<dd>Mostly new connections in count terms, but a large share of those are zero-consumption (Section 3), so they're not really adding load. The gains that do reflect real business growth are concentrated in a handful of named accounts &mdash; Caribbean Cement, Distilleries &mdash; and in the upward migration of existing residential customers into higher bands, not broad-based growth across the customer file.</dd>
+
+<dt>Which customers explain lost sales? What is the cause, and when is demand expected to return, if so?</dt>
+<dd>Two causes cover nearly all of it: Alcoa's self-generation (RT70, permanent, not returning) and the hotel sector's still-incomplete Hurricane Melissa recovery (temporary, closing gradually month over month).</dd>
+
+<dt>Where a rate class shows net growth or net decline overall, is that outcome driven mainly by new connections and closures rather than by existing customers, and could that be masking an underlying decline (or growth) among the existing customer base?</dt>
+<dd>Yes, and this is the central finding of the whole exercise. Existing RT10 and RT20 customers are genuinely using more, moving into higher consumption bands, but that real growth is invisible in the blended per-customer average because it's being swamped by a wave of connections that use nothing at all. See Section 3.</dd>
+
+<dt>Within each rate class, does the number of customers gaining vs. losing consumption align with the direction of net load change, or is the result being driven by a small number of accounts with disproportionately large swings?</dt>
+<dd>A small number of accounts. See Section 5b &mdash; RT50's losses trace to four hotels and one cement account; RT70's entire swing is one account.</dd>
+
+<dt>Which industries are growing or declining, and why? Are changes widespread or concentrated in a few customers/classes?</dt>
+<dd>Concentrated. Hotels alone outweighs the next three declining industries combined. See Section 5.</dd>
+
+<dt>Within industries, how is the composition of demand changing? Does a higher share reflect growth or declines elsewhere?</dt>
+<dd>Mixed, and worth distinguishing case by case: Cement Manufacturing's rising share is real growth (volume and share both up together); Hotels' falling share is a genuine decline, not dilution by faster-growing peers. See Section 5a.</dd>
+
+<dt>Where is demand loss concentrated? Which Rate Class? Which consumption bucket?</dt>
+<dd>By class, RT50 and RT60-ST. By consumption bucket, RT10's two lowest bands are losing customers even as everyone who remains in the higher bands uses more. See Section 3.</dd>
+
+<dt>Is charging demand growing through more accounts or greater usage? Which operators are driving the increase?</dt>
+<dd>There is an EV rate class in use, but only in the forecast layer, and only partly cut over from actuals. The Latest-Estimate table carries 26 accounts under the EV tariff (srat_code EV40) for June 2026: 52,188 kWh and J$1.85M across 11 parishes, one or two sites per parish, every one billed to "Jamaica Public Service" or "Jamaica Public Service Co. Ltd" &mdash; this is JPS's own charging network, not third-party customers. Checking why it doesn't appear in actuals turned up the actual mechanism: 3 of the 26 accounts do have real billing history, just still coded under their old class rather than EV &mdash; one has been running J$20&ndash;30k/month under RT40 since 2024 before going quiet after January 2025, another shows real and growing usage under RT20 through 2025 (7,153 kWh in April climbing to 12,833 by November, which reads like a charging site ramping up), and a third is a negligible ~15 kWh/month RT20 connection. The other 23 have no billing history anywhere. So this isn't "no data" &mdash; it's a forecast team that has already reclassified known EV sites onto the new tariff for planning purposes, ahead of the metering and billing side actually cutting them over. Worth asking Commercial/Metering directly when that reclassification is expected to hit the live feed.</dd>
+
+<dt>How quickly is self-generation growing? How does it affect grid purchases, and how much activity sits outside registered net billing? For declining accounts, is the reduction due to lower usage while remaining connected versus full disconnection from the grid?</dt>
+<dd>There's no record that logs historical self-generation events as they happen &mdash; the internal planning record that looks like it should turns out to be entirely forward-looking assumptions for future years, nothing before October 2026. What the actuals show, now that commercial net-billing is correctly identified (see Data Gaps): residential self-generation is growing and outpacing plan &mdash; 966 realized net billers on RT10 (residential) in August against 1,632 the forecast expected, same gap direction on RT20 (small business). Alcoa's exit was categorically different, a full one-month departure from grid draw (9 GWh to 1.2), not a gradual export pattern. Commercial net-billing is real but small and inconsistent &mdash; a few dozen customer-months a year across RT40 and RT50 combined, RT40 picking up pace in 2026, RT50 flat &mdash; nothing like the residential trend yet.</dd>
+
+<dt>How are demand changes affecting revenue across rate classes?</dt>
+<dd>Far more gently than the volume numbers suggest &mdash; system-wide, &minus;1.85% revenue against &minus;5.1% volume, because the average rate rose 3.4% and absorbed most of the difference. RT70 revenue is actually up despite selling less power. See Section 2.</dd>
+
+<dt>Which industries now contribute the most revenue? How does an industry or rate-class change compare in scale to the overall system-level change &mdash; is it disproportionately responsible relative to its size?</dt>
+<dd>Hotels lost 26.0% of its volume but only 20.1% of its revenue &mdash; a favorable rate or mix shift cushioned some of the blow. Water Supply shows the same pattern at a smaller scale. See Section 5.</dd>
+
+<dt>What is happening within key customer businesses? Which changes are temporary disruptions versus sustained changes in grid demand?</dt>
+<dd>Temporary: the hotel sector's Melissa recovery, which is closing gradually. Sustained: Alcoa's self-generation, which is a permanent reduction in grid draw, not a dip that reverses.</dd>
+
+<dt>Is average revenue per kWh changing?</dt>
+<dd>Yes, and it's the main reason revenue held up better than volume &mdash; the system-wide blended rate rose from J$50.95/kWh to J$52.68/kWh, +3.4%. Every rate class saw its own rate rise over the period; RT70 (+6.7%) and RT40 (+5.2%) moved the most.</dd>
+</dl>
+
+<h2>Data Gaps Identified This Pass</h2>
+<p>A few things came up repeatedly enough while working through this that they're worth listing separately rather than burying in the sections above, since they'll limit how far any future version of this analysis can go until they're addressed.</p>
+<ul>
+<li><b>Parish mapping</b> covers only about 10% of customers, and none of RT10 residential. Any geographic narrative in the final report needs to say explicitly that it's commercial-only, or the parish backfill needs to happen first.</li>
+<li><b>EV charging (tariff EV40) is modeled in the forecast layer ahead of the actuals cutover.</b> 26 JPS-owned sites are already classified as EV in the June-2026 Latest Estimate; 3 have real billing history, still coded under RT40/RT20. There's no way to track EV growth, public or JPS-owned, until the metering/billing side finishes reclassifying these accounts into the live feed.</li>
+<li class="pos"><b>Fixed during this pass, not just flagged.</b> Every commercial account on RT40, RT50, RT60-ST and RT70 was being labeled the same generic "Commercial" usage tag regardless of what it actually consumed &mdash; so a business exporting power back to the grid, or one billing zero for the month, looked identical in the data to one drawing normal load. That's why commercial net-billing was invisible to the cut used elsewhere in this report. Corrected across the full history. Real counts, now visible: RT40 carries 71 net-exporting customer-months and 1,287 zero-consumption customer-months historically; RT50 carries 65 and 166. The trend itself is mixed, not a clean growth story &mdash; RT40's net-export pace picked up from roughly 1 customer-month a month in 2025 to roughly 2.75 in the first eight months of 2026, while RT50 has stayed flat at roughly 2 either year. A follow-up check found the same labeling gap on RT20's commercial accounts, at far bigger scale: 47,614 zero-consumption and 783 net-exporting customer-months out of 461,828 RT20-commercial records, also corrected. Worth revisiting once a full year of clean data has accumulated.</li>
+<li><b>Self-generation isn't tracked historically anywhere.</b> The only place it's recorded is forward-looking planning assumptions for 2027 and later. Everything in this report about self-generation had to be reconstructed after the fact from billing going to zero, which works for a case as large and abrupt as Alcoa's but would miss smaller or more gradual self-generation elsewhere.</li>
+<li><b>Nearly a quarter of tagged commercial volume carries no industry classification at all</b>, and that untagged share is itself growing slightly year over year. Worth a cleanup pass before the sector-level numbers are presented as complete.</li>
+</ul>
+
+<div class="meta">Prepared by Sales Forecasting &amp; Analysis. Figures in GWh / J$ unless stated. Source: billing actuals and account&ndash;industry mapping, Sales Analytics Platform.</div>
+</body></html>
