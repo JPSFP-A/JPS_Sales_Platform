@@ -55,7 +55,7 @@ q('What is happening within key customer businesses? Which changes are temporary
   'Temporary: the hotel sector\'s Melissa recovery, which is closing gradually. Sustained: Alcoa\'s self-generation, which is a permanent reduction in grid draw, not a dip that reverses. Alcoa\'s billed demand is provisional and will be adjusted down, so its remaining revenue should not be read as retained capacity.')
 q('Is average revenue per kWh changing?',
   f'Yes, and it\'s the main reason revenue held up better than volume &mdash; the system-wide blended rate rose from J${rate[2025]/1000:.2f}/kWh to J${rate[2026]/1000:.2f}/kWh, {P(rate[2025],rate[2026])}. Every rate class saw its own rate rise over the period; RT70 ({CLS["RT70"][1]:+.1f}%) and RT40 ({CLS["RT40"][1]:+.1f}%) moved the most. The split by non-fuel, fuel, IPP and taxes is in Section 1b: fuel drives the increase, while the non-fuel rate is roughly flat.')
-A('<h2>Questions to Consider</h2>'); A('<dl class="qa">\n' + '\n\n'.join(QA) + '\n</dl>')
+A('<h2>Key Questions</h2>'); A('<dl class="qa">\n' + '\n\n'.join(QA) + '\n</dl>')
 
 # ================= Appendix =================
 A('<h2>Appendix</h2>')
@@ -131,12 +131,12 @@ for c, lab in (('RT40', 'RT40 Commercial'), ('RT50', 'RT50 Large Commercial'), (
 k25, v25 = dsum('ALL', 2025); k26, v26 = dsum('ALL', 2026)
 A(tbl(['Class', 'GWh', 'Billed kVA (thousands)', 'Energy charge (J$M)', 'Demand charge (J$M)'], arows,
       f'<tr class="tot"><td class="l">All three</td><td>{n(k25/1e6,1)} &rarr; {n(k26/1e6,1)}</td><td>{n(v25/1000)} &rarr; {n(v26/1000)}</td><td>{n(en25)} &rarr; {n(en26)}</td><td>{n(dm25)} &rarr; {n(dm26)}</td></tr>'))
-A('<p class="note">Billed kVA is the sum of the monthly billed demand across the accounts in each class. Alcoa is excluded because its billed demand for August and September is provisional and will be adjusted down. September figures for RT40 also carry a billing-timing distortion at one large account (Caribbean Broilers).</p>')
+A('<p class="note">Alcoa is excluded because its billed demand for August and September is provisional and will be adjusted down. September figures for RT40 also carry a billing-timing distortion at one large account (Caribbean Broilers).</p>')
 A('<h3>A11. Definitions</h3>')
 A('<ul>\n<li><b>Residential &mdash; billed monthly</b>: RT10 homeowner accounts and the residential-type accounts on RT20, billed after use. <b>Prepaid</b>: pay-as-you-go accounts on RT10 and RT20, reported separately. <b>Commercial</b>: RT20 accounts registered as businesses, plus RT40, RT50, RT60-ST and RT70.</li>\n<li><b>Customers</b> are billed accounts in the month, one per metered account for commercial. <b>Sales</b> are billed kWh. <b>Revenue</b> is net billed revenue before GCT, which is shown separately.</li>\n<li><b>Non-fuel charges</b> are the customer charge, energy charge and (commercial only) demand charge; <b>fuel</b> and <b>IPP</b> are the pass-through charges; <b>other</b> is what remains between the sum of those charges and net revenue (billing adjustments and credits).</li>\n<li><b>Defecting customer</b>: a commercial customer whose January&ndash;September consumption is more than 80% below the same period of the prior year.</li>\n</ul>')
 A('<div class="meta">Prepared by Sales Forecasting &amp; Analysis. Figures in GWh / J$ unless stated. Source: JPS billed sales and revenue records.</div>')
 
-head = open(HTML, encoding='utf-8').read()
+head = open(HTML, encoding='utf-8').read().replace('Attribution &amp; Requirements Review','September 2026').replace('Attribution & Requirements Review','September 2026')
 head = head[:head.index('</style></head><body>') + len('</style></head><body>')]
 open(HTML, 'w', encoding='utf-8').write(head + '\n\n' + '\n'.join(out) + '\n\n</body></html>\n')
 print('written', HTML, 'producers', neg.most_common(), 'other', other_neg, 'alc70', alc70, 'rt70d', rt70d)

@@ -122,6 +122,18 @@ for el in body.children:
         else: para(el)
     elif n == 'div' and 'meta' in cl:
         para(el, 8, GREY, 10)
+    elif n == 'div' and 'key' in cl and el.find('ul'):
+        t = el.find('b')
+        p = doc.add_paragraph(); shade(p._p, 'F7F9FB'); border(p, 'left', '0B3D66', 24, 8)
+        p.paragraph_format.left_indent = Cm(0.3); p.paragraph_format.space_after = Pt(2); p.paragraph_format.keep_with_next = True
+        r = p.add_run(t.get_text()); r.bold = True; r.font.size = Pt(10.5); r.font.color.rgb = NAVY
+        for li in el.find('ul').find_all('li', recursive=False):
+            p = doc.add_paragraph(); shade(p._p, 'F7F9FB'); border(p, 'left', '0B3D66', 24, 8)
+            p.paragraph_format.left_indent = Cm(0.6); p.paragraph_format.first_line_indent = Cm(-0.3); p.paragraph_format.space_after = Pt(1)
+            p.paragraph_format.keep_together = True
+            r0 = p.add_run('• '); r0.font.size = Pt(9.5)
+            add_inline(p, li, 9.5)
+        sp = doc.add_paragraph(); sp.paragraph_format.space_after = Pt(4); sp.paragraph_format.line_spacing = 0.6
     elif n == 'div' and ('key' in cl or 'gap' in cl or 'warn' in cl):
         # split on <br><br> into paragraphs inside a shaded, left-ruled block
         parts, cur = [], []
@@ -163,10 +175,10 @@ def field(run, instr):
             e = OxmlElement('w:instrText'); e.set(qn('xml:space'), 'preserve'); e.text = txt; run._r.append(e)
 fp = sec.footer.paragraphs[0]; fp.text = ''
 tabs = fp.paragraph_format.tab_stops; from docx.enum.text import WD_TAB_ALIGNMENT; tabs.add_tab_stop(Cm(17.2), WD_TAB_ALIGNMENT.RIGHT)
-r = fp.add_run('JPS Sales Analysis — Attribution & Requirements Review\tPage '); r.font.size = Pt(8); r.font.color.rgb = GREY
+r = fp.add_run('JPS Sales Analysis — September 2026\tPage '); r.font.size = Pt(8); r.font.color.rgb = GREY
 r2 = fp.add_run(); r2.font.size = Pt(8); r2.font.color.rgb = GREY; field(r2, 'PAGE')
 r3 = fp.add_run(' of '); r3.font.size = Pt(8); r3.font.color.rgb = GREY
 r4 = fp.add_run(); r4.font.size = Pt(8); r4.font.color.rgb = GREY; field(r4, 'NUMPAGES')
-doc.core_properties.title = 'JPS Sales Analysis — Attribution & Requirements Review'
+doc.core_properties.title = 'JPS Sales Analysis — September 2026'
 doc.save(out)
 print('saved', out)

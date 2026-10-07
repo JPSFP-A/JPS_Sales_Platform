@@ -19,7 +19,7 @@ const puppeteer = require(path.join(process.env.APPDATA, 'npm', 'node_modules', 
     headerTemplate: '<span></span>',
     footerTemplate:
       '<div style="width:100%;font-size:8.5px;font-family:Arial,Helvetica,sans-serif;color:#888;padding:0 13mm;display:flex;justify-content:space-between;">' +
-      '<span>JPS Sales Analysis \u2014 Attribution &amp; Requirements Review</span>' +
+      '<span>JPS Sales Analysis \u2014 September 2026</span>' +
       '<span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span></div>',
     margin: { top: '16mm', bottom: '18mm', left: '13mm', right: '13mm' },
   });
