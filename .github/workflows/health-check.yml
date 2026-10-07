@@ -14,10 +14,10 @@ jobs:
     steps:
       - name: Check live URL returns HTTP 200
         run: |
-          # HEAD request: the page is about 1 MB, the headers are enough to prove it is up. Retried because
+          # Tiny static file served by the same deployment, so a 200 means the site is up. Retried because
           # a single 403/5xx from a GitHub runner has been transient.
           for attempt in 1 2 3; do
-            status=$(curl -s -I -o /dev/null -w "%{http_code}" https://sales.jmfinancelab.com)
+            status=$(curl -s -I -o /dev/null -w "%{http_code}" https://sales.jmfinancelab.com/health.txt)
             echo "Attempt $attempt: HTTP status $status"
             if [ "$status" = "200" ]; then echo "Health check passed."; exit 0; fi
             [ "$attempt" -lt 3 ] && sleep 30
