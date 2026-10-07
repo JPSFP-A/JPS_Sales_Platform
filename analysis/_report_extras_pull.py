@@ -51,7 +51,7 @@ def band_of(k):
     if k <= 500000: return 6
     return 7
 bands = {}
-for mo in ('2025-08', '2026-08'):
+for mo in ('2025-09', '2026-09'):
     for key, a in d['acct'].items():
         v = a['m'].get(mo)
         if not v: continue
