@@ -2804,7 +2804,7 @@ async function detectYearCol(sb){
         await new Promise(r=>setTimeout(r,500));
         return;
       }
-    }catch(e){}
+    }catch(e){if(window.JpsMonitor)JpsMonitor.warning('schema:normalize-rpc',e?.message||String(e));}
     // RPC not found or failed — SCHEMA_SQL not yet run; fall through to probe
   }
 
@@ -2833,7 +2833,7 @@ async function detectYearCol(sb){
       _showSchemaBanner('fpa_raw');
       return;
     }
-  }catch(e){}
+  }catch(e){if(window.JpsMonitor)JpsMonitor.warning('schema:source-probe',e?.message||String(e));}
 
   // Check for correct year column
   for(const col of ['year','cal_year']){
@@ -2845,7 +2845,7 @@ async function detectYearCol(sb){
         if(col==='cal_year') _showSchemaBanner('cal_year');
         return;
       }
-    }catch(e){}
+    }catch(e){if(window.JpsMonitor)JpsMonitor.warning('schema:year-col-probe',e?.message||String(e));}
   }
 
   console.warn('[JPS] Could not detect year column — schema may need updating. Using default:',YEAR_COL);
@@ -3278,7 +3278,7 @@ function setTheme(t){
   // Update active state on theme buttons
   document.querySelectorAll('.theme-btn').forEach(b=>b.classList.toggle('on',b.dataset.theme===t));
   // Rebuild charts with new colors
-  try{buildCharts();}catch(e){}
+  try{buildCharts();}catch(e){if(window.JpsMonitor)JpsMonitor.warning('charts:build',e?.message||String(e));}
   const labels={dark:'🌙 Dark theme',light:'☀️ Light theme',jps:'⚡ JPS theme'};
   toast(labels[t]||'Theme applied','ok');
 }
@@ -4359,7 +4359,7 @@ function renderSection(id){
       renderCmCust();renderCmIndTbl();
     }
   }
-  else if(id==='rs'){renderRsKPIs();renderRsPar();try{mkBracketCharts();}catch(e){}}
+  else if(id==='rs'){renderRsKPIs();renderRsPar();try{mkBracketCharts();}catch(e){if(window.JpsMonitor)JpsMonitor.warning('charts:bracket',e?.message||String(e));}}
   else if(id==='df'){renderDefectors();renderDefKPIs();}
   else if(id==='fc'){renderFcEntry();renderMacroGrid();renderFcKPIs();}
   else if(id==='ro'){filterRO();updateROAutoFlags();}
@@ -6379,7 +6379,7 @@ function initAll(){
   // paint of Overview isn't left showing zeroed-out prior-year commercial figures.
   if(!_commDetailLoaded){
     loadCommercialDetail().then(()=>{
-      try{buildCharts();renderSection(document.querySelector('.sec.on')?.id||'ov');}catch(e){}
+      try{buildCharts();renderSection(document.querySelector('.sec.on')?.id||'ov');}catch(e){if(window.JpsMonitor)JpsMonitor.warning('charts:rebuild',e?.message||String(e));}
     }).catch(e=>console.warn('loadCommercialDetail:',e));
   }
 }
@@ -15668,9 +15668,15 @@ async function leCommitPreview(){
     // Cleanup orphaned jps_forecast_versions + jps_forecast rows if preview failed after insert
     if(_jfvCreated){
       try{
-        await sb.from('jps_forecast').delete().eq('version_id',_jfvCreated);
-        await sb.from('jps_forecast_versions').delete().eq('id',_jfvCreated);
-      }catch(_){}
+        const rb1=await sb.from('jps_forecast').delete().eq('version_id',_jfvCreated);
+        if(rb1.error) throw new Error(rb1.error.message);
+        const rb2=await sb.from('jps_forecast_versions').delete().eq('id',_jfvCreated);
+        if(rb2.error) throw new Error(rb2.error.message);
+      }catch(rbErr){
+        if(window.JpsMonitor)JpsMonitor.error('le-commit:rollback',rbErr?.message||String(rbErr),{versionId:_jfvCreated});
+        console.error('[leCommitPreview] rollback failed',rbErr);
+        toast('Rollback failed: orphan forecast version '+_jfvCreated+' left behind. Ask an admin to remove it.','err');
+      }
     }
     statusEl.innerHTML='<span style="color:var(--red)">Error: '+esc(e.message)+'</span>';
     toast('Preview failed: '+e.message,'err');
