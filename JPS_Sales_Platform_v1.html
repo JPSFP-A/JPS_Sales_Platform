@@ -8767,7 +8767,7 @@ function deleteUser(userId,userName){
   openModal('🗑 Delete User',`
     <div style="background:rgba(232,64,64,.1);border:1px solid rgba(232,64,64,.3);border-radius:7px;padding:11px 13px;margin-bottom:12px">
       <strong style="color:var(--red)">⚠ This cannot be undone.</strong><br>
-      <span style="font-size:11px;color:var(--text2)">Deleting <strong>${userName}</strong> will remove their profile and access from this platform.<br>
+      <span style="font-size:11px;color:var(--text2)">Deleting <strong>${esc(userName)}</strong> will remove their profile and access from this platform.<br>
       Their Supabase Auth account will remain — to fully remove login access, go to the Supabase dashboard → Authentication → Users.</span>
     </div>
     <div style="font-size:11px;color:var(--text2)">Type <strong>DELETE</strong> below to confirm:</div>
