@@ -19,6 +19,10 @@ _find*_out.txt
 JPS_Exec_Summary*.html
 JPS_KAM_Review*.html
 JPS_System_Losses*.html
+JPS_Grid_*
+JPS_Sales_Analysis_*
+JPS_Driver_Report*
+JPS_Sep2026_*
 JPS_Sales_Forecast_*
 JPS_Forecast_*
 JPS_LE_Sales_Gen_*
