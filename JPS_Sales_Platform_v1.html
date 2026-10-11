@@ -3298,7 +3298,9 @@ const S={
   get(k,d){try{const v=localStorage.getItem('jps5_'+k);return v?JSON.parse(v):d;}catch(e){return d;}},
   del(k){try{localStorage.removeItem('jps5_'+k);}catch(e){}}
 };
-function esc(s){const d=document.createElement('div');d.textContent=String(s??'');return d.innerHTML;}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+// String argument inside an inline handler, e.g. onclick="fn('${jsq(x)}')": JS-escape \ ' and line breaks, then HTML-escape for the attribute.
+function jsq(s){return esc(String(s??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/[\r\n]+/g,' '));}
 
 /* ── DB helpers ── */
 async function dbUpsert(table,row){
@@ -3853,9 +3855,9 @@ function renderCmDefection(){
       <td><span class="heat hR">${d.ratio}%</span></td>
       <td><span class="def-severity ${sevClass[d.sev]||''}">${d.sev}</span></td>
       <td>${d.consec} mo.</td>
-      <td><select style="font-size:10px;background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:2px 4px" onchange="updateDefType('${d.num.replace(/'/g,"\\'")}',this.value)"><option${defType==='Temporary'?' selected':''}>Temporary</option><option${defType==='Structural'?' selected':''}>Structural</option><option${defType==='Unknown'?' selected':''}>Unknown</option></select></td>
-      <td><select style="font-size:10px;background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:2px 4px" onchange="updateDefCause('${d.num.replace(/'/g,"\\'")}',this.value)"><option${defCause==='Solar DG'?' selected':''}>Solar DG</option><option${defCause==='CHP'?' selected':''}>CHP</option><option${defCause==='Generator'?' selected':''}>Generator</option><option${defCause==='Load Reduction'?' selected':''}>Load Reduction</option><option${defCause==='Account Closed'?' selected':''}>Account Closed</option><option${defCause==='Tariff Transfer'?' selected':''}>Tariff Transfer</option><option${defCause==='Data Error'?' selected':''}>Data Error</option><option${defCause==='Unknown'?' selected':''}>Unknown</option><option${(defCause&&!['Solar DG','CHP','Generator','Load Reduction','Account Closed','Tariff Transfer','Data Error','Unknown'].includes(defCause))?' selected':''}>Other</option></select></td>
-      <td><button style="font-size:11px;background:transparent;border:1px solid var(--border);border-radius:4px;color:var(--text2);cursor:pointer;padding:2px 5px" onclick="emailKAM('${d.num.replace(/'/g,"\\'")}','${d.name.replace(/'/g,"\\'").replace(/"/g,'&quot;')}','${kamName.replace(/'/g,"\\'")}','${defCause}','${d.sev}')">✉</button></td>
+      <td><select style="font-size:10px;background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:2px 4px" onchange="updateDefType('${jsq(d.num)}',this.value)"><option${defType==='Temporary'?' selected':''}>Temporary</option><option${defType==='Structural'?' selected':''}>Structural</option><option${defType==='Unknown'?' selected':''}>Unknown</option></select></td>
+      <td><select style="font-size:10px;background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:2px 4px" onchange="updateDefCause('${jsq(d.num)}',this.value)"><option${defCause==='Solar DG'?' selected':''}>Solar DG</option><option${defCause==='CHP'?' selected':''}>CHP</option><option${defCause==='Generator'?' selected':''}>Generator</option><option${defCause==='Load Reduction'?' selected':''}>Load Reduction</option><option${defCause==='Account Closed'?' selected':''}>Account Closed</option><option${defCause==='Tariff Transfer'?' selected':''}>Tariff Transfer</option><option${defCause==='Data Error'?' selected':''}>Data Error</option><option${defCause==='Unknown'?' selected':''}>Unknown</option><option${(defCause&&!['Solar DG','CHP','Generator','Load Reduction','Account Closed','Tariff Transfer','Data Error','Unknown'].includes(defCause))?' selected':''}>Other</option></select></td>
+      <td><button style="font-size:11px;background:transparent;border:1px solid var(--border);border-radius:4px;color:var(--text2);cursor:pointer;padding:2px 5px" onclick="emailKAM('${jsq(d.num)}','${jsq(d.name)}','${jsq(kamName)}','${jsq(defCause)}','${d.sev}')">✉</button></td>
     </tr>`;}).join('')}</tbody></table>`
     :'<div style="padding:24px;text-align:center;font-size:12px;color:var(--green)">✓ No commercial defectors match current filters.</div>';
 }
@@ -5343,13 +5345,13 @@ function renderCmCust(){
       const pCY=periCY(c),pPY=pyMap[c.num]||0,pB=budMap[c.num]||0;
       const editable=canEditNote(c.kam);
       const noteCell=editable
-        ?`<span style="font-size:10px;color:${saved?'var(--teal)':'var(--text3)'};cursor:pointer" title="${saved?esc(saved):''}" onclick="editNote('${c.num}','${c.name.replace(/'/g,"\\'")}','cm_cust_tbl','${(c.kam||'').replace(/'/g,"\\'")}')">${saved?'📝 '+esc(saved.substring(0,28))+(saved.length>28?'…':''):'✏ Add note'}</span>`
+        ?`<span style="font-size:10px;color:${saved?'var(--teal)':'var(--text3)'};cursor:pointer" title="${saved?esc(saved):''}" onclick="editNote('${c.num}','${jsq(c.name)}','cm_cust_tbl','${jsq((c.kam||''))}')">${saved?'📝 '+esc(saved.substring(0,28))+(saved.length>28?'…':''):'✏ Add note'}</span>`
         :`<span style="font-size:10px;color:${saved?'var(--text2)':'var(--text3)'}" title="${saved?esc(saved)+' — ':''}Only ${kamName||'the assigned KAM'}, a supervisor, or admin can edit this note">${saved?'🔒 '+esc(saved.substring(0,28))+(saved.length>28?'…':''):'--'}</span>`;
       return`<tr>
         <td style="font-size:10px;color:var(--text3)">${esc(c.num)}</td>
         <td style="font-weight:500">${esc(c.name)}</td>
         <td><span class="pill pt">${c.rate}</span></td>
-        <td style="font-size:10px;color:var(--teal);cursor:pointer" onclick="filterByKam('${(c.kam||'').replace(/'/g,"\\'")}',event)" title="Click to filter by this KAM">${esc(kamName)}</td>
+        <td style="font-size:10px;color:var(--teal);cursor:pointer" onclick="filterByKam('${jsq((c.kam||''))}',event)" title="Click to filter by this KAM">${esc(kamName)}</td>
         <td>${esc(c.ind)}</td><td>${esc(c.parish)}</td>
         <td>${pPY.toFixed(1)}</td><td style="font-weight:600">${pCY.toFixed(1)}</td>
         <td style="color:var(--text3)">${pB>0?pB.toFixed(1):'--'}</td>
@@ -5447,7 +5449,7 @@ function renderKamPerformance(){
       const acc=fcMape[k.kam];
       const accClass=acc!=null?(acc>=90?'up':acc>=75?'':'dn'):'';
       const rk=rankMap[k.kam];
-      return`<tr style="cursor:pointer" onclick="filterByKam('${k.kam.replace(/'/g,"\\'")}',event)" title="Click to filter customers to this KAM">
+      return`<tr style="cursor:pointer" onclick="filterByKam('${jsq(k.kam)}',event)" title="Click to filter customers to this KAM">
         <td style="font-weight:700;color:var(--text3)">${rk!=null?`#${rk}`:'--'}</td>
         <td style="font-weight:600;color:var(--teal)">${esc(k.kam)}</td>
         <td>${k.accounts.size}</td>
@@ -5678,8 +5680,8 @@ function renderDefectors(){
       <td><span class="heat hR">${d.ratio}%</span></td>
       <td><span class="def-severity ${sevClass[d.sev]||''}">${d.sev}</span></td>
       <td>${d.consec} mo.</td>
-      <td><span class="pill ${d.cause==='Self-Gen'?'pa':d.cause==='CHP'?'pp':d.cause==='Hurricane'?'pb':d.cause==='Closure'?'pr':'pgr'}">${d.cause}</span></td>
-      <td>${val?`<span class="pill pg">✓ ${val.cause}</span>`:`<button class="btn btn-a" style="padding:2px 7px;font-size:10px" onclick="validateDefector('${d.num}','${d.name.replace(/'/g,"\\'")}')">Validate</button>`}</td>
+      <td><span class="pill ${d.cause==='Self-Gen'?'pa':d.cause==='CHP'?'pp':d.cause==='Hurricane'?'pb':d.cause==='Closure'?'pr':'pgr'}">${esc(d.cause)}</span></td>
+      <td>${val?`<span class="pill pg">✓ ${esc(val.cause)}</span>`:`<button class="btn btn-a" style="padding:2px 7px;font-size:10px" onclick="validateDefector('${d.num}','${jsq(d.name)}')">Validate</button>`}</td>
     </tr>`;
   });
   document.getElementById('df_tbl').innerHTML=`<table class="dt" id="df_dt">
@@ -5841,10 +5843,10 @@ function renderFcEntry(){
       <td style="font-size:10px;color:var(--text3)">${c.num}</td>
       <td style="font-weight:500;white-space:nowrap">${esc(c.name)}</td>
       <td><span class="pill pt">${c.rate}</span></td>
-      <td style="font-size:10px;color:var(--teal)">${c.kam||'--'}</td>
+      <td style="font-size:10px;color:var(--teal)">${esc(c.kam||'--')}</td>
       <td style="font-size:10px;color:var(--text3)">${avg3.toFixed(3)}</td>
       ${fcCells}
-      <td><span style="font-size:10px;color:var(--teal);cursor:pointer" onclick="editFcNote('${c.num}','${c.name.replace(/'/g,"\\'")}')">✏</span></td>
+      <td><span style="font-size:10px;color:var(--teal);cursor:pointer" onclick="editFcNote('${c.num}','${jsq(c.name)}')">✏</span></td>
     </tr>`;
   }).join('');
   document.getElementById('fc_tbl').innerHTML=`<table class="dt" id="fce_dt">
@@ -6055,7 +6057,7 @@ function mrRenderCust(){
       <td><span class="pill pt">${c.rate}</span></td><td>${c.ind}</td>
       <td>${c.yPY.toFixed(1)}</td><td style="font-weight:600">${c.yCY.toFixed(1)}</td>
       <td>${vbar(c.yCY,c.yPY)}</td>
-      <td><span style="color:var(--teal);cursor:pointer;font-size:10px" onclick="editMrNote('${c.num}','${c.name.replace(/'/g,"\\'")}','mr_cust_w')">${saved?saved.substring(0,28)+'…':'✏ note'}</span></td>
+      <td><span style="color:var(--teal);cursor:pointer;font-size:10px" onclick="editMrNote('${c.num}','${jsq(c.name)}','mr_cust_w')">${saved?esc(saved.substring(0,28))+'…':'✏ note'}</span></td>
     </tr>`;}).join('')}</tbody></table>`;
   w.innerHTML=buildCmt('mr_cust_top','Top customer commentary...','mr_cust_w')+`<div class="card" style="margin-bottom:11px"><div class="ch">Top 20 -- ${mrPeriod}</div>${mkTbl(top,'top')}</div>`+buildCmt('mr_cust_bot','Bottom customer commentary...','mr_cust_w')+`<div class="card"><div class="ch">Bottom 20 -- ${mrPeriod}</div>${mkTbl(bot,'bot')}</div>`;
 }
@@ -6070,7 +6072,7 @@ function renderMrPar(){
   w.innerHTML=buildCmt('mr_par','Parish commentary...','mr_par_w')+`<div class="card"><div class="ch">Parish Performance</div>${tbl}</div>`;
 }
 function editMrNote(num,name,cid){
-  openModal(`Review Note: ${name}`,`<textarea id="mrn_ta">${S.get(`mr_note_${mrPeriod}_${num}`,'')}</textarea>`,()=>{S.set(`mr_note_${mrPeriod}_${num}`,document.getElementById('mrn_ta').value);closeModal();renderMrSection();});
+  openModal(`Review Note: ${name}`,`<textarea id="mrn_ta">${esc(S.get(`mr_note_${mrPeriod}_${num}`,''))}</textarea>`,()=>{S.set(`mr_note_${mrPeriod}_${num}`,document.getElementById('mrn_ta').value);closeModal();renderMrSection();});
 }
 function editNote(num,name,cid,accountKam){
   // Re-check server-side-equivalent permission here too, not just at the click
@@ -6080,7 +6082,7 @@ function editNote(num,name,cid,accountKam){
     return;
   }
   const period=`${curYear}-${String(curMonth).padStart(2,'0')}`;
-  openModal(`Customer Note: ${name} (${period})`,`<textarea id="gn_ta">${S.get(`note_${num}_${period}`,'')}</textarea>`,()=>{
+  openModal(`Customer Note: ${name} (${period})`,`<textarea id="gn_ta">${esc(S.get(`note_${num}_${period}`,''))}</textarea>`,()=>{
     const v=document.getElementById('gn_ta').value;
     S.set(`note_${num}_${period}`,v);
     saveNote(num,name,v,period).catch(e=>console.warn('DB note save:',e));
@@ -6728,7 +6730,7 @@ function renderExecSummary() {
         <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
           <div>
             <div style="font-size:12px;font-weight:600;color:var(--text)">${esc(d.name)}</div>
-            <div style="font-size:10px;color:var(--text3)">${d.rate} &middot; ${d.cause} &middot; ${d.consec} months</div>
+            <div style="font-size:10px;color:var(--text3)">${d.rate} &middot; ${esc(d.cause)} &middot; ${d.consec} months</div>
           </div>
           <span class="def-severity ${d.sev==='Critical'?'def-critical':'def-severe'}">${d.sev} ${d.ratio}%</span>
         </div>`).join('');
@@ -7312,7 +7314,7 @@ function renderDefFlow() {
     </td>
     <td><input class="si" type="date" style="width:110px;padding:3px 6px;font-size:10px" value="${a.due||''}"
         onchange="saveDefAction('${a.num}','due',this.value)"/></td>
-    <td><span style="cursor:pointer;color:var(--teal);font-size:10px" onclick="editDefNote('${a.num}','${a.name.replace(/'/g,"\\'")}')">&#9998; note</span></td>
+    <td><span style="cursor:pointer;color:var(--teal);font-size:10px" onclick="editDefNote('${a.num}','${jsq(a.name)}')">&#9998; note</span></td>
   </tr>`).join('');
 
   const tbl = document.getElementById('drf_tbl');
@@ -7979,7 +7981,7 @@ function generateReport() {
           <td style="padding:5px 8px">${d.parish||'--'}</td>
           <td style="padding:5px 8px;text-align:right;color:#e84040;font-weight:600">${d.ratio}%</td>
           <td style="padding:5px 8px;font-weight:600;color:${d.sev==='Critical'?'#e84040':'#f5a623'}">${d.sev}</td>
-          <td style="padding:5px 8px">${d.cause}</td>
+          <td style="padding:5px 8px">${esc(d.cause)}</td>
         </tr>`).join('')
       : '<tr><td colspan="6" style="padding:8px;color:#27c485">No defectors flagged this period.</td></tr>';
     html += `<h2 style="font-size:15px;color:#003366;border-bottom:1px solid #ddd;padding-bottom:6px;margin:18px 0 10px">${secNum++}. Defection Analysis</h2>
@@ -11465,7 +11467,7 @@ function renderDriverForecast(){
           return`<td style="padding:3px;border-left:0.5px solid var(--border);text-align:right;color:var(--text3)">—</td><td style="text-align:right;padding:4px;color:var(--text3)">—</td>`;
         }
         const c=e.chain[m]||{};const pct=c.oper||0,kwh=(c.base||0)*pct/100;
-        return`<td style="padding:3px;border-left:0.5px solid var(--border)"><input value="${pct}" onchange="dfcEditOperational('${a.ac||a.jps_ac}',${year},${m},this.value,'${esc(e.label).replace(/'/g,"\\'")}')" style="width:38px;height:20px;padding:0 3px;text-align:right;font-size:10px;color:${pct>0?'var(--green)':pct<0?'var(--red)':'var(--text)'}"></td><td style="text-align:right;padding:4px;background:rgba(0,194,168,.08);color:var(--teal)">${_dfcFmtGwh(kwh)}</td>`;
+        return`<td style="padding:3px;border-left:0.5px solid var(--border)"><input value="${pct}" onchange="dfcEditOperational('${a.ac||a.jps_ac}',${year},${m},this.value,'${jsq(e.label)}')" style="width:38px;height:20px;padding:0 3px;text-align:right;font-size:10px;color:${pct>0?'var(--green)':pct<0?'var(--red)':'var(--text)'}"></td><td style="text-align:right;padding:4px;background:rgba(0,194,168,.08);color:var(--teal)">${_dfcFmtGwh(kwh)}</td>`;
       }).join('');
       h+=`<tr style="border-bottom:0.5px solid var(--border)"><td style="padding:4px 8px 4px 26px;color:var(--text2)">Operational adj.</td>${opCells}<td style="border-left:0.5px solid var(--border)"></td></tr>`;
       h+=`<tr style="border-bottom:0.5px solid var(--border-strong)"><td style="padding:5px 8px 5px 26px;font-weight:700">Total</td>${totalRowCells(e.chain,true)}<td style="text-align:right;padding:5px 8px;font-weight:700;border-left:0.5px solid var(--border)">${_dfcFmtGwh(fyTotal(e.chain))}</td></tr>`;
@@ -11769,7 +11771,7 @@ function renderMacroAssumptions(){
       if(lockedThru&&m<=lockedThru){
         return`<td style="padding:3px;text-align:center;border-left:0.5px solid var(--border);color:var(--text3)" title="Actual month — driver % isn't applied">—</td>`;
       }
-      return`<td style="padding:3px;text-align:center;border-left:0.5px solid var(--border)"><input value="${v}" onchange="macroSaveCell('${r.type}',${r.seg?`'${esc(r.seg).replace(/'/g,"\\'")}'`:'null'},${year},${m},this.value)" style="width:48px;height:24px;padding:0 4px;text-align:right;font-size:10px"></td>`;
+      return`<td style="padding:3px;text-align:center;border-left:0.5px solid var(--border)"><input value="${v}" onchange="macroSaveCell('${r.type}',${r.seg?`'${jsq(r.seg)}'`:'null'},${year},${m},this.value)" style="width:48px;height:24px;padding:0 4px;text-align:right;font-size:10px"></td>`;
     }).join('');
     const _ia=_macroImpliedAnnual(r.type,r.seg,year);
     const _iaCell=`<td style="padding:3px 8px;text-align:right;font-size:11px;border-left:0.5px solid var(--border-strong);color:${_ia==null?'var(--text3)':'var(--text2)'}" title="${_ia==null?'Not meaningful annualised — monthly shape or a level factor':'What this driver alone contributes over 12 months, compounded. NOT the volume growth out of the chain.'}">${_macroFmtAnnual(_ia)}</td>`;
@@ -16446,9 +16448,9 @@ function renderVldDefReg(){
       <td><span class="heat hR">${d.ratio}%</span></td>
       <td><span class="def-severity ${sevClass[d.sev]||''}">${d.sev}</span></td>
       <td>${d.consec} mo.</td>
-      <td><select style="font-size:10px;background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:2px 4px" onchange="updateDefType('${d.num.replace(/'/g,"\\'")}',this.value)"><option${defType==='Temporary'?' selected':''}>Temporary</option><option${defType==='Structural'?' selected':''}>Structural</option><option${defType==='Unknown'?' selected':''}>Unknown</option></select></td>
-      <td><select style="font-size:10px;background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:2px 4px" onchange="updateDefCause('${d.num.replace(/'/g,"\\'")}',this.value)"><option${defCause==='Solar DG'?' selected':''}>Solar DG</option><option${defCause==='CHP'?' selected':''}>CHP</option><option${defCause==='Generator'?' selected':''}>Generator</option><option${defCause==='Load Reduction'?' selected':''}>Load Reduction</option><option${defCause==='Account Closed'?' selected':''}>Account Closed</option><option${defCause==='Tariff Transfer'?' selected':''}>Tariff Transfer</option><option${defCause==='Data Error'?' selected':''}>Data Error</option><option${defCause==='Unknown'?' selected':''}>Unknown</option></select></td>
-      <td><button style="font-size:11px;background:transparent;border:1px solid var(--border);border-radius:4px;color:var(--text2);cursor:pointer;padding:2px 5px" onclick="emailKAM('${d.num.replace(/'/g,"\\'")}','${d.name.replace(/'/g,"\\'").replace(/"/g,'&quot;')}','${kamName.replace(/'/g,"\\'")}','${defCause}','${d.sev}')">✉</button></td>
+      <td><select style="font-size:10px;background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:2px 4px" onchange="updateDefType('${jsq(d.num)}',this.value)"><option${defType==='Temporary'?' selected':''}>Temporary</option><option${defType==='Structural'?' selected':''}>Structural</option><option${defType==='Unknown'?' selected':''}>Unknown</option></select></td>
+      <td><select style="font-size:10px;background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:2px 4px" onchange="updateDefCause('${jsq(d.num)}',this.value)"><option${defCause==='Solar DG'?' selected':''}>Solar DG</option><option${defCause==='CHP'?' selected':''}>CHP</option><option${defCause==='Generator'?' selected':''}>Generator</option><option${defCause==='Load Reduction'?' selected':''}>Load Reduction</option><option${defCause==='Account Closed'?' selected':''}>Account Closed</option><option${defCause==='Tariff Transfer'?' selected':''}>Tariff Transfer</option><option${defCause==='Data Error'?' selected':''}>Data Error</option><option${defCause==='Unknown'?' selected':''}>Unknown</option></select></td>
+      <td><button style="font-size:11px;background:transparent;border:1px solid var(--border);border-radius:4px;color:var(--text2);cursor:pointer;padding:2px 5px" onclick="emailKAM('${jsq(d.num)}','${jsq(d.name)}','${jsq(kamName)}','${jsq(defCause)}','${d.sev}')">✉</button></td>
     </tr>`;}).join('')}</tbody></table>`
     :'<div style="padding:24px;text-align:center;font-size:12px;color:var(--green)">✓ No commercial defectors match current filters.</div>';
 }
