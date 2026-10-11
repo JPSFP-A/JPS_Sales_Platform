@@ -7314,7 +7314,7 @@ function renderDefFlow() {
     </td>
     <td><input class="si" type="date" style="width:110px;padding:3px 6px;font-size:10px" value="${a.due||''}"
         onchange="saveDefAction('${a.num}','due',this.value)"/></td>
-    <td><span style="cursor:pointer;color:var(--teal);font-size:10px" onclick="editDefNote('${a.num}','${jsq(a.name)}')">&#9998; note</span></td>
+    <td><span style="cursor:pointer;color:var(--teal);font-size:10px" onclick="editDefNote('${jsq(a.num)}','${jsq(a.name)}')">&#9998; note</span></td>
   </tr>`).join('');
 
   const tbl = document.getElementById('drf_tbl');
@@ -7369,7 +7369,7 @@ function renderDefFlow() {
 function editDefNote(num, name) {
   const saved = S.get('def_actions', {})[num] || {};
   openModal('Action Note: ' + name,
-    `<textarea id="dfn_ta" placeholder="Describe action taken, outcome, next steps...">${saved.note||''}</textarea>`,
+    `<textarea id="dfn_ta" placeholder="Describe action taken, outcome, next steps...">${esc(saved.note||'')}</textarea>`,
     () => { saveDefAction(num, 'note', document.getElementById('dfn_ta').value); closeModal(); renderDefFlow(); }
   );
 }
@@ -8691,8 +8691,8 @@ function renderAdm(){
       <thead><tr><th>Name</th><th>Email</th><th>Sales Role</th><th>Finance Role</th><th>KAM link</th><th>Territory</th><th>Status</th><th>Last signed in</th><th>Actions</th></tr></thead>
       <tbody>${PLATFORM_USERS.map(u=>{
         const isPending=!u.sales_role;
-        const safeId=String(u.id||'').replace(/'/g,"\\'");
-        const safeName=String(u.name||u.email||'User').replace(/'/g,"\\'");
+        const safeId=jsq(u.id||'');
+        const safeName=jsq(u.name||u.email||'User');
         return`<tr style="${isPending?'background:rgba(255,171,64,.05)':''}">
         <td style="font-weight:600">${esc(u.name||'')}${isPending?' <span style="font-size:9px;color:var(--amber)">(pending approval)</span>':''}</td>
         <td style="font-size:11px;color:var(--text3)">${esc(u.email||'--')}</td>
@@ -8701,12 +8701,12 @@ function renderAdm(){
               ${isPending?`<option value="" selected disabled>-- assign role --</option>`:''}
               ${['admin','manager','rep','view'].map(r=>`<option${u.sales_role===r?' selected':''}>${r}</option>`).join('')}
             </select>`
-          :`<span class="pill ${(u.sales_role==='admin'||u.sales_role==='manager')?'pa':'pt'}">${u.sales_role||'pending'}</span>`}</td>
-        <td><span class="pill pgr" style="font-size:9px">${u.role||'viewer'}</span></td>
+          :`<span class="pill ${(u.sales_role==='admin'||u.sales_role==='manager')?'pa':'pt'}">${esc(u.sales_role||'pending')}</span>`}</td>
+        <td><span class="pill pgr" style="font-size:9px">${esc(u.role||'viewer')}</span></td>
         <td>${isAdmin
           ?`<input class="si" list="kam_names_dl" style="font-size:10px;padding:3px;width:110px" value="${esc(u.kam_name||'')}" placeholder="none" onchange="setUserKam('${safeId}',this.value)">`
           :esc(u.kam_name||'--')}</td>
-        <td style="font-size:11px">${u.territory||'All'}</td>
+        <td style="font-size:11px">${esc(u.territory||'All')}</td>
         <td><span class="pill ${u.is_active===false?'pr':isPending?'pa':'pg'}">${u.is_active===false?'Blocked':isPending?'View-only (pending role)':'Active'}</span></td>
         <td style="font-size:10px;color:var(--text3)">${fmtLogin(u.last_login_at)}</td>
         <td style="display:flex;gap:4px;flex-wrap:wrap">${isAdmin
@@ -13126,10 +13126,10 @@ async function renderAdjustmentLog(){
       <td style="text-align:right;padding:4px">${esc(r.magnitude)}</td>
       <td style="padding:4px 8px;color:var(--text3);font-size:11px">${esc(r.justification||'')} <span style="color:var(--text3)">— ${esc(r.created_by||'')}</span></td>
       <td style="padding:4px 8px;text-align:right;white-space:nowrap" onclick="event.stopPropagation()">
-        ${r.source==='operational'?`<button class="btn-t" style="padding:2px 8px;font-size:11px" onclick="adjLogEditRow('${esc(r.editArgs[0])}',${r.editArgs[1]},${r.editArgs[2]},${r.editArgs[3]},'${esc(r.editArgs[4])}')">✏ Edit</button>`:''}
+        ${r.source==='operational'?`<button class="btn-t" style="padding:2px 8px;font-size:11px" onclick="adjLogEditRow('${jsq(r.editArgs[0])}',${r.editArgs[1]},${r.editArgs[2]},${r.editArgs[3]},'${jsq(r.editArgs[4])}')">✏ Edit</button>`:''}
         ${r.source==='operational'&&can('delete_item')?`<button class="btn-t" style="padding:2px 8px;font-size:11px;color:var(--red);margin-left:4px" onclick="adjLogDeleteRow(${r.id})">🗑</button>`:''}
         ${r.source==='macro'?`<button class="btn-t" style="padding:2px 8px;font-size:11px" onclick="goToMacroAssumptions()">→ Macro Assumptions</button>`:''}
-        ${r.source==='new_customer'&&r.newCustAc?`<button class="btn-t" style="padding:2px 8px;font-size:11px" onclick="openEditCustomerModal('${esc(r.newCustAc)}')">Edit</button>`:''}
+        ${r.source==='new_customer'&&r.newCustAc?`<button class="btn-t" style="padding:2px 8px;font-size:11px" onclick="openEditCustomerModal('${jsq(r.newCustAc)}')">Edit</button>`:''}
       </td>
     </tr>`).join('')+`</tbody>`;
   });
