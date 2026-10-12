@@ -3764,7 +3764,7 @@ function sw(id,el){
           +'separately from the residential rows. It normally takes a few seconds.<br><br>'
           +'<button class="btn btn-o" data-sec="'+id+'" onclick="sw(this.dataset.sec,null)">Retry</button></div>';
       } else {
-        sec.innerHTML='<div style="padding:40px;color:red;font-family:monospace;font-size:13px"><b>Render error in ['+id+']:</b><br>'+re.message+'<br><pre style="white-space:pre-wrap;font-size:11px">'+re.stack+'</pre></div>';
+        sec.innerHTML='<div style="padding:40px;color:red;font-family:monospace;font-size:13px"><b>Render error in ['+esc(id)+']:</b><br>'+esc(re.message)+'<br><pre style="white-space:pre-wrap;font-size:11px">'+esc(re.stack)+'</pre></div>';
       }
     }
   };
@@ -6210,7 +6210,7 @@ function editReconNote(id){
 ========================================== */
 function buildCmt(section,placeholder,cid){
   const list=S.get(`${mrPeriod}_${section}`,[]);
-  const hist=list.length?list.map((c,i)=>`<div class="centry"><span class="cdel" onclick="delCmt('${section}',${i},'${cid}')">✕</span><div class="cmeta"><span>👤 ${c.rep||'Anon'}</span><span>🕐 ${c.ts}</span></div><div class="ctxt">${c.text.replace(/\n/g,'<br>')}</div></div>`).join(''):`<div style="font-size:10px;color:var(--text3);padding:3px 0">No comments yet for ${mrPeriod}.</div>`;
+  const hist=list.length?list.map((c,i)=>`<div class="centry"><span class="cdel" onclick="delCmt('${section}',${i},'${cid}')">✕</span><div class="cmeta"><span>👤 ${esc(c.rep||'Anon')}</span><span>🕐 ${esc(c.ts)}</span></div><div class="ctxt">${esc(c.text).replace(/\n/g,'<br>')}</div></div>`).join(''):`<div style="font-size:10px;color:var(--text3);padding:3px 0">No comments yet for ${mrPeriod}.</div>`;
   return`<div class="cpanel"><h4>💬 Commentary <span class="cm">${mrPeriod} · ${list.length} saved</span></h4><textarea class="cbox" id="cb_${section}" placeholder="${placeholder}" rows="3"></textarea><div class="cactions"><button class="btn btn-t" onclick="submitCmt('${section}','${cid}')">💾 Save</button><button class="btn btn-o" onclick="document.getElementById('cb_${section}').value=''">Clear</button><span class="stag" id="st_${section}">✓ Saved</span></div><div class="chist">${hist}</div></div>`;
 }
 function submitCmt(section,cid){
@@ -8099,10 +8099,10 @@ function renderAdmComments(){
   if(!rows.length){el.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3)">No saved comments yet. Save a narrative or AI note to see it here.</div>';return;}
   el.innerHTML=rows.map(r=>`<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;background:var(--navy3)">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-      <span style="font-size:10px;font-weight:700;color:var(--teal)">${r.type}</span>
-      <span style="font-size:10px;color:var(--text3)">${r.period}</span>
+      <span style="font-size:10px;font-weight:700;color:var(--teal)">${esc(r.type)}</span>
+      <span style="font-size:10px;color:var(--text3)">${esc(r.period)}</span>
     </div>
-    <div style="font-size:11px;color:var(--text2);line-height:1.6;white-space:pre-wrap">${r.text.substring(0,300)}${r.text.length>300?'…':''}</div>
+    <div style="font-size:11px;color:var(--text2);line-height:1.6;white-space:pre-wrap">${esc(r.text.substring(0,300))}${r.text.length>300?'…':''}</div>
   </div>`).join('');
 }
 
@@ -8452,9 +8452,9 @@ function previewKamCsv(input){
         <div style="background:rgba(0,194,168,.07);border:1px solid rgba(0,194,168,.25);border-radius:7px;padding:12px;margin-bottom:10px">
           <div style="font-weight:700;font-size:11px;color:var(--teal);margin-bottom:8px">Preview — ${assignments.length} assignments across ${kamRows.length} KAMs</div>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:5px;font-size:11px;margin-bottom:8px">
-            ${kamRows.map(([k,n])=>`<div style="color:var(--text2)"><span style="color:var(--teal);font-weight:600">${k}</span> — ${n} accounts</div>`).join('')}
+            ${kamRows.map(([k,n])=>`<div style="color:var(--text2)"><span style="color:var(--teal);font-weight:600">${esc(k)}</span> — ${n} accounts</div>`).join('')}
           </div>
-          ${unmatched.length?`<div style="font-size:10px;color:var(--amber);margin-top:6px">&#9888; ${unmatched.length} customer number${unmatched.length>1?'s':''} not found in loaded actuals: <span style="color:var(--text2)">${unmatched.slice(0,8).join(', ')}${unmatched.length>8?` … +${unmatched.length-8} more`:''}</span></div>`:''}
+          ${unmatched.length?`<div style="font-size:10px;color:var(--amber);margin-top:6px">&#9888; ${unmatched.length} customer number${unmatched.length>1?'s':''} not found in loaded actuals: <span style="color:var(--text2)">${unmatched.slice(0,8).map(esc).join(', ')}${unmatched.length>8?` … +${unmatched.length-8} more`:''}</span></div>`:''}
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn btn-t" onclick="saveKamCsv()">💾 Save ${assignments.length} Assignments →</button>
@@ -8508,7 +8508,7 @@ async function saveKamCsv(){
     toast(`${assignments.length} KAM assignments imported ✓`,'ok');
   }catch(err){
     toast('Import failed: '+err.message,'err');
-    if(preview)preview.innerHTML=`<div style="color:var(--red);font-size:11px;padding:8px 0">Error: ${err.message}</div>`;
+    if(preview)preview.innerHTML=`<div style="color:var(--red);font-size:11px;padding:8px 0">Error: ${esc(err.message)}</div>`;
   }
 }
 
@@ -8837,7 +8837,7 @@ function maybeShowLockBanner(sectionId){
     banner.className='lock-banner';
     banner.innerHTML=`🔒 <strong>${mns[curMonth-1]} ${curYear} is closed.</strong>&nbsp;
       Locked ${lock?.locked_at?new Date(lock.locked_at).toLocaleDateString():''}
-      ${lock?.locked_by?' by '+lock.locked_by:''}. &nbsp;
+      ${lock?.locked_by?' by '+esc(lock.locked_by):''}. &nbsp;
       ${can('unlock_period')?`<button class="btn btn-o" style="margin-left:auto;font-size:9px;padding:2px 8px;border-color:var(--red);color:var(--red)" onclick="unlockPeriodPrompt(${curYear},${curMonth})">Unlock</button>`:'Contact Admin to unlock.'}`;
     sec.insertBefore(banner,sec.firstChild);
   }
@@ -8898,7 +8898,7 @@ function renderPeriodClose(){
       html+=`<div class="period-cell ${locked?'locked':'open'}">
         <div class="pc-label">${mns[m-1]}${isCur?' ★':''}</div>
         <div class="pc-status" style="color:${locked?'var(--red)':'var(--teal)'}">
-          ${locked?`🔒 Closed${lock?.locked_by?'<br><span style="font-size:8px">'+lock.locked_by+'</span>':''}` :'🟢 Open'}
+          ${locked?`🔒 Closed${lock?.locked_by?'<br><span style="font-size:8px">'+esc(lock.locked_by)+'</span>':''}` :'🟢 Open'}
         </div>
         ${can('lock_period')?`<button class="pc-btn" onclick="${locked?`unlockPeriodPrompt(${yr},${m})`:`lockPeriodConfirm(${yr},${m})`}">
           ${locked?'Unlock':'Lock'}
@@ -9689,7 +9689,7 @@ async function renderAuditLog(){
         return `<tr><td style="font-size:10px;white-space:nowrap;color:var(--text3)">${fmt(r.created_at)}</td><td style="font-size:11px">${esc(r.user_name||'')}</td><td><span style="font-size:10px;font-weight:600;color:${col};background:${col}22;padding:2px 7px;border-radius:10px">${r.action}</span></td><td style="font-size:10px;color:var(--text2)">${det}</td></tr>`;
       }).join('')+
       '</tbody></table>';
-  }catch(e){el.innerHTML=`<div style="color:var(--red);padding:16px">Error: ${e.message}</div>`;}
+  }catch(e){el.innerHTML=`<div style="color:var(--red);padding:16px">Error: ${esc(e.message)}</div>`;}
 }
 
 function updateSbStatus(state){
@@ -15616,7 +15616,7 @@ async function leCommitPreview(){
       fpav = ins;
     }
     if(!['draft','submitted'].includes(fpav.status)){
-      statusEl.innerHTML='<span style="color:var(--amber)">⚠ Version '+vCode+' already committed ('+fpav.status+'). Cannot overwrite.</span>';
+      statusEl.innerHTML='<span style="color:var(--amber)">⚠ Version '+esc(vCode)+' already committed ('+esc(fpav.status)+'). Cannot overwrite.</span>';
       return;
     }
     _leCommitVersionId = fpav.id;
