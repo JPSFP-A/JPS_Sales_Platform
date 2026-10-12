@@ -2,8 +2,10 @@
 # Loads the Customer-Monthly-Transaction-Report (PAYG/prepaid) file into jps_actuals,
 # matching the existing prepaid aggregation scheme: parish-aggregated (not per-account),
 # using the 15-admin-parish + KSAN/KSAS/Portmore split + UNMAPPED fallback already in the DB.
-# 'unassigned'-tariff rows (no rate class in the CIS extract) are loaded SEPARATELY under
-# rate_class='UNASSIGNED-PAYG' rather than silently dropped or guessed into RT10/RT20.
+# 'unassigned'-tariff rows (no rate class in the CIS extract) fold into RT10 -- sampled
+# 'unassigned' accounts are indistinguishable from ordinary RT10 residential prepaid
+# usage (see 2026-08-18 review), so they're no longer split into a separate
+# rate_class='UNASSIGNED-PAYG' bucket that most of the app never read anyway.
 import json, sys, requests, time
 import openpyxl
 
@@ -61,14 +63,7 @@ buckets = {}  # (rate_class, parish) -> [kwh, rev_pre_gct, gct, cust_count]
 months_seen = set()
 for r in rows:
     tariff = str(r[6] or '').strip()
-    if tariff == 'RT10-PAYG':
-        rc = 'RT10'
-    elif tariff == 'RT20-PAYG':
-        rc = 'RT20'
-    elif tariff == 'unassigned':
-        rc = 'UNASSIGNED-PAYG'
-    else:
-        rc = 'UNASSIGNED-PAYG'
+    rc = 'RT20' if tariff == 'RT20-PAYG' else 'RT10'
     parish = norm_parish(r[5])
     kwh = float(r[8] or 0)
     pre_gct = float(r[9] or 0)

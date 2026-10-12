@@ -89,13 +89,18 @@ skip_unparseable = 0
 months_seen = set()
 for r in rows:
     tariff = str(r[6] or '').strip()
-    if tariff == 'RT10-PAYG':
-        rc = 'RT10'
-    elif tariff == 'RT20-PAYG':
+    was_unassigned = tariff not in ('RT10-PAYG', 'RT20-PAYG')
+    if tariff == 'RT20-PAYG':
         rc = 'RT20'
     else:
-        rc = 'UNASSIGNED-PAYG'
-    parish = resolve_parish(r[5], protect_existing_ksa_portmore=(rc != 'UNASSIGNED-PAYG'))
+        # RT10-PAYG and 'unassigned' both fold into RT10 (see 2026-08-18 review --
+        # sampled 'unassigned' accounts are indistinguishable from ordinary RT10
+        # residential prepaid usage). Kept separate from was_unassigned below: the
+        # KSA/Portmore protect guard must still key off the ORIGINAL tariff, or
+        # former-unassigned rows in those cities start getting silently skipped by
+        # the same guard that correctly protects real RT10-PAYG rows there.
+        rc = 'RT10'
+    parish = resolve_parish(r[5], protect_existing_ksa_portmore=not was_unassigned)
     if parish is None:
         skipped += 1
         continue

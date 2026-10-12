@@ -191,12 +191,11 @@ for mo, fn in sorted(FILES.items()):
         if not r or len(r) <= max(c_tariff, c_parish, c_kwh, c_amt):
             continue
         tariff = str(r[c_tariff] or '').strip()
-        if tariff == 'RT10-PAYG':
-            rc = 'RT10'
-        elif tariff == 'RT20-PAYG':
-            rc = 'RT20'
-        else:
-            rc = 'UNASSIGNED-PAYG'
+        # RT10-PAYG and 'unassigned' both fold into RT10 (see 2026-08-18 review --
+        # sampled 'unassigned' accounts are indistinguishable from ordinary RT10
+        # residential prepaid usage). GCT rate lookup below stays keyed off the raw
+        # tariff string, not rc, so the 'unassigned' 7.30% rate still applies correctly.
+        rc = 'RT20' if tariff == 'RT20-PAYG' else 'RT10'
         parish = resolve_parish(r[c_parish])
         if parish == 'UNMAPPED':
             unmapped_n += 1
