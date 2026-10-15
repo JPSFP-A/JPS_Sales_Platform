@@ -75,6 +75,23 @@ for j, (per, kind) in enumerate(cols):
         y = si.cell(ri, cr, d['ed'] / 1e3); y.fill = INP; y.number_format = N0
         CLS[(per, kind, 'mwh', c)] = f"Inputs!${L(cm)}${ri}"; CLS[(per, kind, 'ed', c)] = f"Inputs!${L(cr)}${ri}"
     CLS[(per, kind, 'mwh_rng')] = f"Inputs!${L(cm)}$14:${L(cm)}$19"; CLS[(per, kind, 'ed_rng')] = f"Inputs!${L(cr)}$14:${L(cr)}$19"
+si['A22'] = '3. Customers (average for the period)'; si['A22'].font = B
+si['A23'] = 'Actual and prior year: platform customer counts (postpaid + prepaid + commercial accounts). Budget: customer count in the budget file (flat at 727,245 from March). YTD = average of months 1-9.'
+si.merge_cells('A23:H23'); si['A23'].alignment = Alignment(wrap_text=True, vertical='top'); si.row_dimensions[23].height = 32
+for i, h in enumerate(['Item', 'Sept actual', 'Sept budget', 'Sept prior year', 'YTD actual', 'YTD budget', 'YTD prior year'], 1):
+    c = si.cell(24, i, h); c.font = H; c.fill = HF; c.alignment = Alignment(horizontal='center', wrap_text=True)
+import _sep_data as _D
+_a26 = [_D.cust('post', 2026, m) + _D.cust('pp', 2026, m) + _D.cust('com', 2026, m) for m in range(1, 10)]
+_a25 = [_D.cust('post', 2025, m) + _D.cust('pp', 2025, m) + _D.cust('com', 2025, m) for m in range(1, 10)]
+_bud = [726442, 727246] + [727245] * 7
+CUST = {}
+si.cell(25, 1, 'Customers')
+for ci, (per, kind) in enumerate(order, 2):
+    v = {('SEP', 'A'): _a26[8], ('SEP', 'B'): _bud[8], ('SEP', 'P'): _a25[8], ('YTD', 'A'): sum(_a26) / 9, ('YTD', 'B'): sum(_bud) / 9, ('YTD', 'P'): sum(_a25) / 9}[(per, kind)]
+    c = si.cell(25, ci, v); c.fill = INP; c.number_format = N0; CUST[(per, kind)] = f"Inputs!${L(ci)}$25"
+si.cell(26, 1, 'Months in period')
+for ci, (per, kind) in enumerate(order, 2):
+    c = si.cell(26, ci, 1 if per == 'SEP' else 9); c.fill = INP; CUST[('m', per, kind)] = f"Inputs!${L(ci)}$26"
 si.row_dimensions[13].height = 44; si.column_dimensions['A'].width = 40
 for cc in range(2, 16): si.column_dimensions[L(cc)].width = 14
 si.column_dimensions['H'].width = 14
@@ -106,8 +123,8 @@ def calc_sheet(name, per, kind, title):
     s['A16'] = 'Revenue factor, comparison'; s['B16'] = f"=C6/(SUM({CLS[(per, kind, 'ed_rng')]})/1)"
     for r in (13, 14, 15, 16): s.cell(r, 2).number_format = '0.0000'
     # Step 3: class table
-    s['A18'] = 'Step 3 - volume, mix and rate on the energy line, by class'; s['A18'].font = B
-    hd = ['Class', 'Comparison MWh', 'Actual MWh', 'Comparison US$000', 'Actual US$000', 'Comparison US cents/kWh', 'Actual US cents/kWh', 'Volume', 'Mix', 'Rate', 'Total']
+    s['A18'] = 'Step 3 - volume, class mix and rate on the energy line, by class'; s['A18'].font = B
+    hd = ['Class', 'Comparison MWh', 'Actual MWh', 'Comparison US$000', 'Actual US$000', 'Comparison US cents/kWh', 'Actual US cents/kWh', 'Volume', 'Class mix', 'Rate (within class)', 'Total']
     for i, h in enumerate(hd, 1):
         c = s.cell(19, i, h); c.font = H; c.fill = HF; c.alignment = Alignment(wrap_text=True, horizontal='center')
     first = 20; last = first + len(CL) - 1; tot = last + 1
@@ -137,18 +154,34 @@ def calc_sheet(name, per, kind, title):
     s.cell(r0 + 2, 1, 'Share of revenue actually exposed to FX = finance YTD FX effect / YTD upper bound');
     s.cell(r0 + 2, 2, f"={FXFIN}/({FIN[('Energy line (US$000)', 'YTD', 'A')]}*({FIN[('Billing FX rate (J$/US$)', 'YTD', 'B')]}/{FIN[('Billing FX rate (J$/US$)', 'YTD', 'A')]}-1))")
     s.cell(r0 + 3, 1, 'FX effect used (upper bound x exposed share)'); s.cell(r0 + 3, 2, f'=B{r0+1}*B{r0+2}'); s.cell(r0 + 3, 2).fill = G
-    s.cell(r0 + 4, 1, 'Other yield = rate - FX'); s.cell(r0 + 4, 2, f'=J{tot}-B{r0+3}'); s.cell(r0 + 4, 2).fill = G
+    s.cell(r0 + 4, 1, 'Within-class yield = rate - FX'); s.cell(r0 + 4, 2, f'=J{tot}-B{r0+3}'); s.cell(r0 + 4, 2).fill = G
     for rr, f in ((r0 + 1, N0), (r0 + 2, '0.0%'), (r0 + 3, N0), (r0 + 4, N0)): s.cell(rr, 2).number_format = f
-    # Step 5: walk
-    w0 = r0 + 6
-    s.cell(w0, 1, 'Step 5 - the walk').font = B
-    walk = [('Customer charge (fixed charge per customer, finance line)', '=D7'), ('Energy line - volume', f'=H{tot}'), ('Energy line - mix between classes', f'=I{tot}'),
-            ('Energy line - FX', f'=B{r0+3}'), ('Energy line - other yield (within-class)', f'=B{r0+4}')]
+    # Step 5: customer charge driver
+    c0 = r0 + 6
+    s.cell(c0, 1, 'Step 5 - customer charge driver (fixed charge, per customer)').font = B
+    CA, CB = CUST[(per, 'A')], CUST[(per, kind)]
+    mA, mB = CUST[('m', per, 'A')], CUST[('m', per, kind)]
+    s.cell(c0 + 1, 1, 'Average customers: actual / comparison / change %'); s.cell(c0 + 1, 2, f'={CA}'); s.cell(c0 + 1, 3, f'={CB}'); s.cell(c0 + 1, 4, f'=B{c0+1}/C{c0+1}-1')
+    s.cell(c0 + 2, 1, 'Customer charge US$ per customer per month: actual / comparison / change %'); s.cell(c0 + 2, 2, f'=B7*1000/B{c0+1}/{mA}'); s.cell(c0 + 2, 3, f'=C7*1000/C{c0+1}/{mB}'); s.cell(c0 + 2, 4, f'=B{c0+2}/C{c0+2}-1')
+    s.cell(c0 + 3, 1, 'More customers = (actual customers - comparison customers) x comparison customer charge per customer'); s.cell(c0 + 3, 2, f'=(B{c0+1}-C{c0+1})/C{c0+1}*C7'); s.cell(c0 + 3, 2).fill = G
+    s.cell(c0 + 4, 1, 'Charge per customer = customer charge variance - more customers'); s.cell(c0 + 4, 2, f'=D7-B{c0+3}'); s.cell(c0 + 4, 2).fill = G
+    for rr in (c0 + 1,): 
+        for cc in (2, 3): s.cell(rr, cc).number_format = N0
+    for rr in (c0 + 2,):
+        for cc in (2, 3): s.cell(rr, cc).number_format = N2
+    for rr in (c0 + 1, c0 + 2): s.cell(rr, 4).number_format = PCT
+    for rr in (c0 + 3, c0 + 4): s.cell(rr, 2).number_format = N0
+    # Step 6: walk
+    w0 = c0 + 6
+    s.cell(w0, 1, 'Step 6 - the walk').font = B
+    walk = [('Customer charge - more customers', f'=B{c0+3}'), ('Customer charge - charge per customer', f'=B{c0+4}'),
+            ('Energy line - volume', f'=H{tot}'), ('Energy line - class mix (between classes)', f'=I{tot}'),
+            ('Energy line - FX', f'=B{r0+3}'), ('Energy line - within-class yield', f'=B{r0+4}')]
     for k, (lab, f) in enumerate(walk, 1):
         s.cell(w0 + k, 1, lab); s.cell(w0 + k, 2, f); s.cell(w0 + k, 2).number_format = N0
     t = w0 + len(walk) + 1
     s.cell(t, 1, 'Non-fuel revenue variance').font = B; s.cell(t, 2, f'=SUM(B{w0+1}:B{t-1})').font = B; s.cell(t, 2).number_format = N0; s.cell(t, 2).fill = Y
-    s.cell(t + 1, 1, 'Check against finance (B10 variance)'); s.cell(t + 1, 2, f'=D10-B{t}'); s.cell(t + 1, 2).number_format = '0.000'
+    s.cell(t + 1, 1, 'Check against finance (D10 variance)'); s.cell(t + 1, 2, f'=D10-B{t}'); s.cell(t + 1, 2).number_format = '0.000'
     s.column_dimensions['A'].width = 78
     for cc in range(2, 12): s.column_dimensions[L(cc)].width = 15
     return s
@@ -160,17 +193,17 @@ calc_sheet('YTD vs prior year', 'YTD', 'P', 'January-September 2026 vs prior yea
 se = wb.create_sheet('How to read', 0)
 lines = [
  ('Non-fuel revenue walk, September 2026', True),
- ('Non-fuel revenue = Energy line (energy + demand + F/X) + Customer charge, from the finance Revenues sheet. The walk explains the variance in five pieces:', False),
- ('Customer charge: the fixed monthly charge per customer. It moves with the number of customers, not with kWh.', False),
+ ('Non-fuel revenue = Energy line (energy + demand + F/X) + Customer charge, from the finance Revenues sheet. The walk explains the variance in six pieces:', False),
+ ('Customer charge: the fixed monthly charge per customer. It is its own driver, not tied to kWh: part comes from having more customers than the comparison, the rest from a different charge per customer (customer mix between classes and any indexation). Customer counts: platform for actual and prior year; the budget file holds a flat count.', False),
  ('Volume: total normalized sales (MWh) above or below the comparison, valued at the comparison average rate. Only the change in how much was sold.', False),
- ('Mix: the shift of those MWh between rate classes. Classes earn different amounts per kWh (RT10 earns the most, RT50 the least), so selling relatively more RT10 raises the average even if nothing is repriced. It is between-class.', False),
+ ('Class mix: the shift of those MWh between rate classes. Classes earn different amounts per kWh (RT10 earns the most, RT50 the least), so selling relatively more RT10 raises the average even if nothing is repriced. It is between-class.', False),
  ('FX: the change in US$ revenue from J$ billing at a different exchange rate. Estimated from the billing FX rates, scaled to the share of revenue finance shows as FX-exposed (their YTD FX bar of US$89K).', False),
- ('Other yield: what is left of the per-kWh change after FX. It is within-class: customers moving up the residential consumption blocks, demand (kVA) billing, indexation and billing/accrual timing. There has been no base-rate increase; this is not a price change.', False),
+ ('Within-class yield: what is left of the per-kWh change after FX, inside each class: customers moving up the residential consumption blocks, demand (kVA) billing, indexation and billing/accrual timing. There has been no base-rate increase; this is not a price change.', False),
  ('Sheets: Inputs holds every source number (blue). Each comparison sheet is formulas only, so clicking a cell shows how it was built. The yellow check cells must read 0.', False),
- ('Class detail is allocated: the financials have no class split of normalized sales or non-fuel revenue, so billed class data is scaled to the finance totals (Step 2). Class mix and other yield are therefore estimates; the totals tie to finance.', False),
+ ('Class detail is allocated: the financials have no class split of normalized sales or non-fuel revenue, so billed class data is scaled to the finance totals (Step 2). Class mix and within-class yield are therefore estimates; the totals tie to finance.', False),
 ]
 for i, (t, b) in enumerate(lines, 1):
     c = se.cell(i, 1, t); c.alignment = Alignment(wrap_text=True, vertical='top'); c.font = Font(bold=b, size=13 if b else 11); se.row_dimensions[i].height = 24 if b else 50
 se.column_dimensions['A'].width = 150
-out = r'C:\Projects\Sales_Platform\JPS_Sep2026_NonFuel_Walk.xlsx'
+out = r'C:\Projects\Sales_Platform\JPS_Sep2026_NonFuel_Walk_v2.xlsx'
 wb.save(out); print('saved', out)
