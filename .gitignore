@@ -12,6 +12,9 @@ analysis/*
 !analysis/*.py
 !analysis/*.bat
 !analysis/*.js
+!analysis/_cust/
+analysis/_cust/*
+!analysis/_cust/*.py
 !analysis/app2_template.html
 !analysis/sales_explorer.html
 !analysis/KAM_Platform_Quick_Start.pptx
