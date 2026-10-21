@@ -15,6 +15,7 @@ analysis/*
 !analysis/_cust/
 analysis/_cust/*
 !analysis/_cust/*.py
+!analysis/_cust/*.js
 !analysis/app2_template.html
 !analysis/sales_explorer.html
 !analysis/KAM_Platform_Quick_Start.pptx
