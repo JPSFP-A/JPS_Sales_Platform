@@ -46,7 +46,11 @@ tot = {y: [sum(bill[y][rc][m] for rc in CLS) for m in range(12)] for y in YEARS}
 assert abs(sum(tot[2026]) - FY_BILLED) < 1e-6
 
 # ---- net generation 2026 ----
-SEP_NG = 407.689                                            # estimate: read off the System Operations monthly chart, calibrated to finance net generation (+/-1.2 GWh)
+_sep = load_workbook(r'C:\Users\jwilson\Downloads\Presentation P&L - Sep 2026 LE (v6).xlsx', data_only=True, read_only=True)
+_rows = list(_sep['P&L - Slide 6 & 8 & 10 & 23 (NE'].iter_rows(values_only=True))
+assert _rows[95][0] == 'Net Generation (MWH)'
+SEP_NG = _rows[95][2] / 1000                                # September 2026 actual net generation per the Sep 2026 LE workbook (409,722.48 MWh)
+SEP_LOSS_NORM = _rows[98][2]                                # 26.73%, struck on normalized sales
 ng26 = NG_FIN[:8] + [SEP_NG]
 q4_ng = FY_NG - sum(ng26)
 shape = NG_FIN[9:12]
@@ -107,7 +111,7 @@ for yi, y in enumerate(YEARS):
         M.cell(r, 1, '%s %d' % (MON[m], y)).font = F(bold=True, color=NAVY)
         x = M.cell(r, 3, "='Billed by rate class'!%s%d" % (col_c, rt)); x.number_format = '#,##0.0'; x.font = F()
         if y == 2026:
-            basis = 'Actual' if m < 8 else ('Billed actual, net gen estimate' if m == 8 else 'Forecast')
+            basis = 'Actual' if m < 9 else 'Forecast'
             M.cell(r, 2, basis).font = F()
             x = M.cell(r, 6, ng26[m]); x.number_format = '#,##0.0'; x.font = F(color='0000FF')
             x = M.cell(r, 5, '=F%d-C%d' % (r, r)); x.number_format = '#,##0.0'; x.font = F()
@@ -157,7 +161,7 @@ N = wb.create_sheet('Notes')
 notes = [
  ('FY2026', True),
  ('Billed sales are actual customer-billed volumes for January to September. October to December are set so the full year equals the financials LE of %s GWh, using the register split by rate class and month.' % format(FY_BILLED, ',.1f'), False),
- ('Net generation for January to August is the actual in the financials. September (%s GWh) is an estimate read from the System Operations monthly chart and calibrated to the financials net generation, accurate to about 1 GWh; replace it with the actual when issued. October to December are set so the full year equals the financials LE of %s GWh, on the financials plan shape.' % (format(SEP_NG, '.1f'), format(FY_NG, ',.1f')), False),
+ ('Net generation for January to September is the actual: January to August per the financials, September per the September 2026 LE workbook (%s GWh). October to December are set so the full year equals the financials LE of %s GWh, on the financials plan shape.' % (format(SEP_NG, '.1f'), format(FY_NG, ',.1f')), False),
  ('FY2026 loss on billed sales and net generation is %.2f%%.' % ((1 - FY_BILLED / FY_NG) * 100), False),
  ('', False),
  ('FY2027 and FY2028', True),
@@ -166,7 +170,7 @@ notes = [
 for i, (t, b) in enumerate(notes, 1):
     N.cell(i, 1, t).font = F(bold=b, color=NAVY if b else '000000'); N.cell(i, 1).alignment = Alignment(wrap_text=True, vertical='top')
 N.column_dimensions['A'].width = 140
-out = r'C:\Projects\Sales_Platform\JPS_Billed_Sales_and_Net_Gen_FY2026-28_v4.xlsx'
+out = r'C:\Projects\Sales_Platform\JPS_Billed_Sales_and_Net_Gen_FY2026-28_v5.xlsx'
 wb.save(out)
 print('saved', out)
 print('FY26 billed', round(sum(tot[2026]), 3), 'NG', round(sum(ng26), 3), 'loss', round((1 - FY_BILLED / FY_NG) * 100, 3))
