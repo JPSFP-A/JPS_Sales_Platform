@@ -10818,8 +10818,9 @@ async function leSaveVersion(){
 
 /* ==========================================
    DRIVER FORECAST — automatic rolling-base engine
-   Base(month) = avg of the prior 3 months' Total (actual where closed,
-   adjusted forecast where open) — a chain, not a lookup. Macro/Weather/
+   Base(month) = avg of the prior 3 months' UNADJUSTED total (actual where closed,
+   unadjusted forecast where open) — a chain, not a lookup. Operational adjustments
+   are applied on top of that base and, for structural reasons, roll forward. Macro/Weather/
    Seasonality/Industry are read-only, pulled from jps_macro_assumptions.
    Only Operational adj. (+Manual kWh) is editable here, and only on
    accounts with a real KAM assigned — everyone else is cohort grain.
@@ -10854,6 +10855,34 @@ function _dfcOpAdjLookup(ac,year,month){
     return (rac===ac||rac===String(ac).split('-')[0]||String(ac)===rac.split('-')[0])&&Number(r.year)===year&&Number(r.month)===month;
   });
   return row?{pct:Number(row.operational_pct)||0,kwh:Number(row.manual_kwh)||0}:{pct:0,kwh:0};
+}
+// Adjustments roll forward. An entry with a structural reason stays in force from the month it is
+// entered until the next entry for the account; an entry of 0% and 0 kWh ends it. Every other reason
+// (operational disruption, other, unstated) applies to the months entered only.
+const _DFC_OP_ROLLS=new Set(['Confirmed defection','Possible defection','Expansion','Renewal','Win-back']);
+function _dfcOpEntries(ac){
+  const seen=new Set(),out=[];
+  sbOpAdj.forEach(r=>{
+    const rac=String(r.jps_ac||'');
+    if(!(rac===ac||rac===String(ac).split('-')[0]||String(ac)===rac.split('-')[0]))return;
+    const pct=Number(r.operational_pct)||0,kwh=Number(r.manual_kwh)||0;
+    const t=Number(r.year)*12+Number(r.month);
+    const roll=_DFC_OP_ROLLS.has(r.reason_code)||(pct===0&&kwh===0);
+    const k=(roll?'R':'M')+t;
+    if(seen.has(k))return;seen.add(k);
+    out.push({t,pct,kwh,roll});
+  });
+  return out.sort((a,b)=>a.t-b.t);
+}
+function _dfcOpEffective(entries,year,month){
+  const t=year*12+month;let pct=0,kwh=0,last=null;
+  for(const e of entries){
+    if(e.t>t)break;
+    if(e.roll)last=e;                       // latest rolling entry at or before this month
+    else if(e.t===t){pct+=e.pct;kwh+=e.kwh;} // month-only entries
+  }
+  if(last){pct+=last.pct;kwh+=last.kwh;}
+  return{pct,kwh};
 }
 function _dfcDriverPcts(rc,industry,year,month,bucket){
   const seg=_dfcSegment(rc);
@@ -11107,9 +11136,10 @@ function _dfcComputeChain(idx,key,isAccount,driverCtx,opAc,year,asof,newCustCtx,
   const actMap=(isAccount?idx.actByAc:idx.actByCohort)[key];
   const budMap=(isAccount?idx.budByAc:idx.budByCohort)[key];
   const totals={};
+  const opEntries=opAc?_dfcOpEntries(opAc):[];
   for(let m=1;m<=asof;m++){
     const act=actMap?actMap[`${year}_${m}`]:undefined;
-    totals[m]={total:act||0,isActual:true};
+    totals[m]={total:act||0,baseTotal:act||0,isActual:true};
   }
   for(let m=asof+1;m<=12;m++){
     let base;
@@ -11121,7 +11151,7 @@ function _dfcComputeChain(idx,key,isAccount,driverCtx,opAc,year,asof,newCustCtx,
       const terms=[];
       for(let k=1;k<=3;k++){
         const mm=m-k;
-        if(mm>=1&&totals[mm])terms.push(totals[mm].total);
+        if(mm>=1&&totals[mm])terms.push(totals[mm].baseTotal);
         else if(mm<=0&&carryIn&&carryIn[mm]!=null)terms.push(carryIn[mm]);
       }
       const budFallback=budMap?budMap[`${year}_${m}`]:undefined;
@@ -11138,7 +11168,7 @@ function _dfcComputeChain(idx,key,isAccount,driverCtx,opAc,year,asof,newCustCtx,
     // recovery uplift does not belong on it. Excluded accounts keep every other driver.
     if(norm&&opAc&&_DFC_NORM_EXCLUDE.has(String(opAc)))norm=0;
     const solar=_dfcSolarPct(driverCtx.rate_class,year,m);
-    const op=opAc?_dfcOpAdjLookup(opAc,year,m):{pct:0,kwh:0};
+    const op=opAc?_dfcOpEffective(opEntries,year,m):{pct:0,kwh:0};
     // Percentage drivers stack without a bound, so a combination of macro, weather,
     // seasonality, solar, normalisation and an operational cut can exceed -100% and
     // drive an otherwise-positive base below zero -- a modelling artefact, not a real
@@ -11147,7 +11177,9 @@ function _dfcComputeChain(idx,key,isAccount,driverCtx,opAc,year,asof,newCustCtx,
     // (net billers exporting more than they import); the clamp leaves those untouched.
     const _drvSum=Math.max(-100, macro+weather+seasInd+solar+(norm||0)+(migration||0)+op.pct);
     const total=base*(1+_drvSum/100)+op.kwh;
-    totals[m]={total,isActual:false,base,macro,weather,seasInd,solar,norm:norm||0,migration:migration||0,oper:op.pct,manual:op.kwh,drvClamped:_drvSum<=-100};
+    // The base is built from UNADJUSTED totals, so an adjustment never feeds back into it and cannot compound.
+    const baseTotal=base*(1+Math.max(-100, macro+weather+seasInd+solar+(norm||0)+(migration||0))/100);
+    totals[m]={total,baseTotal,isActual:false,base,macro,weather,seasInd,solar,norm:norm||0,migration:migration||0,oper:op.pct,manual:op.kwh,drvClamped:_drvSum<=-100};
   }
   return totals;
 }
@@ -11170,7 +11202,7 @@ function _dfcDataSig(){
   let a='';for(let i=0;i<sbMacroAssum.length;i++){const r=sbMacroAssum[i];
     a+=r.driver_type+'|'+r.segment+'|'+r.year+'|'+r.month+'|'+r.value_pct+';';}
   let b='';for(let i=0;i<sbOpAdj.length;i++){const r=sbOpAdj[i];
-    b+=r.jps_ac+'|'+r.year+'|'+r.month+'|'+r.operational_pct+'|'+r.manual_kwh+';';}
+    b+=r.jps_ac+'|'+r.year+'|'+r.month+'|'+r.operational_pct+'|'+r.manual_kwh+'|'+r.reason_code+';';}
   let c='';for(let i=0;i<sbNewCustomers.length;i++){const r=sbNewCustomers[i];
     c+=r.jps_ac+'|'+r.rate_class+'|'+r.start_year+'|'+r.start_month+'|'+r.expected_kwh+';';}
   let d='';const bd=(typeof sbBridgeDrivers!=='undefined'&&sbBridgeDrivers)?sbBridgeDrivers:[];
@@ -11225,9 +11257,9 @@ function _dfcGetChain(idx,key,isAccount,driverCtx,opAc,year,newCustCtx){
   if(year===FC_BUD_YEAR){
     lockedThru=_dfcClosedThru(year);
   }else if(year>FC_BUD_YEAR){
-    // Carry the prior year's Oct/Nov/Dec tail forward -- that tail is what preserves a
-    // PERMANENT LEVEL SHIFT (a confirmed mid-year defection like Alcoa RT70 going 100%
-    // self-generating from Aug-2026 must stay gone in FY2027, not be averaged back in).
+    // Carry the prior year's Oct/Nov/Dec UNADJUSTED tail forward. A permanent level shift (a
+    // confirmed defection like Alcoa RT70 self-generating from Aug-2026) is no longer carried by
+    // this tail: the defection entry rolls forward and is applied on top of the base each month.
     // For residential (RT10/RT20) only, deseasonalise that tail first: Oct-Dec is the
     // winter consumption peak, so carrying it forward flat inflated every month of the new
     // year by that margin. Dividing by the tail's own uplift vs the year's average converts
@@ -11235,11 +11267,11 @@ function _dfcGetChain(idx,key,isAccount,driverCtx,opAc,year,newCustCtx){
     // they are weakly seasonal, and a self-computed factor there would divide a
     // defection-collapsed tail by its own collapse and resurrect the lost load.
     const prior=_dfcGetChain(idx,key,isAccount,driverCtx,opAc,year-1,newCustCtx);
-    const pv=m=>prior[m]?(prior[m].total||0):0;
+    const pv=m=>prior[m]?((prior[m].baseTotal!=null?prior[m].baseTotal:prior[m].total)||0):0;
     const rcSeg=String(driverCtx.rate_class||'');
     let f=1;
     if(rcSeg==='RT10'||rcSeg==='RT20'){
-      const annualAvg=Object.values(prior).reduce((s,v)=>s+(v.total||0),0)/12;
+      const annualAvg=Object.values(prior).reduce((s,v)=>s+((v.baseTotal!=null?v.baseTotal:v.total)||0),0)/12;
       const tailAvg=(pv(10)+pv(11)+pv(12))/3;
       if(annualAvg>0&&tailAvg>0)f=tailAvg/annualAvg;
     }
@@ -11585,6 +11617,7 @@ async function dfcEditOperational(ac,year,month,newVal,accountLabel){
     `<div style="font-size:12px;color:var(--text2);margin-bottom:12px">
       Operational adj. for <strong>${esc(accountLabel)}</strong>, ${MONTHS_SHORT[month-1]} ${year}, is changing to <strong>${pct>0?'+':''}${pct}%</strong>. Every non-zero change needs a reason before it saves.
     </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Confirmed or possible defection, expansion, renewal and win-back stay in force from this month until the next entry for the account. Enter 0% to end one. Operational disruption and Other apply to this month only.</div>
     <label style="font-size:10px;color:var(--text3);text-transform:uppercase">Reason code</label>
     <select id="dfc_reason_code" class="psel" style="width:100%;margin:4px 0 10px">
       ${REASON_CODES.map(r=>`<option value="${r}">${r}</option>`).join('')}
