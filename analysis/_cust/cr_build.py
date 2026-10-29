@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # Redraft of the Client Relations and Commercial Update (Sep 2026): corrections, month and YTD on the sales slide,
 # a revenue and retention slide, and an outlook and recovery slide. Edits the original file in place (saved under a new name).
-import copy, json, collections
+import copy, json, collections, re
 from pptx import Presentation
 from pptx.util import Emu, Pt
 from pptx.dml.color import RGBColor
@@ -11,7 +11,7 @@ from pptx.chart.data import CategoryChartData
 from pptx.enum.chart import XL_CHART_TYPE, XL_LABEL_POSITION, XL_LEGEND_POSITION, XL_TICK_LABEL_POSITION, XL_TICK_MARK
 
 SRC = 'cr_orig.pptx'
-OUT = r'C:\Projects\Sales_Platform\Client Relations and Commercial Update (Sep2026)_v3.pptx'
+OUT = r'C:\Projects\Sales_Platform\Client Relations and Commercial Update (Sep2026)_v4.pptx'
 NAVY, BLUE, CYAN, GREY, LIGHT = RGBColor(0x06, 0x25, 0x52), RGBColor(0x0E, 0x4E, 0x95), RGBColor(0x00, 0x9F, 0xDA), RGBColor(0x66, 0x78, 0x8A), RGBColor(0xD9, 0xE1, 0xF2)
 RED, GREEN, WHITE, BLACK = RGBColor(0xC0, 0x00, 0x00), RGBColor(0x1F, 0x8F, 0x5A), RGBColor(0xFF, 0xFF, 0xFF), RGBColor(0x1F, 0x1F, 0x1F)
 F_GOOD, F_MID, F_BAD, F_ALT, F_TILE = RGBColor(0xDD, 0xEF, 0xDF), RGBColor(0xFF, 0xF0, 0xC8), RGBColor(0xF6, 0xD3, 0xD6), RGBColor(0xF3, 0xF6, 0xFB), RGBColor(0xEE, 0xF2, 0xF9)
@@ -165,30 +165,34 @@ set_text(by_id(S1, 39), 'Lost')
 set_text(by_id(S1, 40), 'Alcoa (Aug), PAC (Oct)')
 set_text(by_id(S1, 71), "Alcoa's move to self-generation explains 6.5 GWh of the 12.2 GWh September gap")
 
+for sid in range(12, 25): by_id(S1, sid)._element.getparent().remove(by_id(S1, sid)._element)
+ch1 = by_id(S1, 11); ch1.height = Emu(1500000)
+by_id(S1, 25).top = Emu(4500000)
+
 # ================= slide 5 =================
 set_text(by_id(S5, 3), "Commercial sales 12.2 GWh (6.3%) below budget; Alcoa's move to self-generation explains 6.5 GWh")
 set_text(by_id(S5, 4), 'Commercial sales by rate class, September and January to September (GWh)')
 old = by_id(S5, 5); x, y, w = old.left, old.top, old.width
 old._element.getparent().remove(old._element)
-head1 = ['', 'September', '', '', '', '', 'January to September', '', '', '', '']
-head2 = ['Rate class', 'Actual', 'Budget', 'vs bud', 'vs 2025', 'Acc', 'Actual', 'Budget', 'vs bud', 'vs 2025', 'Acc']
+head1 = ['', 'September', '', '', '', 'January to September', '', '', '', '']
+head2 = ['Rate class', 'Actual', 'Budget', 'vs bud', 'vs 2025', 'Actual', 'Budget', 'vs bud', 'vs 2025', 'Acc']
 body, colors = [], []
 for rc in CLASS:
     a, b, p, ya, yb, yp = D[rc]
     ac0, ac1 = acc(rc, 0), acc(rc, 1)
-    body.append([NAMES[rc], f'{a:.1f}', f'{b:.1f}', pct(a / b - 1), pct(a / p - 1), 'n/a' if ac0 is None else f'{ac0 * 100:.0f}%', f'{ya:.1f}', f'{yb:.1f}', pct(ya / yb - 1), pct(ya / yp - 1), 'n/a' if ac1 is None else f'{ac1 * 100:.0f}%'])
-    colors.append([None, None, None, col_(a / b - 1), col_(a / p - 1), None, None, None, col_(ya / yb - 1), col_(ya / yp - 1), None])
-body.append(['Commercial total', f'{tot[0]:.1f}', f'{tot[1]:.1f}', pct(tot[0] / tot[1] - 1), pct(tot[0] / tot[2] - 1), f'{acc_tot[0] * 100:.0f}%*', f'{tot[3]:,.1f}', f'{tot[4]:,.1f}', pct(tot[3] / tot[4] - 1), pct(tot[3] / tot[5] - 1), f'{acc_tot[1] * 100:.0f}%*'])
-colors.append([None, None, None, col_(tot[0] / tot[1] - 1), col_(tot[0] / tot[2] - 1), None, None, None, col_(tot[3] / tot[4] - 1), col_(tot[3] / tot[5] - 1), None])
-t = table(S5, x, y, w, [1.9, 0.62, 0.62, 0.66, 0.66, 0.5, 0.78, 0.78, 0.66, 0.66, 0.5], [head1, head2] + body, 236000, size=8, head_rows=2, left=(0,), colors=colors, total=True)
-t.cell(0, 1).merge(t.cell(0, 5)); t.cell(0, 6).merge(t.cell(0, 10))
-cell_set(t.cell(0, 1), 'September', 8, True, WHITE, PP_ALIGN.CENTER, NAVY); cell_set(t.cell(0, 6), 'January to September', 8, True, WHITE, PP_ALIGN.CENTER, NAVY)
+    body.append([NAMES[rc], f'{a:.1f}', f'{b:.1f}', pct(a / b - 1), pct(a / p - 1), f'{ya:.1f}', f'{yb:.1f}', pct(ya / yb - 1), pct(ya / yp - 1), 'n/a' if ac1 is None else f'{ac1 * 100:.0f}%'])
+    colors.append([None, None, None, col_(a / b - 1), col_(a / p - 1), None, None, col_(ya / yb - 1), col_(ya / yp - 1), None])
+body.append(['Commercial total', f'{tot[0]:.1f}', f'{tot[1]:.1f}', pct(tot[0] / tot[1] - 1), pct(tot[0] / tot[2] - 1), f'{tot[3]:,.1f}', f'{tot[4]:,.1f}', pct(tot[3] / tot[4] - 1), pct(tot[3] / tot[5] - 1), f'{acc_tot[1] * 100:.0f}%*'])
+colors.append([None, None, None, col_(tot[0] / tot[1] - 1), col_(tot[0] / tot[2] - 1), None, None, col_(tot[3] / tot[4] - 1), col_(tot[3] / tot[5] - 1), None])
+t = table(S5, x, y, w, [1.9, 0.7, 0.7, 0.75, 0.75, 0.85, 0.85, 0.75, 0.75, 0.6], [head1, head2] + body, 236000, size=8, head_rows=2, left=(0,), colors=colors, total=True)
+t.cell(0, 1).merge(t.cell(0, 4)); t.cell(0, 5).merge(t.cell(0, 9))
+cell_set(t.cell(0, 1), 'September', 8, True, WHITE, PP_ALIGN.CENTER, NAVY); cell_set(t.cell(0, 5), 'January to September', 8, True, WHITE, PP_ALIGN.CENTER, NAVY)
 for i, rc in enumerate(CLASS, 2):
-    for j, per in ((5, 0), (10, 1)):
+    for j, per in ((9, 1),):
         v = acc(rc, per)
         if v is not None:
             c = t.cell(i, j); c.fill.solid(); c.fill.fore_color.rgb = F_GOOD if v >= 0.95 else (F_MID if v >= 0.85 else F_BAD)
-set_text(by_id(S5, 6), 'Acc: account budget vs billing. *RT40-RT70. Jan-Feb budget = actuals, so YTD vs budget flatters.')
+set_text(by_id(S5, 6), 'Acc: YTD account budget vs billing, RT40-RT70. Jan-Feb budget = actuals, so YTD vs budget flatters.')
 # industry chart: September and YTD variance
 oldc = by_id(S5, 8); cx, cy, cw, ch = oldc.left, oldc.top, oldc.width, oldc.height
 oldc._element.getparent().remove(oldc._element)
@@ -212,10 +216,37 @@ for r in p0.runs[1:]: r._r.getparent().remove(r._r)
 wm = by_id(S5, 20); wp = wm.text_frame.paragraphs
 wp[2].runs[0].text = f'YTD: commercial sales {pct(tot[3] / tot[4] - 1)} vs budget but {pct(tot[3] / tot[5] - 1)} vs 2025; Sept shows the gap more sharply as Alcoa and hotels weigh on the month'
 for r in wp[2].runs[1:]: r._r.getparent().remove(r._r)
-extra = copy.deepcopy(wp[1]._p); wm.text_frame._txBody.append(extra)
-wp = wm.text_frame.paragraphs
-wp[3].runs[0].text = 'Cement is +7.3 GWh vs budget YTD, the largest gain by industry'
-for r in wp[3].runs[1:]: r._r.getparent().remove(r._r)
+wp[1]._p.getparent().remove(wp[1]._p)
+
+
+# ================= growth slide: pipeline and new load only =================
+S6 = prs.slides[5]
+for sid in range(4, 22): by_id(S6, sid)._element.getparent().remove(by_id(S6, sid)._element)
+set_text(by_id(S6, 2), 'COMMERCIAL  |  GROWTH & PIPELINE')
+set_text(by_id(S6, 3), 'The 2027 pipeline is J$1.17B across 13 projects, led by NWC; 25.67 GWh of new load connects in 2026')
+pn = by_id(S6, 22); pn.left = Emu(612648); pn.width = Emu(10972800); pn.height = Emu(4300000)
+for sid in (23, 24, 25, 26):
+    sh = by_id(S6, sid); sh.left = Emu(sh.left - 6199632)
+by_id(S6, 27)._element.getparent().remove(by_id(S6, 27)._element)
+for sid in (28, 29, 30, 31):
+    sh = by_id(S6, sid); sh.left = Emu(sh.left - 795160); sh.top = Emu(sh.top - (1700784 if sid in (28, 29) else 1646512 if sid == 30 else 1150000))
+for r in by_id(S6, 26).text_frame.paragraphs:
+    for rn in r.runs: rn.font.size = Pt(14)
+    r.space_after = Pt(14)
+by_id(S6, 26).top = Emu(2500000)
+tbl = by_id(S6, 30).table
+for rw in tbl.rows:
+    rw.height = Emu(450000)
+    for c in rw.cells:
+        for p in c.text_frame.paragraphs:
+            for rn in p.runs: rn.font.size = Pt(11)
+by_id(S6, 31).top = Emu(4850000)
+for p in by_id(S6, 31).text_frame.paragraphs:
+    for rn in p.runs: rn.font.size = Pt(11)
+kg = by_id(S6, 32).text_frame.paragraphs[-1].runs
+kg[0].text = 'Pipeline delivery: '
+if len(kg) > 1: kg[1].text = "connect the six 2026 projects on time and secure NWC's 2027 load against its solar programme"
+for r in kg[2:]: r._r.getparent().remove(r._r)
 
 # ================= new slide: revenue and retention =================
 SA, ki, rr = new_from(S5, 'COMMERCIAL  |  REVENUE & RETENTION', f'Key accounts keep {nf_net * 100:.0f}% of their revenue, but six accounts drive J${abs(sum(x for x, n in dec6)) / 1e6:,.0f}M of the J${abs(T_(2026, "nf") - T_(2025, "nf")) / 1e9:.1f}bn decline', '', '')
@@ -225,37 +256,44 @@ body_runs[0].text = 'Revenue-at-risk register: '
 if len(body_runs) > 1: body_runs[1].text = 'price every Tier 1 account on non-fuel revenue and demand charge, not volume'
 for r in body_runs[2:]: r._r.getparent().remove(r._r)
 nf26, nf25 = T_(2026, 'nf'), T_(2025, 'nf'); k26, k25 = T_(2026, 'kwh'), T_(2025, 'kwh'); d26, d25 = T_(2026, 'dem'), T_(2025, 'dem')
-tiles = [(f'J${nf26 / 1e9:.1f}bn', 'non-fuel revenue YTD', pct(nf26 / nf25 - 1)), (f'{k26 / 1e6:,.0f} GWh', 'volume YTD', pct(k26 / k25 - 1)),
-         (f'J${d26 / 1e9:.1f}bn', f'demand charges, {d26 / nf26 * 100:.0f}% of non-fuel', pct(d26 / d25 - 1)), (f'J${nf26 / k26:.2f}', 'non-fuel per kWh', pct((nf26 / k26) / (nf25 / k25) - 1))]
+def fixn(n):
+    n = n.strip()
+    if n.isupper(): n = n.title()
+    n = n.replace('Restaurants Of Jam Ltd', 'Restaurants of Jamaica')
+    n = re.sub(r'\s+(Limited|Limite|Limi|Ltd\.?|L)$', '', n)
+    for a, b in [('Commissio', 'Commission'), ('Jamaican Reso', 'Jamaican Resorts'), ('Power Comp', 'Power Company'), ('Alcoa Mins Of Ja', 'Alcoa Minerals of Jamaica'), ('Caribbean Cement Co', 'Caribbean Cement'), (' Ja', ' Jamaica')]:
+        if n.endswith(a): n = n[:-len(a)] + b
+    return n
+tiles = [(f'J${nf26 / 1e9:.1f}bn', 'non-fuel revenue, January to September', pct(nf26 / nf25 - 1)), (f'{k26 / 1e6:,.0f} GWh', 'volume, January to September', pct(k26 / k25 - 1))]
 for i, (big, lab, chg) in enumerate(tiles):
-    x0 = 612648 + i * 1630000
-    rect(SA, x0, 1572768, 1560000, 880000, F_TILE)
-    tb(SA, x0 + 90000, 1620000, 1400000, 330000, big, 20, True, NAVY)
-    tb(SA, x0 + 90000, 1960000, 1400000, 250000, lab, 8.5, False, BLACK)
-    tb(SA, x0 + 90000, 2200000, 1400000, 200000, chg + ' vs 2025', 9, True, col_(float(chg.replace('%', '').replace(MINUS, '-').replace('+', ''))))
+    x0 = 612648 + i * 3250000
+    rect(SA, x0, 1572768, 3150000, 880000, F_TILE)
+    tb(SA, x0 + 120000, 1620000, 2900000, 330000, big, 20, True, NAVY)
+    tb(SA, x0 + 120000, 1960000, 2900000, 250000, lab, 8.5, False, BLACK)
+    tb(SA, x0 + 120000, 2200000, 2900000, 200000, chg + ' vs 2025', 9, True, col_(float(chg.replace('%', '').replace(MINUS, '-').replace('+', ''))))
 tb(SA, 612648, 2560000, 6400000, 220000, 'Top key accounts by non-fuel revenue, January to September (J$M)', 10, True, NAVY)
 rows_ = [['Account', '2026', '2025', 'Change', 'GWh 2026', 'GWh vs 2025']]
 cols_ = []
 for n, v in top8:
     a26, a25 = v[2026]['nf'] / 1e6, v[2025]['nf'] / 1e6
-    rows_.append([n[:30], f'{a26:,.0f}', f'{a25:,.0f}', pct(a26 / a25 - 1, 0) if a25 else 'new', f'{v[2026]["kwh"] / 1e6:,.1f}', sg(v[2026]['kwh'] / 1e6 - v[2025]['kwh'] / 1e6)])
+    rows_.append([fixn(n), f'{a26:,.0f}', f'{a25:,.0f}', pct(a26 / a25 - 1, 0) if a25 else 'new', f'{v[2026]["kwh"] / 1e6:,.1f}', sg(v[2026]['kwh'] / 1e6 - v[2025]['kwh'] / 1e6)])
     cols_.append([None, None, None, col_(a26 - a25), None, col_(v[2026]['kwh'] - v[2025]['kwh'])])
 table(SA, 612648, 2800000, 6400000, [2.6, 0.8, 0.8, 0.8, 0.9, 1.0], rows_, 262000, size=8.5, left=(0,), colors=cols_)
-# retention panel
-rect(SA, 7315200, 2560000, 4270000, 1750000, None, LIGHT)
-tb(SA, 7440000, 2620000, 4000000, 200000, 'RETENTION, JAN TO SEP 2026 VS 2025', 9, True, GREY)
+# retention panel (top right)
+rect(SA, 7315200, 1572768, 4270000, 1750000, None, LIGHT)
+tb(SA, 7440000, 1632768, 4000000, 200000, 'RETENTION, JAN TO SEP 2026 VS 2025', 9, True, GREY)
 ret = [('Accounts billing in both periods', f'{logo * 100:.1f}%', f'{len(act25 & act26):,} of {len(act25):,}'), ('Volume, net of growth', f'{vol_net * 100:.1f}%', f'{vol_gross * 100:.1f}% counting losses only'),
        ('Non-fuel revenue, net of growth', f'{nf_net * 100:.1f}%', f'{nf_gross * 100:.1f}% counting losses only')]
 for i, (lab, big, sub) in enumerate(ret):
-    yy = 2900000 + i * 450000
+    yy = 1930000 + i * 450000
     tb(SA, 7440000, yy, 2300000, 400000, [[(lab, True, NAVY)], [(sub, False, GREY)]], 8.5)
     tb(SA, 9900000, yy, 1550000, 400000, big, 20, True, NAVY, PP_ALIGN.RIGHT)
-tb(SA, 7315200, 4400000, 4270000, 600000, 'Counting accounts alone makes retention look strong. Volume is the better test: a single refinery moves it more than 100 small accounts.', 9, False, BLACK)
-# movers
-tb(SA, 7315200, 4980000, 2100000, 200000, 'Largest non-fuel declines (J$M)', 9, True, NAVY)
-tb(SA, 9500000, 4980000, 2100000, 200000, 'Largest gains (J$M)', 9, True, NAVY)
-tb(SA, 7315200, 5200000, 2100000, 900000, [f'{n[:24]}  {x / 1e6:+,.0f}'.replace('-', MINUS) for x, n in dec6], 8, False, RED)
-tb(SA, 9500000, 5200000, 2100000, 900000, [f'{n[:24]}  {x / 1e6:+,.0f}' for x, n in inc5], 8, False, GREEN)
+tb(SA, 7315200, 3400000, 4270000, 500000, 'Counting accounts alone makes retention look strong. Volume is the better test: a single refinery moves it more than 100 small accounts.', 9, False, BLACK)
+# movers: one list
+tb(SA, 7315200, 4000000, 4270000, 200000, 'Largest changes in non-fuel revenue (J$M)', 9, True, NAVY)
+mv = [(fixn(n), x / 1e6) for x, n in dec6] + [(fixn(n), x / 1e6) for x, n in inc5[:3]]
+rows_m = [[nm_, (MINUS if v < 0 else '+') + f'{abs(v):,.0f}'] for nm_, v in mv]
+table(SA, 7315200, 4220000, 4270000, [3.2, 1.0], [['Account', 'Change']] + rows_m, 172000, size=8, left=(0,), colors=[[None, col_(v)] for nm_, v in mv])
 tb(SA, 612648, 5320000, 6400000, 700000, 'RT40 to RT70 accounts. Non-fuel revenue is energy, demand and customer charges; it excludes fuel, IPP and GCT. Net retention includes growth at retained accounts; the counting-losses-only figure caps each account at its 2025 level. Alcoa August and September demand charges are provisional.', 7.5, False, GREY)
 SA.notes_slide.notes_text_frame.text = 'RT40 to RT70, January to September 2026 against 2025. Non-fuel revenue ties to billing components (energy, demand, customer charge). Retention is measured on accounts billed in both periods.'
 
@@ -274,14 +312,14 @@ rows2 = [['Rate class', 'FY2025', 'FY2026', 'FY2027', 'YoY', 'FY2028', 'YoY']]; 
 for c in com_cls:
     v = FY[c]; rows2.append([NAMES[c], f'{v[0]:,.1f}', f'{v[1]:,.1f}', f'{v[2]:,.1f}', pct(v[2] / v[1] - 1), f'{v[3]:,.1f}', pct(v[3] / v[2] - 1)]); cols2.append([None, None, None, None, col_(v[2] - v[1]), None, col_(v[3] - v[2])])
 rows2.append(['Commercial total', f'{ctot[0]:,.1f}', f'{ctot[1]:,.1f}', f'{ctot[2]:,.1f}', pct(ctot[2] / ctot[1] - 1), f'{ctot[3]:,.1f}', pct(ctot[3] / ctot[2] - 1)]); cols2.append([None, None, None, None, col_(ctot[2] - ctot[1]), None, col_(ctot[3] - ctot[2])])
-table(SB, 612648, 1800000, 6200000, [2.4, 0.9, 0.9, 0.9, 0.8, 0.9, 0.8], rows2, 270000, size=9, left=(0,), colors=cols2, total=True)
-rect(SB, 612648, 3850000, 6200000, 2000000, F_TILE)
-tb(SB, 760000, 3910000, 5900000, 200000, 'WHAT MOVES THE OUTLOOK', 9, True, GREY)
-tb(SB, 760000, 4130000, 5900000, 1700000, [
-    [('Recovery adds about 140 GWh in FY2027. ', True, NAVY), ('Hotels return in steps (1,982 rooms in December, 2,524 in the first half of 2027) and water-supply customers are nearly back to last year.', False, BLACK)],
-    [('Defections take about 71 GWh. ', True, NAVY), ('Alcoa, MBJ Airports and PAC Kingston Airport are decisions already taken, so this is not a forecast of behaviour.', False, BLACK)],
-    [('Growth then slows. ', True, NAVY), ('In FY2028 the storm is behind us, and rooftop solar and self-generation are the main drag.', False, BLACK)],
-    [('Watch. ', True, NAVY), (f'Hotel volumes are still {abs(Y_HOT[8]) * 100:.0f}% below last year, so the pace of reopenings is the first sign of whether the recovery is on track.', False, BLACK)]], 9.5)
+table(SB, 612648, 1800000, 6200000, [2.4, 0.9, 0.9, 0.9, 0.8, 0.9, 0.8], rows2, 245000, size=8.5, left=(0,), colors=cols2, total=True)
+rect(SB, 612648, 3650000, 6200000, 2200000, F_TILE)
+tb(SB, 760000, 3700000, 5900000, 200000, 'WHAT MOVES THE OUTLOOK', 9, True, GREY)
+tb(SB, 760000, 3910000, 5900000, 700000, [
+    [('Recovery adds about 140 GWh in FY2027, ', True, NAVY), ('led by hotels returning in steps and water supply, which is nearly back to last year.', False, BLACK)],
+    [('Defections take about 71 GWh. ', True, NAVY), ('Alcoa, MBJ Airports and PAC Kingston Airport are decisions already taken.', False, BLACK)]], 9.5)
+tb(SB, 760000, 4650000, 5900000, 200000, 'HOTEL REOPENINGS: 5,018 ROOMS, J$4.52B A YEAR, 89.8% BACK BY MID-2027', 8.5, True, GREY)
+table(SB, 760000, 4870000, 5900000, [1.6, 0.9, 1.0, 1.2], [['When', 'Hotels', 'Rooms', 'J$B a year'], ['December 2026', '6', '1,982', '1.78'], ['First half of 2027', '8', '2,524', '2.27'], ['2028', '1', '512', '0.46']], 235000, size=8.5, left=(0,))
 tb(SB, 7100000, 1572768, 4500000, 220000, 'Year on year by month, 2026 vs 2025 (%)', 10, True, NAVY)
 cdm = CategoryChartData(); cdm.categories = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep']
 cdm.add_series('Commercial total', [v * 100 for v in Y_COM]); cdm.add_series('Hotels', [v * 100 for v in Y_HOT]); cdm.add_series('Water supply', [v * 100 for v in Y_WAT])
