@@ -11,7 +11,7 @@ from pptx.chart.data import CategoryChartData
 from pptx.enum.chart import XL_CHART_TYPE, XL_LABEL_POSITION, XL_LEGEND_POSITION, XL_TICK_LABEL_POSITION, XL_TICK_MARK
 
 SRC = 'cr_orig.pptx'
-OUT = r'C:\Projects\Sales_Platform\Client Relations and Commercial Update (Sep2026)_v2.pptx'
+OUT = r'C:\Projects\Sales_Platform\Client Relations and Commercial Update (Sep2026)_v3.pptx'
 NAVY, BLUE, CYAN, GREY, LIGHT = RGBColor(0x06, 0x25, 0x52), RGBColor(0x0E, 0x4E, 0x95), RGBColor(0x00, 0x9F, 0xDA), RGBColor(0x66, 0x78, 0x8A), RGBColor(0xD9, 0xE1, 0xF2)
 RED, GREEN, WHITE, BLACK = RGBColor(0xC0, 0x00, 0x00), RGBColor(0x1F, 0x8F, 0x5A), RGBColor(0xFF, 0xFF, 0xFF), RGBColor(0x1F, 0x1F, 0x1F)
 F_GOOD, F_MID, F_BAD, F_ALT, F_TILE = RGBColor(0xDD, 0xEF, 0xDF), RGBColor(0xFF, 0xF0, 0xC8), RGBColor(0xF6, 0xD3, 0xD6), RGBColor(0xF3, 0xF6, 0xFB), RGBColor(0xEE, 0xF2, 0xF9)
@@ -303,10 +303,10 @@ SB.notes_slide.notes_text_frame.text = 'Outlook figures are the held forecast by
 # ================= new slide: key messages =================
 assert [n[:8] for x, n in dec6[:3]] == ['National', 'Jamaica ', 'Alcoa Mi'], dec6[:3]
 SC, ki3, rr3 = new_from(S5, 'KEY MESSAGES', 'Volume is recovering, but revenue sits with a few large accounts that can leave: the commercial model protects it', '', '')
-ki3.text_frame.paragraphs[0].runs[0].text = 'So what'
+ki3.text_frame.paragraphs[0].runs[0].text = 'So what and ask'
 b3 = ki3.text_frame.paragraphs[-1].runs
-b3[0].text = 'Protect the top accounts first: '
-if len(b3) > 1: b3[1].text = 'revenue-at-risk register (Feb 2027) and Tier 1 commercial offers (Mar 2027)'
+b3[0].text = 'Protect the top accounts: '
+if len(b3) > 1: b3[1].text = 'risk register in Feb, Tier 1 offers in Mar. Board support requested for flexible contracting.'
 for r in b3[2:]: r._r.getparent().remove(r._r)
 decl = abs(sum(x for x, n in dec6)) / 1e6
 cards = [
@@ -337,6 +337,9 @@ lst = list(ids)
 ids.insert(5, sa)            # after the sales slide (position 6)
 ids.insert(7, sb)            # after growth and tourism (position 8)
 ids.insert(1, sc0)   # key messages after the dashboard
+cur = list(ids)
+for e in cur: ids.remove(e)
+for k in (2, 1, 6, 7, 5, 8, 9, 10, 3, 4): ids.append(cur[k - 1])   # key messages, dashboard, sales, revenue, defection, growth, outlook, model, appendix, service
 prs.save(OUT); print('saved', OUT, len(prs.slides))
 print('logo', round(logo, 4), 'vol net/gross', round(vol_net, 4), round(vol_gross, 4), 'nf net/gross', round(nf_net, 4), round(nf_gross, 4))
 print('YTD commercial vs budget', round(tot[3] / tot[4] - 1, 4), 'vs 2025', round(tot[3] / tot[5] - 1, 4), 'acc', [round(v, 3) for v in acc_tot])
