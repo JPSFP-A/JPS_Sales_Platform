@@ -3873,6 +3873,32 @@ function _sbInvalidateActuals(){_allActCache=null;_allActKey='';}
 // 68 groups covering 143 names and ~41 GWh. jps_customer_names maps each raw spelling to
 // one standardised name. Resolving it here, as CUSTOMERS is built, means every customer
 // rollup downstream inherits it without its own lookup. Unmapped names pass through.
+// Startup loads only the spellings whose standardised name differs from the billing name (get_customer_name_map,
+// ~245 of ~13.6k rows; identity rows are no-ops in _friendlyName). The Data Quality screen needs every row to
+// show and edit groups, so it loads the full table on first open (_ensureCustomerNamesFull); from then on every
+// sync keeps refreshing the full table so in-memory edits and the next sync agree.
+let _custNamesFull=false,_custNamesFullInFlight=null;
+async function _loadCustomerNames(){
+  if(!_custNamesFull)try{
+    const{data,error}=await getSB().rpc('get_customer_name_map');
+    if(error)throw error;
+    if(Array.isArray(data))return{rows:data,full:false};
+  }catch(e){
+    console.warn('[sync] get_customer_name_map failed, loading the full table:',e.message);
+    if(window.JpsMonitor&&JpsMonitor.warning)JpsMonitor.warning('sync:customer_name_map',e.message||'error');
+  }
+  return{rows:await sbTable('jps_customer_names',{limit:50000}),full:true};
+}
+function _ensureCustomerNamesFull(){
+  if(_custNamesFull)return Promise.resolve();
+  if(_custNamesFullInFlight)return _custNamesFullInFlight;
+  _custNamesFullInFlight=(async()=>{
+    const rows=await sbTable('jps_customer_names',{limit:50000});
+    if(rows==null)throw new Error('customer names could not be loaded');
+    sbCustomerNames=rows;_custNamesFull=true;_buildFriendlyNameIndex();
+  })().finally(()=>{_custNamesFullInFlight=null;});
+  return _custNamesFullInFlight;
+}
 let _friendlyIdx=null;
 function _buildFriendlyNameIndex(){
   _friendlyIdx=Object.create(null);
@@ -10292,7 +10318,7 @@ async function syncSupabase(silent=false){
       sbTable('jps_macro_assumptions',{limit:20000}),
       sbTable('jps_operational_adjustments_current',{limit:50000}),
       sbTable('jps_forecast_new_customers',{limit:5000}),
-      sbTable('jps_customer_names',{limit:50000}),
+      _loadCustomerNames(),
       sbTable('jps_demand_actuals',{limit:5000}),
       sbTable('jps_rate_assumptions',{limit:20000}),
       sbTable('jps_bridge_drivers',{limit:5000}),
@@ -10393,7 +10419,7 @@ async function syncSupabase(silent=false){
     log.push(bridgeDriversData?`Bridge Drivers: jps_bridge_drivers (${sbBridgeDrivers.length} rows)`:'Bridge Drivers: ⚠ jps_bridge_drivers not found — run schema SQL');
 
     sbNewCustomers=newCustData||[];
-    sbCustomerNames=custNamesData||[];_buildFriendlyNameIndex();
+    sbCustomerNames=(custNamesData&&custNamesData.rows)||[];_custNamesFull=!!(custNamesData&&custNamesData.rows&&custNamesData.full);_buildFriendlyNameIndex();
     log.push(newCustData?`New Customers: jps_forecast_new_customers (${sbNewCustomers.length} rows)`:'New Customers: ⚠ jps_forecast_new_customers not found — run schema SQL');
 
     sbDemandActuals=demandActualsData||[];
@@ -12077,6 +12103,16 @@ function _dqNameGroups(){
 
 function renderNameGroups(){
   const host=document.getElementById('dq_names');if(!host)return;
+  if(!_custNamesFull){
+    // startup holds only the changed spellings; fetch the full table once, then draw
+    host.textContent='Loading customer names…';
+    _ensureCustomerNamesFull().then(renderNameGroups).catch(e=>{
+      host.textContent='Customer names could not be loaded. Use Sync to retry.';
+      toast('Customer names failed to load: '+(e.message||e),'err');
+      if(window.JpsMonitor&&JpsMonitor.error)JpsMonitor.error('dq:customer_names_load',e.message||'error');
+    });
+    return;
+  }
   const q=(document.getElementById('dq_search')?.value||'').trim().toLowerCase();
   const filter=document.getElementById('dq_filter')?.value||'todo';
   const all=_dqNameGroups();
