@@ -393,6 +393,26 @@ body{background:var(--navy);color:var(--text);font-family:'IBM Plex Sans',system
 [data-theme="jps"] .chip.on{background:var(--teal);color:#fff;border-color:var(--teal)}
 [data-theme="jps"] .btn-t{color:#fff}
 [data-theme="jps"] .login-btn{color:#fff}
+/* ── Loading states: section progress bar, commercial-load skeleton ── */
+#busyBar{position:fixed;top:0;left:0;right:0;height:2px;z-index:99998;overflow:hidden;opacity:0;pointer-events:none;transition:opacity .15s}
+#busyBar.on{opacity:1}
+#busyBar::before{content:'';position:absolute;top:0;bottom:0;left:0;width:40%;background:var(--teal);animation:busySlide 1.1s ease-in-out infinite}
+@keyframes busySlide{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
+.comm-wait{padding:12px;margin:0 0 12px;border-left:3px solid var(--teal);background:var(--card)}
+.cw-msg{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text2);margin-bottom:12px}
+.cw-spin{flex:none;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--teal);border-radius:50%;animation:cwSpin .8s linear infinite}
+@keyframes cwSpin{to{transform:rotate(360deg)}}
+.cw-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+.cw-kpis i{height:72px;border-radius:8px}
+.cw-rows i{display:block;height:18px;border-radius:4px;margin-bottom:8px}
+.cw-kpis i,.cw-rows i{background:linear-gradient(90deg,var(--card) 25%,color-mix(in srgb,var(--text3) 20%,var(--card)) 50%,var(--card) 75%);background-size:200% 100%;animation:cwShimmer 1.4s ease-in-out infinite}
+@keyframes cwShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@media(max-width:767px){.cw-kpis{grid-template-columns:repeat(2,1fr)}}
+@media(prefers-reduced-motion:reduce){#busyBar::before,.cw-spin,.cw-kpis i,.cw-rows i{animation:none}}
+/* ── Keyboard focus: inputs drop the outline for a border colour change, so add a visible ring ── */
+.lf input:focus-visible,.lf select:focus-visible,.otp-cell:focus-visible,.psel:focus-visible,.si:focus-visible,.sel:focus-visible,.cbox:focus-visible,.modal textarea:focus-visible{box-shadow:0 0 0 3px color-mix(in srgb,var(--teal) 35%,transparent)}
+.fc-inp:focus-visible{box-shadow:0 0 0 3px color-mix(in srgb,var(--amber) 35%,transparent)}
+.ni:focus-visible{outline-offset:-2px}
 </style>
 </head>
 <body>
@@ -488,7 +508,7 @@ document.getElementById('schema_stale_banner').style.display='none';
 
 <div class="sb-overlay" id="sbOverlay" onclick="toggleSidebar()"></div>
 <!-- SIDEBAR -->
-<div class="sidebar" id="sidebar">
+<div class="sidebar" id="sidebar" role="navigation" aria-label="Main navigation">
   <div class="sb-logo">
     <h2>⚡ JPS Analytics</h2>
     <p>Sales Platform v1.1.0</p>
@@ -2710,7 +2730,7 @@ order by ordinal_position;</pre>
 
 <!-- MODAL -->
 <div class="modal-bg" id="modal" onclick="if(event.target===this)closeModal()">
-  <div class="modal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal_title">
     <h4 id="modal_title">Add Note</h4>
     <div id="modal_body"></div>
     <div class="modal-btns">
@@ -2729,6 +2749,73 @@ function toggleSidebar(){
 }
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'&&document.getElementById('sidebar').classList.contains('sb-open'))toggleSidebar();
+});
+/* Keyboard access for click handlers on non-interactive elements (sidebar nav, KPI cards, table rows).
+   Most are rendered into innerHTML later, so a MutationObserver upgrades them as they appear. Native
+   controls are left alone; divs and spans get role="button", rows and cells just become focusable. */
+(function(){
+  var NATIVE=/^(A|BUTTON|INPUT|SELECT|TEXTAREA|SUMMARY|OPTION|LABEL)$/;
+  function eligible(el){
+    if(NATIVE.test(el.tagName)||el.hasAttribute('tabindex')||el.hasAttribute('disabled'))return false;
+    var oc=el.getAttribute('onclick')||'';
+    if(!oc||/^\s*event\.stopPropagation\(\)\s*;?\s*$/.test(oc))return false;
+    if(!el.textContent.trim()&&!el.getAttribute('aria-label')&&!el.getAttribute('title'))return false;
+    return true;
+  }
+  function upgrade(el){
+    if(!eligible(el))return;
+    el.setAttribute('tabindex','0');
+    if(!el.hasAttribute('role')&&/^(DIV|SPAN|LI)$/.test(el.tagName))el.setAttribute('role','button');
+  }
+  function scan(root){
+    if(root.nodeType!==1)return;
+    if(root.hasAttribute('onclick'))upgrade(root);
+    var l=root.querySelectorAll('[onclick]');
+    for(var i=0;i<l.length;i++)upgrade(l[i]);
+  }
+  var pending=[],queued=false;
+  function flush(){queued=false;var p=pending;pending=[];for(var i=0;i<p.length;i++)scan(p[i]);}
+  document.addEventListener('DOMContentLoaded',function(){
+    scan(document.body);
+    new MutationObserver(function(ms){
+      for(var i=0;i<ms.length;i++)for(var j=0;j<ms[i].addedNodes.length;j++)pending.push(ms[i].addedNodes[j]);
+      if(!queued){queued=true;requestAnimationFrame(flush);}
+    }).observe(document.body,{childList:true,subtree:true});
+  });
+  document.addEventListener('keydown',function(e){
+    if(e.key!=='Enter'&&e.key!==' ')return;
+    var t=e.target;
+    if(!t||!t.hasAttribute||!t.hasAttribute('onclick')||NATIVE.test(t.tagName)||t.getAttribute('tabindex')!=='0')return;
+    e.preventDefault();t.click();
+  });
+})();
+/* Modal: Escape closes, Tab stays inside the dialog (focus moves in on open and back on close in openModal/closeModal). */
+document.addEventListener('keydown',function(e){
+  var m=document.getElementById('modal');
+  if(!m||!m.classList.contains('sh'))return;
+  if(e.key==='Escape'){e.preventDefault();closeModal();return;}
+  if(e.key!=='Tab')return;
+  var f=[].filter.call(m.querySelectorAll('input:not([type=hidden]):not([disabled]),select:not([disabled]),textarea:not([disabled]),button:not([disabled]),[tabindex="0"]'),function(x){return x.offsetParent!==null;});
+  if(!f.length)return;
+  var first=f[0],last=f[f.length-1],a=document.activeElement;
+  if(e.shiftKey&&(a===first||!m.contains(a))){e.preventDefault();last.focus();}
+  else if(!e.shiftKey&&(a===last||!m.contains(a))){e.preventDefault();first.focus();}
+});
+/* Sync buttons show progress for every caller (manual, login, post-upload). A depth counter covers overlapping syncs. */
+document.addEventListener('DOMContentLoaded',function(){
+  if(typeof syncSupabase!=='function')return;
+  var raw=syncSupabase,depth=0;
+  function paint(on){
+    document.querySelectorAll('button[onclick="syncSupabase()"]').forEach(function(b){
+      if(on){if(b.dataset.lbl===undefined)b.dataset.lbl=b.textContent;b.disabled=true;b.textContent='⟳ Syncing…';b.setAttribute('aria-busy','true');}
+      else{if(b.dataset.lbl!==undefined){b.textContent=b.dataset.lbl;delete b.dataset.lbl;}b.disabled=false;b.removeAttribute('aria-busy');}
+    });
+  }
+  window.syncSupabase=async function(){
+    depth++;if(depth===1)paint(true);
+    try{return await raw.apply(this,arguments);}
+    finally{depth--;if(depth===0)paint(false);}
+  };
 });
 </script>
 <script>
@@ -2766,6 +2853,7 @@ function toast(msg, type){
   if(!wrap){
     wrap=document.createElement('div');
     wrap.id='_toast_wrap';
+    wrap.setAttribute('role','status');wrap.setAttribute('aria-live','polite');
     wrap.style.cssText='position:fixed;bottom:22px;right:22px;z-index:99999;display:flex;flex-direction:column;gap:8px;pointer-events:none;max-width:340px';
     document.body.appendChild(wrap);
   }
@@ -3799,6 +3887,15 @@ function _jpsSubmitSyncVisibility(id){
   const btn=document.getElementById('_jpsSubmitBtn');
   if(btn)btn.style.display=(id==='dfc')?'':'none';
 }
+// Thin progress bar while a section renders. Only the latest requested section may clear it, so a fast
+// click-through never leaves it stuck or hides a render that is still running.
+let _swBusyId=null;
+function _swBusy(id,on){
+  let bar=document.getElementById('busyBar');
+  if(!bar){bar=document.createElement('div');bar.id='busyBar';bar.setAttribute('aria-hidden','true');document.body.appendChild(bar);}
+  if(on){_swBusyId=id;bar.classList.add('on');}
+  else if(_swBusyId===id){_swBusyId=null;bar.classList.remove('on');}
+}
 function sw(id,el){
   document.querySelectorAll('.sec').forEach(s=>s.classList.remove('on'));
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
@@ -3814,6 +3911,9 @@ function sw(id,el){
   } else if(el){
     el.classList.add('on');
   }
+  document.querySelectorAll('.ni').forEach(n=>{if(n.classList.contains('on'))n.setAttribute('aria-current','page');else n.removeAttribute('aria-current');});
+  // Immediate feedback on click: the render below is synchronous and can block for a second or more.
+  _swBusy(id,true);
   const _swSections=['ov','cm','df','ro','fc','rb_res'];
   // Lazy-load commercial detail rows when commercial or forecast sections open.
   // 'ov'/'es' (Overview, Exec Summary) are included too — both show KPIs that sum
@@ -3821,7 +3921,8 @@ function sw(id,el){
   // without ever visiting a commercial tab previously showed a silently-undercounted
   // residential-only total with no loading indicator.
   const _commSections=['ov','es','cm','df','ro','fc','le','dfc','adjlog','rcfr','y3cmp'];
-  const _paint=()=>{
+  const _paint=()=>{try{_paint0();}finally{_swBusy(id,false);}};
+  const _paint0=()=>{
     try{if(_swSections.includes(id))buildCharts();}catch(ce){console.warn('buildCharts error:',ce);}
     try{renderSection(id);}catch(re){
       console.error('renderSection error ['+id+']:',re);
@@ -3844,19 +3945,27 @@ function sw(id,el){
   // the user saw a stack trace on Driver Forecast. Wait for the load instead.
   if(_commSections.includes(id)&&!_commDetailLoaded){
     const sec=document.getElementById(id);
+    let slowT=null;
     if(sec&&!sec.querySelector('.comm-wait')){
       const w=document.createElement('div');
       w.className='comm-wait';
-      w.style.cssText='padding:10px 12px;margin:0 0 12px;border-left:3px solid var(--teal);background:var(--card);font-size:12px;color:var(--text2)';
-      w.textContent='Loading commercial account detail…';
+      w.setAttribute('role','status');w.setAttribute('aria-live','polite');
+      // static markup only: a status line plus placeholder KPI tiles and table rows that match the page layout
+      w.innerHTML='<div class="cw-msg"><span class="cw-spin" aria-hidden="true"></span><span class="cw-txt">Loading commercial account detail…</span></div>'
+        +'<div class="cw-kpis" aria-hidden="true"><i></i><i></i><i></i><i></i></div>'
+        +'<div class="cw-rows" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>';
       sec.insertBefore(w,sec.firstChild);
+      sec.setAttribute('aria-busy','true');
+      slowT=setTimeout(()=>{const t=w.querySelector('.cw-txt');if(t)t.textContent='Still loading commercial account detail. This is taking longer than usual; check your connection if it does not finish soon.';},12000);
     }
     loadCommercialDetail()
       .catch(e=>console.warn('loadCommercialDetail:',e))
       .then(()=>{
+        clearTimeout(slowT);
         const sec2=document.getElementById(id);
         const w=sec2&&sec2.querySelector('.comm-wait');
         if(w)w.remove();
+        if(sec2)sec2.removeAttribute('aria-busy');
         setTimeout(_paint,0);
       });
   } else {
@@ -6324,9 +6433,19 @@ function openModal(title,bodyHtml,saveFn,saveBtnText,saveBtnColor){
     btn.style.opacity='1';
     btn.style.pointerEvents='';
   }
+  if(!document.getElementById('modal').classList.contains('sh'))_modalOpener=document.activeElement;
   document.getElementById('modal').classList.add('sh');
+  // Fields first; a confirm-only dialog lands on Cancel so Enter never triggers a destructive Save.
+  const f=document.querySelector('#modal_body input:not([type=hidden]):not([disabled]),#modal_body select:not([disabled]),#modal_body textarea:not([disabled])')
+    ||document.querySelector('#modal .modal-btns button');
+  if(f)f.focus();
 }
-function closeModal(){document.getElementById('modal').classList.remove('sh');_modalFn=null;}
+let _modalOpener=null;
+function closeModal(){
+  document.getElementById('modal').classList.remove('sh');_modalFn=null;
+  const o=_modalOpener;_modalOpener=null;
+  if(o&&o.focus&&document.contains(o))o.focus();
+}
 function saveModal(){if(_modalFn)_modalFn();}
 
 /* ==========================================
