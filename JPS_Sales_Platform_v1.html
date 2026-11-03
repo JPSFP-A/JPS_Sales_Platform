@@ -3756,6 +3756,26 @@ async function _fetchDataVersion(sb){
     return null;
   }
 }
+// The six startup aggregates (res actuals, budget, rate class, parish, industry, customer summary) all read
+// materialized views, so they change only when refresh_sales_mvs() bumps the version. Same rule as the
+// commercial rows: a cache hit is exactly what the RPC would return. Empty results are never cached
+// because RLS returns zero rows (not an error) to a caller whose session has lapsed.
+let _rpcCacheStats={hit:0,miss:0};
+async function _rpcCached(sb,fn,args,ver,uid){
+  const key='rpc:'+fn+':'+JSON.stringify(args);
+  if(ver&&uid){
+    try{
+      const c=await _commCacheGet(key);
+      if(c&&c.version===ver&&c.uid===uid&&Array.isArray(c.rows)&&c.rows.length&&Date.now()-c.savedAt<_COMM_CACHE_MAX_AGE_MS){
+        _rpcCacheStats.hit++;return{data:c.rows,error:null};
+      }
+    }catch(e){_commCacheWarn('read',e);}
+  }
+  _rpcCacheStats.miss++;
+  const r=await sb.rpc(fn,args);
+  if(!r.error&&Array.isArray(r.data)&&r.data.length&&ver&&uid)_commCachePut(key,{version:ver,uid:uid,savedAt:Date.now(),rows:r.data}).catch(e=>_commCacheWarn('write',e));
+  return r;
+}
 let _commLoadInFlight=null;
 async function loadCommercialDetail(force){
   if(_commDetailLoaded&&!force)return;
@@ -10184,7 +10204,7 @@ async function syncSupabase(silent=false){
     // Detect the year column name — skip if already confirmed from a previous sync
     if(!_yearColConfirmed)await detectYearCol(sb);
 
-    // ── Fire ALL queries in parallel — always fetch fresh (no cache skip) ──
+    // ── Fire ALL queries in parallel. Editable tables always fetch fresh; the MV-backed aggregates use the version-keyed cache ──
     const _actYearCutoff=new Date().getFullYear()-1; // fetch current + prior year only
     const _useCachedActuals=false; // always fetch fresh actuals
     // Use the confirmed YEAR_COL for the gte filter (handles both 'year' and 'cal_year')
@@ -10194,6 +10214,11 @@ async function syncSupabase(silent=false){
     // jps_le/jps_demand_actuals; jps_actuals' demand field is demand_jmd) — including
     // it here made this fallback query fail every single time it was invoked.
     const _actCols='id,year,month,jps_ac,name,rate_class,parish,consumption_bucket,kwh,revenue_jmd,demand_jmd,customer_count';
+    // One tiny version call per sync; the MV-backed aggregates below are served from the local cache when it matches.
+    const _mvVer=await _fetchDataVersion(sb);
+    let _mvUid='';
+    try{const{data:{session:_s}}=await sb.auth.getSession();_mvUid=(_s&&_s.user&&_s.user.id)||'';}catch(e){_commCacheWarn('uid',e);}
+    _rpcCacheStats={hit:0,miss:0};
     const [
       indData,kamData,amData,actData,
       budData,sysStatsData,lossesFcData,
@@ -10211,7 +10236,7 @@ async function syncSupabase(silent=false){
       (async()=>{
         // get_res_actuals: residential aggregate rows only (12k vs 53k full) — commercial loaded lazily
         try{
-          const{data,error}=await getSB().rpc('get_res_actuals',{year_cutoff:_actYearCutoff});
+          const{data,error}=await _rpcCached(getSB(),'get_res_actuals',{year_cutoff:_actYearCutoff},_mvVer,_mvUid);
           if(error)throw error;
           return data||[]; // successful call, legitimately zero rows — NOT a failure
         }catch(e){
@@ -10235,10 +10260,10 @@ async function syncSupabase(silent=false){
         }
       })(),
       (async()=>{
-        // Aggregated RPC: 111k raw rows → ~2,652 agg rows (42x reduction, no jps_ac/name needed)
+        // Aggregated RPC over mv_budget_agg (~31k rows, ~6.8 MB uncompressed when measured Nov 2026; includes jps_ac)
         const _budCols='year,month,rate_class,parish,consumption_bucket,kwh_budget,revenue_budget,demand_budget,customer_count';
         try{
-          const{data,error}=await getSB().rpc('get_budget_agg',{year_cutoff:_actYearCutoff});
+          const{data,error}=await _rpcCached(getSB(),'get_budget_agg',{year_cutoff:_actYearCutoff},_mvVer,_mvUid);
           if(error)throw error;
           return data||null;
         }catch(e){
@@ -10256,12 +10281,12 @@ async function syncSupabase(silent=false){
       // ordered by effective_year ascending so the forEach below keeps each
       // class's LATEST tariff (later rows overwrite earlier ones)
       sbTable('jps_tariff_rates',{cols:'rate_class,energy_rate_jmd_kwh,effective_year',order:'effective_year'}),
-      // Lean aggregates — 170/1410/5694 rows — replace sbActuals scans for _rcIdx/PARISHES/INDUSTRIES
-      (async()=>{try{const{data,error}=await getSB().rpc('get_rc_agg',{year_cutoff:_actYearCutoff});if(error)throw error;return data||[];}catch(e){console.warn('[sync] get_rc_agg failed:',e.message);return [];}})(),
-      (async()=>{try{const{data,error}=await getSB().rpc('get_parish_agg',{year_cutoff:_actYearCutoff});if(error)throw error;return data||[];}catch(e){console.warn('[sync] get_parish_agg failed:',e.message);return [];}})(),
-      (async()=>{try{const{data,error}=await getSB().rpc('get_industry_agg',{year_cutoff:_actYearCutoff});if(error)throw error;return data||[];}catch(e){console.warn('[sync] get_industry_agg failed:',e.message);return [];}})(),
-      // Customer summary — 974 rows (one per commercial customer) — replaces 41k CUSTOMERS scan
-      (async()=>{try{const{data,error}=await getSB().rpc('get_customers_summary',{year_cutoff:_actYearCutoff});if(error)throw error;return data||[];}catch(e){console.warn('[sync] get_customers_summary failed:',e.message);return [];}})(),
+      // Lean aggregates (195 / ~1.8k / ~7k rows when measured Nov 2026) replace sbActuals scans for _rcIdx/PARISHES/INDUSTRIES
+      (async()=>{try{const{data,error}=await _rpcCached(getSB(),'get_rc_agg',{year_cutoff:_actYearCutoff},_mvVer,_mvUid);if(error)throw error;return data||[];}catch(e){console.warn('[sync] get_rc_agg failed:',e.message);return [];}})(),
+      (async()=>{try{const{data,error}=await _rpcCached(getSB(),'get_parish_agg',{year_cutoff:_actYearCutoff},_mvVer,_mvUid);if(error)throw error;return data||[];}catch(e){console.warn('[sync] get_parish_agg failed:',e.message);return [];}})(),
+      (async()=>{try{const{data,error}=await _rpcCached(getSB(),'get_industry_agg',{year_cutoff:_actYearCutoff},_mvVer,_mvUid);if(error)throw error;return data||[];}catch(e){console.warn('[sync] get_industry_agg failed:',e.message);return [];}})(),
+      // Customer summary: one row per commercial account (~8.2k rows, ~3.9 MB uncompressed when measured Nov 2026)
+      (async()=>{try{const{data,error}=await _rpcCached(getSB(),'get_customers_summary',{year_cutoff:_actYearCutoff},_mvVer,_mvUid);if(error)throw error;return data||[];}catch(e){console.warn('[sync] get_customers_summary failed:',e.message);return [];}})(),
       sbTable('jps_forecast_entries',{limit:50000}),
       sbTable('jps_forecast_notes',{limit:20000}),
       sbTable('jps_macro_assumptions',{limit:20000}),
@@ -10275,6 +10300,7 @@ async function syncSupabase(silent=false){
     ]);
 
     // ── Process results ────────────────────────────────────
+    log.push(`Cache: ${_rpcCacheStats.hit} of ${_rpcCacheStats.hit+_rpcCacheStats.miss} aggregate calls served locally (data version ${_mvVer||'unknown'})`);
     if(indData){sbIndustries=indData;log.push(`Industries: jps_industries (${indData.length} rows)`);}
     else log.push('Industries: ⚠ jps_industries not found — run schema SQL');
 
