@@ -27,6 +27,8 @@ JPS_Sales_Forecast_*
 JPS_Forecast_*
 JPS_LE_Sales_Gen_*
 architecture-map.html
+*.pptx
+JPS_KAM_*.txt
 *.xlsx
 *.xlsm
 *.docx

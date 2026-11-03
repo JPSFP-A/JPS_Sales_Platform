@@ -3242,7 +3242,7 @@ function _applyLogin(user){
   if (window.JpsMonitor) JpsMonitor.setUser(CU.id || CU.email, CU.name || CU.email);
   if (window.posthog) posthog.identify(CU.id || CU.email);
   try { if (window.Sentry) { const _su = { id: CU.id, email: CU.email }; if (typeof Sentry.setUser === 'function') Sentry.setUser(_su); else if (typeof Sentry.onLoad === 'function') Sentry.onLoad(function(){ Sentry.setUser(_su); }); } } catch(e) { console.warn('Sentry setUser failed', e); }
-  try { _initIdleTimeout(function(){ getSB().auth.signOut(); }); } catch(e) { console.warn('[Sales] idle timeout init failed:', e); }
+  try { _initIdleTimeout(function(){ _commCacheClear(); getSB().auth.signOut(); }); } catch(e) { console.warn('[Sales] idle timeout init failed:', e); }
   const btn=document.getElementById('lBtn');
   if(btn){btn.textContent='Sign In →';btn.disabled=false;}
   document.getElementById('loginScreen').style.display='none';
@@ -3259,6 +3259,7 @@ async function doLogout(){
   const sb=getSB();
   if(sb)await sb.auth.signOut().catch(()=>{});
   try{localStorage.removeItem(_DCACHE_KEY);}catch(_){}
+  _commCacheClear();
   CU={id:'',role:'',name:'',email:'',territory:'All'};
   document.getElementById('loginScreen').style.display='flex';
   // Reset back to the email-entry form -- matters when signing out from the
@@ -3600,8 +3601,9 @@ function getFcMonths(){
 
 /* ==========================================
    COMMERCIAL DETAIL — LAZY LOAD
-   41k commercial account rows loaded on first Commercial tab open (not at startup).
-   Startup only loads 12k residential + 974 customer summaries (76% reduction).
+   ~163k commercial account-month rows (measured Nov 2026), loaded on first open of a section in
+   _commSections (not at startup) and cached in IndexedDB keyed on jps_data_version.
+   Startup only loads the 12.7k residential rows and the customer summaries.
 ========================================== */
 // force=true re-fetches even when already loaded (the post-sync refresh). Rows are
 // fetched into a LOCAL and swapped in only once they arrive, so sbActualsComm is never
@@ -3609,6 +3611,63 @@ function getFcMonths(){
 // sbActualsComm is indistinguishable from "this system genuinely has no commercial
 // rows", so for the length of the fetch the Driver Forecast, RC Forecast Report and
 // 3-Year Comparison reported RT40/RT50/RT70 as ZERO with no error raised.
+/* Commercial rows are ~163k account-month rows (~3.5 MB gzip, ~35 MB parsed) and only change when
+   refresh_sales_mvs() runs, which bumps jps_data_version. Rows cached in IndexedDB under the same
+   version are exactly what get_comm_actuals would return, so a repeat load costs a ~130 ms local
+   read instead of the fetch. Cache failures fall back to the network and are logged to the monitor. */
+const _COMM_CACHE_DB='jps_sales_cache',_COMM_CACHE_STORE='kv',_COMM_CACHE_MAX_AGE_MS=24*3600*1000;
+let _commLoadedVersion=null,_commCacheWarned={};
+function _commCacheWarn(op,e){
+  const m=(e&&e.message)||String(e);
+  console.warn('[comm] cache '+op+' failed:',m);
+  if(!_commCacheWarned[op]){_commCacheWarned[op]=true;if(window.JpsMonitor&&JpsMonitor.warning)JpsMonitor.warning('comm:cache_'+op,m);}
+}
+function _commCacheOpen(){
+  return new Promise((ok,no)=>{
+    if(!window.indexedDB){no(new Error('IndexedDB unavailable'));return;}
+    const r=indexedDB.open(_COMM_CACHE_DB,1);
+    r.onupgradeneeded=()=>{r.result.createObjectStore(_COMM_CACHE_STORE);};
+    r.onsuccess=()=>ok(r.result);
+    r.onerror=()=>no(r.error||new Error('IndexedDB open failed'));
+    r.onblocked=()=>no(new Error('IndexedDB open blocked'));
+  });
+}
+async function _commCacheGet(key){
+  const db=await _commCacheOpen();
+  try{
+    return await new Promise((ok,no)=>{
+      const q=db.transaction(_COMM_CACHE_STORE).objectStore(_COMM_CACHE_STORE).get(key);
+      q.onsuccess=()=>ok(q.result);q.onerror=()=>no(q.error);
+    });
+  }finally{db.close();}
+}
+async function _commCachePut(key,val){
+  const db=await _commCacheOpen();
+  try{
+    await new Promise((ok,no)=>{
+      const t=db.transaction(_COMM_CACHE_STORE,'readwrite');
+      t.objectStore(_COMM_CACHE_STORE).put(val,key);
+      t.oncomplete=ok;t.onerror=()=>no(t.error);t.onabort=()=>no(t.error||new Error('IndexedDB write aborted'));
+    });
+  }finally{db.close();}
+}
+function _commCacheClear(){
+  _commLoadedVersion=null;
+  try{if(window.indexedDB){const q=indexedDB.deleteDatabase(_COMM_CACHE_DB);q.onerror=()=>_commCacheWarn('clear',q.error);}}
+  catch(e){_commCacheWarn('clear',e);}
+}
+// Server-side counter bumped by refresh_sales_mvs(). null means "unknown", which disables the cache for that load.
+async function _fetchDataVersion(sb){
+  try{
+    const{data,error}=await sb.rpc('get_data_version');
+    if(error)throw error;
+    return data&&data.version!=null?String(data.version):null;
+  }catch(e){
+    console.warn('[comm] data version unavailable, loading without cache:',e.message);
+    if(window.JpsMonitor&&JpsMonitor.warning)JpsMonitor.warning('comm:data_version',e.message||'error');
+    return null;
+  }
+}
 let _commLoadInFlight=null;
 async function loadCommercialDetail(force){
   if(_commDetailLoaded&&!force)return;
@@ -3618,11 +3677,21 @@ async function loadCommercialDetail(force){
   const _cutoff=new Date().getFullYear()-1;
   const _yrCol=YEAR_COL||'year';
   const _cols='id,year,month,jps_ac,name,rate_class,parish,consumption_bucket,kwh,revenue_jmd,customer_count';
-  let rows=null;
-  try{
+  let rows=null,fromCache=false,viaRpc=false;
+  const _ver=await _fetchDataVersion(sb);
+  // post-sync refresh with nothing rebuilt since the rows already held: skip the fetch entirely
+  if(force&&_ver&&_commDetailLoaded&&_commLoadedVersion===_ver){console.log('[comm] data version',_ver,'unchanged — keeping loaded rows');return;}
+  const _uid=(CU&&CU.id)||'';
+  if(_ver&&_uid){
+    try{
+      const c=await _commCacheGet('comm_actuals');
+      if(c&&c.version===_ver&&c.cutoff===_cutoff&&c.uid===_uid&&Array.isArray(c.rows)&&c.rows.length&&Date.now()-c.savedAt<_COMM_CACHE_MAX_AGE_MS){rows=c.rows;fromCache=true;}
+    }catch(ce){_commCacheWarn('read',ce);}
+  }
+  if(!rows)try{
     const{data,error}=await sb.rpc('get_comm_actuals',{year_cutoff:_cutoff});
     if(error)throw error;
-    rows=data||[];
+    rows=data||[];viaRpc=true;
   }catch(e){
     console.warn('[comm] get_comm_actuals fallback to raw table:',e.message);
     try{
@@ -3636,16 +3705,18 @@ async function loadCommercialDetail(force){
     }
   }
   if(rows){
-    sbActualsComm=rows;_sbInvalidateActuals();_commDetailLoaded=true;
+    sbActualsComm=rows;_sbInvalidateActuals();_commDetailLoaded=true;_commLoadedVersion=_ver;
+    // only RPC-shaped rows are cached; the raw-table fallback has a different grain
+    if(viaRpc&&_ver&&_uid&&rows.length)_commCachePut('comm_actuals',{version:_ver,cutoff:_cutoff,uid:_uid,savedAt:Date.now(),rows}).catch(e=>_commCacheWarn('write',e));
   }else if(_commDetailLoaded){
     // A refresh failed while we still hold the previous good rows. Keeping them beats
     // blanking them — slightly stale is recoverable, silently zero is not.
     toast('Commercial data refresh failed — still showing the rows loaded earlier','w');
   }else{
-    sbActualsComm=[];_sbInvalidateActuals();_commDetailLoaded=false; // stays retryable
+    sbActualsComm=[];_sbInvalidateActuals();_commDetailLoaded=false;_commLoadedVersion=null; // stays retryable
     toast('Commercial data failed to load (both fetch paths errored) — commercial figures are missing, not zero','w');
   }
-  console.log('[comm] loaded',sbActualsComm.length,'commercial rows');
+  console.log('[comm] loaded',sbActualsComm.length,'commercial rows',fromCache?'(from cache, version '+_ver+')':'(from network)');
   // whatever section was already rendered before this finished was residential-only —
   // refresh it now that the full actuals set (residential+commercial) is available
   try{renderSection(document.querySelector('.sec.on')?.id);}catch(e){console.warn('re-render after commercial load:',e);}
