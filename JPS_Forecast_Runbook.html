@@ -298,14 +298,52 @@
         <div class="idx">01</div>
         <div>
           <h3>Load the month's actuals</h3>
-          <div class="tab">Admin → Data Upload</div>
-          <p>The billing extract is the ground truth everything else is built on. The forecast base is a trailing three-month average, so a bad upload moves every future month, not just the one you loaded.</p>
+          <div class="tab">analysis folder &middot; Python scripts, run in this order</div>
+          <p>The billing extract is the ground truth everything else is built on. The forecast base is a trailing three-month average, so a bad load moves every future month, not just the one you loaded. The monthly extract is about 300 MB and goes in by script, as the September and October loads did. <strong>Admin &rarr; Data Upload</strong> takes a small flat workbook and is for corrections, not for this file.</p>
+
+          <p><strong>The files.</strong> Put them in <code>C:\Projects\Sales_Platform\analysis</code>.</p>
+          <div class="tw">
+            <table>
+              <thead><tr><th>File</th><th>Name it exactly like this</th><th>Read by</th></tr></thead>
+              <tbody>
+                <tr><td>Billing Details Report (the raw billing extract)</td><td><code>Oct 26.csv</code>: three-letter month, <strong>a space</strong>, two-digit year</td><td><code>corrected_scan.py</code>, <code>rt20_split.py</code>, <code>rt10_zero_fix.py</code>, <code>_push_month_adjustments.py</code></td></tr>
+                <tr><td>Prepaid: Customer Monthly Transaction Report</td><td><code>Customer-Monthly-Transaction-Report-10-26.csv</code> (month, hyphen, two-digit year)</td><td><code>_push_prepaid_month.py</code>, <code>_push_month_adjustments.py</code></td></tr>
+                <tr><td>Check Consumption Detail report (kVA demand and special-account adjustments)</td><td>Must start with <code>Check Consumption</code>, e.g. <code>Check Consumption Detail_Oct2026.xls</code></td><td><code>monthly_loader.py</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Two more files must already be in <code>C:\Users\jwilson\Downloads</code>: <code>Rate categorry Data mapping.csv</code> (the spelling is the file's own) and <code>Parish Grouping.csv</code>. A rate code or parish that is not in them is dropped or labelled UNMAPPED, so add it there first.</p>
+
+          <div class="note warn">
+            <span class="lbl">A file with the wrong name is not found</span>
+            <code>Oct-26.xls</code> (hyphen) matches nothing, because the scripts look for a space. The billing extract also arrives as tab-delimited text with a five-line report header, even though it is named <code>.xls</code>. <code>corrected_scan.py</code> and <code>rt20_split.py</code> read that, but <code>rt10_zero_fix.py</code> and <code>_push_month_adjustments.py</code> take only the <code>.csv</code> spelling. Convert it once, leaving the original alone: <code>python convert_billing_xls.py "Oct-26.xls" "Oct 26.csv"</code>. Keep only the <code>.csv</code> beside the scripts; if both spellings sit there, the scan takes the <code>.csv</code>.
+          </div>
+
+          <p><strong>The run.</strong> Every command runs from the <code>analysis</code> folder. Each one that writes has a check, and you do not go on until it passes.</p>
           <ol class="acts">
-            <li>Choose <strong>Overwrite month</strong> for a normal monthly load: it clears that month first, so a re-run after a correction cannot double-count.</li>
-            <li>Choose <strong>Append / upsert</strong> only when adding rows to a month that is already correct.</li>
-            <li>Pick the Excel file. Columns are detected automatically; rows with no year or month are dropped and counted in the console.</li>
-            <li>Confirm the row count looks like a month, not a fragment.</li>
+            <li><code>python corrected_scan.py</code>. Copy <code>corrected.json</code> aside first. It adds only months not already in the file. The log must say <code>processing 2026-10</code> and report the rows billed, the rows skipped as not billed, the prepaid-tagged rows, and 9 report-footer rows. There must be no <code>??</code> line about a file name it could not read.</li>
+            <li><code>python rt20_split.py 2026 10 "C:\Projects\Sales_Platform\analysis\Oct 26.csv"</code>. <strong>Check:</strong> the commercial plus bucketed RT20 kWh in the file it writes equals the RT20 kWh the scan found. They must match.</li>
+            <li><code>python gen_appdata3.py</code>. Rebuilds <code>app_data2.json</code> from <code>corrected.json</code>.</li>
+            <li><code>python _push_rt20_all.py 2026_10</code>. Always name the month. <strong>Never run it with <code>--all</code></strong>: re-pushing an old month under a different parish spelling inserts a second copy and doubles the class.</li>
+            <li><code>python rt10_zero_fix.py 2026-10</code>, then <code>python _push_rt10_buckets.py 2026-10 --dry-run</code>. <strong>Check:</strong> the line <code>2026-09 reconciles exactly</code>. That proves the mapping still reproduces last month before it is trusted for this one. Then run it again without <code>--dry-run</code>.</li>
+            <li><code>python push_actuals_direct.py</code>. Pushes the account-level RT40, RT50, RT60-ST and RT70 rows for every month (an upsert, so repeating it is harmless) and refreshes the database views.</li>
+            <li><code>python _push_prepaid_month.py "Customer-Monthly-Transaction-Report-10-26.csv" 2026-10 --dry-run</code>, then without <code>--dry-run</code>. It stops if the file contains any other month. <strong>Do this before step 8.</strong></li>
+            <li><code>python _push_month_adjustments.py 2026-10 --dry-run</code>, then without. It adds the prepaid-tagged billed rows into the prepaid buckets from step 7, so it stops if the prepaid report is missing. It refreshes the views when it finishes.</li>
+            <li>Copy the Check Consumption report to the name in the table above, then <code>python monthly_loader.py Oct2026</code>. It loads kVA demand and the special-account adjustments. A line <code>unmapped SERV_RATE codes (not loaded)</code> means a tariff is missing from the mapping file, and those rows were not loaded.</li>
+            <li>In the app press <strong>Sync</strong>, then continue to Data Quality.</li>
           </ol>
+
+          <div class="note stop">
+            <span class="lbl">A month without its prepaid file looks complete and is not</span>
+            Steps 1 to 6 and 9 leave out the prepaid customers. The month loads, every total renders, and nothing flags it. Prepaid was 3.2 GWh in August and 3.1 GWh in September (RT10 and RT20), about J$180M of revenue a month. Do not treat a month as loaded until steps 7 and 8 have run.
+          </div>
+
+          <div class="note">
+            <span class="lbl">Not an input here</span>
+            <code>ADJUSTMENT_RPT_MONTHLY_*.xls</code> sits in the same folder. No sales script reads it; it belongs to the DataManager finance sync.
+          </div>
+
+          <p>Control totals for a clean month, from September (GWh billed): RT10 114.566, RT20 60.618, RT40 67.313, RT50 30.253, RT60-ST 3.413, RT70 18.643, total 294.805. Compare the new month class by class before you carry on.</p>
         </div>
       </div>
 
@@ -521,6 +559,12 @@ drivers = macro + weather + seasonality + solar
       </div>
 
       <div class="trap">
+        <h3>Taking instructions for the monthly files from memory</h3>
+        <p>The files, names and order in step 1 come from the scripts' own code and the logs of the September load. A hyphen where the scripts want a space, or a <code>.xls</code> that is really tab-delimited text, fails quietly or not at all.</p>
+        <p class="happened"><b>What happened</b>A session answered "which files do I load each month" without opening the scripts. The answer did not match what the loaders actually read. Read the loader before saying what it needs.</p>
+      </div>
+
+      <div class="trap">
         <h3>Assuming a button did something</h3>
         <p>A guard clause inverted the wrong way made <strong>Commit as Budget</strong> return immediately every time it was pressed. No error, no toast, nothing written, for as long as the feature had existed.</p>
         <p class="happened"><b>What happened</b>The budget-lock pipeline was built, shipped and believed to be working. The database showed the last write predated it by two days. Confirm a write landed; do not infer it from the absence of an error.</p>
@@ -533,7 +577,8 @@ drivers = macro + weather + seasonality + solar
         <table>
           <thead><tr><th>Table</th><th>Holds</th><th>Edit in</th></tr></thead>
           <tbody>
-            <tr><td><code>jps_actuals</code></td><td>Billed sales by account, month, rate class, bucket</td><td><span class="own app">Admin upload</span></td></tr>
+            <tr><td><code>jps_actuals</code></td><td>Billed sales by account, month, rate class, bucket</td><td><span class="own sql">Monthly scripts</span> <span class="own app">Admin upload (corrections)</span></td></tr>
+            <tr><td><code>jps_demand_actuals</code> / <code>jps_special_account_adjustments</code></td><td>kVA demand by class; billing adjustments on the special accounts</td><td><span class="own sql">monthly_loader.py</span></td></tr>
             <tr><td><code>jps_macro_assumptions</code></td><td>Driver rates, seasonality, normalisation, rolling loss</td><td><span class="own app">Macro Assumptions</span></td></tr>
             <tr><td><code>jps_operational_adjustments</code></td><td>Account-level moves entered by KAMs</td><td><span class="own app">Driver Forecast</span></td></tr>
             <tr><td><code>jps_forecast_new_customers</code></td><td>Load with no history</td><td><span class="own app">New Customer</span></td></tr>

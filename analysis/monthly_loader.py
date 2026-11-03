@@ -18,6 +18,14 @@ import csv, json, glob, os, sys, time, zipfile
 import openpyxl
 import requests
 
+# The corporate network re-signs HTTPS with a private root that requests (certifi) does not trust, so every
+# upsert failed with CERTIFICATE_VERIFY_FAILED. truststore uses the Windows certificate store; verification stays on.
+try:
+    import truststore
+    truststore.inject_into_ssl()
+except Exception:
+    pass
+
 HERE = os.path.dirname(os.path.abspath(sys.argv[0]))
 os.chdir(HERE)
 
