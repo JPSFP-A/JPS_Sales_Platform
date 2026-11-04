@@ -11,6 +11,14 @@
 # backs the prior additions out of the live row before adding the new ones.
 # Usage: python _push_month_adjustments.py <YYYY-MM> [--dry-run]
 import csv, glob, json, os, re, sys, requests
+
+# Corporate TLS inspection: requests (certifi) does not trust the re-signed root, so every call failed with CERTIFICATE_VERIFY_FAILED.
+# truststore uses the Windows certificate store; verification stays on.
+try:
+    import truststore
+    truststore.inject_into_ssl()
+except Exception:
+    pass
 csv.field_size_limit(10**9)
 
 src = open(r'C:\Projects\Sales_Platform\analysis\_push_prepaid_backfill.py', encoding='utf-8').read()

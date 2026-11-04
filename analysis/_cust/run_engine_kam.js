@@ -20,7 +20,8 @@ const names = ['_kl', '_isComm', '_sbAllActuals', '_dfcSegment', '_dfcMacroLooku
   '_dfcDriverPcts', '_dfcComputeChain', '_dfcGetChain', '_dfcBuildIndices', '_dfcBuildCommAccounts', '_dfcCommCohortsForNonKam',
   '_dfcBuildResCohorts', '_dfcResetYearChainCache', '_dfcToLERows', '_coreDataReady'];
 
-const main = JSON.parse(fs.readFileSync('pull.json', 'utf8'));
+const CFG0 = (process.argv[2] || '').endsWith('.json') ? JSON.parse(fs.readFileSync(process.argv[2], 'utf8')) : JSON.parse(process.argv[2] || '{}');
+const main = JSON.parse(fs.readFileSync(CFG0.pull || 'pull.json', 'utf8'));
 const nc = JSON.parse(fs.readFileSync('pull_nc.json', 'utf8'));
 const num = (r, ks) => { ks.forEach(k => { if (r[k] != null) r[k] = Number(r[k]); }); return r; };
 const CFG = (process.argv[2] || '').endsWith('.json') ? JSON.parse(fs.readFileSync(process.argv[2], 'utf8')) : JSON.parse(process.argv[2] || '{}');
@@ -41,7 +42,7 @@ const ctx = {
   _allActCache: null, _allActKey: '', LE_LIVE_LABEL: 'Live (Driver Forecast)', out: {},
 };
 vm.createContext(ctx);
-vm.runInContext(names.map(fn).join('\n'), ctx);
+vm.runInContext(names.filter(n => html.indexOf('function ' + n + '(') >= 0).map(fn).join('\n'), ctx);   // an older platform file lacks the roll-forward helpers
 vm.runInContext(`
 const accts = {}; const cls = {};
 for (const y of [2026, 2027, 2028]) {
