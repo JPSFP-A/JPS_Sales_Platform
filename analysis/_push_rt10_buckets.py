@@ -177,6 +177,9 @@ def main():
                              data=json.dumps(rows), timeout=60)
         if resp.status_code < 300:
             print('pushed %d rows' % len(rows))
+            # residential by parish rides with the monthly residential load, so recovery by parish stays current
+            import subprocess
+            subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), '_push_res_parish.py'), target], check=True)
             return
         print('  attempt %d: %s %s' % (attempt + 1, resp.status_code, resp.text[:200]))
         time.sleep(2)

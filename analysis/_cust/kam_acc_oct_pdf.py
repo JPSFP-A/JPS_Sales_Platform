@@ -69,7 +69,7 @@ html = f'''<!doctype html><html><head><meta charset="utf-8"><title>KAM Forecast 
  <div class="box" style="flex:0.9"><div class="sec">Ask of the KAMs</div><div style="font-size:8.3pt">For every account that missed by more than 0.1 GWh, add the reason in the workbook (<b>Largest misses</b>, last column). Confirm whether PAC Kingston and Alcoa should stay at their adjusted levels, and whether PriceSmart's ramp should be entered as new load.</div>
   <div style="font-size:7.4pt;color:{GREY};margin-top:2mm">The forecast is the Driver Forecast as it stood after the September close, rebuilt from the data and adjustments on file. It is not a stored snapshot.</div></div>
 </div>
-<div class="foot"><span><b>Jamaica Public Service</b> | KAM Forecast Accuracy | October 2026</span><span>Account level for KAM-assigned accounts. Detail in JPS_KAM_Forecast_Accuracy_Oct2026.xlsx.</span></div>
+<div class="foot"><span><b>Jamaica Public Service</b> | KAM Forecast Accuracy | October 2026</span><span>Account level for KAM-assigned accounts. Account detail is in the accompanying workbook.</span></div>
 </div></body></html>'''
 p = os.path.join(r'C:\Projects\Sales_Platform\analysis', '_onepager_JPS_OnePager_KAM_Forecast_Accuracy_Oct2026.html')
 open(p, 'w', encoding='utf-8').write(html); print('wrote', p)
