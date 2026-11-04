@@ -135,7 +135,7 @@ html = f'''<!doctype html><html><head><meta charset="utf-8"><title>JPS Sales Ana
 </style></head><body>
 
 <div class="page">
-<div class="top"><div><h1>October 2026: are we in recovery mode?</h1></div><div class="sub">Jamaica Public Service | page 1 of 3<br>Billed volume including prepaid</div></div>
+<div class="top"><div><h1>October 2026: are we in recovery mode?</h1></div><div class="sub">Jamaica Public Service | page 1 of 4<br>Billed volume including prepaid</div></div>
 <div class="head">Residential and small commercial are through the recovery. Large commercial is not: hotels are still {abs(yoy("hotels", 10)) * 100:.0f}% down, Alcoa has left the grid and the hurricane-hit west is still below last year.</div>
 <div class="verdict"><b>Answer.</b> Recovery mode applies to three things only: <b>hotels</b> (the gap to last year has closed from {abs(yoy("hotels", 1)) * 100:.0f}% in January to {abs(yoy("hotels", 10)) * 100:.0f}%), the <b>western parishes</b>, and the <b>{z["2026-10"] - z["2025-10"]:,} extra residential customers still at zero kWh</b>, a number that has not moved since June. Everything else is either back above its pre-storm level (residential, RT20, water) or lower for a structural reason (Alcoa and industrial).</div>
 <div class="row"><div style="flex:1.45"><div class="sec">Year on year by month, 2026 vs 2025</div>{line_chart()}
@@ -153,7 +153,7 @@ html = f'''<!doctype html><html><head><meta charset="utf-8"><title>JPS Sales Ana
 </div>
 
 <div class="page">
-<div class="top"><div><h1>Where: parish, industry and KAM</h1></div><div class="sub">Jamaica Public Service | page 2 of 3<br>October 2026, GWh</div></div>
+<div class="top"><div><h1>Where: parish, industry and KAM</h1></div><div class="sub">Jamaica Public Service | page 3 of 4<br>October 2026, GWh</div></div>
 <div class="head">Growth is concentrated in Kingston and St Catherine. St James and Clarendon are the two parishes pulling the other way, and each has a single explanation.</div>
 <div class="sec">By parish</div>
 <table class="t7"><tr><th class="l" rowspan="2">Parish</th><th colspan="3">Residential (RT10)</th><th colspan="4">Commercial (RT20 to RT70)</th><th rowspan="2">Total vs<br>2025 (GWh)</th></tr>
@@ -175,7 +175,7 @@ html = f'''<!doctype html><html><head><meta charset="utf-8"><title>JPS Sales Ana
 </div>
 
 <div class="page">
-<div class="top"><div><h1>Drivers and the road to 2027</h1></div><div class="sub">Jamaica Public Service | page 3 of 3<br>Residential down, commercial up</div></div>
+<div class="top"><div><h1>Drivers and the road to 2027</h1></div><div class="sub">Jamaica Public Service | page 4 of 4<br>Residential down, commercial up</div></div>
 <div class="head">Residential fell {abs(res_oct / res_sep - 1) * 100:.1f}% on September, all of it in the heavy-use bands, and commercial rose {abs(T["o26_COMM"] / T["s26_COMM"] - 1) * 100:.1f}%, about half of it a rebound from September timing. Neither is a trend, and the 2027 plan leans on both.</div>
 <div class="row"><div style="flex:1"><div class="sec">Residential: where the fall is (October vs September)</div>
 <table class="t7"><tr><th class="l">RT10 band (kWh a month)</th><th>Oct GWh</th><th>vs Sep</th><th>Customers</th><th>vs Sep</th><th>vs 2025</th></tr>{''.join(brow)}</table>
