@@ -88,11 +88,11 @@ res_oct, res_sep = T['o26_RT10'], T['s26_RT10']
 mv = D['movers']; mv_l = sorted(mv.items(), key=lambda kv: -(kv[1].get('10', 0) - kv[1].get('9', 0)))
 ups, dns = [(k, v) for k, v in mv_l if v.get('10', 0) - v.get('9', 0) > 0][:6], [(k, v) for k, v in reversed(mv_l) if v.get('10', 0) - v.get('9', 0) < 0][:4]
 tot_up = sum(max(0, v.get('10', 0) - v.get('9', 0)) for v in mv.values()); tot_dn = sum(min(0, v.get('10', 0) - v.get('9', 0)) for v in mv.values())
-TIMING = ('Caribbean Broilers', 'Petrojam')
+TIMING = ('Caribbean Broilers', 'Petrojam')   # September lows that reverse in October: Broilers billing timing, Petrojam fire outage
 mrow = []
 for i, (k, v) in enumerate(ups + dns):
     d_ = v.get('10', 0) - v.get('9', 0); nm = v['name'].strip().title() if v['name'].isupper() else v['name'].strip()
-    tag = 'billing timing' if any(t in nm for t in TIMING) else ('Alcoa exit' if 'Alcoa' in nm else ('water supply' if 'Water' in nm or 'Irrigation' in nm else '—'))
+    tag = ('fire outage in Sep' if 'Petrojam' in nm else 'billing timing') if any(t in nm for t in TIMING) else ('Alcoa exit' if 'Alcoa' in nm else ('water supply' if 'Water' in nm or 'Irrigation' in nm else '—'))
     mrow.append(f'<tr class="{"alt" if i % 2 else ""}"><td class="l" style="white-space:nowrap">{nm[:30]}</td><td>{v.get("9", 0):.2f}</td><td>{v.get("10", 0):.2f}</td><td style="color:{col(d_)};font-weight:bold">{chg(d_, 2)}</td><td style="text-align:left;font-size:7pt">{tag}</td></tr>')
 timing_g = sum(mv[k]['10'] - mv[k]['9'] for k in mv if any(t in mv[k]['name'] for t in TIMING))
 # FY2026 landing on a 2024 seasonal replay, and what FY2027 needs
@@ -128,6 +128,167 @@ act_cust = sum(B[b]['2026-10_cust'] for b in ('<150', '150>350', '350>550', '550
 zret = (z['2026-10'] - z['2025-10']) * avg_kwh * 12 / 1e6 / r10[4]
 nb26, nb25 = B['<Zero']['2026-10_cust'], B['<Zero']['2025-10_cust']; nbk26, nbk25 = B['<Zero']['2026-10_kwh'], B['<Zero']['2025-10_kwh']
 
+# ---------- by rate class page ----------
+AC = json.load(open('_fy27_actuals.json')); CB = json.load(open('_oct_class_budget.json'))
+CLS = ['RT10', 'RT20', 'RT40', 'RT50', 'RT60-ST', 'RT70']
+CNAME = {'RT10': 'RT10 Residential', 'RT20': 'RT20 Small commercial', 'RT40': 'RT40 Commercial', 'RT50': 'RT50 Large commercial', 'RT60-ST': 'RT60 Street lighting', 'RT70': 'RT70 Industrial'}
+ac = lambda y, m, c: AC['%d-%02d' % (y, m)][c]
+cv = {}
+for c in CLS:
+    o26, o25, s26 = ac(2026, 10, c), ac(2025, 10, c), ac(2026, 9, c)
+    y26 = sum(ac(2026, m, c) for m in range(1, 11)); y25 = sum(ac(2025, m, c) for m in range(1, 11))
+    j26 = sum(ac(2026, m, c) for m in range(7, 11)); j25 = sum(ac(2025, m, c) for m in range(7, 11))
+    cv[c] = dict(j26=j26, j25=j25, o26=o26, o25=o25, s26=s26, le=LE[c]['Oct 26'], bud=CB[c]['oct'], y26=y26, y25=y25, yle=sum(LE[c]['%s 26' % m] for m in MON[:10]), ybud=CB[c]['ytd'])
+tot_c = {k: sum(cv[c][k] for c in CLS) for k in cv['RT10']}
+crow = []
+cc = lambda v, d=1: f'<td style="color:{"#66788A" if abs(v) < 0.0005 else col(v)};font-weight:bold">{chgp(v, d)}</td>'
+for i, c in enumerate(CLS):
+    v = cv[c]
+    crow.append(f'<tr class="{"alt" if i % 2 else ""}"><td class="l" style="white-space:nowrap;font-weight:bold">{CNAME[c]}</td><td>{v["o26"]:.1f}</td>{cc(pc(v["o26"], v["o25"]))}{cc(pc(v["o26"], v["s26"]))}{cc(pc(v["o26"], v["le"]))}{cc(pc(v["o26"], v["bud"]))}{cc(pc(v["j26"], v["j25"]))}{cc(pc(v["y26"], v["y25"]))}</tr>')
+t_ = tot_c
+crow.append(f'<tr class="tot"><td class="l">Total</td><td>{t_["o26"]:.1f}</td><td>{chgp(pc(t_["o26"], t_["o25"]))}</td><td>{chgp(pc(t_["o26"], t_["s26"]))}</td><td>{chgp(pc(t_["o26"], t_["le"]))}</td><td>{chgp(pc(t_["o26"], t_["bud"]))}</td><td>{chgp(pc(t_["j26"], t_["j25"]))}</td><td>{chgp(pc(t_["y26"], t_["y25"]))}</td></tr>')
+# bridge: October actual less the LE, by class (GWh)
+def bridge_svg(w=330, h=190):
+    vals = [(c, cv[c]['o26'] - cv[c]['le']) for c in CLS]; mx = max(abs(v) for _, v in vals) or 1
+    x0 = 150; scale = (w - x0 - 40) / (2 * mx); zx = x0 + mx * scale
+    out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="100%" style="display:block">']
+    for i, (c, v) in enumerate(vals):
+        y = 8 + i * 28; bw = abs(v) * scale; bx = zx if v >= 0 else zx - bw
+        out.append(f'<text x="0" y="{y + 12}" font-size="8" font-family="Arial" fill="#1F1F1F">{CNAME[c]}</text>')
+        out.append(f'<rect x="{bx:.1f}" y="{y}" width="{max(bw, 1):.1f}" height="16" fill="{GREEN if v >= 0 else RED}"/>')
+        lx = zx + bw + 4 if v >= 0 else zx - bw - 4
+        out.append(f'<text x="{lx:.1f}" y="{y + 12}" font-size="8" font-family="Arial" font-weight="bold" fill="#1F1F1F" text-anchor="{"start" if v >= 0 else "end"}">{chg(v, 1)}</text>')
+    out.append(f'<line x1="{zx:.1f}" y1="2" x2="{zx:.1f}" y2="{h - 8}" stroke="#66788A" stroke-width="0.8"/></svg>')
+    return ''.join(out)
+r10d = cv['RT10']['o26'] - cv['RT10']['le']; oth = sum(cv[c]['o26'] - cv[c]['le'] for c in CLS if c != 'RT10')
+SC = json.load(open('_oct_anomaly_scan.json')); oc_, sp_ = SC['oct'], SC['sep']
+al25 = CB['_alcoa_oct25']; al26 = oc_['100185-607213']['net'] / 1e6; al_cr = -oc_['100185-607213']['adj'] / 1e6
+catch20 = sum(oc_[k]['adj'] for k in ('1410783-1015430', '1576881-1260246')) / 1e6
+catch40 = sum(oc_[k]['adj'] for k in ('100012-172245', '1050236-1120260')) / 1e6
+wmp = (sp_['100312-100512']['net'] - oc_['100312-100512']['net']) / 1e3
+pac = oc_['1411748-834411']['net'] / 1e6
+brk = mv['100058']['10'] - mv['100058']['9']; nwc = mv['100012']['10'] - mv['100012']['9']
+rt20_underlying = pc(cv['RT20']['o26'] - catch20, cv['RT20']['o25'])
+class_html = f'''<div class="page">
+<div class="top"><div><h1>By rate class: what is driving each</h1></div><div class="sub">Jamaica Public Service | page 3 of 7<br>October 2026, GWh billed including prepaid</div></div>
+<div class="head">October is {chgp(pc(t_["o26"], t_["o25"]))} on last year and level with the LE. Since July the system is level on last year ({chgp(pc(t_["j26"], t_["j25"]))}): residential and RT20 are up about 4%, RT50 is down {abs(pc(cv["RT50"]["j26"], cv["RT50"]["j25"])) * 100:.0f}% on hotels and RT70 is down {abs(pc(cv["RT70"]["j26"], cv["RT70"]["j25"])) * 100:.0f}% on Alcoa.</div>
+<table class="t7"><tr><th class="l">Rate class</th><th>Oct 26</th><th>vs Oct 25</th><th>vs Sep</th><th>vs LE</th><th>vs budget</th><th>Jul-Oct vs 2025</th><th>YTD vs 2025</th></tr>{''.join(crow)}</table>
+<div class="small">The LE is the financials forecast held. October 2025 includes the storm of 28 October, so every comparison with it is flattered. July to October is the post-recovery period. Year to date is January to October. Prepaid is included.</div>
+<div class="row" style="margin-top:3.4mm"><div style="flex:1"><div class="sec">October actual less the LE, GWh</div>{bridge_svg()}</div>
+<div style="flex:1.5"><div class="sec">What is driving each class</div><div class="box items"><ul>
+<li><b>Residential.</b> Down {abs(pc(cv["RT10"]["o26"], cv["RT10"]["s26"])) * 100:.1f}% on September in the heavy-use buckets (page 5). The LE holds October flat on September, so the {abs(pc(cv["RT10"]["o26"], cv["RT10"]["le"])) * 100:.1f}% gap to the LE is phasing.</li>
+<li><b>RT20.</b> Back above its pre-storm level. About {catch20:.1f} GWh of October is catch-up billing that will not repeat. Without it the month is {chgp(rt20_underlying)} on last year.</li>
+<li><b>RT40.</b> Two accounts, Caribbean Broilers and National Water Commission, are the whole movement on September (page 4). Catch-up bills add about {catch40:.2f} GWh.</li>
+<li><b>RT50.</b> {chgp(pc(cv["RT50"]["o26"], cv["RT50"]["o25"]))} on last October is the storm base. Hotels are still {abs(yoy("hotels", 10)) * 100:.0f}% down, and West Meat Packers is falling ({wmp:.0f} MWh on September).</li>
+<li><b>RT60.</b> Street lighting, steady at {cv["RT60-ST"]["o26"]:.1f} GWh a month.</li>
+<li><b>RT70.</b> {abs(pc(cv["RT70"]["o26"], cv["RT70"]["o25"])) * 100:.0f}% below last October, which is Alcoa ({al26:.2f} GWh against {al25:.1f} a year ago, after a {al_cr:.1f} GWh billing credit). Petrojam is back after its September fire. PAC's solar is not yet in the bills ({pac:.2f} GWh).</li></ul></div></div></div>
+<div class="foot"><span><b>Jamaica Public Service</b> | Sales Analysis | October 2026</span><span>Budget is the 2026 account-level budget.</span></div>
+</div>
+'''
+
+
+# ---------- who moved: top and bottom companies by rate class, and residential bucket movement ----------
+WM = json.load(open('_oct_who_moved.json'))
+WNAME = {'RT20': 'RT20 Small commercial', 'RT40': 'RT40 Commercial', 'RT50': 'RT50 Large commercial', 'RT60-ST': 'RT60 Street lighting', 'RT70': 'RT70 Industrial'}
+NOTE = {'RT40|100058': 'Billing timing', 'RT70|101188': 'Back after September fire outage', 'RT70|100185': 'Left the grid; 2.0 GWh credit in October', 'RT20|1410783': 'New account; catch-up bill', 'RT20|1576881': 'Catch-up bill', 'RT40|1050236': 'Catch-up bill'}
+def tname(n):
+    n = (n or '').strip(); n = n.title() if n.isupper() else n
+    return n[:34]
+by_cls = collections.defaultdict(list)
+for key, e in WM['cust'].items():
+    c, cc_ = key.split('|', 1)
+    if max(abs(e['o26']), abs(e['s26']), abs(e['o25'])) < 20000: continue
+    by_cls[c].append((cc_, e))
+wrows = []; shown = {}
+mw = lambda v: f'{v / 1000:,.0f}'
+def smw(x):
+    return '0' if round(x) == 0 else (f'+{x:,.0f}' if x > 0 else MINUS + f'{abs(x):,.0f}')
+def chg_mwh(v):
+    x = v / 1000
+    return f'<td style="color:{col(x)};font-weight:bold">{smw(x)}</td>'
+n_row = 0
+for c in ('RT20', 'RT40', 'RT50', 'RT60-ST', 'RT70'):
+    L = by_cls[c]; L.sort(key=lambda t: t[1]['o26'] - t[1]['s26'])
+    down = L[:3]; up = L[::-1][:3]
+    tot_o, tot_s = sum(e['o26'] for _, e in L), sum(e['s26'] for _, e in L)
+    wrows.append(f'<tr class="tot"><td class="l" colspan="8">{WNAME[c]}: {len(L)} customers over 20 MWh, {mw(tot_o)} MWh in October, {smw((tot_o - tot_s) / 1000)} MWh on September</td></tr>')
+    flat = all(abs(e['o26'] - e['s26']) < 1 for _, e in L)
+    if flat:
+        wrows.append('<tr><td class="l" colspan="8" style="font-size:7.2pt">No movement: these accounts bill the same kWh every month. The largest are ' + ' and '.join('%s (%s MWh)' % (tname(e['name']).replace('&', '&amp;'), mw(e['o26'])) for _, e in sorted(L, key=lambda t: -t[1]['o26'])[:2]) + '.</td></tr>')
+    for grp, lab in (() if flat else ((up, 'Up'), (down, 'Down'))):
+        for cc_, e in grp:
+            n_row += 1
+            d = e['o26'] - e['s26']; d25 = e['o26'] - e['o25']
+            wrows.append(f'<tr class="{"alt" if n_row % 2 else ""}"><td class="l" style="color:{GREEN if lab == "Up" else RED};font-weight:bold">{lab}</td><td class="l" style="white-space:nowrap">{tname(e["name"])}</td><td>{mw(e["o26"])}</td><td>{mw(e["s26"])}</td>{chg_mwh(d)}<td>{mw(e["o25"])}</td>{chg_mwh(d25)}<td class="l" style="font-size:6.8pt">{NOTE.get(c + "|" + cc_, "")}</td></tr>')
+    shown[c] = (up, down)
+bro = [e for k, e in WM['cust'].items() if k == 'RT40|100058'][0]; pet = [e for k, e in WM['cust'].items() if k == 'RT70|101188'][0]; alc = [e for k, e in WM['cust'].items() if k == 'RT70|100185'][0]
+who_html = f'''<div class="page">
+<div class="top"><div><h1>Who moved: top and bottom companies</h1></div><div class="sub">Jamaica Public Service | page 4 of 7<br>Billed MWh by rate class, October 2026</div></div>
+<div class="head">A handful of accounts explain the commercial movement. Caribbean Broilers ({smw((bro["o26"] - bro["s26"]) / 1000)} MWh) and Petrojam ({smw((pet["o26"] - pet["s26"]) / 1000)} MWh) are not growth: Broilers is billing timing and Petrojam is back after its September fire. Alcoa ({smw((alc["o26"] - alc["s26"]) / 1000)} MWh) has left the grid.</div>
+<table class="t7"><tr><th class="l" style="width:6%"></th><th class="l">Company</th><th>Oct 26</th><th>Sep 26</th><th>vs Sep</th><th>Oct 25</th><th>vs Oct 25</th><th class="l">Note</th></tr>{''.join(wrows)}</table>
+<div class="small">Three largest rises and falls on September in each class, among customers above 20 MWh in either month. Customers are grouped across all their premises. Alcoa is shown after a 2.0 GWh billing credit. October 2025 includes the storm of 28 October.</div>
+<div class="foot"><span><b>Jamaica Public Service</b> | Sales Analysis | October 2026</span><span>Net billed kWh, shown in MWh.</span></div>
+</div>
+'''
+# ---- residential bucket movement ----
+BO = ['<Zero', 'Zero', '<150', '150>350', '350>550', '550>750', '750>950', 'over 950']
+BL = {'<Zero': 'Negative kWh (credit)', 'Zero': 'Zero kWh', '<150': 'Under 150', '150>350': '150 to 350', '350>550': '350 to 550', '550>750': '550 to 750', '750>950': '750 to 950', 'over 950': 'Over 950'}
+WB = WM['bands']; MG = WM['mig']
+arow = []
+for i, b in enumerate(BO):
+    o26c, s26c, o25c = WB['o26'][b][0], WB['s26'][b][0], WB['o25'][b][0]
+    o26k, s26k, o25k = WB['o26'][b][1] / 1e6, WB['s26'][b][1] / 1e6, WB['o25'][b][1] / 1e6
+    avg = lambda k, c: f'{k * 1e6 / c:,.0f}' if c and b not in ('Zero',) else '—'
+    arow.append(f'<tr class="{"alt" if i % 2 else ""}"><td class="l">{BL[b]}</td><td>{o26c:,.0f}</td><td style="color:{col(o26c - s26c)};font-weight:bold">{f"{o26c - s26c:+,.0f}".replace("-", MINUS)}</td><td style="color:{col(o26c - o25c)}">{f"{o26c - o25c:+,.0f}".replace("-", MINUS)}</td><td>{o26k:.2f}</td><td style="color:{col(o26k - s26k)};font-weight:bold">{chg(o26k - s26k, 2)}</td><td style="color:{col(o26k - o25k)}">{chg(o26k - o25k, 2)}</td><td>{avg(o26k, o26c)}</td><td>{avg(s26k, s26c)}</td></tr>')
+ST = ['<150', '150>350', '350>550', '550>750', '750>950', 'over 950']
+NB_ = 'Not billed'; AX = ['<Zero', 'Zero'] + ST + [NB_]
+mig_rows = []
+for i, a in enumerate(AX):
+    cells = []; tot = sum(MG.get(a + '>' + b, 0) for b in AX)
+    for b in AX:
+        v = MG.get(a + '>' + b, 0)
+        st = 'font-weight:bold;background:#DCE6F1' if a == b else ''
+        cells.append(f'<td style="{st}">{v:,}</td>')
+    mig_rows.append(f'<tr class="{"alt" if i % 2 else ""}"><td class="l">{BL.get(a, a)}</td>{"".join(cells)}<td style="font-weight:bold">{tot:,}</td></tr>')
+def split_key(k):
+    for a_ in BO + [NB_]:
+        if k.startswith(a_ + '>') and k[len(a_) + 1:] in BO + [NB_]: return a_, k[len(a_) + 1:]
+    raise ValueError(k)
+rank = {b: k for k, b in enumerate(ST)}
+stay = up_ = dn_ = 0; heavy_s = heavy_dn = heavy_up = heavy_stay = 0
+for k, v in MG.items():
+    a, b = split_key(k)
+    if a in rank and b in rank:
+        if a == b: stay += v
+        elif rank[b] > rank[a]: up_ += v
+        else: dn_ += v
+        if rank[a] >= 2:
+            heavy_s += v
+            if a == b: heavy_stay += v
+            elif rank[b] < rank[a]: heavy_dn += v
+            else: heavy_up += v
+z_stay = MG.get('Zero>Zero', 0); z_back = sum(MG.get('Zero>' + b, 0) for b in ST); z_new = sum(MG.get(a + '>Zero', 0) for a in ST)
+z_tot = sum(MG.get('Zero>' + b, 0) for b in AX)
+h26 = sum(WB['o26'][b][0] for b in ST[2:]); h25 = sum(WB['s26'][b][0] for b in ST[2:]); h24 = sum(WB['o25'][b][0] for b in ST[2:])
+hk26 = sum(WB['o26'][b][1] for b in ST[2:]) / 1e6; hk25 = sum(WB['s26'][b][1] for b in ST[2:]) / 1e6
+lowc = sum(WB['o26'][b][0] - WB['s26'][b][0] for b in ST[:2])
+bucket_html = f'''<div class="page">
+<div class="top"><div><h1>Residential: consumption bucket movement</h1></div><div class="sub">Jamaica Public Service | page 5 of 7<br>RT10 postpaid, Oct vs Sep 2026</div></div>
+<div class="head">{heavy_dn / heavy_s * 100:.0f}% of the customers using over 350 kWh in September fell to a lower bucket in October. The heavy buckets lost {h25 - h26:,.0f} customers and {hk25 - hk26:.1f} GWh, while the two lowest buckets gained {lowc:,.0f}.</div>
+<div class="sec">Customers and volume by bucket</div>
+<table class="t7"><tr><th class="l">Bucket (kWh a month)</th><th>Customers</th><th>vs Sep</th><th>vs Oct 25</th><th>GWh</th><th>vs Sep</th><th>vs Oct 25</th><th>Avg kWh Oct</th><th>Avg kWh Sep</th></tr>{''.join(arow)}</table>
+<div class="small">Postpaid customers billed in the month. Prepaid is not in the buckets. Oct 25 is the storm month. The negative bucket holds bills that net to a credit.</div>
+<div class="sec" style="margin-top:3.4mm">Where customers moved: September bucket (rows) to October bucket (columns), number of customers</div>
+<table class="t7"><tr><th class="l">Sep bucket</th>{''.join(f'<th>{BL.get(b, b)}</th>' for b in AX)}<th>Total</th></tr>{''.join(mig_rows)}</table>
+<div class="small">Shaded diagonal is customers who stayed in the same bucket. Negative kWh customers are bills that net to a credit: customers exporting more than they import, and reversed or cancelled bills. Not billed means no bill in that month.</div>
+<div class="box items" style="margin-top:3mm"><div class="sec">What the movement shows</div><ul>
+<li><b>Heavy users stepped down.</b> Of {heavy_s:,} customers over 350 kWh in September, {heavy_stay:,} stayed, {heavy_dn:,} dropped and {heavy_up:,} moved up. Customers over 350 kWh are {h26:,.0f} now against {h25:,.0f} in September and {h24:,.0f} a year ago.</li>
+<li><b>Across all buckets,</b> {up_:,} customers moved up, {dn_:,} moved down and {stay:,} stayed put, so the step down is broad, not a few customers.</li>
+<li><b>Zero kWh barely moved.</b> Of {z_tot:,} customers at zero in September, {z_stay:,} are still at zero, {z_back:,} returned to usage and {MG.get("Zero>Not billed", 0):,} had no bill. {z_new:,} customers fell to zero from usage.</li></ul></div>
+<div class="foot"><span><b>Jamaica Public Service</b> | Sales Analysis | October 2026</span><span>Customer here is a metered service line.</span></div>
+</div>
+'''
+
 html = f'''<!doctype html><html><head><meta charset="utf-8"><title>JPS Sales Analysis October 2026: recovery, parish and industry</title><style>{CSS}
 .page {{ page-break-after: always; }} .page:last-child {{ page-break-after: auto; }} .top h1 {{ font-size: 18pt; white-space: nowrap; }} .head {{ font-size: 11.5pt; margin: 3mm 0 2.6mm; }}
 .t7 td {{ padding: 0.8mm 0.9mm; font-size: 7.6pt; }} .t7 th {{ font-size: 6.9pt; padding: 0.9mm 0.7mm; }} .box ul {{ margin: 0; padding-left: 4mm; font-size: 8pt; }} .box li {{ margin-bottom: 1.1mm; }}
@@ -135,7 +296,7 @@ html = f'''<!doctype html><html><head><meta charset="utf-8"><title>JPS Sales Ana
 </style></head><body>
 
 <div class="page">
-<div class="top"><div><h1>October 2026: how far has the recovery got?</h1></div><div class="sub">Jamaica Public Service | page 1 of 4<br>Billed volume including prepaid</div></div>
+<div class="top"><div><h1>October 2026: how far has the recovery got?</h1></div><div class="sub">Jamaica Public Service | page 1 of 7<br>Billed volume including prepaid</div></div>
 <div class="head">Residential and small commercial are through the recovery. Large commercial is not: hotels are still {abs(yoy("hotels", 10)) * 100:.0f}% down, Alcoa has left the grid and the hurricane-hit west is still below last year.</div>
 <div class="verdict">Recovery is still under way in three places. <b>Hotels</b> have narrowed the gap to last year from {abs(yoy("hotels", 1)) * 100:.0f}% in January to {abs(yoy("hotels", 10)) * 100:.0f}%. <b>The western parishes</b> are closer but not back. And <b>{z["2026-10"] - z["2025-10"]:,} more residential premises than before the storm</b> are still billing zero consumption, a number that has not moved since June. Everywhere else we are either back above where we were before the storm (residential, RT20, water supply) or lower for a structural reason (Alcoa and the industrial customers).</div>
 <div class="row"><div style="flex:1.45"><div class="sec">Year on year by month, 2026 vs 2025</div>{line_chart()}
@@ -152,8 +313,9 @@ html = f'''<!doctype html><html><head><meta charset="utf-8"><title>JPS Sales Ana
 <div class="foot"><span><b>Jamaica Public Service</b> | Sales Analysis | October 2026</span><span>Comparisons with 2024 exclude prepaid, held only from 2025.</span></div>
 </div>
 
+{class_html}{who_html}{bucket_html}
 <div class="page">
-<div class="top"><div><h1>Where: parish, industry and KAM</h1></div><div class="sub">Jamaica Public Service | page 3 of 4<br>October 2026, GWh</div></div>
+<div class="top"><div><h1>Where: parish, industry and KAM</h1></div><div class="sub">Jamaica Public Service | page 6 of 7<br>October 2026, GWh</div></div>
 <div class="head">Growth is concentrated in Kingston and St Catherine. St James and Clarendon pull the other way, and each has a single explanation.</div>
 <div class="sec">By parish</div>
 <table class="t7"><tr><th class="l" rowspan="2">Parish</th><th colspan="3">Residential (RT10)</th><th colspan="4">Commercial (RT20 to RT70)</th><th rowspan="2">Total vs<br>2025 (GWh)</th></tr>
@@ -169,24 +331,18 @@ html = f'''<!doctype html><html><head><meta charset="utf-8"><title>JPS Sales Ana
 <li><b>St James</b> commercial is {chgp(pc(P["St. James"]["o26_COMM"], P["St. James"]["o25_COMM"]))} on last year ({chg(P["St. James"]["o26_COMM"] - P["St. James"]["o25_COMM"], 1)} GWh). This is the hotel belt, and hotels are {chg(S["hotels"]["2026-10"] - S["hotels"]["2025-10"], 1)} GWh on last October.</li>
 <li><b>Clarendon</b> commercial is {chgp(pc(P["Clarendon"]["o26_COMM"], P["Clarendon"]["o25_COMM"]))} ({chg(P["Clarendon"]["o26_COMM"] - P["Clarendon"]["o25_COMM"], 1)} GWh), which is Alcoa's refinery. Mining is {chg(I["Other Metal Ore Mining"]["o26"] - I["Other Metal Ore Mining"]["o25"], 1)} GWh on last year.</li>
 <li><b>Kingston South</b> commercial is {chgp(pc(P["KSAS"]["o26_COMM"], P["KSAS"]["o25_COMM"]))} ({chg(P["KSAS"]["o26_COMM"] - P["KSAS"]["o25_COMM"], 1)} GWh), of which Caribbean Cement is {chg(I["Cement Manufacturing"]["o26"] - I["Cement Manufacturing"]["o25"], 1)} on a storm-hit base.</li>
-<li><b>Portmore</b> commercial is {chgp(pc(P["Portmore"]["o26_COMM"], P["Portmore"]["s26_COMM"]))} on September because Caribbean Broilers' main plant is billed there ({chg(mv["100058"]["10"] - mv["100058"]["9"], 1)} GWh). That is billing timing, not growth. Petrojam does the same for Kingston South ({chg(mv["101188"]["10"] - mv["101188"]["9"], 1)} GWh).</li>
+<li><b>Portmore</b> commercial is {chgp(pc(P["Portmore"]["o26_COMM"], P["Portmore"]["s26_COMM"]))} on September because Caribbean Broilers' main plant is billed there ({chg(mv["100058"]["10"] - mv["100058"]["9"], 1)} GWh). That is billing timing, not growth. Kingston South also gains from Petrojam returning after its September fire ({chg(mv["101188"]["10"] - mv["101188"]["9"], 1)} GWh).</li>
 <li><b>Residential</b> is up in the east and centre ({chgp(pc(sum(P[w]["o26_RT10"] for w in P if w not in west), sum(P[w]["o25_RT10"] for w in P if w not in west)))} on 2025) and down in the west ({chgp(pc(sum(P[w]["o26_RT10"] for w in west), sum(P[w]["o25_RT10"] for w in west)))}).</li></ul></div>
 <div class="foot"><span><b>Jamaica Public Service</b> | Sales Analysis | October 2026</span><span>Industry and KAM views cover accounts RT20 and above.</span></div>
 </div>
 
 <div class="page">
-<div class="top"><div><h1>What is driving the swing, and 2027</h1></div><div class="sub">Jamaica Public Service | page 4 of 4<br>Residential down, commercial up</div></div>
-<div class="head">Residential fell {abs(res_oct / res_sep - 1) * 100:.1f}% on September, all of it in the heavy-use bands, and commercial rose {abs(T["o26_COMM"] / T["s26_COMM"] - 1) * 100:.1f}%, about half of it a rebound from September timing. Neither is a trend, and the 2027 plan leans on both.</div>
-<div class="row"><div style="flex:1"><div class="sec">Residential: where the fall is (October vs September)</div>
-<table class="t7"><tr><th class="l">RT10 band (kWh a month)</th><th>Oct GWh</th><th>vs Sep</th><th>Customers</th><th>vs Sep</th><th>vs 2025</th></tr>{''.join(brow)}</table>
-<div class="small">Customers using over 350 kWh a month fell by {abs(hi_c):,.0f} and used {abs(hi_k):.1f} GWh less, while the two lowest bands added {lo_k:.1f} GWh. The fall is in the heavy users, which points to cooling load easing as the weather cools. Temperature data would confirm it.</div></div>
-<div style="flex:1"><div class="sec">Commercial: what moved (September to October, GWh, by customer)</div>
-<table class="t7"><tr><th class="l">Customer</th><th>Sep</th><th>Oct</th><th>Change</th><th class="l" style="text-align:left">Read</th></tr>{''.join(mrow)}</table>
-<div class="small">Net movement across customers is {chg(tot_up + tot_dn, 1)} GWh. Timing at Caribbean Broilers and Petrojam accounts for {chg(timing_g, 1)} GWh of it, {abs(timing_g / (tot_up + tot_dn)) * 100:.0f}%.</div></div></div>
+<div class="top"><div><h1>What is driving the swing, and 2027</h1></div><div class="sub">Jamaica Public Service | page 7 of 7<br>Residential down, commercial up</div></div>
+<div class="head">Residential fell {abs(res_oct / res_sep - 1) * 100:.1f}% on September and commercial rose {abs(T["o26_COMM"] / T["s26_COMM"] - 1) * 100:.1f}%, about half of it Caribbean Broilers and Petrojam recovering from a low September. Neither is a trend, and the 2027 plan leans on both.</div>
 <div class="row" style="margin-top:3mm"><div class="box items" style="flex:1"><div class="sec">What is driving the swing</div><ul>
-<li><b>Residential vs September ({chg(res_oct - res_sep, 1)} GWh).</b> This is seasonal and sits in the heavy-use bands. It is also deeper than the {chg((c24["2024-10"]["RT10"] / c24["2024-09"]["RT10"] - 1) * 100, 1)}% October move in 2024. The structural drags are small but real: we have {nb26:,.0f} net-export accounts against {nb25:,.0f} last October, exporting {abs(nbk26) * 1000:,.0f} MWh against {abs(nbk25) * 1000:,.0f}, and {z["2026-10"] - z["2025-10"]:,} more premises sitting at zero consumption.</li>
-<li><b>Residential vs the LE.</b> The LE has RT10 flat on September, while 2024 and 2025 both show a fall. That is phasing, not weakness, but it carries into November and December.</li>
-<li><b>Commercial vs September ({chg(T["o26_COMM"] - T["s26_COMM"], 1)} GWh).</b> Half is a rebound from a low September at Caribbean Broilers and Petrojam, so October is a normal month and not a step up. National Water Commission's {chg(mv["100012"]["10"] - mv["100012"]["9"], 1)} GWh is the one rise that is not timing: {mv["100012"]["10"]:.1f} GWh against {mv["100012"]["7"]:.1f} and {mv["100012"]["8"]:.1f} in July and August, with water supply {chgp(yoy("water", 10))} on last year. Whether it holds depends on pumping demand.</li></ul></div>
+<li><b>Residential vs September ({chg(res_oct - res_sep, 1)} GWh).</b> Seasonal and spread across the heavy-use buckets (page 5). It is deeper than the {chg((c24["2024-10"]["RT10"] / c24["2024-09"]["RT10"] - 1) * 100, 1)}% October move in 2024. The structural drag is small but real: {nb26:,.0f} net-export accounts against {nb25:,.0f} last October, exporting {abs(nbk26) * 1000:,.0f} MWh against {abs(nbk25) * 1000:,.0f}.</li>
+<li><b>Residential vs the LE.</b> The LE has RT10 flat on September, while 2024 and 2025 both fall. That is phasing, not weakness, but it carries into November and December.</li>
+<li><b>Commercial vs September ({chg(T["o26_COMM"] - T["s26_COMM"], 1)} GWh).</b> Caribbean Broilers (billing timing) and Petrojam (back after its September fire) are {chg(timing_g, 1)} GWh of it, {abs(timing_g / (tot_up + tot_dn)) * 100:.0f}%, so October is a normal month and not a step up (page 4). National Water Commission's {chg(mv["100012"]["10"] - mv["100012"]["9"], 1)} GWh is the one real rise: {mv["100012"]["10"]:.1f} GWh against {mv["100012"]["7"]:.1f} and {mv["100012"]["8"]:.1f} in July and August, with water supply {chgp(yoy("water", 10))} on last year. Whether it holds depends on pumping demand.</li></ul></div>
 <div class="box" style="flex:1.1"><div class="sec">FY2026 landing if the year ends like 2024 (GWh)</div>
 <table class="t7"><tr><th class="l">Class</th><th>FY26 LE</th><th>FY26 outlook</th><th>Gap</th><th>FY27 plan</th><th>vs LE</th><th>vs outlook</th></tr>{orow}</table>
 <div class="small">The outlook is January to October actual, with November and December run from October's level and 2024's October to December pattern for each class (RT70 held flat). It rests on one year's pattern, so treat it as an indication, not a forecast.</div></div></div>

@@ -930,6 +930,12 @@ document.getElementById('schema_stale_banner').style.display='none';
         </div>
       </div>
       <div class="card">
+        <div class="ch">Residential by Parish: Recovery vs Last Year <span>RT10, postpaid and prepaid, year on year by month</span>
+          <div style="display:flex;gap:6px"><button class="btn btn-o" onclick="exportTableCSV('rsprec_dt','residential_parish_recovery')">⬇ CSV</button></div>
+        </div>
+        <div class="tbl-wrap" id="rs_prec_tbl"></div>
+      </div>
+      <div class="card">
         <div class="ch">Parish × Consumption Bracket Performance
           <div style="display:flex;gap:6px"><button class="btn btn-o" onclick="exportTableCSV('rs_par_tbl','residential_parish')">⬇ CSV</button></div>
         </div>
@@ -4585,7 +4591,7 @@ function renderSection(id){
       renderCmCust();renderCmIndTbl();
     }
   }
-  else if(id==='rs'){renderRsKPIs();renderRsPar();try{mkBracketCharts();}catch(e){if(window.JpsMonitor)JpsMonitor.warning('charts:bracket',e?.message||String(e));}}
+  else if(id==='rs'){renderRsKPIs();renderRsPar();renderRsParRecovery();try{mkBracketCharts();}catch(e){if(window.JpsMonitor)JpsMonitor.warning('charts:bracket',e?.message||String(e));}}
   else if(id==='df'){renderDefectors();renderDefKPIs();}
   else if(id==='fc'){renderFcEntry();renderMacroGrid();renderFcKPIs();}
   else if(id==='ro'){filterRO();updateROAutoFlags();}
@@ -5869,6 +5875,74 @@ function renderRsPar(){
       <td><span class="heat ${hc(p)}">${p>=0?'+':''}${p.toFixed(1)}%</span></td>
     </tr>`;}).join('')}</tbody></table>`;
   makeSortable('rspar_dt');
+}
+
+/* ==========================================
+   RESIDENTIAL BY PARISH: RECOVERY
+   jps_res_parish holds RT10 by parish and segment (Postpaid from the billing scan, Prepaid from 2025).
+   It is not a materialized view, so it is fetched directly and re-fetched after a sync.
+========================================== */
+let _resParish=null,_resParishYr=null,_resParishLoading=null,_resParishFailed=false;
+const RES_WEST_PARISHES=['Westmoreland','Hanover','St. James','St. Elizabeth','Trelawny']; // hurricane-hit western parishes
+async function loadResParish(force){
+  if(_resParishLoading)return _resParishLoading;
+  if(_resParish&&!force&&_resParishYr===curYear)return;
+  const sb=getSB();if(!sb)return;
+  const yr=curYear;
+  _resParishLoading=(async()=>{
+    try{
+      const{data,error}=await sb.rpc('get_res_parish',{year_cutoff:yr-1});
+      if(error)throw error;
+      _resParish=data||[];_resParishYr=yr;_resParishFailed=false;
+    }catch(e){
+      console.error('[res-parish] get_res_parish failed:',e);
+      if(window.JpsMonitor&&JpsMonitor.error)JpsMonitor.error('rs:parish_load',e.message||String(e));
+      _resParishFailed=true;
+      toast('Residential parish data failed to load. Figures are missing, not zero.','w');
+    }finally{_resParishLoading=null;}
+    renderRsParRecovery();
+  })();
+  return _resParishLoading;
+}
+function renderRsParRecovery(){
+  const el=document.getElementById('rs_prec_tbl');if(!el)return;
+  if(_resParishFailed){el.innerHTML='<div style="padding:20px;text-align:center;font-size:11px;color:var(--text3)">Residential parish data failed to load. <button class="btn btn-o" onclick="_resParishFailed=false;loadResParish(true)">Retry</button></div>';return;}
+  if(!_resParish||_resParishYr!==curYear){
+    el.innerHTML='<div style="padding:20px;text-align:center;font-size:11px;color:var(--text3)">Loading parish data…</div>';
+    loadResParish();return;
+  }
+  const cy=curYear,py=curYear-1,ph=getPH(),pm=new Set(getPM());
+  const withPrepaid=py>=2025; // prepaid is held from 2025, so it only belongs in a comparison where both years have it
+  const agg={}; // parish -> 'yr-mo' -> kwh
+  _resParish.forEach(r=>{
+    if(r.segment==='Prepaid'&&!withPrepaid)return;
+    const yr=Number(r.year),mo=Number(r.month);
+    if(yr!==cy&&yr!==py)return;
+    const p=String(r.parish||'').trim();if(!p)return;
+    const a=agg[p]||(agg[p]={});const k=yr+'-'+mo;
+    a[k]=(a[k]||0)+Number(r.kwh||0);
+  });
+  const names=Object.keys(agg);
+  if(!names.length){el.innerHTML='<div style="padding:20px;text-align:center;font-size:11px;color:var(--text3)">No residential parish data for '+cy+'. Load it with _push_res_parish.py.</div>';return;}
+  const months=Array.from({length:curMonth},(_,i)=>i+1);
+  const sum=(a,yr,ms)=>{let s=0,n=0;ms.forEach(m=>{const v=a[yr+'-'+m];if(v!=null){s+=v;n++;}});return n===ms.length?s:null;}; // null unless every month in the period is loaded
+  const cell=(c,p)=>(c==null||p==null||!p)?'<td style="color:var(--text3)">—</td>':(v=>`<td><span class="heat ${hc(v)}">${v>=0?'+':''}${v.toFixed(1)}%</span></td>`)(pct(c,p));
+  const build=(label,a,west)=>{
+    const c=sum(a,cy,[...pm]),p=sum(a,py,[...pm]);
+    return `<tr><td style="font-weight:600">${esc(label)}${west?' <span style="color:var(--text3);font-weight:400">(W)</span>':''}</td>`
+      +`<td style="font-weight:600">${c==null?'—':(c/1e6).toFixed(2)}</td><td style="color:var(--text3)">${p==null?'—':(p/1e6).toFixed(2)}</td>`
+      +cell(c,p)+months.map(m=>cell(a[cy+'-'+m],a[py+'-'+m])).join('')+'</tr>';
+  };
+  const rows=names.map(n=>({n,a:agg[n],cur:sum(agg[n],cy,[...pm])||0})).sort((x,y)=>y.cur-x.cur);
+  // a group month counts only when every parish in the group has it, so a missing parish month shows as a dash instead of a false fall
+  const group=list=>{const g={};const keys=new Set();list.forEach(n=>Object.keys(agg[n]).forEach(k=>keys.add(k)));keys.forEach(k=>{if(list.every(n=>agg[n][k]!=null))g[k]=list.reduce((s,n)=>s+agg[n][k],0);});return g;};
+  const tot=group(names),west=group(names.filter(n=>RES_WEST_PARISHES.includes(n))),nonWest=group(names.filter(n=>!RES_WEST_PARISHES.includes(n)));
+  el.innerHTML=`<table class="dt" id="rsprec_dt">
+    <thead><tr><th>Parish</th><th>${cy} ${ph} (GWh)</th><th>${py} ${ph} (GWh)</th><th>YoY</th>${months.map(m=>`<th>${MONTHS_SHORT[m-1]}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(r=>build(r.n,r.a,RES_WEST_PARISHES.includes(r.n))).join('')}
+    <tr style="border-top:2px solid var(--border)"><td colspan="${4+months.length}" style="font-size:10px;color:var(--text3);padding:4px 8px">Groups</td></tr>
+    ${build('West (W)',west,false)}${build('East and centre',nonWest,false)}${build('All parishes',tot,false)}</tbody></table>
+    <div style="font-size:10px;color:var(--text3);padding:6px 8px">(W) marks the five hurricane-hit western parishes. Monthly columns are ${cy} vs ${py}, ${withPrepaid?'postpaid plus prepaid':'postpaid only (prepaid is held from 2025)'}. ${py===2025?'October 2025 includes the storm of 28 October, so October is flattered. ':''}A dash means the month is not loaded.</div>`;
 }
 
 /* ==========================================
@@ -10472,6 +10546,7 @@ async function syncSupabase(silent=false){
     // as empty. Note this is the in-memory form of the delete-safe upload rule: write
     // the new state first, retire the old state after — never clear then repopulate.
     const _wasCommLoaded=_commDetailLoaded, _wasLeLoaded=_leDetailLoaded;
+    _resParish=null;_resParishFailed=false; // reloaded on the next Residential render, so a sync never leaves stale parish rows
 
     const anyOk=actOk||budOk||!!ng;
     sbConnected=anyOk;

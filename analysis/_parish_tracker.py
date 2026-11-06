@@ -86,7 +86,7 @@ east_res = sum(V[('2026-10', p, 'RES')] for p in parishes if p not in West) / su
 html = f'''<!doctype html><html><head><meta charset="utf-8"><title>JPS Parish Recovery Tracker October 2026</title><style>{CSS}
 .top h1 {{ font-size: 18pt; }} .t7 td {{ padding: 0.6mm 0.6mm; font-size: 7.2pt; }} .t7 th {{ font-size: 6.6pt; padding: 0.8mm 0.4mm; }} .small {{ font-size: 7.2pt; color: {GREY}; margin-top: 1.2mm; }} .head {{ font-size: 11.5pt; margin: 2.4mm 0 2mm; }}
 </style></head><body><div class="page">
-<div class="top"><div><h1>Parish recovery tracker: October 2026</h1></div><div class="sub">Jamaica Public Service | page 2 of 4<br>Billed volume including prepaid, year on year</div></div>
+<div class="top"><div><h1>Parish recovery tracker: October 2026</h1></div><div class="sub">Jamaica Public Service | page 2 of 7<br>Billed volume including prepaid, year on year</div></div>
 <div class="head">Residential volumes are above last year in the east and centre and still below it in the west. The commercial gap sits in St James (hotels) and Clarendon (Alcoa).</div>
 {block('RES', 'Residential (RT10)')}
 <div style="height:3.2mm"></div>
