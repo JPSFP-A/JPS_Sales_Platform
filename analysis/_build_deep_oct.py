@@ -209,7 +209,7 @@ def chg_mwh(v):
 n_row = 0
 for c in ('RT20', 'RT40', 'RT50', 'RT60-ST', 'RT70'):
     L = by_cls[c]; L.sort(key=lambda t: t[1]['o26'] - t[1]['s26'])
-    down = L[:3]; up = L[::-1][:3]
+    down = L[:5]; up = L[::-1][:5]
     tot_o, tot_s = sum(e['o26'] for _, e in L), sum(e['s26'] for _, e in L)
     wrows.append(f'<tr class="tot"><td class="l" colspan="8">{WNAME[c]}: {len(L)} customers over 20 MWh, {mw(tot_o)} MWh in October, {smw((tot_o - tot_s) / 1000)} MWh on September</td></tr>')
     flat = all(abs(e['o26'] - e['s26']) < 1 for _, e in L)
@@ -225,8 +225,8 @@ bro = [e for k, e in WM['cust'].items() if k == 'RT40|100058'][0]; pet = [e for 
 who_html = f'''<div class="page">
 <div class="top"><div><h1>Who moved: top and bottom companies</h1></div><div class="sub">Jamaica Public Service | page 4 of 7<br>Billed MWh by rate class, October 2026</div></div>
 <div class="head">A handful of accounts explain the commercial movement. Caribbean Broilers ({smw((bro["o26"] - bro["s26"]) / 1000)} MWh) and Petrojam ({smw((pet["o26"] - pet["s26"]) / 1000)} MWh) are not growth: Broilers is billing timing and Petrojam is back after its September fire. Alcoa ({smw((alc["o26"] - alc["s26"]) / 1000)} MWh) has left the grid.</div>
-<table class="t7"><tr><th class="l" style="width:6%"></th><th class="l">Company</th><th>Oct 26</th><th>Sep 26</th><th>vs Sep</th><th>Oct 25</th><th>vs Oct 25</th><th class="l">Note</th></tr>{''.join(wrows)}</table>
-<div class="small">Three largest rises and falls on September in each class, among customers above 20 MWh in either month. Customers are grouped across all their premises. Alcoa is shown after a 2.0 GWh billing credit. October 2025 includes the storm of 28 October.</div>
+<table class="t7 who"><tr><th class="l" style="width:6%"></th><th class="l">Company</th><th>Oct 26</th><th>Sep 26</th><th>vs Sep</th><th>Oct 25</th><th>vs Oct 25</th><th class="l">Note</th></tr>{''.join(wrows)}</table>
+<div class="small">Five largest rises and falls on September in each class, among customers above 20 MWh in either month. Customers are grouped across all their premises. Alcoa is shown after a 2.0 GWh billing credit. October 2025 includes the storm of 28 October.</div>
 <div class="foot"><span><b>Jamaica Public Service</b> | Sales Analysis | October 2026</span><span>Net billed kWh, shown in MWh.</span></div>
 </div>
 '''
@@ -291,7 +291,7 @@ bucket_html = f'''<div class="page">
 
 html = f'''<!doctype html><html><head><meta charset="utf-8"><title>JPS Sales Analysis October 2026: recovery, parish and industry</title><style>{CSS}
 .page {{ page-break-after: always; }} .page:last-child {{ page-break-after: auto; }} .top h1 {{ font-size: 18pt; white-space: nowrap; }} .head {{ font-size: 11.5pt; margin: 3mm 0 2.6mm; }}
-.t7 td {{ padding: 0.8mm 0.9mm; font-size: 7.6pt; }} .t7 th {{ font-size: 6.9pt; padding: 0.9mm 0.7mm; }} .box ul {{ margin: 0; padding-left: 4mm; font-size: 8pt; }} .box li {{ margin-bottom: 1.1mm; }}
+.t7 td {{ padding: 0.8mm 0.9mm; font-size: 7.6pt; }} .who td {{ padding: 0.35mm 0.9mm; font-size: 7.2pt; }} .t7 th {{ font-size: 6.9pt; padding: 0.9mm 0.7mm; }} .box ul {{ margin: 0; padding-left: 4mm; font-size: 8pt; }} .box li {{ margin-bottom: 1.1mm; }}
 .verdict {{ background: {LIGHT}; border-left: 2.2pt solid {BLUE}; padding: 2.2mm 3.2mm; font-size: 8.6pt; margin-bottom: 3mm; }} .verdict b {{ color: {NAVY}; }} .small {{ font-size: 7.2pt; color: {GREY}; margin-top: 1.2mm; }}
 </style></head><body>
 
