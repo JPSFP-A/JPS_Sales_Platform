@@ -74,7 +74,10 @@ for r in list(csv.reader(open(DL + r'\Rate categorry Data mapping.csv')))[1:]:
             RCMAP[norm(r[1])] = r[0]
 
 
+# EV44 (JPS-owned EV chargers) is tagged rate_class 'EV' and mapped to EV40/RT40 by srat, so title_of never returned RT10. The finance earnings sheet counts it in RT10 (October 2026 reconciliation), so it does here.
 def title_of(rc, srat):
+    if norm(srat) == 'EV44':
+        return 'RT10'
     return RCMAP.get(norm(rc)) or RMAP.get(norm(srat))
 
 
@@ -142,8 +145,9 @@ def proc_rt10(path):
         # net_revenue=net_kwh=0, a zero-billed row tagged differently, not a second
         # billed state) defaults to excluded so a future flag value can't silently
         # slip through as billed.
+        # Same rule as corrected_scan.py: not-billed rows are dropped, except EV44 (flagged not billed in error).
         cb = str(gv(r, 'cust_billed') or '').strip()
-        if cb != '1':
+        if cb != '1' and norm(gv(r, 'Srat_Code')) != 'EV44':
             continue
         rc = str(gv(r, 'rate_class'))
         if rc.strip() in ('PR', 'PC'):
