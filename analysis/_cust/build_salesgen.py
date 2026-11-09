@@ -21,7 +21,9 @@ for _name in ('m26', 'm27', 'm28'):
 bill = {2026: {rc: [v / G for v in _ns['m26'][rc]] for rc in CLS},
         2027: {rc: [v / G for v in _ns['m27'][rc]] for rc in CLS},
         2028: {rc: [v / G for v in _ns['m28'][rc]] for rc in CLS}}
-live = {y: {rc: [v / G for v in E[str(y)][rc]] for rc in CLS} for y in YEARS}   # live platform run, kept for the comparison sheet only
+live = {y: {rc: [v / G for v in E[str(y)][rc]] for rc in CLS} for y in YEARS}
+for _rc in CLS:
+    bill[2026][_rc][8] = live[2026][_rc][8]   # September 2026 actual billed sales by class replaces the register forecast   # live platform run, kept for the comparison sheet only
 tot = {y: [sum(bill[y][rc][m] for rc in CLS) for m in range(12)] for y in YEARS}
 
 # net generation actuals Jan-Aug 2026 (system operations record), MWh
@@ -93,7 +95,7 @@ for yi, y in enumerate(YEARS):
         M.cell(r, 1, f'{MON[m]} {y}').font = F(bold=True, color=NAVY)
         x = M.cell(r, 3, f"='Billed by rate class'!{col_c}{rt}"); x.number_format = '#,##0.0'; x.font = F()
         if y == 2026 and m < 9:
-            M.cell(r, 2, 'Net gen actual' if m < 8 else 'Net gen per scorecard').font = F()
+            M.cell(r, 2, 'Net gen actual' if m < 8 else 'Billed and net gen actual').font = F()
             x = M.cell(r, 6, NG_ACT[m] / 1000); x.number_format = '#,##0.0'; x.font = F(color='0000FF')
             x = M.cell(r, 5, f'=F{r}-C{r}'); x.number_format = '#,##0.0'; x.font = F()
             x = M.cell(r, 4, f'=E{r}/F{r}'); x.number_format = '0.0%'; x.font = F()
@@ -130,13 +132,13 @@ M.freeze_panes = 'C5'
 N = wb.create_sheet('Notes')
 notes = [
  ('Basis', True),
- ('Billed sales are the register figures: FY2026 per the 11 September billed sales table, FY2027 and FY2028 per the Driver Report, by rate class and month. Only net generation and losses have been updated.', False),
+ ('Billed sales are the register figures: FY2026 per the 11 September billed sales table, FY2027 and FY2028 per the Driver Report, by rate class and month. September 2026 is the actual (294.8 GWh) in place of the register forecast of 285.7 GWh.', False),
  ('Net generation for January to August 2026 is the recorded system figure. Losses for those months are net generation less billed sales.', False),
  (f'September 2026 net generation (422.3 GWh) is set so that the rolling 12-month system loss ties to the 26.74% in the September scorecard, struck on finance normalized sales. On the billed sales in this file the September month loss reads {(1 - tot[2026][8] / (NG_ACT[8] / 1000)) * 100:.1f}%. October to December use one loss rate ({R_OPEN * 100:.1f}%) chosen so that FY2026 closes at 27.10% of net generation, in line with the full-year latest estimate in the scorecard.', False),
  ('FY2027 and FY2028 use the seasonal monthly loss path in the platform assumptions.', False),
  ('', False),
  ('Billed sales in the file against a live run of the platform forecast', True),
- ('The Live vs file sheet shows the difference. September actual billed sales are 294.8 GWh against 285.7 GWh in the file; that lifts the October to December base and the level carries into 2027 and 2028. Billed sales in this workbook have not been changed for it.', False),
+ ('The Live vs file sheet shows the difference. September actual billed sales are 294.8 GWh against 285.7 GWh in the register, and September is set to the actual here. The higher September lifts the October to December base in a live run and the level carries into 2027 and 2028; October onward is not changed here.', False),
 ]
 V = wb.create_sheet('Live vs file')
 V['A1'] = 'Billed sales (GWh): file against live platform run'; V['A1'].font = F(bold=True, size=13, color=NAVY)
@@ -165,7 +167,7 @@ for j in range(2, 14): V.column_dimensions[L(j)].width = 12
 for i, (t, b) in enumerate(notes, 1):
     N.cell(i, 1, t).font = F(bold=b, color=NAVY if b else '000000'); N.cell(i, 1).alignment = Alignment(wrap_text=True, vertical='top')
 N.column_dimensions['A'].width = 140
-out = r'C:\Projects\Sales_Platform\JPS_Billed_Sales_and_Net_Gen_FY2026-28_v2.xlsx'
+out = r'C:\Projects\Sales_Platform\JPS_Billed_Sales_and_Net_Gen_FY2026-28_v3.xlsx'
 wb.save(out)
 print('saved', out)
 print('open-month loss rate', round(R_OPEN * 100, 3), 'Jan-Aug actual loss % of NG', round(L_act / (sum(NG_ACT) / 1000) * 100, 2))

@@ -85,6 +85,7 @@ for c in CL: print('%-8s %8.1f %8.1f %8.1f %8.1f %+8.1f %+7.1f%%' % (c, lefy[c],
 print('%-8s %8.1f %8.1f %8.1f %8.1f %+8.1f %+7.1f%%' % ('Total', sum(lefy.values()), sum(fy26.values()), sum(heldfy.values()), T, T - sum(heldfy.values()), (T / sum(fy26.values()) - 1) * 100))
 hot = sum(HOTEL_GAP * hf[m] for m in range(12)); print('hotel uplift', round(hot, 1), 'RT70 overlay/month', round(sum(RT70_OVR.values()), 2), 'WMP', round(WMP * 10, 2))
 json.dump({'f27': f27, 'fy26': fy26, 'held': heldfy, 'le': lefy, 'ratio': ratio, 'hotel': hot}, open(HERE + r'\analysis\_fy27_result.json', 'w'))
+json.dump({'rt10': f27['RT10'], 'fy26': fy26['RT10']}, open(HERE + r'\analysis\_fy27_rt10_base.json', 'w'))   # class-level RT10 before the weather and EV overlays
 
 # --- workbook ------------------------------------------------------------------------------------
 wb = openpyxl.Workbook(); H = Font(bold=True, color='FFFFFF'); HF = PatternFill('solid', fgColor='1F3864'); B = Font(bold=True)

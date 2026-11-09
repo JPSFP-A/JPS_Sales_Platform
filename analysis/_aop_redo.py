@@ -156,15 +156,15 @@ notes.text = ('Basis for the 2027 proposals. Disconnections: 2026 LE less about 
 import json
 from pptx.chart.data import CategoryChartData
 from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION, XL_LABEL_POSITION, XL_TICK_LABEL_POSITION
-BC = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '_fy27_byclass.json')))
+BC = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '_fy27_byclass.json'))); RES = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '_fy27_result.json')))
 set_title(s5, 'Sales by Rate Class: What Is Driving Each', 24)
 for sh in list(s5.shapes):
     if sh.name == 'Content Placeholder 2': sh._element.getparent().remove(sh._element)
 names = {'RT10': 'RT10 Residential', 'RT20': 'RT20 Small commercial', 'RT40': 'RT40 Commercial', 'RT50': 'RT50 Large commercial', 'RT60-ST': 'RT60 Street lighting', 'RT70': 'RT70 Industrial'}
-drv = {'RT10': 'Storm recovery is complete: up 3.9% on 2025 since July. Drags: 7,742 more zero-kWh premises than before the storm, western parishes 3.5% below last year, and 857 net-export customers.',
+drv = {'RT10': 'Storm recovery is complete: up 3.9% on 2025 since July. Drags: 7,742 more zero-kWh premises than before the storm, western parishes 3.5% below last year, and 857 net-export customers. The 2027 base carries a warm year (El Nino, about +6 GWh with RT20 residential) and the JPS EV chargers, which have grown five times since last October.',
        'RT20': 'Fully recovered, 10.4% above October 2024. October carries about 0.3 GWh of catch-up billing that will not repeat.',
        'RT40': 'Flat on last year since July (+0.1%). Water supply is back, hotels are 19% down, and billing timing at Caribbean Broilers moves single months.',
-       'RT50': 'Hotel recovery: Q3 was 13% below 2025. 2027 assumes 30% of the hotel gap is closed in January, rising to 62% by December. West Meat Packers loses 70% of its load from March.',
+       'RT50': 'Hotel recovery: Q3 was 13% below 2025. 2027 assumes 19% of the hotel gap is closed in January, rising to 75% by December, in line with the reopening schedule. West Meat Packers loses 70% of its load from March.',
        'RT60-ST': 'Street lighting and similar. Steady at about 3.4 GWh a month. Early 2026 was low and has recovered.',
        'RT70': 'Customers leaving the grid. Alcoa fell from 7.2 GWh a month in 2025 to 0.26 in October. PAC (4 MW) and MBJ (6 MW) solar take about 16 GWh off in 2027.'}
 cols2 = [1550000, 900000, 950000, 950000, 850000, 750000, 5700000]
@@ -224,7 +224,7 @@ big3 = sum(BC[c]['fy27'] - BC[c]['fy26'] for c in ('RT10', 'RT20', 'RT40'))
 pts = ['What moves the year',
        f'Of the {sg(td, 0)} GWh, {sg(h1t, 0)} GWh falls in January to June. That half was depressed by the storm in 2026. July to December is flat on 2026 ({sg(h2t, 0)} GWh).',
        f'Residential, RT20 and RT40 add {sg(big3, 0)} GWh, {sg(sum(BC[c]["h1"] for c in ("RT10", "RT20", "RT40")), 0)} GWh of it in January to June. That is mostly the base returning to normal, not new demand.',
-       f'RT70 loses {abs(r70):.0f} GWh as customers move to their own generation. Hotels add about 23 GWh through the year.',
+       f'RT70 loses {abs(r70):.0f} GWh as customers move to their own generation. Hotels add about {RES["hotel"]:.0f} GWh through the year, pipeline customers {RES["pipe"]:.0f} GWh, and the adjustments on file take {abs(RES["adj"]):.0f} GWh off.',
        f'The seasonal pattern we use moves the total by about 22 GWh either way, so the range is {tot["fy27"] - 22:,.0f} to {tot["fy27"] + 22:,.0f} GWh.']
 for k, txt in enumerate(pts):
     pp = tf.paragraphs[0] if k == 0 else tf.add_paragraph(); pp.alignment = PP_ALIGN.LEFT
