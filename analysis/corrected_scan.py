@@ -140,10 +140,10 @@ def proc(path):
         # nonzero net_billed_revenue/Cust_Charge, deposits/administrative charges, not
         # real monthly billing) without depending on which exact flag value shows up.
         cb=str(gv(r,'cust_billed') or '').strip()
-        # Not-billed rows are dropped, except EV44: the billing details report flags those accounts cust_billed=0 in error
-        # (confirmed with Finance, Nov 2026). Credits and other adjustments on not-billed rows stay out until Finance has
-        # checked them; PR/PC stay out because those premises sit in the prepaid (JUICE) data.
-        if cb != '1' and norm(gv(r,'Srat_Code')) != 'EV44':
+        # Not-billed rows are dropped unless they carry kWh. EV44 is flagged cust_billed=0 in error (confirmed with Finance, Nov 2026), and credits and
+        # adjustments on not-billed rows are in the earnings sheet, so a row with kWh counts (October 2026 was 0.25 GWh apart without them).
+        # PR/PC stay out below: those premises sit in the prepaid (JUICE) data.
+        if cb != '1' and norm(gv(r,'Srat_Code')) != 'EV44' and g(r,'net_kwh_billed_consump') == 0:
             skipped_unbilled+=1; continue
         rc=str(gv(r,'rate_class'))
         if rc in ('PR','PC'):

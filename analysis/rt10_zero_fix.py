@@ -145,9 +145,9 @@ def proc_rt10(path):
         # net_revenue=net_kwh=0, a zero-billed row tagged differently, not a second
         # billed state) defaults to excluded so a future flag value can't silently
         # slip through as billed.
-        # Same rule as corrected_scan.py: not-billed rows are dropped, except EV44 (flagged not billed in error).
+        # Same rule as corrected_scan.py: not-billed rows are dropped unless they carry kWh (EV44, credits and adjustments).
         cb = str(gv(r, 'cust_billed') or '').strip()
-        if cb != '1' and norm(gv(r, 'Srat_Code')) != 'EV44':
+        if cb != '1' and norm(gv(r, 'Srat_Code')) != 'EV44' and g(r, 'net_kwh_billed_consump') == 0:
             continue
         rc = str(gv(r, 'rate_class'))
         if rc.strip() in ('PR', 'PC'):

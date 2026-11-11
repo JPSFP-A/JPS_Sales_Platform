@@ -158,7 +158,8 @@ for r in _rows():
         continue
     n_total += 1
     cb = r[idx['cust_billed']] if 'cust_billed' in idx and idx['cust_billed'] < len(r) else None
-    if cb is not None and str(cb).strip() in ('0', '0.0'):
+    # Same rule as corrected_scan.py: a not-billed row is dropped unless it carries kWh (credits and adjustments).
+    if cb is not None and str(cb).strip() in ('0', '0.0') and (num(r[idx['net_kwh_billed_consump']]) if 'net_kwh_billed_consump' in idx else 0.0) == 0:
         continue
     n_billed += 1
 
